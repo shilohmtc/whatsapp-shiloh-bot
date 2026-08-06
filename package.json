@@ -1,0 +1,28 @@
+{
+  "name": "whatsapp-shiloh-bot",
+  "version": "1.0.0",
+  "description": "Production-ready WhatsApp AI Bot",
+  "main": "app.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node app.js",
+    "dev": "nodemon app.js"
+  },
+  "keywords": [
+    "whatsapp",
+    "meta",
+    "openai",
+    "express"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.12.2",
+    "dotenv": "^17.2.1",
+    "express": "^5.1.0",
+    "pino": "^10.1.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.10"
+  }
+}
