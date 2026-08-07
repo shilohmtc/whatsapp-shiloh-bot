@@ -163,9 +163,18 @@ function buildHandoff(intent) {
 
 async function processAppointmentChangeMessage(phone, text) {
   try {
-    const existing = await getIntent(phone);
+    let existing = await getIntent(phone);
     const action = detectAction(text);
-    const active = existing && ["collecting", "awaiting_confirmation"].includes(existing.status);
+    let active = existing && ["collecting", "awaiting_confirmation"].includes(existing.status);
+
+    // A new explicit appointment-change command always wins over stale or different state.
+    // This lets a customer switch from reschedule to cancellation (or vice versa), and
+    // starts a fresh flow after a previous request reached ready_for_handoff.
+    if (action && existing && (existing.action !== action || existing.status === "ready_for_handoff")) {
+      await clearIntent(phone);
+      existing = null;
+      active = false;
+    }
 
     if (!active && !action) return { handled: false };
 
@@ -175,6 +184,14 @@ async function processAppointmentChangeMessage(phone, text) {
         handled: true,
         reply: "No problem — I’ve stopped that appointment-change request. Your Goldie appointment has not been changed.",
       };
+    }
+
+    // If the user explicitly changes intent while awaiting confirmation, start the new flow
+    // instead of forcing YES/STOP for the old request.
+    if (existing?.status === "awaiting_confirmation" && action && existing.action !== action) {
+      await clearIntent(phone);
+      existing = null;
+      active = false;
     }
 
     if (existing?.status === "awaiting_confirmation") {
@@ -192,7 +209,13 @@ async function processAppointmentChangeMessage(phone, text) {
 
     let intent = existing;
     if (!intent) {
-      intent = await saveIntent(phone, { action, status: "collecting" });
+      intent = await saveIntent(phone, {
+        action,
+        currentDate: null,
+        preferredDate: null,
+        preferredTime: null,
+        status: "collecting",
+      });
     }
 
     const date = extractDate(text);
