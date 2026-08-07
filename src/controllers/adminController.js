@@ -1,8 +1,10 @@
+const path = require("path");
 const {
   ingestDocument,
   listDocuments,
   deleteDocument,
 } = require("../services/knowledge");
+const { extractDocumentText } = require("../services/documentParser");
 
 exports.createDocument = async (req, res) => {
   try {
@@ -32,6 +34,58 @@ exports.createDocument = async (req, res) => {
     (req.log || console).error?.({ err: error }, "Failed to ingest document");
     return res.status(500).json({
       error: "Document ingestion failed",
+      requestId: req.id,
+    });
+  }
+};
+
+exports.uploadDocument = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        error: "Attach one file using the form-data field named 'file'",
+        requestId: req.id,
+      });
+    }
+
+    const parsed = await extractDocumentText(req.file);
+    const requestedTitle = String(req.body?.title || "").trim();
+    const fallbackTitle = path.basename(
+      req.file.originalname,
+      path.extname(req.file.originalname)
+    );
+    const title = requestedTitle || fallbackTitle || "Uploaded document";
+    const source = String(req.body?.source || req.file.originalname).trim();
+
+    const document = await ingestDocument({
+      title,
+      source,
+      content: parsed.text,
+    });
+
+    return res.status(201).json({
+      document,
+      upload: {
+        filename: req.file.originalname,
+        mimeType: req.file.mimetype,
+        bytes: req.file.size,
+        extension: parsed.extension,
+        extractedChars: parsed.extractedChars,
+      },
+      requestId: req.id,
+    });
+  } catch (error) {
+    (req.log || console).error?.({ err: error }, "Failed to process uploaded document");
+
+    const message = String(error.message || "");
+    const clientError =
+      message.includes("Unsupported file type") ||
+      message.includes("readable text") ||
+      message.includes("character limit") ||
+      message.includes("No upload file");
+
+    return res.status(clientError ? 400 : 500).json({
+      error: clientError ? message : "Uploaded document ingestion failed",
       requestId: req.id,
     });
   }
