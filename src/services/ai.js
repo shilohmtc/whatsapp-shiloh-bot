@@ -1,6 +1,7 @@
 const OpenAI = require("openai");
 const { getSession, saveSession } = require("./memory");
 const { retrieveKnowledge } = require("./knowledge");
+const { getProfile, buildProfileContext } = require("./profile");
 const logger = require("../lib/logger");
 
 const client = new OpenAI({
@@ -18,6 +19,8 @@ Be concise.
 
 Never invent facts.
 
+When a USER PROFILE is provided, treat it as durable information explicitly saved for this WhatsApp user. Use it for personalization when relevant, but do not repeat private profile details unnecessarily.
+
 When business knowledge is provided below, use it as the primary source for business-specific answers. If the knowledge does not contain the answer, say you do not have that information rather than guessing.
 `;
 
@@ -34,13 +37,16 @@ function buildKnowledgeContext(matches) {
 }
 
 async function generateReply(phone, message) {
-  const previousResponseId = await getSession(phone);
-  const knowledge = await retrieveKnowledge(message, 5);
+  const [previousResponseId, knowledge, profile] = await Promise.all([
+    getSession(phone),
+    retrieveKnowledge(message, 5),
+    getProfile(phone),
+  ]);
 
   const request = {
     model: process.env.OPENAI_MODEL || "gpt-5",
     input: message,
-    instructions: `${baseInstructions}${buildKnowledgeContext(knowledge)}`,
+    instructions: `${baseInstructions}${buildProfileContext(profile)}${buildKnowledgeContext(knowledge)}`,
   };
 
   if (previousResponseId) {
