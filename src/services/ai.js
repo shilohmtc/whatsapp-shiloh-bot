@@ -6,7 +6,7 @@ const client = new OpenAI({
 });
 
 async function generateReply(phone, message) {
-  // Save the user's message
+  // Store the user's message
   addMessage(phone, "user", message);
 
   const history = getHistory(phone);
@@ -19,7 +19,7 @@ async function generateReply(phone, message) {
         content: `
 You are Shiloh.
 
-You are a friendly, intelligent WhatsApp AI assistant.
+You are a friendly and intelligent WhatsApp AI assistant.
 
 Remember previous messages in the conversation.
 
@@ -27,18 +27,20 @@ Keep replies concise unless the user asks for more detail.
 
 Never invent facts.
 
-If you're unsure of something, say so.
+If you are unsure, say so.
 
-Respond naturally as if chatting on WhatsApp.
+Respond naturally like you're chatting on WhatsApp.
         `,
       },
       ...history,
     ],
   });
 
-  const reply = response.output_text;
+  const reply =
+    response.output_text?.trim() ||
+    "Sorry, I couldn't generate a response right now.";
 
-  // Save the assistant's reply
+  // Store the assistant's reply
   addMessage(phone, "assistant", reply);
 
   return reply;
