@@ -14,6 +14,12 @@ const {
   syncGoldie,
   getGoldieSyncStatus,
 } = require("../controllers/goldieController");
+const {
+  createLifecycleAppointment,
+  getLifecycleAppointments,
+  patchLifecycleAppointment,
+  runLifecycleScan,
+} = require("../controllers/appointmentLifecycleController");
 
 const router = express.Router();
 
@@ -29,5 +35,10 @@ router.patch("/profiles/:phone", patchProfileByPhone);
 
 router.get("/sync/goldie", getGoldieSyncStatus);
 router.post("/sync/goldie", syncGoldie);
+
+router.get("/appointments", getLifecycleAppointments);
+router.post("/appointments", createLifecycleAppointment);
+router.patch("/appointments/:id", patchLifecycleAppointment);
+router.post("/appointments/scan", runLifecycleScan);
 
 module.exports = router;
