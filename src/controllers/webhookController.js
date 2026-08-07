@@ -1,22 +1,28 @@
 const { sendWhatsAppMessage } = require("../services/whatsapp");
 const { generateReply } = require("../services/ai");
+const logger = require("../lib/logger");
 
-// Verify webhook
+function maskPhone(phone = "") {
+  return phone.length > 4 ? `***${phone.slice(-4)}` : "***";
+}
+
 exports.verifyWebhook = (req, res) => {
   const mode = req.query["hub.mode"];
   const token = req.query["hub.verify_token"];
   const challenge = req.query["hub.challenge"];
 
   if (mode === "subscribe" && token === process.env.VERIFY_TOKEN) {
-    console.log("Webhook verified");
+    (req.log || logger).info("WhatsApp webhook verified");
     return res.status(200).send(challenge);
   }
 
+  (req.log || logger).warn("WhatsApp webhook verification rejected");
   return res.sendStatus(403);
 };
 
-// Receive messages
 exports.receiveWebhook = async (req, res) => {
+  const log = req.log || logger;
+
   try {
     const entry = req.body.entry?.[0];
     const change = entry?.changes?.[0];
@@ -29,23 +35,40 @@ exports.receiveWebhook = async (req, res) => {
     const message = value.messages[0];
 
     if (message.type !== "text") {
+      log.info({ messageType: message.type }, "Ignoring unsupported WhatsApp message");
       return res.sendStatus(200);
     }
 
     const from = message.from;
-    const text = message.text.body;
+    const text = message.text?.body?.trim();
 
-    console.log(`Incoming message from ${from}: ${text}`);
+    if (!from || !text) {
+      log.warn("Received malformed WhatsApp text message");
+      return res.sendStatus(200);
+    }
 
-    // Pass the phone number and message
-    const reply = await generateReply(from, text);
+    log.info({ from: maskPhone(from) }, "Processing incoming WhatsApp message");
 
-    await sendWhatsAppMessage(from, reply);
+    try {
+      const reply = await generateReply(from, text);
+      await sendWhatsAppMessage(from, reply);
+    } catch (error) {
+      log.error({ err: error, from: maskPhone(from) }, "Failed to process WhatsApp message");
+
+      try {
+        await sendWhatsAppMessage(
+          from,
+          "Sorry, I'm having trouble responding right now. Please try again in a moment."
+        );
+      } catch (fallbackError) {
+        log.error({ err: fallbackError }, "Failed to send WhatsApp fallback message");
+        return res.sendStatus(500);
+      }
+    }
 
     return res.sendStatus(200);
-
   } catch (error) {
-    console.error("Webhook Error:", error);
+    log.error({ err: error }, "Unhandled WhatsApp webhook error");
     return res.sendStatus(500);
   }
 };
