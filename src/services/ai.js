@@ -6,41 +6,61 @@ const client = new OpenAI({
 });
 
 async function generateReply(phone, message) {
-  // Store the user's message
+  // Save user's message
   addMessage(phone, "user", message);
 
   const history = getHistory(phone);
 
-  const response = await client.responses.create({
-    model: process.env.OPENAI_MODEL || "gpt-5",
-    input: [
-      {
-        role: "system",
-        content: `
+  // Debug (leave this in while testing)
+  console.log("================================");
+  console.log("PHONE:", phone);
+  console.log("HISTORY:");
+  console.log(JSON.stringify(history, null, 2));
+  console.log("================================");
+
+  const messages = [
+    {
+      role: "system",
+      content: `
 You are Shiloh.
 
-You are a friendly and intelligent WhatsApp AI assistant.
+You are a friendly WhatsApp AI assistant.
 
-Remember previous messages in the conversation.
+You MUST use previous messages in the conversation.
 
-Keep replies concise unless the user asks for more detail.
+If the user says:
 
-Never invent facts.
+"My name is Christel"
 
-If you are unsure, say so.
+and later asks
 
-Respond naturally like you're chatting on WhatsApp.
-        `,
-      },
-      ...history,
-    ],
+"What is my name?"
+
+you must answer
+
+"Your name is Christel."
+
+Never pretend you don't know if it appears earlier in the conversation.
+      `,
+    },
+    ...history.map((msg) => ({
+      role: msg.role,
+      content: msg.content,
+    })),
+  ];
+
+  const response = await client.responses.create({
+    model: process.env.OPENAI_MODEL || "gpt-5",
+    input: messages,
   });
 
-  const reply =
-    response.output_text?.trim() ||
-    "Sorry, I couldn't generate a response right now.";
+  console.log("GPT RESPONSE:");
+  console.log(JSON.stringify(response, null, 2));
 
-  // Store the assistant's reply
+  const reply =
+    response.output_text ||
+    "Sorry, I couldn't generate a response.";
+
   addMessage(phone, "assistant", reply);
 
   return reply;
