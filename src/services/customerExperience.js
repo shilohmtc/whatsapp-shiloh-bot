@@ -103,6 +103,15 @@ async function recentlyRequestedReview(phone) {
   return result.rowCount > 0;
 }
 
+function reviewInvite(alreadyRequested) {
+  if (alreadyRequested) return "";
+  return [
+    "",
+    "If you'd also like to share your experience publicly, you can leave a Google review here:",
+    GOOGLE_REVIEW_URL,
+  ].join("\n");
+}
+
 async function processCustomerExperienceMessage(phone, text) {
   try {
     const experience = await getActiveExperience(phone);
@@ -120,31 +129,27 @@ async function processCustomerExperienceMessage(phone, text) {
       }
 
       const rating = Number(value);
+      const alreadyRequested = await recentlyRequestedReview(phone);
+      const reviewRequestedAtSql = alreadyRequested ? "review_requested_at" : "NOW()";
 
       if (rating >= 4) {
-        const alreadyRequested = await recentlyRequestedReview(phone);
-        const status = alreadyRequested ? "completed" : "review_invited";
         const result = await pool.query(
           `UPDATE customer_experience
            SET rating = $2,
-               status = $3,
-               review_requested_at = CASE WHEN $4 THEN review_requested_at ELSE NOW() END,
+               status = 'completed',
+               review_requested_at = ${reviewRequestedAtSql},
                updated_at = NOW()
            WHERE id = $1
            RETURNING *`,
-          [experience.id, rating, status, alreadyRequested]
+          [experience.id, rating]
         );
 
-        const reply = alreadyRequested
-          ? "Thank you so much for the rating. We're delighted you had a good experience at Shiloh, and we really appreciate your continued support."
-          : [
-              "Thank you so much! We're delighted that you had a good experience at Shiloh Massage Therapy & Aesthetic Clinic.",
-              "",
-              "If you have a minute, we'd really appreciate a Google review:",
-              GOOGLE_REVIEW_URL,
-              "",
-              "Thank you for supporting Shiloh.",
-            ].join("\n");
+        const reply = [
+          "Thank you so much! We're delighted that you had a good experience at Shiloh Massage Therapy & Aesthetic Clinic.",
+          reviewInvite(alreadyRequested),
+          "",
+          "Thank you for supporting Shiloh.",
+        ].filter(Boolean).join("\n");
 
         return { handled: true, reply, experience: result.rows[0] };
       }
@@ -153,17 +158,20 @@ async function processCustomerExperienceMessage(phone, text) {
         `UPDATE customer_experience
          SET rating = $2,
              status = 'awaiting_feedback',
+             review_requested_at = ${reviewRequestedAtSql},
              updated_at = NOW()
          WHERE id = $1
          RETURNING *`,
         [experience.id, rating]
       );
 
-      return {
-        handled: true,
-        reply: "Thank you for telling us. I'm sorry your visit wasn't what you hoped for. Would you mind telling us what we could have done better? Your feedback will be kept for the clinic team to follow up.",
-        experience: result.rows[0],
-      };
+      const reply = [
+        "Thank you for telling us. I'm sorry your visit wasn't what you hoped for.",
+        "Would you mind telling us what we could have done better? Your feedback will be kept for the clinic team to follow up.",
+        reviewInvite(alreadyRequested),
+      ].filter(Boolean).join("\n\n");
+
+      return { handled: true, reply, experience: result.rows[0] };
     }
 
     if (experience.status === "awaiting_feedback") {
