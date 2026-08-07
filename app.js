@@ -11,6 +11,9 @@ const webhookRoutes = require("./src/routes/webhook");
 const adminRoutes = require("./src/routes/admin");
 const { checkDatabase } = require("./src/services/memory");
 const { startGoldieSyncScheduler } = require("./src/services/goldieSync");
+const {
+  startAppointmentLifecycleScheduler,
+} = require("./src/services/appointmentLifecycle");
 
 const app = express();
 
@@ -58,6 +61,7 @@ const PORT = process.env.PORT || 3000;
 const server = app.listen(PORT, () => {
   logger.info({ port: PORT }, "Shiloh started");
   startGoldieSyncScheduler();
+  startAppointmentLifecycleScheduler();
 });
 
 function shutdown(signal) {
