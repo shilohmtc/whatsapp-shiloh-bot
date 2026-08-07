@@ -1,5 +1,6 @@
 const { sendWhatsAppMessage } = require("../services/whatsapp");
 const { generateReply } = require("../services/ai");
+const { updateProfileFromMessage } = require("../services/profileExtractor");
 const logger = require("../lib/logger");
 
 function maskPhone(phone = "") {
@@ -50,6 +51,10 @@ exports.receiveWebhook = async (req, res) => {
     log.info({ from: maskPhone(from) }, "Processing incoming WhatsApp message");
 
     try {
+      // Capture explicit durable facts before generating the reply so the
+      // current message can immediately benefit from the updated profile.
+      await updateProfileFromMessage(from, text);
+
       const reply = await generateReply(from, text);
       await sendWhatsAppMessage(from, reply);
     } catch (error) {
