@@ -5,6 +5,7 @@ const {
   deleteDocument,
 } = require("../services/knowledge");
 const { extractDocumentText } = require("../services/documentParser");
+const { getProfile, upsertProfile, listProfiles } = require("../services/profile");
 
 exports.createDocument = async (req, res) => {
   try {
@@ -123,5 +124,65 @@ exports.removeDocument = async (req, res) => {
       error: "Could not delete document",
       requestId: req.id,
     });
+  }
+};
+
+exports.getProfiles = async (req, res) => {
+  try {
+    const profiles = await listProfiles(req.query.limit);
+    return res.status(200).json({ profiles, requestId: req.id });
+  } catch (error) {
+    (req.log || console).error?.({ err: error }, "Failed to list user profiles");
+    return res.status(500).json({
+      error: "Could not list user profiles",
+      requestId: req.id,
+    });
+  }
+};
+
+exports.getProfileByPhone = async (req, res) => {
+  try {
+    const profile = await getProfile(req.params.phone);
+    if (!profile) {
+      return res.status(404).json({ error: "User profile not found", requestId: req.id });
+    }
+    return res.status(200).json({ profile, requestId: req.id });
+  } catch (error) {
+    (req.log || console).error?.({ err: error }, "Failed to read user profile");
+    return res.status(500).json({ error: "Could not read user profile", requestId: req.id });
+  }
+};
+
+exports.patchProfileByPhone = async (req, res) => {
+  try {
+    const allowed = [
+      "name",
+      "preferredLanguage",
+      "preferred_language",
+      "location",
+      "preferences",
+      "customerStatus",
+      "customer_status",
+      "tags",
+      "customAttributes",
+      "custom_attributes",
+    ];
+
+    const patch = {};
+    for (const key of allowed) {
+      if (Object.prototype.hasOwnProperty.call(req.body || {}, key)) {
+        patch[key] = req.body[key];
+      }
+    }
+
+    const profile = await upsertProfile(req.params.phone, patch);
+    if (!profile) {
+      return res.status(500).json({ error: "Could not update user profile", requestId: req.id });
+    }
+
+    return res.status(200).json({ profile, requestId: req.id });
+  } catch (error) {
+    (req.log || console).error?.({ err: error }, "Failed to update user profile");
+    return res.status(500).json({ error: "Could not update user profile", requestId: req.id });
   }
 };

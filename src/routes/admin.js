@@ -6,6 +6,9 @@ const {
   uploadDocument,
   getDocuments,
   removeDocument,
+  getProfiles,
+  getProfileByPhone,
+  patchProfileByPhone,
 } = require("../controllers/adminController");
 
 const router = express.Router();
@@ -15,5 +18,9 @@ router.get("/documents", getDocuments);
 router.post("/documents", createDocument);
 router.post("/documents/upload", documentUpload, uploadDocument);
 router.delete("/documents/:id", removeDocument);
+
+router.get("/profiles", getProfiles);
+router.get("/profiles/:phone", getProfileByPhone);
+router.patch("/profiles/:phone", patchProfileByPhone);
 
 module.exports = router;
