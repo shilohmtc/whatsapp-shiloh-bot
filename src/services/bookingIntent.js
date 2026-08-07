@@ -113,6 +113,69 @@ function resolveWeekday(targetDay, { next = false } = {}, now = new Date()) {
   return formatIsoDate(addDays(base, delta));
 }
 
+function validIsoFromParts(day, month, year) {
+  const candidate = dateFromLocalParts({ year, month, day });
+  if (
+    candidate.getUTCFullYear() !== year ||
+    candidate.getUTCMonth() + 1 !== month ||
+    candidate.getUTCDate() !== day
+  ) {
+    return null;
+  }
+
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+function resolveWrittenDate(day, monthName, yearText, now = new Date()) {
+  const months = {
+    january: 1,
+    jan: 1,
+    february: 2,
+    feb: 2,
+    march: 3,
+    mar: 3,
+    april: 4,
+    apr: 4,
+    may: 5,
+    june: 6,
+    jun: 6,
+    july: 7,
+    jul: 7,
+    august: 8,
+    aug: 8,
+    september: 9,
+    sep: 9,
+    sept: 9,
+    october: 10,
+    oct: 10,
+    november: 11,
+    nov: 11,
+    december: 12,
+    dec: 12,
+  };
+
+  const month = months[String(monthName).toLowerCase()];
+  if (!month) return null;
+
+  const today = localDateParts(now);
+  let year = yearText ? Number(yearText) : today.year;
+  if (year < 100) year += 2000;
+
+  let iso = validIsoFromParts(Number(day), month, year);
+  if (!iso) return null;
+
+  if (!yearText) {
+    const candidate = dateFromLocalParts({ year, month, day: Number(day) });
+    const base = currentClinicDate(now);
+    if (candidate < base) {
+      year += 1;
+      iso = validIsoFromParts(Number(day), month, year);
+    }
+  }
+
+  return iso;
+}
+
 function extractDate(text = "", now = new Date()) {
   const value = String(text).trim();
   const base = currentClinicDate(now);
@@ -127,6 +190,25 @@ function extractDate(text = "", now = new Date()) {
     return resolveWeekday(weekday[2], { next: Boolean(weekday[1]) }, now);
   }
 
+  const monthPattern =
+    "january|jan|february|feb|march|mar|april|apr|may|june|jun|july|jul|august|aug|september|sept|sep|october|oct|november|nov|december|dec";
+
+  const dayFirst = value.match(
+    new RegExp(`\\b(\\d{1,2})(?:st|nd|rd|th)?\\s+(${monthPattern})(?:\\s+(\\d{2,4}))?\\b`, "i")
+  );
+  if (dayFirst) {
+    const resolved = resolveWrittenDate(dayFirst[1], dayFirst[2], dayFirst[3], now);
+    if (resolved) return resolved;
+  }
+
+  const monthFirst = value.match(
+    new RegExp(`\\b(${monthPattern})\\s+(\\d{1,2})(?:st|nd|rd|th)?(?:,?\\s+(\\d{2,4}))?\\b`, "i")
+  );
+  if (monthFirst) {
+    const resolved = resolveWrittenDate(monthFirst[2], monthFirst[1], monthFirst[3], now);
+    if (resolved) return resolved;
+  }
+
   const numeric = value.match(/\b(\d{1,2})[\/-](\d{1,2})(?:[\/-](\d{2,4}))?\b/);
   if (numeric) {
     const day = Number(numeric[1]);
@@ -134,14 +216,7 @@ function extractDate(text = "", now = new Date()) {
     let year = numeric[3] ? Number(numeric[3]) : localDateParts(now).year;
     if (year < 100) year += 2000;
 
-    const candidate = dateFromLocalParts({ year, month, day });
-    if (
-      candidate.getUTCFullYear() === year &&
-      candidate.getUTCMonth() + 1 === month &&
-      candidate.getUTCDate() === day
-    ) {
-      return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-    }
+    return validIsoFromParts(day, month, year);
   }
 
   return null;
