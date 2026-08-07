@@ -227,9 +227,6 @@ async function verifyService(service) {
   if (!service?.trim()) return { verified: false, reason: "missing" };
 
   try {
-    // Prefer a deterministic text match against the full authoritative
-    // knowledge document. This avoids false negatives when a short service
-    // name such as "Swedish massage" does not rank in the top vector chunks.
     if (await hasLexicalKnowledgeMatch(service)) {
       return { verified: true, reason: "lexical_knowledge_match" };
     }
@@ -343,8 +340,6 @@ async function processBookingMessage(phone, text) {
     };
 
     if (active) {
-      // If the previous service failed verification, treat the next plain-text
-      // reply as a corrected service name so the customer is not stuck.
       if (existing.service_verified === false && !patch.serviceText) {
         patch.serviceText = String(text).trim().replace(/[.!?]+$/, "");
         patch.serviceVerified = null;
@@ -359,7 +354,10 @@ async function processBookingMessage(phone, text) {
     const serviceChanged =
       patch.serviceText && patch.serviceText.trim() !== String(existing?.service_text || "").trim();
 
-    if (patch.serviceText && (serviceChanged || existing?.service_verified == null)) {
+    // Re-run verification whenever the currently stored result is anything
+    // other than a confirmed success. This fixes stale `false` results that
+    // survived the previous deployment in PostgreSQL.
+    if (patch.serviceText && (serviceChanged || existing?.service_verified !== true)) {
       const verification = await verifyService(patch.serviceText);
       patch.serviceVerified = verification.verified;
     }
