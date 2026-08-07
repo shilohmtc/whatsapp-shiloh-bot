@@ -4,6 +4,13 @@ All notable changes to Shiloh are documented in this file.
 
 This project follows Semantic Versioning: MAJOR.MINOR.PATCH.
 
+## [1.0.1] - 2026-08-07
+
+### Maintenance
+- Upgraded the official OpenAI JavaScript/TypeScript SDK from the 5.x line to `7.1.0`.
+- Regenerated `package-lock.json` and verified a clean `npm ci` install on Node.js 24.14.1.
+- Kept the existing Responses API integration and customer-facing behavior unchanged.
+
 ## [1.0.0] - 2026-08-07
 
 ### Shiloh AI Receptionist — Production Baseline
