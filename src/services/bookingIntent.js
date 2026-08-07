@@ -34,7 +34,6 @@ async function ensureTable() {
     )
   `);
 
-  // Safe migration for Sprint 4.1 tables that already exist in production.
   await pool.query(`ALTER TABLE booking_intents ADD COLUMN IF NOT EXISTS therapist_text TEXT`);
   await pool.query(`ALTER TABLE booking_intents ADD COLUMN IF NOT EXISTS service_verified BOOLEAN`);
 
@@ -66,7 +65,6 @@ function localDateParts(date = new Date()) {
 }
 
 function dateFromLocalParts({ year, month, day }) {
-  // Noon UTC avoids date drift when formatting in Africa/Johannesburg.
   return new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
 }
 
@@ -140,11 +138,17 @@ function extractDate(text = "", now = new Date()) {
 }
 
 function extractTime(text = "") {
-  const value = String(text);
-  const match = value.match(
-    /\b(?:at\s*)?((?:[01]?\d|2[0-3])(?::[0-5]\d)?\s*(?:am|pm)?|(?:1[0-2]|0?[1-9])\s*(?:am|pm))\b/i
+  const value = String(text).trim();
+
+  const explicit = value.match(
+    /\b(?:at\s+)?((?:[01]?\d|2[0-3]):[0-5]\d\s*(?:am|pm)?|(?:1[0-2]|0?[1-9])\s*(?:am|pm))\b/i
   );
-  if (match) return match[1].trim().toLowerCase();
+  if (explicit) return explicit[1].trim().toLowerCase();
+
+  const atHour = value.match(/\bat\s+((?:[01]?\d|2[0-3]))\b/i);
+  if (atHour) return atHour[1].trim();
+
+  if (/^(?:[01]?\d|2[0-3])$/.test(value)) return value;
 
   const daypart = value.match(/\b(morning|afternoon|evening)\b/i);
   return daypart ? daypart[1].toLowerCase() : null;
