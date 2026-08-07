@@ -6,7 +6,7 @@ const client = new OpenAI({
 });
 
 async function generateReply(phone, message) {
-  const previousResponseId = getSession(phone);
+  const previousResponseId = await getSession(phone);
 
   const request = {
     model: process.env.OPENAI_MODEL || "gpt-5",
@@ -31,7 +31,7 @@ Never invent facts.
 
   const response = await client.responses.create(request);
 
-  saveSession(phone, response.id);
+  await saveSession(phone, response.id);
 
   return (
     response.output_text?.trim() ||
