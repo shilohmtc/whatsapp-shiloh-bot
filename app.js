@@ -1,22 +1,73 @@
 require("dotenv").config();
 
 const express = require("express");
+const { validateEnv } = require("./src/config/env");
+const logger = require("./src/lib/logger");
+const requestContext = require("./src/middleware/requestContext");
+
+validateEnv();
 
 const webhookRoutes = require("./src/routes/webhook");
+const { checkDatabase } = require("./src/services/memory");
 
 const app = express();
 
-app.use(express.json());
-
-// Routes
-app.use("/", webhookRoutes);
+app.disable("x-powered-by");
+app.use(express.json({ limit: "1mb" }));
+app.use(requestContext);
 
 app.get("/", (req, res) => {
-    res.send("Shiloh WhatsApp AI Bot is running.");
+  res.status(200).json({
+    service: "shiloh-whatsapp-bot",
+    status: "running",
+  });
+});
+
+app.get("/health", async (req, res) => {
+  const databaseHealthy = await checkDatabase();
+  const statusCode = databaseHealthy ? 200 : 503;
+
+  return res.status(statusCode).json({
+    status: databaseHealthy ? "ok" : "degraded",
+    database: databaseHealthy ? "ok" : "unavailable",
+    timestamp: new Date().toISOString(),
+  });
+});
+
+app.use("/", webhookRoutes);
+
+app.use((err, req, res, next) => {
+  const log = req.log || logger;
+  log.error({ err }, "Unhandled Express error");
+
+  if (res.headersSent) {
+    return next(err);
+  }
+
+  return res.status(500).json({
+    error: "Internal server error",
+    requestId: req.id,
+  });
 });
 
 const PORT = process.env.PORT || 3000;
 
-app.listen(PORT, () => {
-    console.log(`🚀 Shiloh running on port ${PORT}`);
+const server = app.listen(PORT, () => {
+  logger.info({ port: PORT }, "Shiloh started");
 });
+
+function shutdown(signal) {
+  logger.info({ signal }, "Shutting down Shiloh");
+  server.close(() => {
+    logger.info("HTTP server closed");
+    process.exit(0);
+  });
+
+  setTimeout(() => {
+    logger.error("Forced shutdown after timeout");
+    process.exit(1);
+  }, 10000).unref();
+}
+
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));
