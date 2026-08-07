@@ -48,6 +48,16 @@ function isBookingCancel(text = "") {
   return /\b(cancel|stop|never mind|nevermind)\b/i.test(String(text));
 }
 
+function isConfirmation(text = "") {
+  return /^(yes|y|confirm|confirmed|correct|looks good|that works|proceed|continue|ok|okay)$/i.test(
+    String(text).trim()
+  );
+}
+
+function isEditRequest(text = "") {
+  return /\b(change|edit|update|different|instead|wrong)\b/i.test(String(text));
+}
+
 function localDateParts(date = new Date()) {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: CLINIC_TIME_ZONE,
@@ -137,6 +147,19 @@ function extractDate(text = "", now = new Date()) {
   return null;
 }
 
+function displayDate(isoDate) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(isoDate || ""))) return isoDate;
+  const [year, month, day] = isoDate.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
+  return new Intl.DateTimeFormat("en-ZA", {
+    timeZone: CLINIC_TIME_ZONE,
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  }).format(date);
+}
+
 function extractTime(text = "") {
   const value = String(text).trim();
 
@@ -157,7 +180,7 @@ function extractTime(text = "") {
 function extractTherapist(text = "") {
   const value = String(text).trim();
   if (/\b(any therapist|anyone|whoever is available|no preference)\b/i.test(value)) {
-    return "Any therapist";
+    return "Any available therapist";
   }
 
   const match = value.match(/\b(?:with|therapist)\s+([A-Za-z][A-Za-z' -]{1,60})\b/i);
@@ -183,6 +206,23 @@ function extractService(text = "") {
   }
 
   return null;
+}
+
+function normalizeServiceName(service = "") {
+  const clean = String(service).trim().replace(/\s+/g, " ");
+  const aliases = new Map([
+    ["swedish massage", "Swedish Massage"],
+    ["swedish", "Swedish Massage"],
+    ["hot stone massage", "Hot Stone Massage"],
+    ["hot stone", "Hot Stone Massage"],
+    ["deep tissue massage", "Deep Tissue Massage"],
+    ["deep tissue", "Deep Tissue Massage"],
+  ]);
+
+  const alias = aliases.get(clean.toLowerCase());
+  if (alias) return alias;
+
+  return clean.replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
 function significantServiceTokens(service = "") {
@@ -313,21 +353,97 @@ function nextQuestion(intent) {
   return null;
 }
 
+function buildConfirmationSummary(intent) {
+  return [
+    "Please check these booking preferences:",
+    `• Service: ${normalizeServiceName(intent.service_text)}`,
+    `• Date: ${displayDate(intent.preferred_date)}`,
+    `• Time: ${intent.preferred_time}`,
+    `• Therapist: ${intent.therapist_text || "Any available therapist"}`,
+    "",
+    "Reply YES to continue to Goldie, or tell me what you'd like to change.",
+  ].join("\n");
+}
+
+function buildHandoffReply(intent) {
+  return [
+    "Perfect — your booking preferences are ready:",
+    `• Service: ${normalizeServiceName(intent.service_text)}`,
+    `• Date: ${displayDate(intent.preferred_date)}`,
+    `• Time: ${intent.preferred_time}`,
+    `• Therapist: ${intent.therapist_text || "Any available therapist"}`,
+    "",
+    "Your appointment is not reserved yet. Goldie remains the live source for availability and final confirmation.",
+    "Open Shiloh's secure booking page to choose an available slot and complete your booking:",
+    BOOKING_URL,
+  ].join("\n");
+}
+
 async function processBookingMessage(phone, text) {
   try {
     const existing = await getIntent(phone);
     const active = existing?.status === "collecting";
+    const awaitingConfirmation = existing?.status === "awaiting_confirmation";
 
-    if (!active && !isBookingStart(text)) {
+    if (!active && !awaitingConfirmation && !isBookingStart(text)) {
       return { handled: false };
     }
 
-    if (active && isBookingCancel(text)) {
+    if ((active || awaitingConfirmation) && isBookingCancel(text)) {
       await clearIntent(phone);
       return {
         handled: true,
         reply: "No problem — I’ve cleared that booking request. How else can I help with Shiloh?",
       };
+    }
+
+    if (awaitingConfirmation) {
+      if (isConfirmation(text)) {
+        const intent = await saveIntent(phone, { status: "ready_for_handoff" });
+        return { handled: true, reply: buildHandoffReply(intent), intent };
+      }
+
+      if (!isEditRequest(text)) {
+        return {
+          handled: true,
+          reply: "Please reply YES to continue to Goldie, or tell me what you'd like to change — for example, ‘change the time to 3pm’.",
+          intent: existing,
+        };
+      }
+
+      const patch = { status: "collecting" };
+      const date = extractDate(text);
+      const time = extractTime(text);
+      const therapist = extractTherapist(text);
+      const service = extractService(text);
+
+      if (date) patch.preferredDate = date;
+      if (time) patch.preferredTime = time;
+      if (therapist) patch.therapistText = therapist;
+      if (service) {
+        patch.serviceText = service;
+        patch.serviceVerified = null;
+      }
+
+      if (!date && !time && !therapist && !service) {
+        return {
+          handled: true,
+          reply: "Sure — what would you like to change: the service, date, time, or therapist?",
+          intent: existing,
+        };
+      }
+
+      let intent = await saveIntent(phone, patch);
+      if (service) {
+        const verification = await verifyService(service);
+        intent = await saveIntent(phone, { serviceVerified: verification.verified });
+      }
+
+      const question = nextQuestion(intent);
+      if (question) return { handled: true, reply: question, intent };
+
+      intent = await saveIntent(phone, { status: "awaiting_confirmation" });
+      return { handled: true, reply: buildConfirmationSummary(intent), intent };
     }
 
     const extractedService = extractService(text);
@@ -354,9 +470,6 @@ async function processBookingMessage(phone, text) {
     const serviceChanged =
       patch.serviceText && patch.serviceText.trim() !== String(existing?.service_text || "").trim();
 
-    // Re-run verification whenever the currently stored result is anything
-    // other than a confirmed success. This fixes stale `false` results that
-    // survived the previous deployment in PostgreSQL.
     if (patch.serviceText && (serviceChanged || existing?.service_verified !== true)) {
       const verification = await verifyService(patch.serviceText);
       patch.serviceVerified = verification.verified;
@@ -369,26 +482,8 @@ async function processBookingMessage(phone, text) {
       return { handled: true, reply: question, intent };
     }
 
-    intent = await saveIntent(phone, { status: "ready_for_handoff" });
-
-    const summary = [
-      "I have your booking preferences:",
-      `• Service: ${intent.service_text}`,
-      `• Date: ${intent.preferred_date}`,
-      `• Time: ${intent.preferred_time}`,
-    ];
-
-    if (intent.therapist_text) {
-      summary.push(`• Therapist: ${intent.therapist_text}`);
-    }
-
-    summary.push(
-      "",
-      "These are your preferences, not a reserved appointment. Please use Shiloh’s secure Goldie booking page to check live availability and complete the booking:",
-      BOOKING_URL
-    );
-
-    return { handled: true, reply: summary.join("\n"), intent };
+    intent = await saveIntent(phone, { status: "awaiting_confirmation" });
+    return { handled: true, reply: buildConfirmationSummary(intent), intent };
   } catch (error) {
     logger.error({ err: error }, "Booking intent processing failed");
     return { handled: false };
@@ -404,4 +499,6 @@ module.exports = {
   extractTime,
   extractTherapist,
   verifyService,
+  normalizeServiceName,
+  displayDate,
 };
