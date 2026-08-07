@@ -2,6 +2,7 @@ const { sendWhatsAppMessage } = require("../services/whatsapp");
 const { generateReply } = require("../services/ai");
 const { updateProfileFromMessage } = require("../services/profileExtractor");
 const { CLINIC_REDIRECT, evaluateClinicScope } = require("../services/scopeGuard");
+const { processBookingMessage } = require("../services/bookingIntent");
 const logger = require("../lib/logger");
 
 function maskPhone(phone = "") {
@@ -60,6 +61,16 @@ exports.receiveWebhook = async (req, res) => {
           "Redirecting off-topic WhatsApp request"
         );
         await sendWhatsAppMessage(from, CLINIC_REDIRECT);
+        return res.sendStatus(200);
+      }
+
+      const booking = await processBookingMessage(from, text);
+      if (booking.handled) {
+        log.info(
+          { from: maskPhone(from), bookingStatus: booking.intent?.status },
+          "Handled booking-intent conversation"
+        );
+        await sendWhatsAppMessage(from, booking.reply);
         return res.sendStatus(200);
       }
 
