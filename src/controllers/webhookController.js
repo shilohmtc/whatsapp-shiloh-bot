@@ -28,7 +28,6 @@ exports.receiveWebhook = async (req, res) => {
 
     const message = value.messages[0];
 
-    // Only respond to text messages
     if (message.type !== "text") {
       return res.sendStatus(200);
     }
@@ -38,13 +37,13 @@ exports.receiveWebhook = async (req, res) => {
 
     console.log(`Incoming message from ${from}: ${text}`);
 
-    // Generate GPT-5 reply
-    const reply = await generateReply(text);
+    // Pass the phone number and message
+    const reply = await generateReply(from, text);
 
-    // Send reply back to WhatsApp
     await sendWhatsAppMessage(from, reply);
 
     return res.sendStatus(200);
+
   } catch (error) {
     console.error("Webhook Error:", error);
     return res.sendStatus(500);
