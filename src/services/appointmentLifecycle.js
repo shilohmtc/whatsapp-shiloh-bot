@@ -13,6 +13,9 @@ const REMINDER_HOURS = Number(process.env.APPOINTMENT_REMINDER_HOURS || 24);
 const FOLLOWUP_HOURS = Number(process.env.APPOINTMENT_FOLLOWUP_HOURS || 4);
 const SCAN_MINUTES = Number(process.env.APPOINTMENT_SCAN_MINUTES || 5);
 const LANGUAGE_CODE = process.env.WHATSAPP_TEMPLATE_LANGUAGE || "en";
+const GOOGLE_REVIEW_URL =
+  process.env.SHILOH_GOOGLE_REVIEW_URL ||
+  "https://www.google.com/search?q=Shiloh+Massage+Therapy+Clinic+PTY+LTD";
 
 let initialized = false;
 let timer = null;
@@ -150,7 +153,7 @@ async function claimDueFollowup() {
 }
 
 async function undoClaim(id, column) {
-  if (!['reminder_sent_at', 'followup_sent_at'].includes(column)) return;
+  if (!["reminder_sent_at", "followup_sent_at"].includes(column)) return;
   await pool.query(
     `UPDATE appointment_lifecycle SET ${column} = NULL, updated_at = NOW() WHERE id = $1`,
     [id]
@@ -175,7 +178,7 @@ async function processReminders() {
           LANGUAGE_CODE
         );
       } catch (error) {
-        await undoClaim(appointment.id, 'reminder_sent_at');
+        await undoClaim(appointment.id, "reminder_sent_at");
         logger.error({ err: error, appointmentId: appointment.id }, "Appointment reminder failed");
         break;
       }
@@ -190,11 +193,11 @@ async function processReminders() {
         await sendWhatsAppTemplate(
           appointment.phone,
           followupTemplate,
-          [appointment.service_text],
+          [appointment.service_text, GOOGLE_REVIEW_URL],
           LANGUAGE_CODE
         );
       } catch (error) {
-        await undoClaim(appointment.id, 'followup_sent_at');
+        await undoClaim(appointment.id, "followup_sent_at");
         logger.error({ err: error, appointmentId: appointment.id }, "Appointment follow-up failed");
         break;
       }
@@ -223,6 +226,7 @@ function startAppointmentLifecycleScheduler() {
       followupHours: FOLLOWUP_HOURS,
       reminderTemplateConfigured: Boolean(process.env.WHATSAPP_REMINDER_TEMPLATE),
       followupTemplateConfigured: Boolean(process.env.WHATSAPP_FOLLOWUP_TEMPLATE),
+      googleReviewConfigured: Boolean(GOOGLE_REVIEW_URL),
     },
     "Appointment lifecycle scheduler started"
   );
