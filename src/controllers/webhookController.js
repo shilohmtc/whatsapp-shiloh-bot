@@ -3,6 +3,7 @@ const { generateReply } = require("../services/ai");
 const { updateProfileFromMessage } = require("../services/profileExtractor");
 const { CLINIC_REDIRECT, evaluateClinicScope } = require("../services/scopeGuard");
 const { processBookingMessage } = require("../services/bookingIntent");
+const { processAppointmentChangeMessage } = require("../services/appointmentChange");
 const logger = require("../lib/logger");
 
 function maskPhone(phone = "") {
@@ -64,6 +65,21 @@ exports.receiveWebhook = async (req, res) => {
         return res.sendStatus(200);
       }
 
+      // Existing-appointment changes take precedence over new-booking flow.
+      const appointmentChange = await processAppointmentChangeMessage(from, text);
+      if (appointmentChange.handled) {
+        log.info(
+          {
+            from: maskPhone(from),
+            action: appointmentChange.intent?.action,
+            changeStatus: appointmentChange.intent?.status,
+          },
+          "Handled appointment-change conversation"
+        );
+        await sendWhatsAppMessage(from, appointmentChange.reply);
+        return res.sendStatus(200);
+      }
+
       const booking = await processBookingMessage(from, text);
       if (booking.handled) {
         log.info(
@@ -74,8 +90,6 @@ exports.receiveWebhook = async (req, res) => {
         return res.sendStatus(200);
       }
 
-      // Capture explicit durable facts before generating the reply so the
-      // current message can immediately benefit from the updated profile.
       await updateProfileFromMessage(from, text);
 
       const reply = await generateReply(from, text);
