@@ -20,6 +20,12 @@ const {
   patchLifecycleAppointment,
   runLifecycleScan,
 } = require("../controllers/appointmentLifecycleController");
+const {
+  getFeedback,
+  getReviews,
+  getCustomerSatisfaction,
+  resolveCustomerFeedback,
+} = require("../controllers/customerExperienceController");
 
 const router = express.Router();
 
@@ -40,5 +46,10 @@ router.get("/appointments", getLifecycleAppointments);
 router.post("/appointments", createLifecycleAppointment);
 router.patch("/appointments/:id", patchLifecycleAppointment);
 router.post("/appointments/scan", runLifecycleScan);
+
+router.get("/feedback", getFeedback);
+router.patch("/feedback/:id/resolve", resolveCustomerFeedback);
+router.get("/reviews", getReviews);
+router.get("/customer-satisfaction", getCustomerSatisfaction);
 
 module.exports = router;
