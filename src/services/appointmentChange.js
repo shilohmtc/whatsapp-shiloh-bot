@@ -22,7 +22,7 @@ async function ensureTable() {
     CREATE TABLE IF NOT EXISTS appointment_change_intents (
       phone VARCHAR(32) PRIMARY KEY,
       action TEXT NOT NULL,
-      current_date TEXT,
+      existing_appointment_date TEXT,
       preferred_date TEXT,
       preferred_time TEXT,
       status TEXT NOT NULL DEFAULT 'collecting',
@@ -30,6 +30,11 @@ async function ensureTable() {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
+
+  await pool.query(
+    `ALTER TABLE appointment_change_intents
+     ADD COLUMN IF NOT EXISTS existing_appointment_date TEXT`
+  );
 
   initialized = true;
 }
@@ -56,7 +61,7 @@ function isConfirmation(text = "") {
 async function getIntent(phone) {
   await ensureTable();
   const result = await pool.query(
-    `SELECT phone, action, current_date, preferred_date, preferred_time, status,
+    `SELECT phone, action, existing_appointment_date, preferred_date, preferred_time, status,
             created_at, updated_at
      FROM appointment_change_intents
      WHERE phone = $1`,
@@ -71,23 +76,23 @@ async function saveIntent(phone, patch = {}) {
   const action = patch.action ?? current.action;
   if (!action) throw new Error("Appointment change action is required");
 
-  const currentDate = patch.currentDate ?? current.current_date ?? null;
+  const currentDate = patch.currentDate ?? current.existing_appointment_date ?? null;
   const preferredDate = patch.preferredDate ?? current.preferred_date ?? null;
   const preferredTime = patch.preferredTime ?? current.preferred_time ?? null;
   const status = patch.status ?? current.status ?? "collecting";
 
   const result = await pool.query(
     `INSERT INTO appointment_change_intents (
-       phone, action, current_date, preferred_date, preferred_time, status, updated_at
+       phone, action, existing_appointment_date, preferred_date, preferred_time, status, updated_at
      ) VALUES ($1, $2, $3, $4, $5, $6, NOW())
      ON CONFLICT (phone) DO UPDATE SET
        action = EXCLUDED.action,
-       current_date = EXCLUDED.current_date,
+       existing_appointment_date = EXCLUDED.existing_appointment_date,
        preferred_date = EXCLUDED.preferred_date,
        preferred_time = EXCLUDED.preferred_time,
        status = EXCLUDED.status,
        updated_at = NOW()
-     RETURNING phone, action, current_date, preferred_date, preferred_time, status,
+     RETURNING phone, action, existing_appointment_date, preferred_date, preferred_time, status,
                created_at, updated_at`,
     [phone, action, currentDate, preferredDate, preferredTime, status]
   );
@@ -106,7 +111,7 @@ function cancellationPolicyNote() {
 }
 
 function nextQuestion(intent) {
-  if (!intent.current_date) {
+  if (!intent.existing_appointment_date) {
     return "What day or date is the existing appointment you want to change?";
   }
 
@@ -125,7 +130,7 @@ function buildSummary(intent) {
   if (intent.action === "cancel") {
     return [
       "Please confirm this cancellation request:",
-      `• Existing appointment: ${displayDate(intent.current_date)}`,
+      `• Existing appointment: ${displayDate(intent.existing_appointment_date)}`,
       "",
       cancellationPolicyNote(),
       "",
@@ -135,7 +140,7 @@ function buildSummary(intent) {
 
   return [
     "Please confirm these reschedule preferences:",
-    `• Existing appointment: ${displayDate(intent.current_date)}`,
+    `• Existing appointment: ${displayDate(intent.existing_appointment_date)}`,
     `• Preferred new date: ${displayDate(intent.preferred_date)}`,
     `• Preferred new time: ${intent.preferred_time}`,
     "",
@@ -193,7 +198,7 @@ async function processAppointmentChangeMessage(phone, text) {
     const date = extractDate(text);
     const time = extractTime(text);
 
-    if (!intent.current_date && date) {
+    if (!intent.existing_appointment_date && date) {
       intent = await saveIntent(phone, { currentDate: date });
     } else if (intent.action === "reschedule" && !intent.preferred_date && date) {
       intent = await saveIntent(phone, { preferredDate: date });
