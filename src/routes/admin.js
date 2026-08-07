@@ -10,6 +10,10 @@ const {
   getProfileByPhone,
   patchProfileByPhone,
 } = require("../controllers/adminController");
+const {
+  syncGoldie,
+  getGoldieSyncStatus,
+} = require("../controllers/goldieController");
 
 const router = express.Router();
 
@@ -22,5 +26,8 @@ router.delete("/documents/:id", removeDocument);
 router.get("/profiles", getProfiles);
 router.get("/profiles/:phone", getProfileByPhone);
 router.patch("/profiles/:phone", patchProfileByPhone);
+
+router.get("/sync/goldie", getGoldieSyncStatus);
+router.post("/sync/goldie", syncGoldie);
 
 module.exports = router;
