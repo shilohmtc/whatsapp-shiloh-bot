@@ -205,21 +205,46 @@ function significantServiceTokens(service = "") {
     .filter((token) => token.length >= 4 && !ignored.has(token));
 }
 
+async function hasLexicalKnowledgeMatch(service) {
+  const tokens = significantServiceTokens(service);
+  if (!tokens.length) return false;
+
+  await ensureTable();
+
+  const result = await pool.query(
+    `SELECT EXISTS (
+       SELECT 1
+       FROM documents d
+       WHERE ${tokens.map((_, index) => `LOWER(d.content) LIKE $${index + 1}`).join(" AND ")}
+     ) AS found`,
+    tokens.map((token) => `%${token}%`)
+  );
+
+  return Boolean(result.rows[0]?.found);
+}
+
 async function verifyService(service) {
   if (!service?.trim()) return { verified: false, reason: "missing" };
 
   try {
-    const matches = await retrieveKnowledge(service, 5);
+    // Prefer a deterministic text match against the full authoritative
+    // knowledge document. This avoids false negatives when a short service
+    // name such as "Swedish massage" does not rank in the top vector chunks.
+    if (await hasLexicalKnowledgeMatch(service)) {
+      return { verified: true, reason: "lexical_knowledge_match" };
+    }
+
+    const matches = await retrieveKnowledge(service, 8);
     const tokens = significantServiceTokens(service);
 
     const verified = matches.some((item) => {
-      if (Number(item.similarity) < 0.4) return false;
+      if (Number(item.similarity) < 0.35) return false;
       const haystack = `${item.title || ""} ${item.content || ""}`.toLowerCase();
-      if (tokens.length === 0) return Number(item.similarity) >= 0.62;
-      return tokens.some((token) => haystack.includes(token));
+      if (tokens.length === 0) return Number(item.similarity) >= 0.58;
+      return tokens.every((token) => haystack.includes(token));
     });
 
-    return { verified, reason: verified ? "knowledge_match" : "not_found" };
+    return { verified, reason: verified ? "semantic_knowledge_match" : "not_found" };
   } catch (error) {
     logger.warn({ err: error }, "Could not verify requested booking service");
     return { verified: null, reason: "verification_unavailable" };
@@ -318,7 +343,15 @@ async function processBookingMessage(phone, text) {
     };
 
     if (active) {
-      if (!existing.service_text && !patch.serviceText) patch.serviceText = String(text).trim();
+      // If the previous service failed verification, treat the next plain-text
+      // reply as a corrected service name so the customer is not stuck.
+      if (existing.service_verified === false && !patch.serviceText) {
+        patch.serviceText = String(text).trim().replace(/[.!?]+$/, "");
+        patch.serviceVerified = null;
+      } else if (!existing.service_text && !patch.serviceText) {
+        patch.serviceText = String(text).trim();
+      }
+
       if (!existing.preferred_date && !patch.preferredDate) patch.preferredDate = extractDate(text) || null;
       if (!existing.preferred_time && !patch.preferredTime) patch.preferredTime = extractTime(text) || null;
     }
