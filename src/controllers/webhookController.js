@@ -1,6 +1,7 @@
 const { sendWhatsAppMessage } = require("../services/whatsapp");
 const { generateReply } = require("../services/ai");
 const { updateProfileFromMessage } = require("../services/profileExtractor");
+const { CLINIC_REDIRECT, evaluateClinicScope } = require("../services/scopeGuard");
 const logger = require("../lib/logger");
 
 function maskPhone(phone = "") {
@@ -51,6 +52,17 @@ exports.receiveWebhook = async (req, res) => {
     log.info({ from: maskPhone(from) }, "Processing incoming WhatsApp message");
 
     try {
+      const scope = evaluateClinicScope(text);
+
+      if (!scope.allowed) {
+        log.info(
+          { from: maskPhone(from), scopeReason: scope.reason },
+          "Redirecting off-topic WhatsApp request"
+        );
+        await sendWhatsAppMessage(from, CLINIC_REDIRECT);
+        return res.sendStatus(200);
+      }
+
       // Capture explicit durable facts before generating the reply so the
       // current message can immediately benefit from the updated profile.
       await updateProfileFromMessage(from, text);
