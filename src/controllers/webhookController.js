@@ -4,6 +4,7 @@ const { updateProfileFromMessage } = require("../services/profileExtractor");
 const { CLINIC_REDIRECT, evaluateClinicScope } = require("../services/scopeGuard");
 const { processBookingMessage } = require("../services/bookingIntent");
 const { processAppointmentChangeMessage } = require("../services/appointmentChange");
+const { processCustomerExperienceMessage } = require("../services/customerExperience");
 const logger = require("../lib/logger");
 
 function maskPhone(phone = "") {
@@ -32,12 +33,9 @@ exports.receiveWebhook = async (req, res) => {
     const change = entry?.changes?.[0];
     const value = change?.value;
 
-    if (!value?.messages) {
-      return res.sendStatus(200);
-    }
+    if (!value?.messages) return res.sendStatus(200);
 
     const message = value.messages[0];
-
     if (message.type !== "text") {
       log.info({ messageType: message.type }, "Ignoring unsupported WhatsApp message");
       return res.sendStatus(200);
@@ -45,7 +43,6 @@ exports.receiveWebhook = async (req, res) => {
 
     const from = message.from;
     const text = message.text?.body?.trim();
-
     if (!from || !text) {
       log.warn("Received malformed WhatsApp text message");
       return res.sendStatus(200);
@@ -54,8 +51,23 @@ exports.receiveWebhook = async (req, res) => {
     log.info({ from: maskPhone(from) }, "Processing incoming WhatsApp message");
 
     try {
-      const scope = evaluateClinicScope(text);
+      // Satisfaction replies must be checked before the scope guard because a valid
+      // response can be only a number such as "5" or free-form private feedback.
+      const customerExperience = await processCustomerExperienceMessage(from, text);
+      if (customerExperience.handled) {
+        log.info(
+          {
+            from: maskPhone(from),
+            experienceStatus: customerExperience.experience?.status,
+            rating: customerExperience.experience?.rating,
+          },
+          "Handled customer-experience conversation"
+        );
+        await sendWhatsAppMessage(from, customerExperience.reply);
+        return res.sendStatus(200);
+      }
 
+      const scope = evaluateClinicScope(text);
       if (!scope.allowed) {
         log.info(
           { from: maskPhone(from), scopeReason: scope.reason },
@@ -65,7 +77,6 @@ exports.receiveWebhook = async (req, res) => {
         return res.sendStatus(200);
       }
 
-      // Existing-appointment changes take precedence over new-booking flow.
       const appointmentChange = await processAppointmentChangeMessage(from, text);
       if (appointmentChange.handled) {
         log.info(
@@ -91,12 +102,10 @@ exports.receiveWebhook = async (req, res) => {
       }
 
       await updateProfileFromMessage(from, text);
-
       const reply = await generateReply(from, text);
       await sendWhatsAppMessage(from, reply);
     } catch (error) {
       log.error({ err: error, from: maskPhone(from) }, "Failed to process WhatsApp message");
-
       try {
         await sendWhatsAppMessage(
           from,
