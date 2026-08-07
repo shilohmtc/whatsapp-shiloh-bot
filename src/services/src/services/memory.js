@@ -1,12 +1,19 @@
-function addMessage(phone, role, content) {
-  const history = getHistory(phone);
+const sessions = new Map();
 
-  history.push({
-    role,
-    content: content.trim(),
-  });
-
-  if (history.length > MAX_HISTORY) {
-    history.splice(0, history.length - MAX_HISTORY);
-  }
+function getSession(phone) {
+  return sessions.get(phone);
 }
+
+function saveSession(phone, responseId) {
+  sessions.set(phone, responseId);
+}
+
+function clearSession(phone) {
+  sessions.delete(phone);
+}
+
+module.exports = {
+  getSession,
+  saveSession,
+  clearSession,
+};
