@@ -1,0 +1,19 @@
+-- Shiloh OS production database baseline.
+--
+-- This migration intentionally performs no schema changes.
+-- The existing production schema predates versioned migrations and remains
+-- managed by the current runtime ensureTable/ensureSchema functions until
+-- each legacy domain is migrated deliberately.
+--
+-- Baseline application tables observed in production on 2026-08-09:
+-- appointment_change_intents
+-- appointment_lifecycle
+-- booking_intents
+-- conversation_sessions
+-- customer_experience
+-- document_chunks
+-- documents
+-- knowledge_sync_state
+-- user_profiles
+--
+-- Extensions observed: plpgsql, vector.
