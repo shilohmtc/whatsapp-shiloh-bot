@@ -46,6 +46,29 @@ async function resolveService(name) {
   return result.rows;
 }
 
+async function suggestActiveServices(name) {
+  const query = clean(name).toLowerCase();
+  const tokens = query.split(/\s+/).filter((token) => token.length >= 3).slice(0, 6);
+  const result = await pool.query(
+    `SELECT id, name
+       FROM services
+      WHERE status = 'active'
+      ORDER BY
+        CASE
+          WHEN LOWER(name) = $1 THEN 0
+          WHEN $2::text[] <> '{}'::text[] AND EXISTS (
+            SELECT 1 FROM unnest($2::text[]) token WHERE LOWER(name) LIKE '%' || token || '%'
+          ) THEN 1
+          ELSE 2
+        END,
+        name,
+        id
+      LIMIT 8`,
+    [query, tokens]
+  );
+  return result.rows;
+}
+
 function candidateNames(rows, field) {
   return rows.slice(0, 8).map((row) => `• ${row[field]} (#${row.id})`).join("\n");
 }
@@ -64,7 +87,16 @@ async function checkAvailability({ staffName, serviceName, localDateTime }) {
   const staff = staffMatches[0];
 
   const serviceMatches = await resolveService(serviceName);
-  if (!serviceMatches.length) return { status: "service_not_found", reply: `I couldn't find an active service matching “${clean(serviceName)}”.` };
+  if (!serviceMatches.length) {
+    const suggestions = await suggestActiveServices(serviceName);
+    const suggestionText = suggestions.length
+      ? `\n\nActive canonical services you can use:\n${candidateNames(suggestions, "name")}\n\nRetry the command using one of these exact service names.`
+      : "\n\nThere are currently no active canonical services available to suggest.";
+    return {
+      status: "service_not_found",
+      reply: `I couldn't find an active service matching “${clean(serviceName)}”.${suggestionText}`,
+    };
+  }
   if (serviceMatches.length > 1 && serviceMatches[0].name.toLowerCase() !== clean(serviceName).toLowerCase()) {
     return { status: "service_ambiguous", reply: `I found more than one possible service match. Please be more specific:\n${candidateNames(serviceMatches, "name")}` };
   }
