@@ -123,8 +123,8 @@ async function checkAvailability({ staffName, serviceName, localDateTime }) {
   const conflictResult = await pool.query(
     `WITH requested AS (
        SELECT
-         ($3::timestamp AT TIME ZONE 'Africa/Johannesburg') AS starts_at,
-         (($3::timestamp + ($4::text || ' minutes')::interval) AT TIME ZONE 'Africa/Johannesburg') AS ends_at
+         ($2::timestamp AT TIME ZONE 'Africa/Johannesburg') AS starts_at,
+         (($2::timestamp + ($3::text || ' minutes')::interval) AT TIME ZONE 'Africa/Johannesburg') AS ends_at
      )
      SELECT 'appointment' AS conflict_type, a.id, a.starts_at, a.ends_at,
             COALESCE(c.display_name, a.source_client_name, 'Unknown client') AS label
@@ -143,7 +143,7 @@ async function checkAvailability({ staffName, serviceName, localDateTime }) {
       WHERE cb.starts_at < r.ends_at
         AND cb.ends_at > r.starts_at
      ORDER BY starts_at, id`,
-    [staff.id, service.id, parsedDateTime, totalMinutes]
+    [staff.id, parsedDateTime, totalMinutes]
   );
 
   const windowResult = await pool.query(
