@@ -27,7 +27,7 @@ function moreMenu(){return ['*More — Schedule management*','','1️⃣ Staff h
 
 async function processAdminMobileMenuMessage(sender,text){
   const bookingFlow=await processAdminMobileBookingFlowMessage(sender,text);if(bookingFlow.handled)return bookingFlow;
-  const staffFlow=await processAdminStaffScheduleFlowMessage(sender,text);if(staffFlow.handled)return staffFlow;
+  const staffFlow=await processAdminStaffScheduleFlowMessage(sender,text);if(staffFlow.handled){if(staffFlow.returnToMore){moreSessions.delete(senderKey(sender));return {handled:true,admin:staffFlow.admin,reply:moreMenu()};}return staffFlow;}
   const holiday=await processAdminHolidayHoursMessage(sender,text);if(holiday.handled)return holiday;
   const freelancer=await processAdminFreelancerAvailabilityMessage(sender,text);if(freelancer.handled)return freelancer;
   const admin=await getAdmin(sender);if(!admin)return {handled:false};
