@@ -10,7 +10,7 @@ function price(v){const n=Number(String(v||'').replace(/[^0-9.-]/g,'')); return 
 async function loadMaps(client, clientBatchId){
   const [clientLinks,services,staff]=await Promise.all([
     client.query(`SELECT ecr.display_name,er.shiloh_entity_id AS client_id FROM external_records er JOIN external_client_records ecr ON ecr.external_record_id=er.id WHERE er.import_batch_id=$1 AND er.source='goldie' AND er.entity_type='client' AND er.reconciliation_status='matched' AND er.shiloh_entity_id IS NOT NULL`,[clientBatchId]),
-    client.query(`SELECT id,name,duration_minutes,price FROM services WHERE status='active'`),
+    client.query(`SELECT id,name,duration_minutes,price FROM services WHERE status='active' OR external_source='goldie_historical'`),
     client.query(`SELECT id,display_name,source_name,status FROM staff`),
   ]);
   const cm=new Map(); for(const r of clientLinks.rows){const k=norm(r.display_name);if(!cm.has(k))cm.set(k,new Set());cm.get(k).add(String(r.client_id));}
