@@ -1,5 +1,11 @@
 const { pool } = require("../db/pool");
 
+function dateOnly(value) {
+  if (!value) return null;
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  return String(value).slice(0, 10);
+}
+
 async function repairJeanPierreIdentity() {
   const db = await pool.connect();
   try {
@@ -37,7 +43,7 @@ async function repairJeanPierreIdentity() {
     }
 
     const session = sessionResult.rows[0];
-    if (String(session.pending_date_of_birth) !== "1987-07-23") {
+    if (dateOnly(session.pending_date_of_birth) !== "1987-07-23") {
       throw new Error(`Unexpected onboarding DOB for 8605 contact: ${session.pending_date_of_birth}`);
     }
 
@@ -57,7 +63,7 @@ async function repairJeanPierreIdentity() {
 
     if (jeanPierreMatches.rowCount === 1) {
       const jeanPierre = jeanPierreMatches.rows[0];
-      if (jeanPierre.date_of_birth && String(jeanPierre.date_of_birth) !== "1987-07-23") {
+      if (jeanPierre.date_of_birth && dateOnly(jeanPierre.date_of_birth) !== "1987-07-23") {
         throw new Error("Existing Jean-Pierre client has a conflicting date of birth");
       }
       jeanPierreId = jeanPierre.id;
