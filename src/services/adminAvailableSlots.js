@@ -9,15 +9,9 @@ function parseDate(v='') {
   if(p.getUTCFullYear()!==y||p.getUTCMonth()+1!==mo||p.getUTCDate()!==d) return null;
   return `${y}-${String(mo).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
 }
-function addDays(date, days) {
-  const d=new Date(`${date}T00:00:00Z`); d.setUTCDate(d.getUTCDate()+days); return d.toISOString().slice(0,10);
-}
-async function todayLocal() {
-  const r=await pool.query(`SELECT (NOW() AT TIME ZONE 'Africa/Johannesburg')::date::text AS today`); return r.rows[0].today;
-}
-async function resolve(table, nameColumn, query) {
-  const q=clean(query); const r=await pool.query(`SELECT * FROM ${table} WHERE status='active' AND ${nameColumn} ILIKE $1 ORDER BY CASE WHEN LOWER(${nameColumn})=LOWER($2) THEN 0 ELSE 1 END, ${nameColumn}, id LIMIT 10`,[`%${q}%`,q]); return r.rows;
-}
+function addDays(date, days) { const d=new Date(`${date}T00:00:00Z`); d.setUTCDate(d.getUTCDate()+days); return d.toISOString().slice(0,10); }
+async function todayLocal() { const r=await pool.query(`SELECT (NOW() AT TIME ZONE 'Africa/Johannesburg')::date::text AS today`); return r.rows[0].today; }
+async function resolve(table, nameColumn, query) { const q=clean(query); const r=await pool.query(`SELECT * FROM ${table} WHERE status='active' AND ${nameColumn} ILIKE $1 ORDER BY CASE WHEN LOWER(${nameColumn})=LOWER($2) THEN 0 ELSE 1 END, ${nameColumn}, id LIMIT 10`,[`%${q}%`,q]); return r.rows; }
 function fmtTime(v){return new Intl.DateTimeFormat('en-ZA',{timeZone:'Africa/Johannesburg',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(v));}
 function fmtDate(v){return new Intl.DateTimeFormat('en-ZA',{timeZone:'Africa/Johannesburg',day:'2-digit',month:'2-digit',year:'numeric'}).format(new Date(v));}
 async function getAdmin(sender){const a=await pool.query(`SELECT id,display_name,permissions FROM staff_admin_accounts WHERE normalized_whatsapp=$1 AND active=TRUE`,[normalizePhone(sender)]);return a.rows[0]||null;}
@@ -26,7 +20,7 @@ async function resolveResources(admin, staffText, serviceText){
   const staff=await resolve('staff','display_name',staffText); if(!staff.length) return {reply:`I couldn't find an active staff member matching “${clean(staffText)}”.`};
   if(staff.length>1&&staff[0].display_name.toLowerCase()!==clean(staffText).toLowerCase()) return {reply:`I found more than one staff match. Please use the exact name:\n${staff.map(x=>`• ${x.display_name} (#${x.id})`).join('\n')}`};
   const services=await resolve('services','name',serviceText); if(!services.length) return {reply:`I couldn't find an active service matching “${clean(serviceText)}”.`};
-  if(services.length>1&&services[0].name.toLowerCase()!==clean(serviceText).toLowerCase()) return {reply:`I found more than one service match. Please use the exact name:\n${services.map(x=>`• ${x.name} (#${x.id})`).join('\n')}`};
+  if(services.length>1&&services[0].name.toLowerCase()!==clean(serviceText).toLowerCase()) return {reply:`I found more than one service match. Please use the exact name:\n${services.map(x=>`• ${x.display_name || x.name} (#${x.id})`).join('\n')}`};
   return {staff:staff[0],service:services[0]};
 }
 async function audit(adminId,action,metadata){await pool.query(`INSERT INTO crm_audit_events (actor_admin_id,action,entity_type,entity_id,metadata) VALUES ($1,$2,'admin_assistant',NULL,$3::jsonb)`,[adminId,action,JSON.stringify(metadata)]);}
@@ -40,7 +34,6 @@ async function processAdminAvailableSlotsMessage(sender,text){
   const m=availableMatch||checkMatch||nextMatch;
   const resources=await resolveResources(admin,m[1],m[2]); if(resources.reply) return {handled:true,admin,reply:resources.reply};
   const {staff,service}=resources;
-
   if(availableMatch||checkMatch){
     const dateTime=m[3];
     const date=parseDate(dateTime) || parseDate(dateTime.split(/\s+/)[0]);
@@ -52,7 +45,7 @@ async function processAdminAvailableSlotsMessage(sender,text){
     const requestedTime = dateTime.match(/\b(\d{1,2}):(\d{2})\b/);
     if(requestedTime){
       const hh=Number(requestedTime[1]), mm=Number(requestedTime[2]);
-      const matching=result.slots.find(s=>{const d=new Date(s.starts_at); const local=new Intl.DateTimeFormat('en-ZA',{timeZone:'Africa/Johannesburg',hour:'2-digit',minute:'2-digit',hour12:false}).format(d).split(':').map(Number); return local[0]===hh&&local[1]===mm;});
+      const matching=result.slots.find(s=>{const parts=fmtTime(s.starts_at).split(':').map(Number); return parts[0]===hh&&parts[1]===mm;});
       if(matching) return {handled:true,admin,reply:`Availability confirmed — ${staff.display_name} — ${service.name}\nDate: ${date}\nTime: ${fmtTime(matching.starts_at)}–${fmtTime(matching.ends_at)}\n\nThis is an authoritative bookable slot.`};
       return {handled:true,admin,reply:`No authoritative bookable slot was found for ${staff.display_name} — ${service.name} at ${hh.toString().padStart(2,'0')}:${mm.toString().padStart(2,'0')} on ${date}.`};
     }
@@ -62,7 +55,6 @@ async function processAdminAvailableSlotsMessage(sender,text){
     if(result.slots.length>5) lines.push(`…and ${result.slots.length-5} more. Use Check availability for a specific time.`);
     return {handled:true,admin,reply:lines.join('\n')};
   }
-
   const requestedStart=m[3] ? parseDate(m[3]) : await todayLocal();
   if(!requestedStart) return {handled:true,admin,reply:'Use: Next available STAFF | SERVICE | DD/MM/YYYY\nThe date is optional.'};
   for(let offset=0;offset<60;offset++){
@@ -70,11 +62,7 @@ async function processAdminAvailableSlotsMessage(sender,text){
     const result=await listAvailableSlots({staffId:staff.id,serviceId:service.id,date,intervalMinutes:15});
     if(result.status==='not_eligible') return {handled:true,admin,reply:`${staff.display_name} is not eligible for ${service.name}.`};
     if(result.status==='invalid_duration') return {handled:true,admin,reply:`${service.name} does not have a usable duration.`};
-    if(result.slots.length){
-      const slot=result.slots[0];
-      await audit(admin.id,'admin.next_available_viewed',{staffId:staff.id,serviceId:service.id,searchStart:requestedStart,foundDate:date,startsAt:slot.starts_at});
-      return {handled:true,admin,reply:[`Next available — ${staff.display_name} — ${service.name}`,`• ${fmtDate(slot.starts_at)} ${fmtTime(slot.starts_at)}–${fmtTime(slot.ends_at)}`,`• Service window: ${result.totalMinutes} minutes`,'','This slot is authoritative at the time of this lookup. Re-check availability before preparing a booking.'].join('\n')};
-    }
+    if(result.slots.length){ const slot=result.slots[0]; await audit(admin.id,'admin.next_available_viewed',{staffId:staff.id,serviceId:service.id,searchStart:requestedStart,foundDate:date,startsAt:slot.starts_at}); return {handled:true,admin,reply:[`Next available — ${staff.display_name} — ${service.name}`,`• ${fmtDate(slot.starts_at)} ${fmtTime(slot.starts_at)}–${fmtTime(slot.ends_at)}`,`• Service window: ${result.totalMinutes} minutes`,'','This slot is authoritative at the time of this lookup. Re-check availability before preparing a booking.'].join('\n')}; }
   }
   await audit(admin.id,'admin.next_available_viewed',{staffId:staff.id,serviceId:service.id,searchStart:requestedStart,foundDate:null});
   return {handled:true,admin,reply:`No authoritative available slot was found for ${staff.display_name} — ${service.name} in the next 60 days from ${requestedStart}.`};
