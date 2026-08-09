@@ -16,7 +16,7 @@ function hasPermission(admin, permission) {
 
 function mainHelp(admin) {
   const lines = ["Shiloh Admin Assistant", `Hi ${admin.display_name} 👋 Admin mode is active.`, ""];
-  if (hasPermission(admin, "appointment:view")) lines.push("Appointments", "• Today — view today's appointments", "• Tomorrow — view tomorrow's appointments");
+  if (hasPermission(admin, "appointment:view")) lines.push("Appointments", "• Today — view today's appointments", "• Tomorrow — view tomorrow's appointments", "• Check availability STAFF | SERVICE | DD/MM/YYYY HH:MM — conflict check");
   if (hasPermission(admin, "walkin:create")) lines.push("", "Client Management", "• Add walk-in — register a new walk-in client", "• Help walk-in — see the walk-in registration steps");
   if (hasPermission(admin, "client:lookup")) lines.push("", "Client Lookup", "• Find client [name or number] — look up canonical CRM client details", "• Help client — see client-lookup guidance");
   lines.push("", "Help", "• Help — return to this menu", "• Menu — return to this menu", "• Cancel — cancel an active walk-in registration", "", "You can also tell me what you want to do in normal language. I’ll only show or perform actions your admin account is permitted to use.");
@@ -49,7 +49,21 @@ function clientHelp(admin) {
 
 function appointmentsHelp(admin) {
   if (!hasPermission(admin, "appointment:view")) return "Your admin account does not currently have permission to view appointments.";
-  return ["Appointments Help", "", "Live read-only commands:", "• Today — view today's appointments", "• Tomorrow — view tomorrow's appointments", "", "Appointment creation, moving and cancellation will only be enabled after the transactional CRM booking layer is complete and will use explicit confirmation for production changes."].join("\n");
+  return [
+    "Appointments Help",
+    "",
+    "Live read-only commands:",
+    "• Today — view today's appointments",
+    "• Tomorrow — view tomorrow's appointments",
+    "• Check availability STAFF | SERVICE | DD/MM/YYYY HH:MM",
+    "",
+    "Example:",
+    "• Check availability Christel | Swedish Massage | 10/08/2026 14:30",
+    "",
+    "Availability lookup checks canonical staff/service eligibility plus overlapping appointments and staff calendar blocks. It does not yet claim full working-hours availability because recurring practitioner schedules are not modeled in CRM-1.",
+    "",
+    "Production appointment creation will only be enabled behind an explicit confirmation step and a final conflict re-check.",
+  ].join("\n");
 }
 
 function getAdminHelpReply(admin, text) {
