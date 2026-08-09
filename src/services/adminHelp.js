@@ -18,7 +18,7 @@ function mainHelp(admin) {
   const lines = ["Shiloh Admin Assistant", `Hi ${admin.display_name} 👋 Admin mode is active.`, ""];
   if (hasPermission(admin, "appointment:view")) lines.push("Appointments", "• Today — view today's appointments", "• Tomorrow — view tomorrow's appointments");
   if (hasPermission(admin, "walkin:create")) lines.push("", "Client Management", "• Add walk-in — register a new walk-in client", "• Help walk-in — see the walk-in registration steps");
-  if (hasPermission(admin, "client:lookup")) lines.push("", "Client Lookup", "• Find client [name or number] — client lookup is being added next", "• Help client — see current client-management guidance");
+  if (hasPermission(admin, "client:lookup")) lines.push("", "Client Lookup", "• Find client [name or number] — look up canonical CRM client details", "• Help client — see client-lookup guidance");
   lines.push("", "Help", "• Help — return to this menu", "• Menu — return to this menu", "• Cancel — cancel an active walk-in registration", "", "You can also tell me what you want to do in normal language. I’ll only show or perform actions your admin account is permitted to use.");
   return lines.join("\n");
 }
@@ -30,7 +30,21 @@ function walkinHelp(admin) {
 
 function clientHelp(admin) {
   if (!hasPermission(admin, "client:lookup")) return "Your admin account does not currently have permission to look up client information.";
-  return ["Client Management Help", "", "Current live admin capability:", "• Add walk-in — safely create a new walk-in client", "", "Duplicate protection is always applied before a new client is created.", "", "Client lookup and client-detail commands are the next Admin Assistant capability and will appear here when live."].join("\n");
+  return [
+    "Client Lookup Help",
+    "",
+    "Send:",
+    "• Find client [full or partial name]",
+    "• Find client [mobile/WhatsApp number]",
+    "",
+    "Examples:",
+    "• Find client Christel",
+    "• Find client 0821234567",
+    "",
+    "A unique match shows canonical CRM details and appointment summary information. Multiple matches are shown as candidates and Shiloh will not select or merge identities automatically.",
+    "",
+    "Client lookup is read-only and does not change client records.",
+  ].join("\n");
 }
 
 function appointmentsHelp(admin) {
