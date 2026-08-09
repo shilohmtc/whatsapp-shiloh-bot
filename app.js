@@ -12,6 +12,7 @@ const adminRoutes = require("./src/routes/admin");
 const auditReadRoutes = require("./src/routes/auditRead");
 const { checkDatabase } = require("./src/services/memory");
 const { getPostCanonicalizationAudit } = require("./src/services/canonicalizationAudit");
+const { getAppointmentIdentityEvidence } = require("./src/services/appointmentIdentityEvidence");
 const { runConfiguredCreateNewPromotion } = require("./src/services/createNewClientPromotion");
 const { startGoldieSyncScheduler } = require("./src/services/goldieSync");
 const {
@@ -56,6 +57,15 @@ async function logCanonicalizationAuditStatus() {
   }
 }
 
+async function logAppointmentIdentityEvidenceStatus() {
+  try {
+    const report = await getAppointmentIdentityEvidence({ clientBatchId: "1", appointmentBatchId: "2" });
+    logger.info({ appointmentIdentityEvidence: { clientBatchId: report.clientBatchId, appointmentBatchId: report.appointmentBatchId, summary: report.summary } }, "Appointment identity evidence summary");
+  } catch (error) {
+    logger.error({ err: error }, "Appointment identity evidence summary failed");
+  }
+}
+
 async function runControlledStartupDataWork() {
   try {
     await runConfiguredCreateNewPromotion(logger);
@@ -63,6 +73,7 @@ async function runControlledStartupDataWork() {
     logger.error({ err: error }, "Configured Goldie create-new promotion failed");
   }
   await logCanonicalizationAuditStatus();
+  await logAppointmentIdentityEvidenceStatus();
 }
 
 const server = app.listen(PORT, () => {
