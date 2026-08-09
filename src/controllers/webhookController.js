@@ -6,6 +6,10 @@ const { processBookingMessage } = require("../services/bookingIntent");
 const { processAppointmentChangeMessage } = require("../services/appointmentChange");
 const { processCustomerExperienceMessage } = require("../services/customerExperience");
 const { processClientIdentityMessage } = require("../services/clientIdentityOnboarding");
+const {
+  forceMatchedClientNameConfirmation,
+  guardActiveNameConfirmation,
+} = require("../services/identityOnboardingGuard");
 const logger = require("../lib/logger");
 
 function maskPhone(phone = "") {
@@ -74,6 +78,16 @@ exports.receiveWebhook = async (req, res) => {
         return res.sendStatus(200);
       }
 
+      // If an existing historical client is being onboarded, verify the claimed name
+      // against the linked canonical client before the onboarding service can write
+      // DOB/contact data or change the client display name.
+      const nameGuard = await guardActiveNameConfirmation(from, text);
+      if (nameGuard.handled) {
+        log.warn({ from: maskPhone(from) }, "Blocked onboarding identity-name mismatch");
+        await sendWhatsAppMessage(from, nameGuard.reply);
+        return res.sendStatus(200);
+      }
+
       // Canonical identity/onboarding runs before the scope guard so required answers
       // such as a name, phone number or date of birth are accepted as valid workflow input.
       const identity = await processClientIdentityMessage(from, text);
@@ -88,6 +102,17 @@ exports.receiveWebhook = async (req, res) => {
         );
 
         let reply = identity.reply;
+
+        // A phone match is useful for recognition but is not enough evidence to update
+        // an incomplete historical client. Require the sender to confirm the matched
+        // client's name before collecting or persisting further identity fields.
+        if (identity.identityStatus === "matched_incomplete" && identity.client?.id) {
+          const forced = await forceMatchedClientNameConfirmation(from, identity.client.id);
+          if (forced) {
+            reply = `Welcome back, ${identity.client.display_name}. Before I can continue with the booking, please confirm your full name.`;
+          }
+        }
+
         if (identity.onboardingComplete && identity.resumeBooking) {
           const booking = await processBookingMessage(from, "I want to book an appointment");
           if (booking.handled && booking.reply) {
