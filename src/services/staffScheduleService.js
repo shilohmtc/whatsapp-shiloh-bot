@@ -73,18 +73,28 @@ async function replaceWorkingHoursDay({ staffId, dayOfWeek, windows, locationId 
     await db.query('BEGIN');
     await db.query(`DELETE FROM staff_working_hours WHERE staff_id=$1 AND day_of_week=$2 AND (($3::bigint IS NULL AND location_id IS NULL) OR location_id=$3)`, [staffId, day, locationId]);
     await db.query(`DELETE FROM staff_recurring_day_closures WHERE staff_id=$1 AND day_of_week=$2 AND (($3::bigint IS NULL AND location_id IS NULL) OR location_id=$3)`, [staffId, day, locationId]);
-
-    for (const w of validated.windows) {
-      await db.query(`INSERT INTO staff_working_hours (staff_id, location_id, day_of_week, starts_local, ends_local) VALUES ($1,$2,$3,$4::time,$5::time)`, [staffId, locationId, day, w.startsLocal, w.endsLocal]);
-    }
-
-    if (!validated.windows.length) {
-      await db.query(`INSERT INTO staff_recurring_day_closures (staff_id, location_id, day_of_week) VALUES ($1,$2,$3)`, [staffId, locationId, day]);
-    }
-
+    for (const w of validated.windows) await db.query(`INSERT INTO staff_working_hours (staff_id, location_id, day_of_week, starts_local, ends_local) VALUES ($1,$2,$3,$4::time,$5::time)`, [staffId, locationId, day, w.startsLocal, w.endsLocal]);
+    if (!validated.windows.length) await db.query(`INSERT INTO staff_recurring_day_closures (staff_id, location_id, day_of_week) VALUES ($1,$2,$3)`, [staffId, locationId, day]);
     await db.query(`INSERT INTO crm_audit_events (actor_admin_id, action, entity_type, entity_id, metadata) VALUES ($1,'schedule.working_hours_replaced','staff',$2,$3::jsonb)`, [actorAdminId, staffId, JSON.stringify({ dayOfWeek:day, day:DAYS[day], locationId, windows:validated.windows, recurringClosed:validated.windows.length === 0 })]);
     await db.query('COMMIT');
     return { status:'updated', staff:staffResult.rows[0], day, windows:validated.windows, recurringClosed:validated.windows.length === 0 };
+  } catch (e) { await db.query('ROLLBACK'); throw e; } finally { db.release(); }
+}
+
+async function clearWorkingHoursDayOverride({ staffId, dayOfWeek, locationId = null, actorAdminId = null }) {
+  const day = dayNumber(dayOfWeek);
+  if (day === undefined) return { status:'invalid_day', reply:'Use a weekday name such as Monday, or day number 0–6.' };
+  const staffResult = await pool.query(`SELECT id, display_name, status, scheduling_type FROM staff WHERE id=$1`, [staffId]);
+  if (!staffResult.rowCount || staffResult.rows[0].status !== 'active') return { status:'staff_not_found', reply:'Active staff member not found.' };
+  if (staffResult.rows[0].scheduling_type !== 'regular') return { status:'not_regular', reply:'Only regular practitioners inherit clinic hours.' };
+  const db = await pool.connect();
+  try {
+    await db.query('BEGIN');
+    const removedHours = await db.query(`DELETE FROM staff_working_hours WHERE staff_id=$1 AND day_of_week=$2 AND (($3::bigint IS NULL AND location_id IS NULL) OR location_id=$3)`, [staffId, day, locationId]);
+    const removedClosures = await db.query(`DELETE FROM staff_recurring_day_closures WHERE staff_id=$1 AND day_of_week=$2 AND (($3::bigint IS NULL AND location_id IS NULL) OR location_id=$3)`, [staffId, day, locationId]);
+    await db.query(`INSERT INTO crm_audit_events (actor_admin_id, action, entity_type, entity_id, metadata) VALUES ($1,'schedule.working_hours_inheritance_restored','staff',$2,$3::jsonb)`, [actorAdminId, staffId, JSON.stringify({ dayOfWeek:day, day:DAYS[day], locationId, removedWorkingHourRows:removedHours.rowCount, removedClosureRows:removedClosures.rowCount })]);
+    await db.query('COMMIT');
+    return { status:'updated', staff:staffResult.rows[0], day, inherited:true };
   } catch (e) { await db.query('ROLLBACK'); throw e; } finally { db.release(); }
 }
 
@@ -95,11 +105,7 @@ async function addScheduleException({ staffId, date, type, startsLocal = null, e
   if (hasTimes && (!validTime(startsLocal) || !validTime(endsLocal) || endsLocal <= startsLocal)) return { status:'invalid_time', reply:'Use a valid HH:MM-HH:MM range, or all-day.' };
   const staffResult = await pool.query(`SELECT id, display_name, status FROM staff WHERE id=$1`, [staffId]);
   if (!staffResult.rowCount || staffResult.rows[0].status !== 'active') return { status:'staff_not_found', reply:'Active staff member not found.' };
-  const inserted = await pool.query(
-    `INSERT INTO staff_schedule_exceptions (staff_id, location_id, exception_date, exception_type, starts_local, ends_local, reason)
-     VALUES ($1,$2,$3,$4,$5::time,$6::time,$7) RETURNING id, exception_date, exception_type, starts_local::text, ends_local::text, reason`,
-    [staffId, locationId, date, type, startsLocal, endsLocal, reason ? clean(reason).slice(0,250) : null]
-  );
+  const inserted = await pool.query(`INSERT INTO staff_schedule_exceptions (staff_id, location_id, exception_date, exception_type, starts_local, ends_local, reason) VALUES ($1,$2,$3,$4,$5::time,$6::time,$7) RETURNING id, exception_date, exception_type, starts_local::text, ends_local::text, reason`, [staffId, locationId, date, type, startsLocal, endsLocal, reason ? clean(reason).slice(0,250) : null]);
   await pool.query(`INSERT INTO crm_audit_events (actor_admin_id, action, entity_type, entity_id, metadata) VALUES ($1,'schedule.exception_created','staff',$2,$3::jsonb)`, [actorAdminId, staffId, JSON.stringify({ exceptionId: inserted.rows[0].id, date, type, startsLocal, endsLocal, reason })]);
   return { status:'created', staff:staffResult.rows[0], exception:inserted.rows[0] };
 }
@@ -110,29 +116,10 @@ async function updateScheduleException({ staffId, exceptionId, date, startsLocal
   const db = await pool.connect();
   try {
     await db.query('BEGIN');
-    const current = await db.query(
-      `SELECT id, exception_date::text, exception_type, starts_local::text, ends_local::text
-         FROM staff_schedule_exceptions
-        WHERE id=$1 AND staff_id=$2
-        FOR UPDATE`,
-      [exceptionId, staffId]
-    );
-    if (!current.rowCount || current.rows[0].exception_type !== 'available') {
-      await db.query('ROLLBACK');
-      return { status:'not_found' };
-    }
-    const updated = await db.query(
-      `UPDATE staff_schedule_exceptions
-          SET exception_date=$3::date, starts_local=$4::time, ends_local=$5::time, updated_at=NOW()
-        WHERE id=$1 AND staff_id=$2
-        RETURNING id, exception_date::text, exception_type, starts_local::text, ends_local::text, reason`,
-      [exceptionId, staffId, date, startsLocal, endsLocal]
-    );
-    await db.query(
-      `INSERT INTO crm_audit_events (actor_admin_id, action, entity_type, entity_id, metadata)
-       VALUES ($1,'schedule.exception_updated','staff',$2,$3::jsonb)`,
-      [actorAdminId, staffId, JSON.stringify({ exceptionId:Number(exceptionId), before:current.rows[0], after:updated.rows[0] })]
-    );
+    const current = await db.query(`SELECT id, exception_date::text, exception_type, starts_local::text, ends_local::text FROM staff_schedule_exceptions WHERE id=$1 AND staff_id=$2 FOR UPDATE`, [exceptionId, staffId]);
+    if (!current.rowCount || current.rows[0].exception_type !== 'available') { await db.query('ROLLBACK'); return { status:'not_found' }; }
+    const updated = await db.query(`UPDATE staff_schedule_exceptions SET exception_date=$3::date, starts_local=$4::time, ends_local=$5::time, updated_at=NOW() WHERE id=$1 AND staff_id=$2 RETURNING id, exception_date::text, exception_type, starts_local::text, ends_local::text, reason`, [exceptionId, staffId, date, startsLocal, endsLocal]);
+    await db.query(`INSERT INTO crm_audit_events (actor_admin_id, action, entity_type, entity_id, metadata) VALUES ($1,'schedule.exception_updated','staff',$2,$3::jsonb)`, [actorAdminId, staffId, JSON.stringify({ exceptionId:Number(exceptionId), before:current.rows[0], after:updated.rows[0] })]);
     await db.query('COMMIT');
     return { status:'updated', exception:updated.rows[0] };
   } catch (e) { await db.query('ROLLBACK'); throw e; } finally { db.release(); }
@@ -149,7 +136,6 @@ function formatWorkingHours(data) {
   const lines = [`Working hours — ${data.staff.display_name}`];
   const regular = data.staff.scheduling_type === 'regular';
   const closures = data.closures || [];
-
   for (let d=0; d<7; d++) {
     const rows = data.hours.filter((r) => Number(r.day_of_week) === d);
     const closed = closures.some((r) => Number(r.day_of_week) === d);
@@ -157,9 +143,7 @@ function formatWorkingHours(data) {
     else if (closed) lines.push(`• ${DAYS[d]}: Closed (staff override)`);
     else if (regular) lines.push(`• ${DAYS[d]}: Clinic hours (inherited)`);
   }
-
   if (!regular && !data.hours.length && !closures.length) lines.push('', 'No recurring working hours are configured yet.');
-
   if (data.exceptions.length) {
     lines.push('', 'Upcoming exceptions:');
     for (const ex of data.exceptions.slice(0,10)) lines.push(`• #${ex.id} ${String(ex.exception_date).slice(0,10)} — ${ex.exception_type} — ${ex.starts_local ? `${ex.starts_local.slice(0,5)}-${ex.ends_local.slice(0,5)}` : 'all-day'}${ex.reason ? ` — ${ex.reason}` : ''}`);
@@ -167,4 +151,4 @@ function formatWorkingHours(data) {
   return lines.join('\n');
 }
 
-module.exports = { DAYS, dayNumber, resolveStaff, getWorkingHours, replaceWorkingHoursDay, addScheduleException, updateScheduleException, removeScheduleException, formatWorkingHours };
+module.exports = { DAYS, dayNumber, resolveStaff, getWorkingHours, replaceWorkingHoursDay, clearWorkingHoursDayOverride, addScheduleException, updateScheduleException, removeScheduleException, formatWorkingHours };
