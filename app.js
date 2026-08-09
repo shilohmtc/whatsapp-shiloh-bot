@@ -9,6 +9,7 @@ const webhookRoutes = require("./src/routes/webhook");
 const adminRoutes = require("./src/routes/admin");
 const auditReadRoutes = require("./src/routes/auditRead");
 const { checkDatabase } = require("./src/services/memory");
+const { applyPendingMigrations } = require("./src/services/migrations");
 const { startGoldieSyncScheduler } = require("./src/services/goldieSync");
 const { startAppointmentLifecycleScheduler } = require("./src/services/appointmentLifecycle");
 
@@ -39,14 +40,29 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 3000;
-const server = app.listen(PORT, () => {
-  logger.info({ port: PORT }, "Shiloh started");
-  startGoldieSyncScheduler();
-  startAppointmentLifecycleScheduler();
+let server;
+
+async function start() {
+  if (process.env.RUN_DB_MIGRATIONS_ON_STARTUP === "true") {
+    const migrationResult = await applyPendingMigrations();
+    logger.info({ applied: migrationResult.applied }, "Explicit startup database migrations applied");
+  }
+
+  server = app.listen(PORT, () => {
+    logger.info({ port: PORT }, "Shiloh started");
+    startGoldieSyncScheduler();
+    startAppointmentLifecycleScheduler();
+  });
+}
+
+start().catch((error) => {
+  logger.fatal({ err: error }, "Shiloh failed during startup");
+  process.exit(1);
 });
 
 function shutdown(signal) {
   logger.info({ signal }, "Shutting down Shiloh");
+  if (!server) return process.exit(0);
   server.close(() => {
     logger.info("HTTP server closed");
     process.exit(0);
