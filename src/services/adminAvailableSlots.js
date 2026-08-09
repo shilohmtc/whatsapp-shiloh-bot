@@ -20,7 +20,7 @@ async function resolveResources(admin, staffText, serviceText){
   const staff=await resolve('staff','display_name',staffText); if(!staff.length) return {reply:`I couldn't find an active staff member matching “${clean(staffText)}”.`};
   if(staff.length>1&&staff[0].display_name.toLowerCase()!==clean(staffText).toLowerCase()) return {reply:`I found more than one staff match. Please use the exact name:\n${staff.map(x=>`• ${x.display_name} (#${x.id})`).join('\n')}`};
   const services=await resolve('services','name',serviceText); if(!services.length) return {reply:`I couldn't find an active service matching “${clean(serviceText)}”.`};
-  if(services.length>1&&services[0].name.toLowerCase()!==clean(serviceText).toLowerCase()) return {reply:`I found more than one service match. Please use the exact name:\n${services.map(x=>`• ${x.display_name || x.name} (#${x.id})`).join('\n')}`};
+  if(services.length>1&&services[0].name.toLowerCase()!==clean(serviceText).toLowerCase()) return {reply:`I found more than one service match. Please use the exact name:\n${services.map(x=>`• ${x.name} (#${x.id})`).join('\n')}`};
   return {staff:staff[0],service:services[0]};
 }
 async function audit(adminId,action,metadata){await pool.query(`INSERT INTO crm_audit_events (actor_admin_id,action,entity_type,entity_id,metadata) VALUES ($1,$2,'admin_assistant',NULL,$3::jsonb)`,[adminId,action,JSON.stringify(metadata)]);}
