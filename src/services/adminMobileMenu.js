@@ -2,6 +2,7 @@ const { pool } = require('../db/pool');
 const { normalizePhone } = require('./clientIdentityOnboarding');
 const { processAdminHolidayHoursMessage, getHolidayReminder } = require('./adminHolidayHours');
 const { processAdminFreelancerAvailabilityMessage } = require('./adminFreelancerAvailability');
+const { processAdminMobileBookingFlowMessage } = require('./adminMobileBookingFlow');
 
 const scheduleSessions = new Map();
 function has(admin,p){return admin?.permissions?.[p]===true;}
@@ -21,13 +22,12 @@ function menu(admin){
   return lines.join('\n');
 }
 
-function availabilityGuide(){return ['*Find an available time*','','For the quickest result, send:','Next available STAFF | SERVICE','','Example:','Next available Christel | Full Body Swedish','','Or check a date:','Available slots STAFF | SERVICE | DD/MM/YYYY'].join('\n');}
-function bookingGuide(){return ['*Make a booking*','','1. Find the client first','2. Check an available time','3. Send the booking request','','Find client NAME','','Then:','Book client CRM_ID | STAFF | SERVICE | DD/MM/YYYY HH:MM','','Shiloh will show a summary before anything is created. The booking is only written after CONFIRM BOOKING.'].join('\n');}
 function clientGuide(){return ['*Find a client*','','Send the client name or mobile number after “Find client”.','','Example:','Find client Chenique'].join('\n');}
 function scheduleMenu(){return ['*Staff schedule*','','1️⃣ View working hours','2️⃣ Change regular hours','3️⃣ Add leave / special hours','4️⃣ Remove an exception','5️⃣ Freelancer availability','','Reply with a number.','Reply MENU to return.'].join('\n');}
 function scheduleGuide(choice){if(choice==='1')return ['*View working hours*','','Send: Working hours STAFF','','Example: Working hours Christel'].join('\n');if(choice==='2')return ['*Change regular hours*','','Send: Set working hours STAFF | DAY | HOURS','','Example: Set working hours Christel | Monday | 09:00-17:00','','Use CLOSED when the practitioner does not work that day.'].join('\n');if(choice==='3')return ['*Add leave / special hours*','','Leave:','Add schedule exception STAFF | YYYY-MM-DD | unavailable | ALL-DAY | REASON','','Special hours:','Add schedule exception STAFF | YYYY-MM-DD | available | HH:MM-HH:MM | REASON'].join('\n');return ['*Remove an exception*','','First send: Working hours STAFF','Then use the exception number shown:','Remove schedule exception STAFF | NUMBER'].join('\n');}
 
 async function processAdminMobileMenuMessage(sender,text){
+  const bookingFlow=await processAdminMobileBookingFlowMessage(sender,text);if(bookingFlow.handled)return bookingFlow;
   const holiday=await processAdminHolidayHoursMessage(sender,text);if(holiday.handled)return holiday;
   const freelancer=await processAdminFreelancerAvailabilityMessage(sender,text);if(freelancer.handled)return freelancer;
   const admin=await getAdmin(sender);if(!admin)return {handled:false};
@@ -45,8 +45,16 @@ async function processAdminMobileMenuMessage(sender,text){
     if(v==='5'){scheduleSessions.delete(k);return processAdminFreelancerAvailabilityMessage(sender,'Freelancer availability');}
     return {handled:true,admin,reply:'Choose 1, 2, 3, 4, 5, or reply MENU.'};
   }
-  if(v==='3'||v==='find an available time'||v==='find availability'){if(!has(admin,'appointment:view'))return {handled:false};await audit(admin.id,'admin.mobile_menu_selected',{option:'availability'});return {handled:true,admin,reply:availabilityGuide()};}
-  if(v==='4'||v==='make a booking'||v==='new booking'){if(!has(admin,'appointment:create'))return {handled:false};await audit(admin.id,'admin.mobile_menu_selected',{option:'booking'});return {handled:true,admin,reply:bookingGuide()};}
+  if(v==='3'||v==='find an available time'||v==='find availability'){
+    if(!has(admin,'appointment:view')||!has(admin,'appointment:create'))return {handled:false};
+    await audit(admin.id,'admin.mobile_menu_selected',{option:'availability_booking_flow'});
+    return processAdminMobileBookingFlowMessage(sender,'Find an available time');
+  }
+  if(v==='4'||v==='make a booking'||v==='new booking'){
+    if(!has(admin,'appointment:create')||!has(admin,'appointment:view'))return {handled:false};
+    await audit(admin.id,'admin.mobile_menu_selected',{option:'booking_flow'});
+    return processAdminMobileBookingFlowMessage(sender,'Make a booking');
+  }
   if(v==='5'||v==='find a client'){if(!has(admin,'client:lookup'))return {handled:false};await audit(admin.id,'admin.mobile_menu_selected',{option:'client'});return {handled:true,admin,reply:clientGuide()};}
   if(v==='6'||v==='add a walk-in'||v==='add walk-in'){if(!has(admin,'walkin:create'))return {handled:false};return {handled:false};}
   if(v==='7'||v==='staff schedule'||v==='schedule'){if(!has(admin,'schedule:manage'))return {handled:false};scheduleSessions.set(k,{step:'menu'});await audit(admin.id,'admin.mobile_menu_selected',{option:'schedule'});return {handled:true,admin,reply:scheduleMenu()};}
