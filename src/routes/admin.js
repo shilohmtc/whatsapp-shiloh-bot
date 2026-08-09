@@ -28,6 +28,12 @@ const {
   getCustomerSatisfaction,
   resolveCustomerFeedback,
 } = require("../controllers/customerExperienceController");
+const {
+  getStatus: getDatabaseStatus,
+  getTables: getDatabaseTables,
+  getSchema: getDatabaseSchema,
+  getOverview: getDatabaseOverview,
+} = require("../controllers/databaseController");
 
 const router = express.Router();
 
@@ -56,5 +62,10 @@ router.get("/feedback", getFeedback);
 router.patch("/feedback/:id/resolve", resolveCustomerFeedback);
 router.get("/reviews", getReviews);
 router.get("/customer-satisfaction", getCustomerSatisfaction);
+
+router.get("/database/status", getDatabaseStatus);
+router.get("/database/tables", getDatabaseTables);
+router.get("/database/schema", getDatabaseSchema);
+router.get("/database/overview", getDatabaseOverview);
 
 module.exports = router;
