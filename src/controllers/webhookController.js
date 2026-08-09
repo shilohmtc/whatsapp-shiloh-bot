@@ -5,6 +5,7 @@ const { CLINIC_REDIRECT, evaluateClinicScope } = require("../services/scopeGuard
 const { processBookingMessage } = require("../services/bookingIntent");
 const { processAppointmentChangeMessage } = require("../services/appointmentChange");
 const { processCustomerExperienceMessage } = require("../services/customerExperience");
+const { processClientIdentityMessage } = require("../services/clientIdentityOnboarding");
 const logger = require("../lib/logger");
 
 function maskPhone(phone = "") {
@@ -51,8 +52,8 @@ exports.receiveWebhook = async (req, res) => {
     log.info({ from: maskPhone(from) }, "Processing incoming WhatsApp message");
 
     try {
-      // Satisfaction replies must be checked before the scope guard because a valid
-      // response can be only a number such as "5" or free-form private feedback.
+      // Satisfaction replies remain first because they can be a single number or
+      // private free-form feedback and must not be mistaken for onboarding input.
       const customerExperience = await processCustomerExperienceMessage(from, text);
       if (customerExperience.handled) {
         log.info(
@@ -64,6 +65,22 @@ exports.receiveWebhook = async (req, res) => {
           "Handled customer-experience conversation"
         );
         await sendWhatsAppMessage(from, customerExperience.reply);
+        return res.sendStatus(200);
+      }
+
+      // Canonical identity/onboarding runs before the scope guard so required answers
+      // such as a name, phone number or date of birth are accepted as valid workflow input.
+      const identity = await processClientIdentityMessage(from, text);
+      if (identity.handled) {
+        log.info(
+          {
+            from: maskPhone(from),
+            identityStatus: identity.identityStatus,
+            onboardingComplete: Boolean(identity.onboardingComplete),
+          },
+          "Handled canonical client identity/onboarding conversation"
+        );
+        await sendWhatsAppMessage(from, identity.reply);
         return res.sendStatus(200);
       }
 
