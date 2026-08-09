@@ -9,6 +9,7 @@ validateEnv();
 
 const webhookRoutes = require("./src/routes/webhook");
 const adminRoutes = require("./src/routes/admin");
+const auditReadRoutes = require("./src/routes/auditRead");
 const { checkDatabase } = require("./src/services/memory");
 const { startGoldieSyncScheduler } = require("./src/services/goldieSync");
 const {
@@ -39,6 +40,7 @@ app.get("/health", async (req, res) => {
   });
 });
 
+app.use("/audit-read", auditReadRoutes);
 app.use("/admin", adminRoutes);
 app.use("/", webhookRoutes);
 
