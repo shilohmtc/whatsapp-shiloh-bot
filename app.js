@@ -10,6 +10,7 @@ const adminRoutes = require("./src/routes/admin");
 const auditReadRoutes = require("./src/routes/auditRead");
 const { checkDatabase } = require("./src/services/memory");
 const { applyPendingMigrations } = require("./src/services/migrations");
+const { repairJeanPierreIdentity } = require("./src/services/identityRepair");
 const { startGoldieSyncScheduler } = require("./src/services/goldieSync");
 const { startAppointmentLifecycleScheduler } = require("./src/services/appointmentLifecycle");
 
@@ -46,6 +47,11 @@ async function start() {
   if (process.env.RUN_DB_MIGRATIONS_ON_STARTUP === "true") {
     const migrationResult = await applyPendingMigrations();
     logger.info({ applied: migrationResult.applied }, "Explicit startup database migrations applied");
+  }
+
+  if (process.env.RUN_JEAN_PIERRE_IDENTITY_REPAIR === "true") {
+    const repairResult = await repairJeanPierreIdentity();
+    logger.info(repairResult, "Guarded Jean-Pierre identity repair completed");
   }
 
   server = app.listen(PORT, () => {
