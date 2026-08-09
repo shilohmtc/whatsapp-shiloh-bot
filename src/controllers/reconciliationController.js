@@ -1,0 +1,42 @@
+const {
+  getReconciliationSummary,
+  listReconciliationCases,
+  getReconciliationCase,
+} = require("../services/reconciliationReport");
+
+exports.getSummary = async (req, res) => {
+  try {
+    const report = await getReconciliationSummary(req.query.batchId || null);
+    return res.status(200).json({ report, requestId: req.id });
+  } catch (error) {
+    (req.log || console).error?.({ err: error }, "Failed to build reconciliation summary");
+    return res.status(500).json({ error: "Could not build reconciliation summary", requestId: req.id });
+  }
+};
+
+exports.getCases = async (req, res) => {
+  try {
+    const cases = await listReconciliationCases({
+      batchId: req.query.batchId || null,
+      status: req.query.status || null,
+      reason: req.query.reason || null,
+      limit: req.query.limit,
+      offset: req.query.offset,
+    });
+    return res.status(200).json({ cases, count: cases.length, requestId: req.id });
+  } catch (error) {
+    (req.log || console).error?.({ err: error }, "Failed to list reconciliation cases");
+    return res.status(500).json({ error: "Could not list reconciliation cases", requestId: req.id });
+  }
+};
+
+exports.getCase = async (req, res) => {
+  try {
+    const record = await getReconciliationCase(req.params.id);
+    if (!record) return res.status(404).json({ error: "Reconciliation case not found", requestId: req.id });
+    return res.status(200).json({ case: record, requestId: req.id });
+  } catch (error) {
+    (req.log || console).error?.({ err: error }, "Failed to get reconciliation case");
+    return res.status(500).json({ error: "Could not get reconciliation case", requestId: req.id });
+  }
+};
