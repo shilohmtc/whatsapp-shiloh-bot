@@ -20,6 +20,7 @@ const { stageClients: stageGoldieClients } = require("../controllers/goldieImpor
 const {
   getSummary: getReconciliationSummary,
   getRecommendations: getReconciliationRecommendations,
+  getCanonicalizationAudit,
   canonicalizeClients: canonicalizeReconciliationClients,
   getCases: getReconciliationCases,
   getCase: getReconciliationCase,
@@ -63,6 +64,7 @@ router.post("/sync/goldie", syncGoldie);
 router.post("/imports/goldie/clients", csvUpload, stageGoldieClients);
 router.get("/reconciliation/clients/summary", getReconciliationSummary);
 router.get("/reconciliation/clients/recommendations", getReconciliationRecommendations);
+router.get("/reconciliation/clients/canonicalization-audit", getCanonicalizationAudit);
 router.post("/reconciliation/clients/canonicalize", canonicalizeReconciliationClients);
 router.get("/reconciliation/clients", getReconciliationCases);
 router.get("/reconciliation/clients/:id", getReconciliationCase);
