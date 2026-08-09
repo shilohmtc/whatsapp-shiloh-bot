@@ -23,6 +23,31 @@ const SERVICE_ALIASES = new Map([
 ]);
 function serviceKey(name) { const k = norm(name); return SERVICE_ALIASES.get(k) || k; }
 
+function resolveServiceList(raw, serviceMap) {
+  const parts = splitList(raw);
+  if (!parts.length) return [];
+  const memo = new Map();
+  function walk(index) {
+    if (index === parts.length) return [];
+    if (memo.has(index)) return memo.get(index);
+    for (let end = parts.length; end > index; end--) {
+      const candidate = parts.slice(index, end).join(', ');
+      const key = serviceKey(candidate);
+      const id = serviceMap.get(key);
+      if (!id) continue;
+      const tail = walk(end);
+      if (tail) {
+        const result = [{ name: candidate, id }, ...tail];
+        memo.set(index, result);
+        return result;
+      }
+    }
+    memo.set(index, null);
+    return null;
+  }
+  return walk(0) || parts.map((name) => ({ name, id: serviceMap.get(serviceKey(name)) || null }));
+}
+
 async function buildAppointmentReconciliationPlan({ appointmentBatchId = '2', clientBatchId = '1' } = {}) {
   const [appointments, clientLinks, services, staff] = await Promise.all([
     pool.query(`SELECT id, external_id, source_payload FROM external_records WHERE import_batch_id=$1 AND source='goldie' AND entity_type='appointment' AND reconciliation_status='unmatched' ORDER BY id`, [appointmentBatchId]),
@@ -74,12 +99,12 @@ async function buildAppointmentReconciliationPlan({ appointmentBatchId = '2', cl
     }
     summary.client[clientState]++;
 
-    const serviceNames = splitList(p.Services);
-    const serviceMatches = serviceNames.map((name) => ({ name, id: serviceMap.get(serviceKey(name)) || null }));
+    const rawServices = String(p.Services || '').trim();
+    const serviceMatches = resolveServiceList(rawServices, serviceMap);
     let serviceState = 'blank';
-    if (serviceNames.length) {
+    if (rawServices) {
       const matched = serviceMatches.filter((x) => x.id).length;
-      serviceState = matched === serviceNames.length ? 'allExact' : matched === 0 ? 'none' : 'partial';
+      serviceState = matched === serviceMatches.length ? 'allExact' : matched === 0 ? 'none' : 'partial';
     }
     summary.services[serviceState]++;
 
@@ -117,6 +142,7 @@ async function buildAppointmentReconciliationPlan({ appointmentBatchId = '2', cl
       requireExactlyOneUniquelyCanonicalClient: true,
       requireAllServicesExactOrApprovedAlias: true,
       approvedServiceAliases: Object.fromEntries(SERVICE_ALIASES),
+      parseCatalogueServiceNamesContainingCommas: true,
       allowEvidenceBackedHistoricalInactiveServices: true,
       historicalServiceSource: 'goldie_historical',
       allowHistoricalInactiveStaffByGoldieSourceName: true,
@@ -127,4 +153,4 @@ async function buildAppointmentReconciliationPlan({ appointmentBatchId = '2', cl
   };
 }
 
-module.exports = { buildAppointmentReconciliationPlan, parseGoldieDateTime, SERVICE_ALIASES, serviceKey };
+module.exports = { buildAppointmentReconciliationPlan, parseGoldieDateTime, SERVICE_ALIASES, serviceKey, resolveServiceList };
