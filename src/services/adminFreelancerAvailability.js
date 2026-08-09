@@ -6,22 +6,7 @@ const sessions = new Map();
 const MONTHS = {jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
 function clean(v=''){return String(v).trim().replace(/\s+/g,' ');}
 function key(sender){return normalizePhone(sender);}
-function isGlobalAdminCommand(raw=''){
-  const v=clean(raw);
-  return /^(?:check\s+)?availability\b/i.test(v)
-    || /^available\s+slots\b/i.test(v)
-    || /^next\s+available\b/i.test(v)
-    || /^working\s+hours\b/i.test(v)
-    || /^set\s+working\s+hours\b/i.test(v)
-    || /^add\s+schedule\s+exception\b/i.test(v)
-    || /^remove\s+schedule\s+exception\b/i.test(v)
-    || /^book\s+client\b/i.test(v)
-    || /^(?:find|lookup|search(?: for)?)\s+client\b/i.test(v)
-    || /^add\s+walk-?in\b/i.test(v)
-    || /^(?:today|tomorrow)$/i.test(v)
-    || /^(?:holiday\s+hours|staff\s+schedule|schedule|menu|admin\s+menu|home)$/i.test(v)
-    || /^(?:confirm|cancel)\s+booking$/i.test(v);
-}
+function isGlobalAdminCommand(raw=''){const v=clean(raw);return /^(?:check\s+)?availability\b/i.test(v)||/^available\s+slots\b/i.test(v)||/^next\s+available\b/i.test(v)||/^working\s+hours\b/i.test(v)||/^set\s+working\s+hours\b/i.test(v)||/^add\s+schedule\s+exception\b/i.test(v)||/^remove\s+schedule\s+exception\b/i.test(v)||/^book\s+client\b/i.test(v)||/^(?:find|lookup|search(?: for)?)\s+client\b/i.test(v)||/^add\s+walk-?in\b/i.test(v)||/^(?:today|tomorrow)$/i.test(v)||/^(?:holiday\s+hours|staff\s+schedule|schedule|menu|admin\s+menu|home)$/i.test(v)||/^(?:confirm|cancel)\s+booking$/i.test(v);}
 async function getAdmin(sender){const r=await pool.query(`SELECT id,display_name,permissions FROM staff_admin_accounts WHERE normalized_whatsapp=$1 AND active=TRUE`,[key(sender)]);return r.rows[0]||null;}
 function has(admin,p){return admin?.permissions?.[p]===true;}
 async function freelancers(){const r=await pool.query(`SELECT id,display_name FROM staff WHERE status='active' AND scheduling_type='freelance' ORDER BY display_name,id`);return r.rows;}
@@ -32,74 +17,24 @@ function parseHours(v){const m=clean(v).match(/^([0-2]\d:[0-5]\d)\s*-\s*([0-2]\d
 function fmtDate(v){return new Intl.DateTimeFormat('en-ZA',{timeZone:'Africa/Johannesburg',weekday:'short',day:'2-digit',month:'short',year:'numeric'}).format(new Date(`${v}T12:00:00+02:00`));}
 function staffMenu(staff){return [`*${staff.display_name} — Freelancer*`,'','1️⃣ View availability','2️⃣ Add available date','3️⃣ Change availability','4️⃣ Remove availability','','0️⃣ Back','Reply with a number.'].join('\n');}
 function listReply(staff,rows,title='Upcoming availability'){const lines=[`*${staff.display_name} — ${title}*`,''];if(!rows.length)lines.push('No upcoming dated availability is configured.');else rows.forEach((r,i)=>lines.push(`${i+1}️⃣ ${fmtDate(r.exception_date)} · ${r.starts_local.slice(0,5)}–${r.ends_local.slice(0,5)}`));lines.push('','0️⃣ Back');return lines.join('\n');}
-function confirmReply(staff,date,hours,label='Add availability'){return [`*${staff.display_name} — ${label}*`,'',fmtDate(date),`${hours.start}–${hours.end}`,'','1️⃣ Confirm','2️⃣ Change','0️⃣ Cancel'].join('\n');}
+function confirmReply(staff,date,hours,reason,label='Add availability'){return [`*${staff.display_name} — ${label}*`,'',fmtDate(date),`${hours.start}–${hours.end}`,'',`Reason: ${reason}`,'','1️⃣ Confirm','2️⃣ Change','0️⃣ Cancel'].join('\n');}
+function reasonPrompt(){return 'Reason is required. Send a short reason for this availability change.\n\n0️⃣ Back';}
 function scheduleManagementMenu(){return '*More — Schedule management*\n\n1️⃣ Staff hours\n2️⃣ Leave / special availability\n3️⃣ Freelancer availability\n4️⃣ Holiday hours\n\n0️⃣ Back\n\nReply with a number.';}
 function freelancerListReply(rows){return ['*Freelancer availability*','','Choose a practitioner:','',...rows.map((r,i)=>`${i+1}️⃣ ${r.display_name}`),'','0️⃣ Back'].join('\n');}
-
 async function processAdminFreelancerAvailabilityMessage(sender,text){
-  const raw=clean(text),v=raw.toLowerCase(),k=key(sender),session=sessions.get(k);
-  const direct=/^(?:freelancer availability|freelancers|freelance schedule)$/i.test(raw);
-  if(session && isGlobalAdminCommand(raw) && !/^menu$/i.test(raw)){
-    sessions.delete(k);
-    return {handled:false};
-  }
-  const admin=await getAdmin(sender);if(!admin)return {handled:false};
-  if(!has(admin,'schedule:manage'))return {handled:true,admin,reply:"You don't have permission to manage staff schedules."};
-  // A bare Back can arrive on a different Render instance after a rolling deploy,
-  // where the in-memory session does not exist. Recover safely to the parent menu
-  // instead of falling through and letting another handler consume the 0.
-  if(!session&&!direct&&v==='0')return {handled:true,admin,reply:scheduleManagementMenu()};
-  if(!session&&!direct)return {handled:false};
-  if(v==='menu'){sessions.delete(k);return {handled:false};}
-  if(!session){const rows=await freelancers();if(!rows.length)return {handled:true,admin,reply:'No active freelancers are configured.'};sessions.set(k,{step:'pick-staff',staffRows:rows});return {handled:true,admin,reply:freelancerListReply(rows)};}
-  if(session.step==='pick-staff'){
-    if(v==='0'){sessions.delete(k);return {handled:true,admin,reply:scheduleManagementMenu()};}
-    const n=Number(v);if(!Number.isInteger(n)||n<1||n>session.staffRows.length)return {handled:true,admin,reply:'Reply with the practitioner number shown, or 0 to go back.'};
-    const staff=session.staffRows[n-1];sessions.set(k,{step:'staff-menu',staff});return {handled:true,admin,reply:staffMenu(staff)};
-  }
-  if(session.step==='staff-menu'){
-    const staff=session.staff;
-    if(v==='0'){const rows=await freelancers();sessions.set(k,{step:'pick-staff',staffRows:rows});return {handled:true,admin,reply:freelancerListReply(rows)};}
-    if(v==='1'){const rows=await availability(staff.id);return {handled:true,admin,reply:listReply(staff,rows)};}
-    if(v==='2'){sessions.set(k,{step:'add-date',staff});return {handled:true,admin,reply:[`*${staff.display_name} — Add available date*`,'','What date is available?','Example: 12 Aug','','0️⃣ Cancel'].join('\n')};}
-    if(v==='3'||v==='4'){const rows=await availability(staff.id);if(!rows.length)return {handled:true,admin,reply:listReply(staff,rows)};sessions.set(k,{step:v==='3'?'change-pick':'remove-pick',staff,rows});return {handled:true,admin,reply:listReply(staff,rows,v==='3'?'Choose availability to change':'Choose availability to remove')};}
-    return {handled:true,admin,reply:'Choose 1, 2, 3, 4, or 0.'};
-  }
-  if(session.step==='add-date'){
-    if(v==='0'){sessions.set(k,{step:'staff-menu',staff:session.staff});return {handled:true,admin,reply:staffMenu(session.staff)};}
-    const date=parseDate(raw);if(!date)return {handled:true,admin,reply:'Send a valid date, for example *12 Aug* or *12/08/2026*.'};sessions.set(k,{step:'add-hours',staff:session.staff,date});return {handled:true,admin,reply:[`*${session.staff.display_name} — ${fmtDate(date)}*`,'','What hours are available?','Example: 10:00-15:00','','0️⃣ Cancel'].join('\n')};
-  }
-  if(session.step==='add-hours'){
-    if(v==='0'){sessions.set(k,{step:'staff-menu',staff:session.staff});return {handled:true,admin,reply:staffMenu(session.staff)};}
-    const hours=parseHours(raw);if(!hours)return {handled:true,admin,reply:'Send the hours as HH:MM-HH:MM, for example *10:00-15:00*.'};sessions.set(k,{step:'add-confirm',staff:session.staff,date:session.date,hours});return {handled:true,admin,reply:confirmReply(session.staff,session.date,hours)};
-  }
-  if(session.step==='add-confirm'){
-    if(v==='0'){sessions.set(k,{step:'staff-menu',staff:session.staff});return {handled:true,admin,reply:staffMenu(session.staff)};}
-    if(v==='2'){sessions.set(k,{step:'add-hours',staff:session.staff,date:session.date});return {handled:true,admin,reply:'Send the new hours, for example *10:00-15:00*.'};}
-    if(v!=='1')return {handled:true,admin,reply:'Choose 1 to confirm, 2 to change, or 0 to cancel.'};
-    const result=await addScheduleException({staffId:session.staff.id,date:session.date,type:'available',startsLocal:session.hours.start,endsLocal:session.hours.end,reason:'Freelancer dated availability',actorAdminId:admin.id});sessions.set(k,{step:'staff-menu',staff:session.staff});return {handled:true,admin,reply:result.status==='created'?`✅ ${session.staff.display_name} is available ${fmtDate(session.date)} · ${session.hours.start}–${session.hours.end}.\n\n${staffMenu(session.staff)}`:(result.reply||'Availability update rejected.')};
-  }
-  if(session.step==='change-pick'||session.step==='remove-pick'){
-    if(v==='0'){sessions.set(k,{step:'staff-menu',staff:session.staff});return {handled:true,admin,reply:staffMenu(session.staff)};}
-    const n=Number(v);if(!Number.isInteger(n)||n<1||n>session.rows.length)return {handled:true,admin,reply:'Reply with the availability number shown, or 0 to go back.'};const row=session.rows[n-1];
-    if(session.step==='change-pick'){sessions.set(k,{step:'change-hours',staff:session.staff,row});return {handled:true,admin,reply:[`*Change ${session.staff.display_name} availability*`,'',`${fmtDate(row.exception_date)} · ${row.starts_local.slice(0,5)}–${row.ends_local.slice(0,5)}`,'','Send the new hours, for example *11:00-16:00*.','0️⃣ Cancel'].join('\n')};}
-    sessions.set(k,{step:'remove-confirm',staff:session.staff,row});return {handled:true,admin,reply:[`*Remove ${session.staff.display_name} availability?*`,'',`${fmtDate(row.exception_date)} · ${row.starts_local.slice(0,5)}–${row.ends_local.slice(0,5)}`,'','1️⃣ Confirm remove','0️⃣ Cancel'].join('\n')};
-  }
-  if(session.step==='change-hours'){
-    if(v==='0'){sessions.set(k,{step:'staff-menu',staff:session.staff});return {handled:true,admin,reply:staffMenu(session.staff)};}
-    const hours=parseHours(raw);if(!hours)return {handled:true,admin,reply:'Send the new hours as HH:MM-HH:MM.'};sessions.set(k,{step:'change-confirm',staff:session.staff,row:session.row,hours});return {handled:true,admin,reply:confirmReply(session.staff,session.row.exception_date,hours,'Change availability')};
-  }
-  if(session.step==='change-confirm'){
-    if(v==='0'){sessions.set(k,{step:'staff-menu',staff:session.staff});return {handled:true,admin,reply:staffMenu(session.staff)};}
-    if(v==='2'){sessions.set(k,{step:'change-hours',staff:session.staff,row:session.row});return {handled:true,admin,reply:'Send the new hours.'};}
-    if(v!=='1')return {handled:true,admin,reply:'Choose 1 to confirm, 2 to change, or 0 to cancel.'};
-    const r=await updateScheduleException({staffId:session.staff.id,exceptionId:session.row.id,date:session.row.exception_date,startsLocal:session.hours.start,endsLocal:session.hours.end,actorAdminId:admin.id});sessions.set(k,{step:'staff-menu',staff:session.staff});return {handled:true,admin,reply:r.status==='updated'?`✅ Availability updated to ${session.hours.start}–${session.hours.end}.\n\n${staffMenu(session.staff)}`:'Availability could not be updated.'};
-  }
-  if(session.step==='remove-confirm'){
-    if(v==='0'){sessions.set(k,{step:'staff-menu',staff:session.staff});return {handled:true,admin,reply:staffMenu(session.staff)};}if(v!=='1')return {handled:true,admin,reply:'Choose 1 to confirm removal, or 0 to cancel.'};
-    const r=await removeScheduleException({staffId:session.staff.id,exceptionId:session.row.id,actorAdminId:admin.id});sessions.set(k,{step:'staff-menu',staff:session.staff});return {handled:true,admin,reply:r.status==='removed'?`✅ Availability removed.\n\n${staffMenu(session.staff)}`:'That availability entry was not found.'};
-  }
-  sessions.delete(k);return {handled:false};
+ const raw=clean(text),v=raw.toLowerCase(),k=key(sender),session=sessions.get(k);const direct=/^(?:freelancer availability|freelancers|freelance schedule)$/i.test(raw);if(session&&isGlobalAdminCommand(raw)&&!/^menu$/i.test(raw)){sessions.delete(k);return{handled:false};}const admin=await getAdmin(sender);if(!admin)return{handled:false};if(!has(admin,'schedule:manage'))return{handled:true,admin,reply:"You don't have permission to manage staff schedules."};if(!session&&!direct&&v==='0')return{handled:true,admin,reply:scheduleManagementMenu()};if(!session&&!direct)return{handled:false};if(v==='menu'){sessions.delete(k);return{handled:false};}
+ if(!session){const rows=await freelancers();if(!rows.length)return{handled:true,admin,reply:'No active freelancers are configured.'};sessions.set(k,{step:'pick-staff',staffRows:rows});return{handled:true,admin,reply:freelancerListReply(rows)};}
+ if(session.step==='pick-staff'){if(v==='0'){sessions.delete(k);return{handled:true,admin,reply:scheduleManagementMenu()};}const n=Number(v);if(!Number.isInteger(n)||n<1||n>session.staffRows.length)return{handled:true,admin,reply:'Reply with the practitioner number shown, or 0 to go back.'};const staff=session.staffRows[n-1];sessions.set(k,{step:'staff-menu',staff});return{handled:true,admin,reply:staffMenu(staff)};}
+ if(session.step==='staff-menu'){const staff=session.staff;if(v==='0'){const rows=await freelancers();sessions.set(k,{step:'pick-staff',staffRows:rows});return{handled:true,admin,reply:freelancerListReply(rows)};}if(v==='1'){const rows=await availability(staff.id);return{handled:true,admin,reply:listReply(staff,rows)};}if(v==='2'){sessions.set(k,{step:'add-date',staff});return{handled:true,admin,reply:[`*${staff.display_name} — Add available date*`,'','What date is available?','Example: 12 Aug','','0️⃣ Cancel'].join('\n')};}if(v==='3'||v==='4'){const rows=await availability(staff.id);if(!rows.length)return{handled:true,admin,reply:listReply(staff,rows)};sessions.set(k,{step:v==='3'?'change-pick':'remove-pick',staff,rows});return{handled:true,admin,reply:listReply(staff,rows,v==='3'?'Choose availability to change':'Choose availability to remove')};}return{handled:true,admin,reply:'Choose 1, 2, 3, 4, or 0.'};}
+ if(session.step==='add-date'){if(v==='0'){sessions.set(k,{step:'staff-menu',staff:session.staff});return{handled:true,admin,reply:staffMenu(session.staff)};}const date=parseDate(raw);if(!date)return{handled:true,admin,reply:'Send a valid date, for example *12 Aug* or *12/08/2026*.'};sessions.set(k,{step:'add-hours',staff:session.staff,date});return{handled:true,admin,reply:[`*${session.staff.display_name} — ${fmtDate(date)}*`,'','What hours are available?','Example: 10:00-15:00','','0️⃣ Cancel'].join('\n')};}
+ if(session.step==='add-hours'){if(v==='0'){sessions.set(k,{step:'staff-menu',staff:session.staff});return{handled:true,admin,reply:staffMenu(session.staff)};}const hours=parseHours(raw);if(!hours)return{handled:true,admin,reply:'Send the hours as HH:MM-HH:MM, for example *10:00-15:00*.'};sessions.set(k,{step:'add-reason',staff:session.staff,date:session.date,hours});return{handled:true,admin,reply:reasonPrompt()};}
+ if(session.step==='add-reason'){if(v==='0'){sessions.set(k,{step:'staff-menu',staff:session.staff});return{handled:true,admin,reply:staffMenu(session.staff)};}if(!raw||v==='skip')return{handled:true,admin,reply:reasonPrompt()};sessions.set(k,{step:'add-confirm',staff:session.staff,date:session.date,hours:session.hours,reason:raw});return{handled:true,admin,reply:confirmReply(session.staff,session.date,session.hours,raw)};}
+ if(session.step==='add-confirm'){if(v==='0'){sessions.set(k,{step:'staff-menu',staff:session.staff});return{handled:true,admin,reply:staffMenu(session.staff)};}if(v==='2'){sessions.set(k,{step:'add-hours',staff:session.staff,date:session.date});return{handled:true,admin,reply:'Send the new hours, for example *10:00-15:00*.'};}if(v!=='1')return{handled:true,admin,reply:'Choose 1 to confirm, 2 to change, or 0 to cancel.'};const result=await addScheduleException({staffId:session.staff.id,date:session.date,type:'available',startsLocal:session.hours.start,endsLocal:session.hours.end,reason:session.reason,actorAdminId:admin.id});sessions.set(k,{step:'staff-menu',staff:session.staff});return{handled:true,admin,reply:result.status==='created'?`✅ ${session.staff.display_name} is available ${fmtDate(session.date)} · ${session.hours.start}–${session.hours.end} · ${session.reason}.\n\n${staffMenu(session.staff)}`:(result.reply||'Availability update rejected.')};}
+ if(session.step==='change-pick'||session.step==='remove-pick'){if(v==='0'){sessions.set(k,{step:'staff-menu',staff:session.staff});return{handled:true,admin,reply:staffMenu(session.staff)};}const n=Number(v);if(!Number.isInteger(n)||n<1||n>session.rows.length)return{handled:true,admin,reply:'Reply with the availability number shown, or 0 to go back.'};const row=session.rows[n-1];if(session.step==='change-pick'){sessions.set(k,{step:'change-hours',staff:session.staff,row});return{handled:true,admin,reply:[`*Change ${session.staff.display_name} availability*`,'',`${fmtDate(row.exception_date)} · ${row.starts_local.slice(0,5)}–${row.ends_local.slice(0,5)}`,'','Send the new hours, for example *11:00-16:00*.','0️⃣ Cancel'].join('\n')};}sessions.set(k,{step:'remove-confirm',staff:session.staff,row});return{handled:true,admin,reply:[`*Remove ${session.staff.display_name} availability?*`,'',`${fmtDate(row.exception_date)} · ${row.starts_local.slice(0,5)}–${row.ends_local.slice(0,5)}`,'','1️⃣ Confirm remove','0️⃣ Cancel'].join('\n')};}
+ if(session.step==='change-hours'){if(v==='0'){sessions.set(k,{step:'staff-menu',staff:session.staff});return{handled:true,admin,reply:staffMenu(session.staff)};}const hours=parseHours(raw);if(!hours)return{handled:true,admin,reply:'Send the new hours as HH:MM-HH:MM.'};sessions.set(k,{step:'change-reason',staff:session.staff,row:session.row,hours});return{handled:true,admin,reply:reasonPrompt()};}
+ if(session.step==='change-reason'){if(v==='0'){sessions.set(k,{step:'staff-menu',staff:session.staff});return{handled:true,admin,reply:staffMenu(session.staff)};}if(!raw||v==='skip')return{handled:true,admin,reply:reasonPrompt()};sessions.set(k,{step:'change-confirm',staff:session.staff,row:session.row,hours:session.hours,reason:raw});return{handled:true,admin,reply:confirmReply(session.staff,session.row.exception_date,session.hours,raw,'Change availability')};}
+ if(session.step==='change-confirm'){if(v==='0'){sessions.set(k,{step:'staff-menu',staff:session.staff});return{handled:true,admin,reply:staffMenu(session.staff)};}if(v==='2'){sessions.set(k,{step:'change-hours',staff:session.staff,row:session.row});return{handled:true,admin,reply:'Send the new hours.'};}if(v!=='1')return{handled:true,admin,reply:'Choose 1 to confirm, 2 to change, or 0 to cancel.'};const r=await updateScheduleException({staffId:session.staff.id,exceptionId:session.row.id,date:session.row.exception_date,startsLocal:session.hours.start,endsLocal:session.hours.end,reason:session.reason,actorAdminId:admin.id});sessions.set(k,{step:'staff-menu',staff:session.staff});return{handled:true,admin,reply:r.status==='updated'?`✅ Availability updated to ${session.hours.start}–${session.hours.end} · ${session.reason}.\n\n${staffMenu(session.staff)}`:'Availability could not be updated.'};}
+ if(session.step==='remove-confirm'){if(v==='0'){sessions.set(k,{step:'staff-menu',staff:session.staff});return{handled:true,admin,reply:staffMenu(session.staff)};}if(v!=='1')return{handled:true,admin,reply:'Choose 1 to confirm removal, or 0 to cancel.'};const r=await removeScheduleException({staffId:session.staff.id,exceptionId:session.row.id,actorAdminId:admin.id});sessions.set(k,{step:'staff-menu',staff:session.staff});return{handled:true,admin,reply:r.status==='removed'?`✅ Availability removed.\n\n${staffMenu(session.staff)}`:'That availability entry was not found.'};}
+ sessions.delete(k);return{handled:false};
 }
-
 module.exports={processAdminFreelancerAvailabilityMessage};
