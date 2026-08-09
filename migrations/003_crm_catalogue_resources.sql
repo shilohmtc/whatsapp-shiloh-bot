@@ -108,4 +108,4 @@ INSERT INTO staff (display_name, resource_type, status, source_name) VALUES ('SH
 INSERT INTO staff (display_name, resource_type, status, source_name) VALUES ('Savanna Massage Practitioner', 'practitioner', 'active', 'Savanna Massage Practitioner') ON CONFLICT (source_name) DO UPDATE SET display_name=EXCLUDED.display_name, resource_type=EXCLUDED.resource_type, status=EXCLUDED.status, updated_at=NOW();
 INSERT INTO staff (display_name, resource_type, status, source_name) VALUES ('Yolanda', 'practitioner', 'inactive', 'Yolanda .') ON CONFLICT (source_name) DO UPDATE SET display_name=EXCLUDED.display_name, resource_type=EXCLUDED.resource_type, status=EXCLUDED.status, updated_at=NOW();
 
--- Goldie service catalogue (52 services) and staff eligibility mappings are seeded below.
+-- The 52 Goldie services and staff/service mappings will be loaded by the controlled import step after this schema migration is verified.
