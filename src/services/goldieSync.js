@@ -1,19 +1,12 @@
 const axios = require("axios");
 const crypto = require("crypto");
-const { Pool } = require("pg");
+const { pool } = require("../db/pool");
 const { replaceDocumentBySource } = require("./knowledge");
 const logger = require("../lib/logger");
 
 const DEFAULT_GOLDIE_URL =
   "https://book.heygoldie.com/Shiloh-Massage-Therapy-Clinic";
 const SOURCE_KEY = "goldie:shiloh-booking-page";
-
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL?.includes("render.com")
-    ? { rejectUnauthorized: false }
-    : undefined,
-});
 
 let syncInProgress = false;
 let schedulerTimer = null;
