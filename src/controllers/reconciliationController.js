@@ -6,6 +6,7 @@ const {
 const { getRecommendationReport } = require("../services/reconciliationRecommendations");
 const { canonicalizeClients } = require("../services/clientCanonicalization");
 const { getPostCanonicalizationAudit } = require("../services/canonicalizationAudit");
+const { getAppointmentIdentityEvidence } = require("../services/appointmentIdentityEvidence");
 
 exports.getSummary = async (req, res) => {
   try {
@@ -24,6 +25,19 @@ exports.getRecommendations = async (req, res) => {
   } catch (error) {
     (req.log || console).error?.({ err: error }, "Failed to build reconciliation recommendations");
     return res.status(500).json({ error: "Could not build reconciliation recommendations", requestId: req.id });
+  }
+};
+
+exports.getAppointmentIdentityEvidence = async (req, res) => {
+  try {
+    const report = await getAppointmentIdentityEvidence({
+      clientBatchId: req.query.clientBatchId || "1",
+      appointmentBatchId: req.query.appointmentBatchId || "2",
+    });
+    return res.status(200).json({ report, requestId: req.id });
+  } catch (error) {
+    (req.log || console).error?.({ err: error }, "Failed to build appointment identity evidence");
+    return res.status(500).json({ error: "Could not build appointment identity evidence", requestId: req.id });
   }
 };
 
