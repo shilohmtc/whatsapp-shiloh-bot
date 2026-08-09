@@ -104,6 +104,40 @@ async function addScheduleException({ staffId, date, type, startsLocal = null, e
   return { status:'created', staff:staffResult.rows[0], exception:inserted.rows[0] };
 }
 
+async function updateScheduleException({ staffId, exceptionId, date, startsLocal, endsLocal, actorAdminId = null }) {
+  if (!validDate(date)) return { status:'invalid_date', reply:'Use a valid date.' };
+  if (!validTime(startsLocal) || !validTime(endsLocal) || endsLocal <= startsLocal) return { status:'invalid_time', reply:'Use a valid HH:MM-HH:MM range.' };
+  const db = await pool.connect();
+  try {
+    await db.query('BEGIN');
+    const current = await db.query(
+      `SELECT id, exception_date::text, exception_type, starts_local::text, ends_local::text
+         FROM staff_schedule_exceptions
+        WHERE id=$1 AND staff_id=$2
+        FOR UPDATE`,
+      [exceptionId, staffId]
+    );
+    if (!current.rowCount || current.rows[0].exception_type !== 'available') {
+      await db.query('ROLLBACK');
+      return { status:'not_found' };
+    }
+    const updated = await db.query(
+      `UPDATE staff_schedule_exceptions
+          SET exception_date=$3::date, starts_local=$4::time, ends_local=$5::time, updated_at=NOW()
+        WHERE id=$1 AND staff_id=$2
+        RETURNING id, exception_date::text, exception_type, starts_local::text, ends_local::text, reason`,
+      [exceptionId, staffId, date, startsLocal, endsLocal]
+    );
+    await db.query(
+      `INSERT INTO crm_audit_events (actor_admin_id, action, entity_type, entity_id, metadata)
+       VALUES ($1,'schedule.exception_updated','staff',$2,$3::jsonb)`,
+      [actorAdminId, staffId, JSON.stringify({ exceptionId:Number(exceptionId), before:current.rows[0], after:updated.rows[0] })]
+    );
+    await db.query('COMMIT');
+    return { status:'updated', exception:updated.rows[0] };
+  } catch (e) { await db.query('ROLLBACK'); throw e; } finally { db.release(); }
+}
+
 async function removeScheduleException({ staffId, exceptionId, actorAdminId = null }) {
   const result = await pool.query(`DELETE FROM staff_schedule_exceptions WHERE id=$1 AND staff_id=$2 RETURNING id`, [exceptionId, staffId]);
   if (!result.rowCount) return { status:'not_found' };
@@ -133,4 +167,4 @@ function formatWorkingHours(data) {
   return lines.join('\n');
 }
 
-module.exports = { DAYS, dayNumber, resolveStaff, getWorkingHours, replaceWorkingHoursDay, addScheduleException, removeScheduleException, formatWorkingHours };
+module.exports = { DAYS, dayNumber, resolveStaff, getWorkingHours, replaceWorkingHoursDay, addScheduleException, updateScheduleException, removeScheduleException, formatWorkingHours };
