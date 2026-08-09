@@ -80,7 +80,16 @@ exports.receiveWebhook = async (req, res) => {
           },
           "Handled canonical client identity/onboarding conversation"
         );
-        await sendWhatsAppMessage(from, identity.reply);
+
+        let reply = identity.reply;
+        if (identity.onboardingComplete && identity.resumeBooking) {
+          const booking = await processBookingMessage(from, "I want to book an appointment");
+          if (booking.handled && booking.reply) {
+            reply = `${reply}\n\n${booking.reply}`;
+          }
+        }
+
+        await sendWhatsAppMessage(from, reply);
         return res.sendStatus(200);
       }
 
