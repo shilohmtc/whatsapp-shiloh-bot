@@ -23,8 +23,11 @@ async function listClients({ q, status, limit, offset }) {
   values.push(clampLimit(limit)); const limitParam = `$${values.length}`;
   values.push(parseOffset(offset)); const offsetParam = `$${values.length}`;
   const result = await pool.query(`
-    SELECT c.id, c.display_name, c.preferred_language, c.status, c.preferences, c.tags,
+    SELECT c.id, c.display_name, c.date_of_birth, c.preferred_language, c.status, c.preferences, c.tags,
            c.custom_attributes, c.source, c.created_at, c.updated_at,
+           (c.display_name IS NOT NULL AND c.date_of_birth IS NOT NULL AND EXISTS (
+              SELECT 1 FROM client_contacts ccv WHERE ccv.client_id = c.id AND ccv.verified_at IS NOT NULL
+           )) AS onboarding_complete,
            COALESCE(jsonb_agg(jsonb_build_object('id', cc.id, 'type', cc.contact_type, 'value', cc.value,
              'isPrimary', cc.is_primary, 'verifiedAt', cc.verified_at) ORDER BY cc.is_primary DESC, cc.id)
              FILTER (WHERE cc.id IS NOT NULL), '[]'::jsonb) AS contacts
@@ -37,8 +40,11 @@ async function listClients({ q, status, limit, offset }) {
 
 async function getClient(id) {
   const result = await pool.query(`
-    SELECT c.id, c.display_name, c.preferred_language, c.status, c.preferences, c.tags,
+    SELECT c.id, c.display_name, c.date_of_birth, c.preferred_language, c.status, c.preferences, c.tags,
            c.custom_attributes, c.source, c.created_at, c.updated_at,
+           (c.display_name IS NOT NULL AND c.date_of_birth IS NOT NULL AND EXISTS (
+              SELECT 1 FROM client_contacts ccv WHERE ccv.client_id = c.id AND ccv.verified_at IS NOT NULL
+           )) AS onboarding_complete,
            COALESCE(jsonb_agg(jsonb_build_object('id', cc.id, 'type', cc.contact_type, 'value', cc.value,
              'isPrimary', cc.is_primary, 'verifiedAt', cc.verified_at) ORDER BY cc.is_primary DESC, cc.id)
              FILTER (WHERE cc.id IS NOT NULL), '[]'::jsonb) AS contacts
