@@ -56,12 +56,29 @@ async function listAvailableSlots({ staffId, serviceId, date, locationId, interv
                 SELECT id FROM locations WHERE status='active' ORDER BY id LIMIT 1
               )) AS location_id
      ),
+     holiday AS (
+       SELECT ph.holiday_date
+         FROM public_holidays ph, requested r
+        WHERE ph.country_code='ZA' AND ph.holiday_date=r.local_date
+     ),
+     clinic_override AS (
+       SELECT lhe.exception_type, lhe.starts_local, lhe.ends_local
+         FROM location_hours_exceptions lhe, requested r
+        WHERE lhe.location_id=r.location_id AND lhe.exception_date=r.local_date
+        LIMIT 1
+     ),
      clinic_windows AS (
+       SELECT co.starts_local, co.ends_local
+         FROM clinic_override co
+        WHERE co.exception_type='open'
+       UNION ALL
        SELECT lwh.starts_local, lwh.ends_local
          FROM location_working_hours lwh, requested r
         WHERE lwh.location_id = r.location_id
           AND lwh.day_of_week = r.dow
           AND lwh.active = TRUE
+          AND NOT EXISTS (SELECT 1 FROM clinic_override)
+          AND NOT EXISTS (SELECT 1 FROM holiday)
      ),
      base_windows AS (
        SELECT wh.starts_local, wh.ends_local
