@@ -8,6 +8,7 @@ const webhookRoutes = require("./src/routes/webhook");
 const adminRoutes = require("./src/routes/admin");
 const auditReadRoutes = require("./src/routes/auditRead");
 const { checkDatabase } = require("./src/services/memory");
+const { applyPendingMigrations, getMigrationStatus } = require("./src/services/migrations");
 const { getPostCanonicalizationAudit } = require("./src/services/canonicalizationAudit");
 const { getAppointmentIdentityEvidence } = require("./src/services/appointmentIdentityEvidence");
 const { getSecondPassReconciliation } = require("./src/services/secondPassReconciliation");
@@ -29,6 +30,23 @@ app.get("/health", async (req,res)=>{ const ok=await checkDatabase(); return res
 app.use("/audit-read",auditReadRoutes); app.use("/admin",adminRoutes); app.use("/",webhookRoutes);
 app.use((err,req,res,next)=>{ const log=req.log||logger; log.error({err},"Unhandled Express error"); if(res.headersSent)return next(err); return res.status(500).json({error:"Internal server error",requestId:req.id}); });
 const PORT=process.env.PORT||3000;
+async function applyConfiguredMigration(){
+  const requested=process.env.APPLY_DATABASE_MIGRATIONS_ON_STARTUP;
+  if(!requested) return;
+  if(requested!=="007_historical_goldie_services.sql"){logger.error({requested},"Refusing unapproved startup migration request");return;}
+  try{
+    const before=await getMigrationStatus();
+    const target=before.find(m=>m.filename===requested);
+    if(!target){logger.error({requested},"Requested startup migration not found");return;}
+    if(target.applied){logger.info({requested,checksumMatches:target.checksumMatches},"Requested startup migration already applied");return;}
+    const otherPending=before.filter(m=>!m.applied&&m.filename!==requested);
+    if(otherPending.length){logger.error({requested,otherPending:otherPending.map(m=>m.filename)},"Refusing migration because other pending migrations exist");return;}
+    const result=await applyPendingMigrations();
+    const after=await getMigrationStatus();
+    const verified=after.find(m=>m.filename===requested);
+    logger.info({requested,result,verified},"Guarded startup migration applied");
+  }catch(error){logger.error({err:error,requested},"Guarded startup migration failed");}
+}
 async function logCanonicalizationAuditStatus(){try{const r=await getPostCanonicalizationAudit("1");logger.info({canonicalizationAudit:{batchId:r.batchId,overallPass:r.overallPass,checks:r.checks}},"Canonicalization audit status");}catch(error){logger.error({err:error},"Canonicalization audit status failed");}}
 async function logAppointmentIdentityEvidenceStatus(){try{const r=await getAppointmentIdentityEvidence({clientBatchId:"1",appointmentBatchId:"2"});logger.info({appointmentIdentityEvidence:{clientBatchId:r.clientBatchId,appointmentBatchId:r.appointmentBatchId,summary:r.summary}},"Appointment identity evidence summary");}catch(error){logger.error({err:error},"Appointment identity evidence summary failed");}}
 async function logSecondPassStatus(){try{const r=await getSecondPassReconciliation({clientBatchId:"1",appointmentBatchId:"2"});logger.info({secondPassReconciliation:{clientBatchId:r.clientBatchId,appointmentBatchId:r.appointmentBatchId,summary:r.summary}},"Second-pass reconciliation summary");}catch(error){logger.error({err:error},"Second-pass reconciliation summary failed");}}
@@ -39,7 +57,7 @@ async function logMarindaDryRun(){try{const r=await buildMarindaPlan({clientBatc
 async function logAppointmentReconciliationDryRun(){try{const r=await buildAppointmentReconciliationPlan({appointmentBatchId:"2",clientBatchId:"1"});logger.info({appointmentReconciliationDryRun:{summary:r.summary,blockerCounts:r.blockerCounts,blockedSamples:r.blockedSamples,policy:r.policy}},"Appointment reconciliation dry-run plan");return r;}catch(error){logger.error({err:error},"Appointment reconciliation dry-run failed");return null;}}
 async function logAppointmentServiceMismatchAnalysis(){try{const r=await analyzeAppointmentServiceMismatches({appointmentBatchId:"2"});logger.info({appointmentServiceMismatchAnalysis:r},"Appointment service mismatch analysis");return r;}catch(error){logger.error({err:error},"Appointment service mismatch analysis failed");return null;}}
 async function logHistoricalServiceEvidence(){try{const r=await getHistoricalServiceEvidence({appointmentBatchId:"2"});logger.info({historicalServiceEvidence:{appointmentBatchId:r.appointmentBatchId,distinctNames:r.distinctNames,items:r.items.slice(0,40),policy:r.policy}},"Historical Goldie service evidence");return r;}catch(error){logger.error({err:error},"Historical Goldie service evidence failed");return null;}}
-async function runControlledStartupDataWork(){try{await runConfiguredCreateNewPromotion(logger);}catch(error){logger.error({err:error},"Configured Goldie create-new promotion failed");} const chantelDryRun=await logChantelDryRun(); if(chantelDryRun?.eligible){try{await runConfiguredChantelDuplicateCanonicalization(logger);}catch(error){logger.error({err:error},"Configured Chantel duplicate canonicalization failed");}} const separateDryRun=await logSeparateIdentityDryRun(); if(separateDryRun?.summary?.eligible>0){try{await runConfiguredSeparateIdentityCanonicalization(logger);}catch(error){logger.error({err:error},"Configured separate identity canonicalization failed");}} const marindaDryRun=await logMarindaDryRun(); if(marindaDryRun?.eligible){try{await runConfiguredMarindaCanonicalization(logger);}catch(error){logger.error({err:error},"Configured Marinda canonicalization failed");}} await logCanonicalizationAuditStatus(); await logAppointmentIdentityEvidenceStatus(); await logSecondPassStatus(); await logTopManualQueue(); const appointmentDryRun=await logAppointmentReconciliationDryRun(); if(appointmentDryRun?.summary?.promotion?.safeSingleClientAppointments>0){try{await runConfiguredSafeAppointmentPromotion(logger);}catch(error){logger.error({err:error},"Configured Goldie appointment promotion failed");}} await logAppointmentServiceMismatchAnalysis(); await logHistoricalServiceEvidence();}
+async function runControlledStartupDataWork(){await applyConfiguredMigration(); try{await runConfiguredCreateNewPromotion(logger);}catch(error){logger.error({err:error},"Configured Goldie create-new promotion failed");} const chantelDryRun=await logChantelDryRun(); if(chantelDryRun?.eligible){try{await runConfiguredChantelDuplicateCanonicalization(logger);}catch(error){logger.error({err:error},"Configured Chantel duplicate canonicalization failed");}} const separateDryRun=await logSeparateIdentityDryRun(); if(separateDryRun?.summary?.eligible>0){try{await runConfiguredSeparateIdentityCanonicalization(logger);}catch(error){logger.error({err:error},"Configured separate identity canonicalization failed");}} const marindaDryRun=await logMarindaDryRun(); if(marindaDryRun?.eligible){try{await runConfiguredMarindaCanonicalization(logger);}catch(error){logger.error({err:error},"Configured Marinda canonicalization failed");}} await logCanonicalizationAuditStatus(); await logAppointmentIdentityEvidenceStatus(); await logSecondPassStatus(); await logTopManualQueue(); const appointmentDryRun=await logAppointmentReconciliationDryRun(); if(appointmentDryRun?.summary?.promotion?.safeSingleClientAppointments>0){try{await runConfiguredSafeAppointmentPromotion(logger);}catch(error){logger.error({err:error},"Configured Goldie appointment promotion failed");}} await logAppointmentServiceMismatchAnalysis(); await logHistoricalServiceEvidence();}
 const server=app.listen(PORT,()=>{logger.info({port:PORT},"Shiloh started");startGoldieSyncScheduler();startAppointmentLifecycleScheduler();runControlledStartupDataWork();});
 function shutdown(signal){logger.info({signal},"Shutting down Shiloh");server.close(()=>{logger.info("HTTP server closed");process.exit(0);});setTimeout(()=>{logger.error("Forced shutdown after timeout");process.exit(1);},10000).unref();}
 process.on("SIGTERM",()=>shutdown("SIGTERM")); process.on("SIGINT",()=>shutdown("SIGINT"));
