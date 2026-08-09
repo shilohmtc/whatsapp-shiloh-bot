@@ -51,7 +51,17 @@ async function listAvailableSlots({ staffId, serviceId, date, locationId, interv
   const result = await pool.query(
     `WITH requested AS (
        SELECT $1::date AS local_date,
-              EXTRACT(DOW FROM $1::date)::int AS dow
+              EXTRACT(DOW FROM $1::date)::int AS dow,
+              COALESCE($3::bigint, (
+                SELECT id FROM locations WHERE status='active' ORDER BY id LIMIT 1
+              )) AS location_id
+     ),
+     clinic_windows AS (
+       SELECT lwh.starts_local, lwh.ends_local
+         FROM location_working_hours lwh, requested r
+        WHERE lwh.location_id = r.location_id
+          AND lwh.day_of_week = r.dow
+          AND lwh.active = TRUE
      ),
      base_windows AS (
        SELECT wh.starts_local, wh.ends_local
@@ -59,16 +69,16 @@ async function listAvailableSlots({ staffId, serviceId, date, locationId, interv
         WHERE wh.staff_id = $2
           AND wh.day_of_week = r.dow
           AND wh.active = TRUE
-          AND ($3::bigint IS NULL OR wh.location_id IS NULL OR wh.location_id = $3)
+          AND (r.location_id IS NULL OR wh.location_id IS NULL OR wh.location_id = r.location_id)
      ),
      exception_windows AS (
        SELECT ex.exception_type, ex.starts_local, ex.ends_local
          FROM staff_schedule_exceptions ex, requested r
         WHERE ex.staff_id = $2
           AND ex.exception_date = r.local_date
-          AND ($3::bigint IS NULL OR ex.location_id IS NULL OR ex.location_id = $3)
+          AND (r.location_id IS NULL OR ex.location_id IS NULL OR ex.location_id = r.location_id)
      ),
-     effective_windows AS (
+     staff_windows AS (
        SELECT starts_local, ends_local FROM base_windows
         WHERE NOT EXISTS (
           SELECT 1 FROM exception_windows ex
@@ -80,11 +90,19 @@ async function listAvailableSlots({ staffId, serviceId, date, locationId, interv
         WHERE exception_type = 'available'
           AND starts_local IS NOT NULL AND ends_local IS NOT NULL
      ),
+     effective_windows AS (
+       SELECT GREATEST(sw.starts_local, cw.starts_local) AS starts_local,
+              LEAST(sw.ends_local, cw.ends_local) AS ends_local
+         FROM staff_windows sw
+         JOIN clinic_windows cw
+           ON sw.starts_local < cw.ends_local
+          AND sw.ends_local > cw.starts_local
+     ),
      candidates AS (
        SELECT (r.local_date + ew.starts_local + (gs.n * ($5::text || ' minutes')::interval)) AS local_start,
               (r.local_date + ew.starts_local + (gs.n * ($5::text || ' minutes')::interval) + ($4::text || ' minutes')::interval) AS local_end
          FROM requested r
-         JOIN effective_windows ew ON TRUE
+         JOIN effective_windows ew ON ew.ends_local > ew.starts_local
          CROSS JOIN LATERAL generate_series(
            0,
            GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (ew.ends_local - ew.starts_local)) / 60 / $5)::int)
@@ -92,7 +110,7 @@ async function listAvailableSlots({ staffId, serviceId, date, locationId, interv
         WHERE r.local_date + ew.starts_local + (gs.n * ($5::text || ' minutes')::interval) + ($4::text || ' minutes')::interval
               <= r.local_date + ew.ends_local
      )
-     SELECT (c.local_start AT TIME ZONE '${TZ}') AS starts_at,
+     SELECT DISTINCT (c.local_start AT TIME ZONE '${TZ}') AS starts_at,
             (c.local_end AT TIME ZONE '${TZ}') AS ends_at
        FROM candidates c
       WHERE NOT EXISTS (
