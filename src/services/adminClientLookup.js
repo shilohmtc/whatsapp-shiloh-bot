@@ -10,6 +10,14 @@ function isPhoneLike(value = "") {
   return digits.length >= 4 && /^[+()\-\s0-9]+$/.test(String(value).trim());
 }
 
+function phoneCandidates(value = "") {
+  const digits = normalizePhone(value);
+  const candidates = new Set([digits]);
+  if (/^0\d{9}$/.test(digits)) candidates.add(`27${digits.slice(1)}`);
+  if (/^27\d{9}$/.test(digits)) candidates.add(`0${digits.slice(2)}`);
+  return [...candidates].filter(Boolean);
+}
+
 function maskContact(value = "") {
   const digits = normalizePhone(value);
   if (digits.length >= 4) return `ending in ${digits.slice(-4)}`;
@@ -48,20 +56,32 @@ async function findClients(query, limit = 10) {
   if (!cleaned) return { queryType: "empty", clients: [] };
 
   const phoneSearch = isPhoneLike(cleaned);
-  const digits = normalizePhone(cleaned);
   const values = [];
   let predicate;
 
   if (phoneSearch) {
-    values.push(digits);
-    const p = `$${values.length}`;
-    predicate = `EXISTS (
-      SELECT 1
-        FROM client_contacts cc_search
-       WHERE cc_search.client_id = c.id
-         AND cc_search.normalized_value IS NOT NULL
-         AND (cc_search.normalized_value = ${p} OR cc_search.normalized_value LIKE '%' || ${p})
-    )`;
+    const digits = normalizePhone(cleaned);
+    const candidates = phoneCandidates(cleaned);
+    values.push(candidates);
+    const candidatesParam = `$${values.length}`;
+    if (digits.length >= 9) {
+      predicate = `EXISTS (
+        SELECT 1
+          FROM client_contacts cc_search
+         WHERE cc_search.client_id = c.id
+           AND cc_search.normalized_value = ANY(${candidatesParam}::text[])
+      )`;
+    } else {
+      values.push(digits);
+      const suffixParam = `$${values.length}`;
+      predicate = `EXISTS (
+        SELECT 1
+          FROM client_contacts cc_search
+         WHERE cc_search.client_id = c.id
+           AND cc_search.normalized_value IS NOT NULL
+           AND (cc_search.normalized_value = ANY(${candidatesParam}::text[]) OR cc_search.normalized_value LIKE '%' || ${suffixParam})
+      )`;
+    }
   } else {
     values.push(`%${cleaned}%`);
     predicate = `c.display_name ILIKE $${values.length}`;
@@ -99,10 +119,7 @@ async function findClients(query, limit = 10) {
      LEFT JOIN client_contacts cc ON cc.client_id = c.id
      WHERE ${predicate}
      GROUP BY c.id
-     ORDER BY
-       CASE WHEN LOWER(c.display_name) = LOWER($1) THEN 0 ELSE 1 END,
-       c.display_name NULLS LAST,
-       c.id
+     ORDER BY c.display_name NULLS LAST, c.id
      LIMIT ${limitParam}`,
     values
   );
