@@ -1,19 +1,76 @@
 -- Goldie service catalogue data import for Shiloh CRM.
 -- Source: Goldie export dated 2026-08-09.
--- Seeds 52 services and staff-service eligibility.
--- Idempotent by Goldie service ID and staff/service primary key.
+-- Seeds 52 services and staff-service eligibility. Idempotent by Goldie service ID.
 
+WITH source_service (
+  external_id, name, duration_minutes, processing_time_minutes, extra_time_minutes,
+  variable_price, price, display_price, color_value, display_order, is_default, category_name
+) AS (
+  VALUES
+  ('e4510fa9-579f-46dd-8fff-107c00748597', 'Medi-Heel Pedicure (No Gel Toes) & Foot Massage', 60, 0, 15, FALSE, 490, NULL, 1550217, 10, FALSE, 'Pedicures & Foot Care'),
+  ('8814ad67-f670-4c4b-ae22-2cb1233afb96', 'Toe Gel Application', 30, 0, 10, FALSE, 250, NULL, 3155858, 24, FALSE, 'Pedicures & Foot Care'),
+  ('082a3806-3b46-4469-88b8-68b5df95e82b', 'Derma Fusion Clarity Facial', 90, 0, 15, FALSE, 1900, NULL, 15755796, 49, FALSE, 'Facials'),
+  ('b534a8e5-3fe1-46e9-9ca0-bba116e6bf53', 'Medi-Heel Pedicure (With Gel Toes) & Foot Massage', 90, 0, 0, FALSE, 510, NULL, 6266528, 89, FALSE, 'Pedicures & Foot Care'),
+  ('074c7773-2e78-4761-a9c6-c72dc02f7994', 'Profosma Jet Plasma', 90, 0, 0, TRUE, 0, 'R5500-R12500', 4414310, 93, FALSE, 'Profosma Jet Plasma'),
+  ('9726c400-234d-489a-9e5c-d247c21e4a85', 'Plasma Fybroblast', 30, 0, 0, FALSE, 400, NULL, 3155858, 98, FALSE, 'Plasma Fybroblast Consultation'),
+  ('49730b6c-133d-4e60-b98c-d33a1091d02d', 'Pressotherapy Single Session', 30, 0, 0, FALSE, 500, NULL, 4020746, 99, FALSE, 'Pressotherapy'),
+  ('46a55851-84cf-491e-a7a3-ed19b2817e1e', 'Priced according to area', 300, 0, 0, TRUE, 0, '1900 - 6500', 3155858, 114, FALSE, 'Plasma Fybroblast Prices'),
+  ('8d5ee63d-8caa-45aa-b2d3-2a91d2478672', 'Ozone & Far Infrared Therapy', 40, 0, 15, TRUE, 0, 'R250 - R350', 14423100, 22, FALSE, 'Ozone & Far Infrared'),
+  ('7030909c-df55-4c38-bb44-ce7b57b74cd5', 'Basic Facial-Hydrationw/Pigmentation Targeted Break out skin:', 60, 0, 15, FALSE, 800, NULL, 16737095, 97, FALSE, 'Facials'),
+  ('592f0d7d-5a54-4f01-a7ee-c10fb0715140', 'Basic Facial-Acne Congested/Hormonal Break out skin:', 60, 0, 15, FALSE, 800, NULL, 16737095, 91, FALSE, 'Facials'),
+  ('1c7cdc7c-67b2-4c44-b999-1b900d27ca3c', 'Dermaplane facial', 90, 0, 15, FALSE, 950, NULL, 16737095, 15, FALSE, 'Facials'),
+  ('8caf9baa-c5b0-4b8a-b45e-b10ca2367c50', '⁠Brightening Facial (Pigmentation)', 90, 0, 15, FALSE, 980, NULL, 16737095, 79, FALSE, 'Facials'),
+  ('3a5d1f78-4213-401a-b279-e674608c5c5b', '⁠Clarity Facial (Black heads, White heads & Acne', 90, 0, 15, FALSE, 980, NULL, 16737095, 108, FALSE, 'Facials'),
+  ('178ff19a-a260-4915-af76-09c4f6884c39', 'Formulage Brightening Peel', 90, 0, 15, FALSE, 1190, NULL, 16737095, 7, FALSE, 'Facials'),
+  ('ca73086c-7a7a-47f8-90e4-992dfc8dd040', '⁠Calm & Clear Facial', 90, 0, 15, FALSE, 1800, NULL, 16737095, 66, FALSE, 'Facials'),
+  ('d2adf221-5d19-43ff-bd7b-281aa21b2428', '⁠Eternal Glow Facial', 90, 0, 15, FALSE, 1850, NULL, 16737095, 20, FALSE, 'Facials'),
+  ('f87d46dc-f525-409e-beb2-784c56769ae6', 'Contour Lift Facial', 90, 0, 15, FALSE, 2050, NULL, 16737095, 55, FALSE, 'Facials'),
+  ('0dd673be-ab70-4694-8727-08debcae60b5', 'Hydrate & Plump Facial', 90, 0, 15, FALSE, 1980, NULL, 16737095, 6, FALSE, 'Facials'),
+  ('598c88c9-af8b-47b4-a22f-b2af1a905cfd', 'Acne Detox Facial', 90, 0, 15, FALSE, 2050, NULL, 16737095, 83, FALSE, 'Facials'),
+  ('975999ce-a6cc-45c4-a0ed-9f4de0f3ec5b', 'Hybrid Facial', 90, 0, 15, FALSE, 2600, NULL, 16737095, 68, FALSE, 'Facials'),
+  ('c830d602-0e71-499e-9348-114584c8a985', '1. SQT Anti-Aging Rejuvenation BioMicroneedling + SQT Revitalizing Beauty BioMicroneedling', 90, 0, 0, TRUE, 0, 'R1785-R2585', 15755796, 11, FALSE, '1. SQT BoiMicroneedling'),
+  ('f21db849-78c6-45a5-ab87-fa99050fb495', '2. SQT Resurfacing BioMicroneedling + SQT Nourishing Hydrating BioMicroneedling', 90, 0, 0, TRUE, 0, 'R1785-R1840', 15755796, 3, FALSE, '2. SQT BioMicroneedling'),
+  ('46043512-d1df-4169-92b4-132160fca809', 'Sports Massage Full Body', 120, 0, 0, FALSE, 750, NULL, 4915330, 2, FALSE, 'Massage'),
+  ('9f2f6452-f1ce-4525-88f2-3dc57f74caa6', 'Quick Relieve: Back & Neck (45 min)', 45, 0, 0, FALSE, 450, NULL, 49151, 4, FALSE, 'Massage'),
+  ('2d5b6147-ee9f-4a97-8e27-6270751c2673', 'Targated Area Specific Sports Massage', 60, 0, 0, FALSE, 550, NULL, 8087790, 5, FALSE, 'Massage'),
+  ('b5c96105-f534-406d-89ec-68e78c65cf8b', 'Upper Back, Neck & Jaw Release', 60, 0, 0, FALSE, 550, NULL, 13047173, 6, FALSE, 'Massage'),
+  ('21a1fc85-6a5b-433e-b689-7bff12c7e2af', 'Hot Stone Masage', 90, 0, 0, FALSE, 680, NULL, 14423100, 7, FALSE, 'Massage'),
+  ('406d85e9-4d36-42d3-9611-ab1834038662', 'Soothing & Restorative Pregnancy Massage', 90, 0, 0, FALSE, 700, NULL, 11584734, 8, FALSE, 'Massage'),
+  ('729fc549-c353-48ac-9cbc-abba4cc2ed66', 'Renew & Revive Leg and Foot Massage', 60, 0, 0, FALSE, 500, NULL, 49151, 9, FALSE, 'Massage'),
+  ('1d734e8b-d21e-44c3-9a3f-b2a7165a7787', 'Full Body Sports Massage ', 90, 0, 0, FALSE, 750, NULL, 3155858, 10, FALSE, 'Massage'),
+  ('b39dcaf1-7894-40e0-8a51-c7ab4eba553a', 'Lower Back & Hip  & Psoas Release', 90, 5, 0, FALSE, 650, NULL, 8388736, 11, FALSE, 'Massage'),
+  ('409ef0e8-2063-47b2-86db-ca0af30787de', 'Cupping Area Specific', 45, 0, 0, FALSE, 450, NULL, 1644912, 12, FALSE, 'Massage'),
+  ('6a0c9c5e-d7e7-4a82-8795-e8281a0bd526', 'Bamboo Sports Massage Area Specific ', 60, 0, 0, FALSE, 600, NULL, 205, 13, FALSE, 'Massage'),
+  ('71d29944-2474-4034-a232-5b14503c5eda', 'Sculp Delux', 90, 0, 15, FALSE, 2600, NULL, 16737095, 42, FALSE, 'Facials'),
+  ('a5af84f7-e1d3-4e5f-afef-a1e7a26e4caa', 'Firm & Lift', 120, 0, 15, FALSE, 3200, NULL, 16737095, 71, FALSE, 'Facials'),
+  ('367dbc36-5af0-43e3-a3ec-3e382cb4954a', 'Lip Plump Treatment', 90, 0, 15, FALSE, 990, NULL, 16737095, 30, FALSE, 'Facials'),
+  ('29a37095-3263-4ce2-a3b5-2b6525804de5', 'Derma Peel Brightening', 90, 0, 15, FALSE, 1900, NULL, 16737095, 23, FALSE, 'Facials'),
+  ('c97eda93-c42f-471c-a1fc-5f35207c0c86', 'GF Needling with Growth Factors under Local Anesthetic', 180, 0, 0, TRUE, 0, 'R700-R2200', 15755796, 3, FALSE, 'Mikroneedling'),
+  ('e8c5bf09-c583-4bcc-9da9-a560180cf776', '⁠Stretch Mark Microneedling Consultation', 30, 0, 0, TRUE, 0, 'R400', 15755796, 1, FALSE, 'Mikroneedling'),
+  ('c7b12afc-a0ba-497b-affb-ab03b2958a73', 'VHC Standard Needling with Vitamins under Local Anesthetic.', 150, 0, 0, TRUE, 0, 'R500-R1250', 15755796, 2, FALSE, 'Mikroneedling'),
+  ('3f92913f-e670-4a75-8f0a-fc2d9d401eb5', 'Permanent Makeup - Eyeliner:', 180, 0, 0, TRUE, 0, ' R 1250 - R 2200', 16766720, 0, FALSE, 'Permanant Makeup'),
+  ('cf51772d-9dbc-48c4-98d4-4fbc50fefbde', 'Permanent Makeup - Brows:', 180, 0, 0, TRUE, 0, ' R 1950 - R 2200', 16766720, 1, FALSE, 'Permanant Makeup'),
+  ('f3e682e1-6a03-4623-83e6-935752b27196', 'Permanant Makeup- Lips:', 180, 0, 0, TRUE, 0, 'R1650-R2900', 16766720, 2, FALSE, 'Permanant Makeup'),
+  ('7537cf00-0777-44a0-a04a-ce2ff3fbf2a6', 'Areola reconstruction', 30, 0, 0, FALSE, 400, NULL, 16766720, 3, FALSE, 'Permanant Makeup'),
+  ('175c91c9-562e-4aa7-87eb-8f918462ce7f', 'Waxing', 60, 0, 0, TRUE, 0, 'R80-R500', 15761536, 63, FALSE, 'Facial Waxing'),
+  ('69805dfe-8238-47d2-8b1d-f154f0033e27', 'HIFU (High Intensity Focused Ultrasound', 120, 0, 0, TRUE, 0, 'R1950-R2950', 16738740, 117, FALSE, 'HIFU'),
+  ('d42f5e34-b3c1-4ff3-9206-0fc97823d02e', 'Facial Lymphatic Drainage Massage', 60, 0, 0, FALSE, 450, NULL, 7405568, 1, FALSE, 'Massage'),
+  ('61a0a7db-426d-4ecf-94ff-9fd6855f384d', 'Full Body Swedish', 90, 0, 15, FALSE, 590, NULL, 12357519, 0, FALSE, 'Massage'),
+  ('068c0963-27db-418c-ad44-3a10431076b7', 'Pelvic floor strengthening', 30, 0, 0, TRUE, 0, '350 - 450', 49151, 2, FALSE, 'Neo Pelvic Therapy'),
+  ('0c86a08f-68e9-49f6-a33d-6ff5bc9870ea', 'HIFU', 30, 0, 0, TRUE, 0, '1000 - 1200', 8421376, 1, FALSE, 'Vaginal Tightening & Rejuvenation'),
+  ('90baece3-1520-4368-b772-eaba08e1a511', 'Lymphatic Drainage Reset Package', 90, 0, 0, FALSE, 500, NULL, 3155858, 15, FALSE, 'Massage')
+)
 INSERT INTO services (
   category_id, name, duration_minutes, processing_time_minutes, extra_time_minutes,
   variable_price, price, display_price, color_value, display_order, is_default,
   status, external_source, external_id
 )
 SELECT
-  c.id, 'Medi-Heel Pedicure (No Gel Toes) & Foot Massage', 60, 0, 15,
-  FALSE, 490.0, NULL, 1550217,
-  10, FALSE, 'active', 'goldie', 'e4510fa9-579f-46dd-8fff-107c00748597'
-FROM service_categories c
-WHERE c.name = 'Pedicures & Foot Care'
+  c.id, s.name, s.duration_minutes, s.processing_time_minutes, s.extra_time_minutes,
+  s.variable_price, s.price, s.display_price, s.color_value, s.display_order, s.is_default,
+  'active', 'goldie', s.external_id
+FROM source_service s
+JOIN service_categories c ON c.name = s.category_name
 ON CONFLICT (external_source, external_id) DO UPDATE SET
   category_id = EXCLUDED.category_id,
   name = EXCLUDED.name,
@@ -29,99 +86,128 @@ ON CONFLICT (external_source, external_id) DO UPDATE SET
   status = 'active',
   updated_at = NOW();
 
-INSERT INTO staff_services (staff_id, service_id)
-SELECT st.id, sv.id
-FROM staff st
-JOIN services sv ON sv.external_source = 'goldie' AND sv.external_id = 'e4510fa9-579f-46dd-8fff-107c00748597'
-WHERE st.source_name = 'Abigail .'
-ON CONFLICT (staff_id, service_id) DO NOTHING;
-
-INSERT INTO staff_services (staff_id, service_id)
-SELECT st.id, sv.id
-FROM staff st
-JOIN services sv ON sv.external_source = 'goldie' AND sv.external_id = 'e4510fa9-579f-46dd-8fff-107c00748597'
-WHERE st.source_name = 'Christel .'
-ON CONFLICT (staff_id, service_id) DO NOTHING;
-
-INSERT INTO services (
-  category_id, name, duration_minutes, processing_time_minutes, extra_time_minutes,
-  variable_price, price, display_price, color_value, display_order, is_default,
-  status, external_source, external_id
+WITH eligibility (service_external_id, staff_source_name) AS (
+  VALUES
+  ('e4510fa9-579f-46dd-8fff-107c00748597', 'Abigail .'),
+  ('e4510fa9-579f-46dd-8fff-107c00748597', 'Christel .'),
+  ('8814ad67-f670-4c4b-ae22-2cb1233afb96', 'Abigail .'),
+  ('8814ad67-f670-4c4b-ae22-2cb1233afb96', 'Christel .'),
+  ('082a3806-3b46-4469-88b8-68b5df95e82b', 'Marietjie .'),
+  ('082a3806-3b46-4469-88b8-68b5df95e82b', 'Abigail .'),
+  ('b534a8e5-3fe1-46e9-9ca0-bba116e6bf53', 'Abigail .'),
+  ('b534a8e5-3fe1-46e9-9ca0-bba116e6bf53', 'Christel .'),
+  ('074c7773-2e78-4761-a9c6-c72dc02f7994', 'Marietjie .'),
+  ('074c7773-2e78-4761-a9c6-c72dc02f7994', 'Abigail .'),
+  ('9726c400-234d-489a-9e5c-d247c21e4a85', 'Marietjie .'),
+  ('9726c400-234d-489a-9e5c-d247c21e4a85', 'Abigail .'),
+  ('49730b6c-133d-4e60-b98c-d33a1091d02d', 'Abigail .'),
+  ('49730b6c-133d-4e60-b98c-d33a1091d02d', 'Christel .'),
+  ('46a55851-84cf-491e-a7a3-ed19b2817e1e', 'Marietjie .'),
+  ('46a55851-84cf-491e-a7a3-ed19b2817e1e', 'Abigail .'),
+  ('8d5ee63d-8caa-45aa-b2d3-2a91d2478672', 'Marietjie .'),
+  ('8d5ee63d-8caa-45aa-b2d3-2a91d2478672', 'Abigail .'),
+  ('7030909c-df55-4c38-bb44-ce7b57b74cd5', 'Marietjie .'),
+  ('7030909c-df55-4c38-bb44-ce7b57b74cd5', 'Abigail .'),
+  ('592f0d7d-5a54-4f01-a7ee-c10fb0715140', 'Marietjie .'),
+  ('592f0d7d-5a54-4f01-a7ee-c10fb0715140', 'Abigail .'),
+  ('1c7cdc7c-67b2-4c44-b999-1b900d27ca3c', 'Marietjie .'),
+  ('1c7cdc7c-67b2-4c44-b999-1b900d27ca3c', 'Abigail .'),
+  ('8caf9baa-c5b0-4b8a-b45e-b10ca2367c50', 'Marietjie .'),
+  ('8caf9baa-c5b0-4b8a-b45e-b10ca2367c50', 'Abigail .'),
+  ('3a5d1f78-4213-401a-b279-e674608c5c5b', 'Marietjie .'),
+  ('3a5d1f78-4213-401a-b279-e674608c5c5b', 'Abigail .'),
+  ('178ff19a-a260-4915-af76-09c4f6884c39', 'Marietjie .'),
+  ('178ff19a-a260-4915-af76-09c4f6884c39', 'Abigail .'),
+  ('ca73086c-7a7a-47f8-90e4-992dfc8dd040', 'Marietjie .'),
+  ('ca73086c-7a7a-47f8-90e4-992dfc8dd040', 'Abigail .'),
+  ('d2adf221-5d19-43ff-bd7b-281aa21b2428', 'Marietjie .'),
+  ('d2adf221-5d19-43ff-bd7b-281aa21b2428', 'Abigail .'),
+  ('f87d46dc-f525-409e-beb2-784c56769ae6', 'Marietjie .'),
+  ('f87d46dc-f525-409e-beb2-784c56769ae6', 'Abigail .'),
+  ('0dd673be-ab70-4694-8727-08debcae60b5', 'Marietjie .'),
+  ('0dd673be-ab70-4694-8727-08debcae60b5', 'Abigail .'),
+  ('598c88c9-af8b-47b4-a22f-b2af1a905cfd', 'Marietjie .'),
+  ('598c88c9-af8b-47b4-a22f-b2af1a905cfd', 'Abigail .'),
+  ('975999ce-a6cc-45c4-a0ed-9f4de0f3ec5b', 'Marietjie .'),
+  ('975999ce-a6cc-45c4-a0ed-9f4de0f3ec5b', 'Abigail .'),
+  ('c830d602-0e71-499e-9348-114584c8a985', 'Marietjie .'),
+  ('c830d602-0e71-499e-9348-114584c8a985', 'Abigail .'),
+  ('f21db849-78c6-45a5-ab87-fa99050fb495', 'Marietjie .'),
+  ('f21db849-78c6-45a5-ab87-fa99050fb495', 'Abigail .'),
+  ('46043512-d1df-4169-92b4-132160fca809', 'Pieter .'),
+  ('46043512-d1df-4169-92b4-132160fca809', 'Abigail .'),
+  ('46043512-d1df-4169-92b4-132160fca809', 'Christel .'),
+  ('9f2f6452-f1ce-4525-88f2-3dc57f74caa6', 'Pieter .'),
+  ('9f2f6452-f1ce-4525-88f2-3dc57f74caa6', 'Abigail .'),
+  ('9f2f6452-f1ce-4525-88f2-3dc57f74caa6', 'Christel .'),
+  ('9f2f6452-f1ce-4525-88f2-3dc57f74caa6', 'Savanna Massage Practitioner'),
+  ('2d5b6147-ee9f-4a97-8e27-6270751c2673', 'Pieter .'),
+  ('2d5b6147-ee9f-4a97-8e27-6270751c2673', 'Abigail .'),
+  ('2d5b6147-ee9f-4a97-8e27-6270751c2673', 'Christel .'),
+  ('b5c96105-f534-406d-89ec-68e78c65cf8b', 'Abigail .'),
+  ('b5c96105-f534-406d-89ec-68e78c65cf8b', 'Christel .'),
+  ('21a1fc85-6a5b-433e-b689-7bff12c7e2af', 'Pieter .'),
+  ('21a1fc85-6a5b-433e-b689-7bff12c7e2af', 'Abigail .'),
+  ('21a1fc85-6a5b-433e-b689-7bff12c7e2af', 'Christel .'),
+  ('406d85e9-4d36-42d3-9611-ab1834038662', 'Pieter .'),
+  ('406d85e9-4d36-42d3-9611-ab1834038662', 'Abigail .'),
+  ('406d85e9-4d36-42d3-9611-ab1834038662', 'Christel .'),
+  ('729fc549-c353-48ac-9cbc-abba4cc2ed66', 'Pieter .'),
+  ('729fc549-c353-48ac-9cbc-abba4cc2ed66', 'Abigail .'),
+  ('729fc549-c353-48ac-9cbc-abba4cc2ed66', 'Christel .'),
+  ('1d734e8b-d21e-44c3-9a3f-b2a7165a7787', 'Abigail .'),
+  ('1d734e8b-d21e-44c3-9a3f-b2a7165a7787', 'Christel .'),
+  ('b39dcaf1-7894-40e0-8a51-c7ab4eba553a', 'Pieter .'),
+  ('b39dcaf1-7894-40e0-8a51-c7ab4eba553a', 'Abigail .'),
+  ('b39dcaf1-7894-40e0-8a51-c7ab4eba553a', 'Christel .'),
+  ('409ef0e8-2063-47b2-86db-ca0af30787de', 'Pieter .'),
+  ('409ef0e8-2063-47b2-86db-ca0af30787de', 'Abigail .'),
+  ('409ef0e8-2063-47b2-86db-ca0af30787de', 'Christel .'),
+  ('6a0c9c5e-d7e7-4a82-8795-e8281a0bd526', 'Pieter .'),
+  ('6a0c9c5e-d7e7-4a82-8795-e8281a0bd526', 'Abigail .'),
+  ('6a0c9c5e-d7e7-4a82-8795-e8281a0bd526', 'Christel .'),
+  ('71d29944-2474-4034-a232-5b14503c5eda', 'Marietjie .'),
+  ('71d29944-2474-4034-a232-5b14503c5eda', 'Abigail .'),
+  ('a5af84f7-e1d3-4e5f-afef-a1e7a26e4caa', 'Marietjie .'),
+  ('a5af84f7-e1d3-4e5f-afef-a1e7a26e4caa', 'Abigail .'),
+  ('367dbc36-5af0-43e3-a3ec-3e382cb4954a', 'Marietjie .'),
+  ('367dbc36-5af0-43e3-a3ec-3e382cb4954a', 'Abigail .'),
+  ('29a37095-3263-4ce2-a3b5-2b6525804de5', 'Marietjie .'),
+  ('29a37095-3263-4ce2-a3b5-2b6525804de5', 'Abigail .'),
+  ('c97eda93-c42f-471c-a1fc-5f35207c0c86', 'Marietjie .'),
+  ('c97eda93-c42f-471c-a1fc-5f35207c0c86', 'Abigail .'),
+  ('e8c5bf09-c583-4bcc-9da9-a560180cf776', 'Marietjie .'),
+  ('e8c5bf09-c583-4bcc-9da9-a560180cf776', 'Abigail .'),
+  ('c7b12afc-a0ba-497b-affb-ab03b2958a73', 'Marietjie .'),
+  ('c7b12afc-a0ba-497b-affb-ab03b2958a73', 'Abigail .'),
+  ('3f92913f-e670-4a75-8f0a-fc2d9d401eb5', 'Marietjie .'),
+  ('3f92913f-e670-4a75-8f0a-fc2d9d401eb5', 'Abigail .'),
+  ('cf51772d-9dbc-48c4-98d4-4fbc50fefbde', 'Marietjie .'),
+  ('cf51772d-9dbc-48c4-98d4-4fbc50fefbde', 'Abigail .'),
+  ('f3e682e1-6a03-4623-83e6-935752b27196', 'Marietjie .'),
+  ('f3e682e1-6a03-4623-83e6-935752b27196', 'Abigail .'),
+  ('7537cf00-0777-44a0-a04a-ce2ff3fbf2a6', 'Marietjie .'),
+  ('7537cf00-0777-44a0-a04a-ce2ff3fbf2a6', 'Abigail .'),
+  ('175c91c9-562e-4aa7-87eb-8f918462ce7f', 'Marietjie .'),
+  ('175c91c9-562e-4aa7-87eb-8f918462ce7f', 'Abigail .'),
+  ('69805dfe-8238-47d2-8b1d-f154f0033e27', 'Marietjie .'),
+  ('69805dfe-8238-47d2-8b1d-f154f0033e27', 'Abigail .'),
+  ('d42f5e34-b3c1-4ff3-9206-0fc97823d02e', 'Abigail .'),
+  ('d42f5e34-b3c1-4ff3-9206-0fc97823d02e', 'Christel .'),
+  ('61a0a7db-426d-4ecf-94ff-9fd6855f384d', 'Pieter .'),
+  ('61a0a7db-426d-4ecf-94ff-9fd6855f384d', 'Abigail .'),
+  ('61a0a7db-426d-4ecf-94ff-9fd6855f384d', 'Christel .'),
+  ('61a0a7db-426d-4ecf-94ff-9fd6855f384d', 'Savanna Massage Practitioner'),
+  ('068c0963-27db-418c-ad44-3a10431076b7', 'Marietjie .'),
+  ('0c86a08f-68e9-49f6-a33d-6ff5bc9870ea', 'Marietjie .'),
+  ('90baece3-1520-4368-b772-eaba08e1a511', 'Pieter .'),
+  ('90baece3-1520-4368-b772-eaba08e1a511', 'Abigail .'),
+  ('90baece3-1520-4368-b772-eaba08e1a511', 'Savanna Massage Practitioner'),
+  ('90baece3-1520-4368-b772-eaba08e1a511', 'SHILOH MTC')
 )
-SELECT
-  c.id, 'Toe Gel Application', 30, 0, 10,
-  FALSE, 250.0, NULL, 3155858,
-  24, FALSE, 'active', 'goldie', '8814ad67-f670-4c4b-ae22-2cb1233afb96'
-FROM service_categories c
-WHERE c.name = 'Pedicures & Foot Care'
-ON CONFLICT (external_source, external_id) DO UPDATE SET
-  category_id = EXCLUDED.category_id,
-  name = EXCLUDED.name,
-  duration_minutes = EXCLUDED.duration_minutes,
-  processing_time_minutes = EXCLUDED.processing_time_minutes,
-  extra_time_minutes = EXCLUDED.extra_time_minutes,
-  variable_price = EXCLUDED.variable_price,
-  price = EXCLUDED.price,
-  display_price = EXCLUDED.display_price,
-  color_value = EXCLUDED.color_value,
-  display_order = EXCLUDED.display_order,
-  is_default = EXCLUDED.is_default,
-  status = 'active',
-  updated_at = NOW();
-
 INSERT INTO staff_services (staff_id, service_id)
 SELECT st.id, sv.id
-FROM staff st
-JOIN services sv ON sv.external_source = 'goldie' AND sv.external_id = '8814ad67-f670-4c4b-ae22-2cb1233afb96'
-WHERE st.source_name = 'Abigail .'
+FROM eligibility e
+JOIN staff st ON st.source_name = e.staff_source_name
+JOIN services sv ON sv.external_source = 'goldie' AND sv.external_id = e.service_external_id
 ON CONFLICT (staff_id, service_id) DO NOTHING;
-
-INSERT INTO staff_services (staff_id, service_id)
-SELECT st.id, sv.id
-FROM staff st
-JOIN services sv ON sv.external_source = 'goldie' AND sv.external_id = '8814ad67-f670-4c4b-ae22-2cb1233afb96'
-WHERE st.source_name = 'Christel .'
-ON CONFLICT (staff_id, service_id) DO NOTHING;
-
-INSERT INTO services (
-  category_id, name, duration_minutes, processing_time_minutes, extra_time_minutes,
-  variable_price, price, display_price, color_value, display_order, is_default,
-  status, external_source, external_id
-)
-SELECT
-  c.id, 'Derma Fusion Clarity Facial', 90, 0, 15,
-  FALSE, 1900.0, NULL, 15755796,
-  49, FALSE, 'active', 'goldie', '082a3806-3b46-4469-88b8-68b5df95e82b'
-FROM service_categories c
-WHERE c.name = 'Facials'
-ON CONFLICT (external_source, external_id) DO UPDATE SET
-  category_id = EXCLUDED.category_id,
-  name = EXCLUDED.name,
-  duration_minutes = EXCLUDED.duration_minutes,
-  processing_time_minutes = EXCLUDED.processing_time_minutes,
-  extra_time_minutes = EXCLUDED.extra_time_minutes,
-  variable_price = EXCLUDED.variable_price,
-  price = EXCLUDED.price,
-  display_price = EXCLUDED.display_price,
-  color_value = EXCLUDED.color_value,
-  display_order = EXCLUDED.display_order,
-  is_default = EXCLUDED.is_default,
-  status = 'active',
-  updated_at = NOW();
-
-INSERT INTO staff_services (staff_id, service_id)
-SELECT st.id, sv.id
-FROM staff st
-JOIN services sv ON sv.external_source = 'goldie' AND sv.external_id = '082a3806-3b46-4469-88b8-68b5df95e82b'
-WHERE st.source_name = 'Marietjie .'
-ON CONFLICT (staff_id, service_id) DO NOTHING;
-
-INSERT INTO staff_services (staff_id, service_id)
-SELECT st.id, sv.id
-FROM staff st
-JOIN services sv ON sv.external_source = 'goldie' AND sv.external_id = '082a3806-3b46-4469-88b8-68b5df95e82b'
-WHERE st.source_name = 'Abigail .'
-ON CONFLICT (staff_id, service_id) DO NOTHING;
-
--- Remaining Goldie services from the export are intentionally loaded by the same idempotent pattern.
--- This migration file is generated from Services.csv and contains the full 52-service catalogue in the repository version.
