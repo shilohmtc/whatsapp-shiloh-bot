@@ -35,36 +35,19 @@ async function processAdminAvailableSlotsMessage(sender,text){
   const resources=await resolveResources(admin,m[1],m[2]); if(resources.reply) return {handled:true,admin,reply:resources.reply};
   const {staff,service}=resources;
   if(availableMatch||checkMatch){
-    const dateTime=m[3];
-    const date=parseDate(dateTime) || parseDate(dateTime.split(/\s+/)[0]);
+    const dateTime=m[3]; const date=parseDate(dateTime) || parseDate(dateTime.split(/\s+/)[0]);
     if(!date) return {handled:true,admin,reply:'Use: Check availability STAFF | SERVICE | DD/MM/YYYY HH:MM'};
     const result=await listAvailableSlots({staffId:staff.id,serviceId:service.id,date,intervalMinutes:15});
     await audit(admin.id,'admin.available_slots_viewed',{staffId:staff.id,serviceId:service.id,date,status:result.status,slotCount:result.slots.length,command:checkMatch?'check availability':'available slots'});
     if(result.status==='not_eligible') return {handled:true,admin,reply:`${staff.display_name} is not eligible for ${service.name}.`};
     if(result.status==='invalid_duration') return {handled:true,admin,reply:`${service.name} does not have a usable duration.`};
-    const requestedTime = dateTime.match(/\b(\d{1,2}):(\d{2})\b/);
-    if(requestedTime){
-      const hh=Number(requestedTime[1]), mm=Number(requestedTime[2]);
-      const matching=result.slots.find(s=>{const parts=fmtTime(s.starts_at).split(':').map(Number); return parts[0]===hh&&parts[1]===mm;});
-      if(matching) return {handled:true,admin,reply:`Availability confirmed — ${staff.display_name} — ${service.name}\nDate: ${date}\nTime: ${fmtTime(matching.starts_at)}–${fmtTime(matching.ends_at)}\n\nThis is an authoritative bookable slot.`};
-      return {handled:true,admin,reply:`No authoritative bookable slot was found for ${staff.display_name} — ${service.name} at ${hh.toString().padStart(2,'0')}:${mm.toString().padStart(2,'0')} on ${date}.`};
-    }
-    if(!result.slots.length) return {handled:true,admin,reply:`Available slots — ${staff.display_name} — ${service.name}\nDate: ${date}\n\nNo authoritative bookable slots were found. Working hours, schedule exceptions, existing appointments and calendar blocks were all applied.`};
-    const lines=[`Available slots — ${staff.display_name} — ${service.name}`,`Date: ${date}`,`Service window: ${result.totalMinutes} minutes`,''];
-    for(const s of result.slots.slice(0,5)) lines.push(`• ${fmtTime(s.starts_at)}–${fmtTime(s.ends_at)}`);
-    if(result.slots.length>5) lines.push(`…and ${result.slots.length-5} more. Use Check availability for a specific time.`);
-    return {handled:true,admin,reply:lines.join('\n')};
+    const requestedTime=dateTime.match(/\b(\d{1,2}):(\d{2})\b/);
+    if(requestedTime){const hh=Number(requestedTime[1]),mm=Number(requestedTime[2]);const matching=result.slots.find(s=>{const parts=fmtTime(s.starts_at).split(':').map(Number);return parts[0]===hh&&parts[1]===mm;});if(matching)return{handled:true,admin,reply:`Availability confirmed — ${staff.display_name} — ${service.name}\nDate: ${date}\nTime: ${fmtTime(matching.starts_at)}–${fmtTime(matching.ends_at)}\n\nThis is an authoritative bookable slot.`};return{handled:true,admin,reply:`No authoritative bookable slot was found for ${staff.display_name} — ${service.name} at ${hh.toString().padStart(2,'0')}:${mm.toString().padStart(2,'0')} on ${date}.`};}
+    if(!result.slots.length)return{handled:true,admin,reply:`Available slots — ${staff.display_name} — ${service.name}\nDate: ${date}\n\nNo authoritative bookable slots were found. Working hours, schedule exceptions, existing appointments and calendar blocks were all applied.`};
+    const lines=[`Available slots — ${staff.display_name} — ${service.name}`,`Date: ${date}`,`Service window: ${result.totalMinutes} minutes`,''];for(const s of result.slots.slice(0,5))lines.push(`• ${fmtTime(s.starts_at)}–${fmtTime(s.ends_at)}`);if(result.slots.length>5)lines.push(`…and ${result.slots.length-5} more. Use Check availability for a specific time.`);return{handled:true,admin,reply:lines.join('\n')};
   }
-  const requestedStart=m[3] ? parseDate(m[3]) : await todayLocal();
-  if(!requestedStart) return {handled:true,admin,reply:'Use: Next available STAFF | SERVICE | DD/MM/YYYY\nThe date is optional.'};
-  for(let offset=0;offset<60;offset++){
-    const date=addDays(requestedStart,offset);
-    const result=await listAvailableSlots({staffId:staff.id,serviceId:service.id,date,intervalMinutes:15});
-    if(result.status==='not_eligible') return {handled:true,admin,reply:`${staff.display_name} is not eligible for ${service.name}.`};
-    if(result.status==='invalid_duration') return {handled:true,admin,reply:`${service.name} does not have a usable duration.`};
-    if(result.slots.length){ const slot=result.slots[0]; await audit(admin.id,'admin.next_available_viewed',{staffId:staff.id,serviceId:service.id,searchStart:requestedStart,foundDate:date,startsAt:slot.starts_at}); return {handled:true,admin,reply:[`Next available — ${staff.display_name} — ${service.name}`,`• ${fmtDate(slot.starts_at)} ${fmtTime(slot.starts_at)}–${fmtTime(slot.ends_at)}`,`• Service window: ${result.totalMinutes} minutes`,'','This slot is authoritative at the time of this lookup. Re-check availability before preparing a booking.'].join('\n')}; }
-  }
-  await audit(admin.id,'admin.next_available_viewed',{staffId:staff.id,serviceId:service.id,searchStart:requestedStart,foundDate:null});
-  return {handled:true,admin,reply:`No authoritative available slot was found for ${staff.display_name} — ${service.name} in the next 60 days from ${requestedStart}.`};
+  const requestedStart=m[3]?parseDate(m[3]):await todayLocal();if(!requestedStart)return{handled:true,admin,reply:'Use: Next available STAFF | SERVICE | DD/MM/YYYY\nThe date is optional.'};
+  for(let offset=0;offset<60;offset++){const date=addDays(requestedStart,offset);const result=await listAvailableSlots({staffId:staff.id,serviceId:service.id,date,intervalMinutes:15});if(result.status==='not_eligible')return{handled:true,admin,reply:`${staff.display_name} is not eligible for ${service.name}.`};if(result.status==='invalid_duration')return{handled:true,admin,reply:`${service.name} does not have a usable duration.`};if(result.slots.length){const slot=result.slots[0];await audit(admin.id,'admin.next_available_viewed',{staffId:staff.id,serviceId:service.id,searchStart:requestedStart,foundDate:date,startsAt:slot.starts_at});return{handled:true,admin,reply:[`Next available — ${staff.display_name} — ${service.name}`,`• ${fmtDate(slot.starts_at)} ${fmtTime(slot.starts_at)}–${fmtTime(slot.ends_at)}`,`• Service window: ${result.totalMinutes} minutes`,'','This slot is authoritative at the time of this lookup. Re-check availability before preparing a booking.'].join('\n')}}}
+  await audit(admin.id,'admin.next_available_viewed',{staffId:staff.id,serviceId:service.id,searchStart:requestedStart,foundDate:null});return{handled:true,admin,reply:`No authoritative available slot was found for ${staff.display_name} — ${service.name} in the next 60 days from ${requestedStart}.`};
 }
 module.exports={processAdminAvailableSlotsMessage};
