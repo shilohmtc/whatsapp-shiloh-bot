@@ -1,5 +1,5 @@
 const { pool } = require("../db/pool");
-const { checkAvailability } = require("./adminAvailability");
+const { checkAvailability, formatAvailabilityReply, checkAuthoritativeSchedule, getConflicts } = require("./adminAvailability");
 
 function formatLocalDateTime(value) {
   return new Intl.DateTimeFormat("en-ZA", {
@@ -27,7 +27,7 @@ async function getSingleActiveLocation() {
 
 async function prepareAdminBooking({ adminId, clientId, staffName, serviceName, localDateTime }) {
   if (!/^\d+$/.test(String(clientId)) || Number(clientId) <= 0) {
-    return { status: "invalid_client", reply: "Use the canonical CRM client number from Find client, for example: Book client 123 | Christel | Swedish Massage | 10/08/2026 14:30" };
+    return { status: "invalid_client", reply: "Use the canonical CRM client number from Find client, for example: Book client 123 | Christel | Full Body Swedish | 10/08/2026 14:30" };
   }
 
   const clientResult = await pool.query(
@@ -46,8 +46,7 @@ async function prepareAdminBooking({ adminId, clientId, staffName, serviceName, 
   }
 
   const availability = await checkAvailability({ staffName, serviceName, localDateTime });
-  if (availability.status !== "clear") {
-    const { formatAvailabilityReply } = require("./adminAvailability");
+  if (availability.status !== "available") {
     return { status: availability.status, reply: formatAvailabilityReply(availability), availability };
   }
 
@@ -146,34 +145,22 @@ async function confirmAdminBooking(admin) {
       return { status: "past_time", reply: "The pending booking time has already passed, so it was discarded. Please start again with a future time." };
     }
 
-    const eligibility = await db.query(
-      `SELECT 1 FROM staff_services WHERE staff_id = $1 AND service_id = $2 LIMIT 1`,
-      [session.staff_id, session.service_id]
-    );
+    const eligibility = await db.query(`SELECT 1 FROM staff_services WHERE staff_id = $1 AND service_id = $2 LIMIT 1`, [session.staff_id, session.service_id]);
     if (!eligibility.rowCount) {
       await db.query(`DELETE FROM admin_booking_sessions WHERE admin_id = $1`, [admin.id]);
       await db.query("COMMIT");
       return { status: "eligibility_changed", reply: "The staff/service eligibility changed before confirmation, so the booking was not created." };
     }
 
-    const conflicts = await db.query(
-      `SELECT 'appointment' AS conflict_type, a.id
-         FROM appointment_staff ast
-         JOIN appointments a ON a.id = ast.appointment_id
-        WHERE ast.staff_id = $1
-          AND a.status <> 'cancelled'
-          AND a.starts_at < $3
-          AND a.ends_at > $2
-       UNION ALL
-       SELECT 'calendar_block' AS conflict_type, cb.id
-         FROM calendar_blocks cb
-        WHERE cb.staff_id = $1
-          AND cb.starts_at < $3
-          AND cb.ends_at > $2
-       LIMIT 1`,
-      [session.staff_id, session.starts_at, session.ends_at]
-    );
-    if (conflicts.rowCount) {
+    const schedule = await checkAuthoritativeSchedule({ db, staffId: session.staff_id, startsAt: session.starts_at, endsAt: session.ends_at });
+    if (schedule.partialUnavailable || (schedule.allDayUnavailable && !schedule.insideAvailableException) || !schedule.covered) {
+      await db.query(`DELETE FROM admin_booking_sessions WHERE admin_id = $1`, [admin.id]);
+      await db.query("COMMIT");
+      return { status: "schedule_changed", reply: "The practitioner's authoritative working schedule no longer permits this time. Nothing was written. Please run availability again." };
+    }
+
+    const conflicts = await getConflicts({ db, staffId: session.staff_id, startsAt: session.starts_at, endsAt: session.ends_at });
+    if (conflicts.length) {
       await db.query(`DELETE FROM admin_booking_sessions WHERE admin_id = $1`, [admin.id]);
       await db.query("COMMIT");
       return { status: "conflict", reply: "A conflicting appointment or staff calendar block appeared before confirmation. Nothing was written. Please run availability again." };
@@ -214,7 +201,7 @@ async function confirmAdminBooking(admin) {
       `INSERT INTO crm_audit_events
          (actor_admin_id, action, entity_type, entity_id, metadata)
        VALUES ($1, 'admin.booking_created', 'appointment', $2, $3::jsonb)`,
-      [admin.id, appointment.id, JSON.stringify({ clientId: session.client_id, staffId: session.staff_id, serviceId: session.service_id, locationId: session.location_id, startsAt: session.starts_at, endsAt: session.ends_at })]
+      [admin.id, appointment.id, JSON.stringify({ clientId: session.client_id, staffId: session.staff_id, serviceId: session.service_id, locationId: session.location_id, startsAt: session.starts_at, endsAt: session.ends_at, authoritativeScheduleChecked: true })]
     );
 
     await db.query(`DELETE FROM admin_booking_sessions WHERE admin_id = $1`, [admin.id]);
@@ -231,7 +218,7 @@ async function confirmAdminBooking(admin) {
         `• Time: ${formatLocalDateTime(session.starts_at)}`,
         `• Location: ${session.location_name}`,
         "",
-        "The production write occurred only after your explicit CONFIRM BOOKING message and a final conflict re-check.",
+        "The production write occurred only after your explicit CONFIRM BOOKING message and a final authoritative schedule, eligibility, and conflict re-check.",
       ].join("\n"),
     };
   } catch (error) {
