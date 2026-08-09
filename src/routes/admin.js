@@ -5,7 +5,7 @@ const { csvUpload } = require("../middleware/csvUpload");
 const { createDocument, uploadDocument, getDocuments, removeDocument, getProfiles, getProfileByPhone, patchProfileByPhone, sendTemplateTest } = require("../controllers/adminController");
 const { syncGoldie, getGoldieSyncStatus } = require("../controllers/goldieController");
 const { stageClients: stageGoldieClients, stageAppointments: stageGoldieAppointments } = require("../controllers/goldieImportController");
-const { getSummary: getReconciliationSummary, getRecommendations: getReconciliationRecommendations, getAppointmentIdentityEvidence, getSecondPassReconciliation, getManualQueue, decideManualCase, getCanonicalizationAudit, canonicalizeClients: canonicalizeReconciliationClients, getCases: getReconciliationCases, getCase: getReconciliationCase } = require("../controllers/reconciliationController");
+const { getSummary: getReconciliationSummary, getRecommendations: getReconciliationRecommendations, getAppointmentIdentityEvidence, getSecondPassReconciliation, getManualQueue, decideManualCase, getChantelDuplicatePlan, executeChantelDuplicate, getCanonicalizationAudit, canonicalizeClients: canonicalizeReconciliationClients, getCases: getReconciliationCases, getCase: getReconciliationCase } = require("../controllers/reconciliationController");
 const { createLifecycleAppointment, getLifecycleAppointments, patchLifecycleAppointment, runLifecycleScan, runControlledLifecycleTest } = require("../controllers/appointmentLifecycleController");
 const { getFeedback, getReviews, getCustomerSatisfaction, resolveCustomerFeedback } = require("../controllers/customerExperienceController");
 const { getStatus: getDatabaseStatus, getTables: getDatabaseTables, getSchema: getDatabaseSchema, getOverview: getDatabaseOverview, getMigrations: getDatabaseMigrations, applyMigrations: applyDatabaseMigrations } = require("../controllers/databaseController");
@@ -21,6 +21,8 @@ router.get("/reconciliation/clients/appointment-evidence", getAppointmentIdentit
 router.get("/reconciliation/clients/second-pass", getSecondPassReconciliation);
 router.get("/reconciliation/clients/manual-queue", getManualQueue);
 router.post("/reconciliation/clients/manual-queue/:id/decision", decideManualCase);
+router.get("/reconciliation/clients/chantel-duplicate/plan", getChantelDuplicatePlan);
+router.post("/reconciliation/clients/chantel-duplicate/execute", executeChantelDuplicate);
 router.get("/reconciliation/clients/canonicalization-audit", getCanonicalizationAudit);
 router.post("/reconciliation/clients/canonicalize", canonicalizeReconciliationClients);
 router.get("/reconciliation/clients", getReconciliationCases); router.get("/reconciliation/clients/:id", getReconciliationCase);
