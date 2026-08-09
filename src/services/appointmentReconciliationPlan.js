@@ -13,18 +13,22 @@ function parseGoldieDateTime(dateText, timeText) {
   let year = Number(m[3]); if (year < 100) year += 2000;
   const month = Number(m[2]), day = Number(m[1]), hour = Number(t[1]), minute = Number(t[2]), second = Number(t[3] || 0);
   if (month < 1 || month > 12 || day < 1 || day > 31 || hour > 23 || minute > 59 || second > 59) return null;
-  // Goldie export is local salon time (South Africa, UTC+2). Preserve the intended local wall clock.
   const iso = `${String(year).padStart(4,'0')}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}T${String(hour).padStart(2,'0')}:${String(minute).padStart(2,'0')}:${String(second).padStart(2,'0')}+02:00`;
   const d = new Date(iso);
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
+const SERVICE_ALIASES = new Map([
+  [norm('90 Min Full Body Swedish'), norm('Full Body Swedish')],
+]);
+function serviceKey(name) { const k = norm(name); return SERVICE_ALIASES.get(k) || k; }
+
 async function buildAppointmentReconciliationPlan({ appointmentBatchId = '2', clientBatchId = '1' } = {}) {
   const [appointments, clientLinks, services, staff] = await Promise.all([
-    pool.query(`SELECT id, external_id, source_payload FROM external_records WHERE import_batch_id=$1 AND source='goldie' AND entity_type='appointment' ORDER BY id`, [appointmentBatchId]),
+    pool.query(`SELECT id, external_id, source_payload FROM external_records WHERE import_batch_id=$1 AND source='goldie' AND entity_type='appointment' AND reconciliation_status='unmatched' ORDER BY id`, [appointmentBatchId]),
     pool.query(`SELECT ecr.display_name, er.shiloh_entity_id AS client_id FROM external_records er JOIN external_client_records ecr ON ecr.external_record_id=er.id WHERE er.import_batch_id=$1 AND er.source='goldie' AND er.entity_type='client' AND er.reconciliation_status='matched' AND er.shiloh_entity_id IS NOT NULL`, [clientBatchId]),
     pool.query(`SELECT id,name FROM services WHERE status='active'`),
-    pool.query(`SELECT id,display_name FROM staff WHERE status='active'`),
+    pool.query(`SELECT id,display_name,source_name,status FROM staff`),
   ]);
 
   const clientMap = new Map();
@@ -34,7 +38,11 @@ async function buildAppointmentReconciliationPlan({ appointmentBatchId = '2', cl
     clientMap.get(k).add(String(r.client_id));
   }
   const serviceMap = new Map(services.rows.map((r) => [norm(r.name), String(r.id)]));
-  const staffMap = new Map(staff.rows.map((r) => [norm(r.display_name), String(r.id)]));
+  const staffMap = new Map();
+  for (const r of staff.rows) {
+    staffMap.set(norm(r.display_name), String(r.id));
+    if (r.source_name) staffMap.set(norm(r.source_name), String(r.id));
+  }
 
   const summary = {
     total: appointments.rowCount, appointmentRows: 0, nonAppointmentRows: 0, validTimes: 0, invalidTimes: 0,
@@ -56,18 +64,18 @@ async function buildAppointmentReconciliationPlan({ appointmentBatchId = '2', cl
     validTimes ? summary.validTimes++ : summary.invalidTimes++;
 
     const clientNames = splitList(p.Clients);
-    let clientState = 'blank', clientId = null;
+    let clientState = 'blank';
     if (clientNames.length > 1) clientState = 'multipleNamedClients';
     else if (clientNames.length === 1) {
       const ids = clientMap.get(norm(clientNames[0]));
       if (!ids || ids.size === 0) clientState = 'unresolvedName';
       else if (ids.size > 1) clientState = 'ambiguousName';
-      else { clientState = 'uniqueCanonical'; clientId = [...ids][0]; }
+      else clientState = 'uniqueCanonical';
     }
     summary.client[clientState]++;
 
     const serviceNames = splitList(p.Services);
-    const serviceMatches = serviceNames.map((name) => ({ name, id: serviceMap.get(norm(name)) || null }));
+    const serviceMatches = serviceNames.map((name) => ({ name, id: serviceMap.get(serviceKey(name)) || null }));
     let serviceState = 'blank';
     if (serviceNames.length) {
       const matched = serviceMatches.filter((x) => x.id).length;
@@ -76,7 +84,7 @@ async function buildAppointmentReconciliationPlan({ appointmentBatchId = '2', cl
     summary.services[serviceState]++;
 
     const staffNames = splitList(p.Staff);
-    const staffMatches = staffNames.map((name) => ({ name, id: staffMap.get(norm(name.replace(/\s+\.$/, ''))) || staffMap.get(norm(name)) || null }));
+    const staffMatches = staffNames.map((name) => ({ name, id: staffMap.get(norm(name)) || staffMap.get(norm(name.replace(/\s+\.$/, ''))) || null }));
     let staffState = 'blank';
     if (staffNames.length) {
       const matched = staffMatches.filter((x) => x.id).length;
@@ -107,7 +115,9 @@ async function buildAppointmentReconciliationPlan({ appointmentBatchId = '2', cl
       promoteOnlyTypeAppointment: true,
       requireValidTimeRange: true,
       requireExactlyOneUniquelyCanonicalClient: true,
-      requireAllServicesExact: true,
+      requireAllServicesExactOrApprovedAlias: true,
+      approvedServiceAliases: Object.fromEntries(SERVICE_ALIASES),
+      allowHistoricalInactiveStaffByGoldieSourceName: true,
       requireAllStaffExact: true,
       timezone: 'Africa/Johannesburg (+02:00)',
       writesEnabled: false,
@@ -115,4 +125,4 @@ async function buildAppointmentReconciliationPlan({ appointmentBatchId = '2', cl
   };
 }
 
-module.exports = { buildAppointmentReconciliationPlan, parseGoldieDateTime };
+module.exports = { buildAppointmentReconciliationPlan, parseGoldieDateTime, SERVICE_ALIASES, serviceKey };
