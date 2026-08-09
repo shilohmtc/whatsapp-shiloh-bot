@@ -1,17 +1,10 @@
-const { Pool } = require("pg");
+const { pool } = require("../db/pool");
 const { extractDate, extractTime, displayDate } = require("./bookingIntent");
 const logger = require("../lib/logger");
 
 const BOOKING_URL =
   process.env.GOLDIE_BOOKING_URL ||
   "https://book.heygoldie.com/Shiloh-Massage-Therapy-Clinic";
-
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL?.includes("render.com")
-    ? { rejectUnauthorized: false }
-    : undefined,
-});
 
 let initialized = false;
 
@@ -167,9 +160,6 @@ async function processAppointmentChangeMessage(phone, text) {
     const action = detectAction(text);
     let active = existing && ["collecting", "awaiting_confirmation"].includes(existing.status);
 
-    // A new explicit appointment-change command always wins over stale or different state.
-    // This lets a customer switch from reschedule to cancellation (or vice versa), and
-    // starts a fresh flow after a previous request reached ready_for_handoff.
     if (action && existing && (existing.action !== action || existing.status === "ready_for_handoff")) {
       await clearIntent(phone);
       existing = null;
@@ -186,8 +176,6 @@ async function processAppointmentChangeMessage(phone, text) {
       };
     }
 
-    // If the user explicitly changes intent while awaiting confirmation, start the new flow
-    // instead of forcing YES/STOP for the old request.
     if (existing?.status === "awaiting_confirmation" && action && existing.action !== action) {
       await clearIntent(phone);
       existing = null;
