@@ -1,6 +1,7 @@
 const { pool } = require("../db/pool");
 const { normalizePhone } = require("./clientIdentityOnboarding");
 const { findClients, formatClientLookupReply } = require("./adminClientLookup");
+const { checkAvailability, formatAvailabilityReply } = require("./adminAvailability");
 
 function normalizeText(text = "") {
   return String(text).trim().toLowerCase().replace(/\s+/g, " ");
@@ -41,7 +42,11 @@ function menu(admin) {
   ];
 
   if (hasPermission(admin, "appointment:view")) {
-    lines.push("• Today — view today's appointments", "• Tomorrow — view tomorrow's appointments");
+    lines.push(
+      "• Today — view today's appointments",
+      "• Tomorrow — view tomorrow's appointments",
+      "• Check availability STAFF | SERVICE | DD/MM/YYYY HH:MM — conflict check"
+    );
   }
   if (hasPermission(admin, "walkin:create")) {
     lines.push("• Add walk-in — register a walk-in client");
@@ -112,6 +117,14 @@ function extractClientLookup(text = "") {
   return match ? match[1].trim() : null;
 }
 
+function extractAvailabilityCheck(text = "") {
+  const value = String(text).trim();
+  const match = value.match(/^(?:check\s+)?availability\s+(.+?)\s*\|\s*(.+?)\s*\|\s*(.+)$/i)
+    || value.match(/^check\s+availability\s+for\s+(.+?)\s*\|\s*(.+?)\s*\|\s*(.+)$/i);
+  if (!match) return null;
+  return { staffName: match[1].trim(), serviceName: match[2].trim(), localDateTime: match[3].trim() };
+}
+
 async function processAdminAssistantMessage(sender, text) {
   const admin = await getAdmin(sender);
   if (!admin) return { handled: false, isAdmin: false };
@@ -120,6 +133,32 @@ async function processAdminAssistantMessage(sender, text) {
   if (isGreeting(text)) {
     await audit(admin.id, "admin.whatsapp_greeting");
     return { handled: true, isAdmin: true, admin, reply: menu(admin) };
+  }
+
+  const availabilityCheck = extractAvailabilityCheck(text);
+  if (availabilityCheck) {
+    if (!hasPermission(admin, "appointment:view")) {
+      return { handled: true, isAdmin: true, admin, reply: "Your admin account does not currently have permission to view appointment availability." };
+    }
+    const result = await checkAvailability(availabilityCheck);
+    await audit(admin.id, "admin.availability_checked", {
+      status: result.status,
+      staffId: result.staff?.id || null,
+      serviceId: result.service?.id || null,
+      startsAt: result.startsAt || null,
+      endsAt: result.endsAt || null,
+      conflictCount: result.conflicts?.length || 0,
+    });
+    return { handled: true, isAdmin: true, admin, reply: formatAvailabilityReply(result) };
+  }
+
+  if (/^(?:check\s+)?availability\b/i.test(String(text).trim())) {
+    return {
+      handled: true,
+      isAdmin: true,
+      admin,
+      reply: "Use: Check availability STAFF | SERVICE | DD/MM/YYYY HH:MM\nExample: Check availability Christel | Swedish Massage | 10/08/2026 14:30",
+    };
   }
 
   const clientLookup = extractClientLookup(text);
