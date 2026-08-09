@@ -1,5 +1,6 @@
 const { pool } = require("../db/pool");
 const { checkAvailability, formatAvailabilityReply, checkAuthoritativeSchedule, getConflicts } = require("./adminAvailability");
+const { checkClinicHours } = require("./clinicHours");
 
 function formatLocalDateTime(value) {
   return new Intl.DateTimeFormat("en-ZA", {
@@ -152,6 +153,13 @@ async function confirmAdminBooking(admin) {
       return { status: "eligibility_changed", reply: "The staff/service eligibility changed before confirmation, so the booking was not created." };
     }
 
+    const clinic = await checkClinicHours({ db, locationId: session.location_id, startsAt: session.starts_at, endsAt: session.ends_at });
+    if (!clinic.covered) {
+      await db.query(`DELETE FROM admin_booking_sessions WHERE admin_id = $1`, [admin.id]);
+      await db.query("COMMIT");
+      return { status: "clinic_hours_changed", reply: "The clinic's authoritative opening hours no longer permit this time. Nothing was written. Please check holiday/business hours and run availability again." };
+    }
+
     const schedule = await checkAuthoritativeSchedule({ db, staffId: session.staff_id, startsAt: session.starts_at, endsAt: session.ends_at });
     if (schedule.partialUnavailable || (schedule.allDayUnavailable && !schedule.insideAvailableException) || !schedule.covered) {
       await db.query(`DELETE FROM admin_booking_sessions WHERE admin_id = $1`, [admin.id]);
@@ -201,7 +209,7 @@ async function confirmAdminBooking(admin) {
       `INSERT INTO crm_audit_events
          (actor_admin_id, action, entity_type, entity_id, metadata)
        VALUES ($1, 'admin.booking_created', 'appointment', $2, $3::jsonb)`,
-      [admin.id, appointment.id, JSON.stringify({ clientId: session.client_id, staffId: session.staff_id, serviceId: session.service_id, locationId: session.location_id, startsAt: session.starts_at, endsAt: session.ends_at, authoritativeScheduleChecked: true })]
+      [admin.id, appointment.id, JSON.stringify({ clientId: session.client_id, staffId: session.staff_id, serviceId: session.service_id, locationId: session.location_id, startsAt: session.starts_at, endsAt: session.ends_at, authoritativeClinicHoursChecked: true, authoritativeScheduleChecked: true })]
     );
 
     await db.query(`DELETE FROM admin_booking_sessions WHERE admin_id = $1`, [admin.id]);
@@ -218,7 +226,7 @@ async function confirmAdminBooking(admin) {
         `• Time: ${formatLocalDateTime(session.starts_at)}`,
         `• Location: ${session.location_name}`,
         "",
-        "The production write occurred only after your explicit CONFIRM BOOKING message and a final authoritative schedule, eligibility, and conflict re-check.",
+        "The production write occurred only after your explicit CONFIRM BOOKING message and a final clinic-hours, staff-schedule, eligibility, and conflict re-check.",
       ].join("\n"),
     };
   } catch (error) {
