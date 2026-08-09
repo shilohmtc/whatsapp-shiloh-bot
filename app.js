@@ -11,6 +11,7 @@ const webhookRoutes = require("./src/routes/webhook");
 const adminRoutes = require("./src/routes/admin");
 const auditReadRoutes = require("./src/routes/auditRead");
 const { checkDatabase } = require("./src/services/memory");
+const { getPostCanonicalizationAudit } = require("./src/services/canonicalizationAudit");
 const { startGoldieSyncScheduler } = require("./src/services/goldieSync");
 const {
   startAppointmentLifecycleScheduler,
@@ -60,10 +61,26 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 3000;
 
+async function logCanonicalizationAuditStatus() {
+  try {
+    const report = await getPostCanonicalizationAudit("1");
+    logger.info({
+      canonicalizationAudit: {
+        batchId: report.batchId,
+        overallPass: report.overallPass,
+        checks: report.checks,
+      },
+    }, "Canonicalization audit status");
+  } catch (error) {
+    logger.error({ err: error }, "Canonicalization audit status failed");
+  }
+}
+
 const server = app.listen(PORT, () => {
   logger.info({ port: PORT }, "Shiloh started");
   startGoldieSyncScheduler();
   startAppointmentLifecycleScheduler();
+  logCanonicalizationAuditStatus();
 });
 
 function shutdown(signal) {
