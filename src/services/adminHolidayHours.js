@@ -1,89 +1,25 @@
 const { pool } = require('../db/pool');
 const { normalizePhone } = require('./clientIdentityOnboarding');
 
+const sessions=new Map();
 function clean(v=''){return String(v).trim().replace(/\s+/g,' ');}
 async function getAdmin(sender){const r=await pool.query(`SELECT id,display_name,permissions FROM staff_admin_accounts WHERE normalized_whatsapp=$1 AND active=TRUE`,[normalizePhone(sender)]);return r.rows[0]||null;}
 function has(admin,p){return admin?.permissions?.[p]===true;}
 async function getLocation(){const r=await pool.query(`SELECT id,name FROM locations WHERE status='active' ORDER BY id LIMIT 2`);return r.rowCount===1?r.rows[0]:null;}
-function fmtDate(v){return new Intl.DateTimeFormat('en-ZA',{timeZone:'Africa/Johannesburg',day:'2-digit',month:'2-digit',year:'numeric'}).format(new Date(`${v}T12:00:00+02:00`));}
+function fmtDate(v){return new Intl.DateTimeFormat('en-ZA',{timeZone:'Africa/Johannesburg',day:'2-digit',month:'short',year:'numeric'}).format(new Date(`${v}T12:00:00+02:00`));}
 function fmtTime(v){return String(v||'').slice(0,5);}
 
-async function holidayOverview(locationId){
-  const r=await pool.query(`
-    SELECT ph.holiday_date::text,ph.name,ph.observed,
-           lhe.exception_type,lhe.starts_local,lhe.ends_local
-      FROM public_holidays ph
-      LEFT JOIN location_hours_exceptions lhe
-        ON lhe.location_id=$1 AND lhe.exception_date=ph.holiday_date
-     WHERE ph.country_code='ZA'
-       AND ph.holiday_date >= (NOW() AT TIME ZONE 'Africa/Johannesburg')::date
-       AND ph.holiday_date < ((NOW() AT TIME ZONE 'Africa/Johannesburg')::date + INTERVAL '180 days')
-     ORDER BY ph.holiday_date
-     LIMIT 8`,[locationId]);
-  return r.rows;
-}
-
-async function getHolidayReminder(){
-  const location=await getLocation();if(!location)return null;
-  const r=await pool.query(`
-    SELECT ph.holiday_date::text,ph.name
-      FROM public_holidays ph
-      LEFT JOIN location_hours_exceptions lhe
-        ON lhe.location_id=$1 AND lhe.exception_date=ph.holiday_date
-     WHERE ph.country_code='ZA'
-       AND ph.holiday_date >= (NOW() AT TIME ZONE 'Africa/Johannesburg')::date
-       AND ph.holiday_date <= ((NOW() AT TIME ZONE 'Africa/Johannesburg')::date + INTERVAL '30 days')
-       AND lhe.id IS NULL
-     ORDER BY ph.holiday_date
-     LIMIT 1`,[location.id]);
-  if(!r.rowCount)return null;
-  const row=r.rows[0];
-  return `⚠️ Holiday hours need attention: ${fmtDate(row.holiday_date)} — ${row.name}. Open *Holiday hours* under More to confirm CLOSED or set special hours.`;
-}
-
-function overviewReply(rows){
-  const lines=['*Holiday hours*','','Public holidays are closed by default until hours are confirmed.',''];
-  if(!rows.length){lines.push('No upcoming South African public holidays are loaded in the next 180 days.');return lines.join('\n');}
-  for(const row of rows){
-    let status='⚠️ CLOSED by default · hours not confirmed';
-    if(row.exception_type==='closed') status='✅ Closed confirmed';
-    if(row.exception_type==='open') status=`✅ Open ${fmtTime(row.starts_local)}–${fmtTime(row.ends_local)}`;
-    lines.push(`• ${fmtDate(row.holiday_date)} — ${row.name}${row.observed?' (observed)':''}`);
-    lines.push(`  ${status}`);
-  }
-  lines.push('','To update a holiday:','Set holiday hours YYYY-MM-DD | CLOSED','or','Set holiday hours YYYY-MM-DD | HH:MM-HH:MM','','Reply MENU to return.');
-  return lines.join('\n');
-}
-
-async function setHolidayHours(admin,location,date,value){
-  const holiday=await pool.query(`SELECT holiday_date::text,name FROM public_holidays WHERE country_code='ZA' AND holiday_date=$1::date`,[date]);
-  if(!holiday.rowCount) return `I couldn't find ${date} in the South African public-holiday calendar.`;
-  let type='closed',start=null,end=null;
-  if(!/^(closed|close)$/i.test(value)){
-    const m=clean(value).match(/^([0-2]\d:[0-5]\d)\s*-\s*([0-2]\d:[0-5]\d)$/);
-    if(!m) return 'Use CLOSED or HH:MM-HH:MM, for example 08:00-14:00.';
-    if(m[2]<=m[1]) return 'Holiday closing time must be later than opening time.';
-    type='open';start=m[1];end=m[2];
-  }
-  await pool.query(`INSERT INTO location_hours_exceptions(location_id,exception_date,exception_type,starts_local,ends_local,reason,actor_admin_id,updated_at)
-    VALUES($1,$2::date,$3,$4::time,$5::time,$6,$7,NOW())
-    ON CONFLICT(location_id,exception_date) DO UPDATE SET exception_type=EXCLUDED.exception_type,starts_local=EXCLUDED.starts_local,ends_local=EXCLUDED.ends_local,reason=EXCLUDED.reason,actor_admin_id=EXCLUDED.actor_admin_id,updated_at=NOW()`,
-    [location.id,date,type,start,end,`Public holiday: ${holiday.rows[0].name}`,admin.id]);
-  await pool.query(`INSERT INTO crm_audit_events(actor_admin_id,action,entity_type,entity_id,metadata) VALUES($1,'admin.holiday_hours_updated','location',$2,$3::jsonb)`,[admin.id,location.id,JSON.stringify({date,holiday:holiday.rows[0].name,type,start,end})]);
-  return type==='closed' ? `Holiday hours updated — ${holiday.rows[0].name} (${date}) is CLOSED.` : `Holiday hours updated — ${holiday.rows[0].name} (${date}) is open ${start}–${end}.`;
-}
-
-async function processAdminHolidayHoursMessage(sender,text){
-  const raw=clean(text),v=raw.toLowerCase();
-  if(!['holiday hours','public holiday hours','8'].includes(v)&&!/^set\s+holiday\s+hours\b/i.test(raw)) return {handled:false};
-  const admin=await getAdmin(sender);if(!admin)return {handled:false};
-  if(!has(admin,'schedule:manage'))return {handled:true,admin,reply:"You don't have permission to manage clinic hours."};
-  const location=await getLocation();if(!location)return {handled:true,admin,reply:'I cannot safely manage holiday hours because the CRM does not resolve to exactly one active clinic location.'};
-  const m=raw.match(/^set\s+holiday\s+hours\s+(\d{4}-\d{2}-\d{2})\s*\|\s*(.+)$/i);
-  if(m)return {handled:true,admin,reply:await setHolidayHours(admin,location,m[1],m[2])};
-  if(/^set\s+holiday\s+hours\b/i.test(raw))return {handled:true,admin,reply:'Use: Set holiday hours YYYY-MM-DD | CLOSED\nor: Set holiday hours YYYY-MM-DD | HH:MM-HH:MM'};
-  const rows=await holidayOverview(location.id);
-  await pool.query(`INSERT INTO crm_audit_events(actor_admin_id,action,entity_type,entity_id,metadata) VALUES($1,'admin.holiday_hours_viewed','location',$2,$3::jsonb)`,[admin.id,location.id,JSON.stringify({upcoming:rows.length,unconfigured:rows.filter(r=>!r.exception_type).length})]);
-  return {handled:true,admin,reply:overviewReply(rows)};
-}
+async function holidayOverview(locationId){const r=await pool.query(`SELECT ph.holiday_date::text,ph.name,ph.observed,lhe.exception_type,lhe.starts_local,lhe.ends_local FROM public_holidays ph LEFT JOIN location_hours_exceptions lhe ON lhe.location_id=$1 AND lhe.exception_date=ph.holiday_date WHERE ph.country_code='ZA' AND ph.holiday_date >= (NOW() AT TIME ZONE 'Africa/Johannesburg')::date AND ph.holiday_date < ((NOW() AT TIME ZONE 'Africa/Johannesburg')::date + INTERVAL '180 days') ORDER BY ph.holiday_date LIMIT 8`,[locationId]);return r.rows;}
+async function getHolidayReminder(){const location=await getLocation();if(!location)return null;const r=await pool.query(`SELECT ph.holiday_date::text,ph.name FROM public_holidays ph LEFT JOIN location_hours_exceptions lhe ON lhe.location_id=$1 AND lhe.exception_date=ph.holiday_date WHERE ph.country_code='ZA' AND ph.holiday_date >= (NOW() AT TIME ZONE 'Africa/Johannesburg')::date AND ph.holiday_date <= ((NOW() AT TIME ZONE 'Africa/Johannesburg')::date + INTERVAL '30 days') AND lhe.id IS NULL ORDER BY ph.holiday_date LIMIT 1`,[location.id]);if(!r.rowCount)return null;return `⚠️ Holiday hours need attention: ${fmtDate(r.rows[0].holiday_date)} — ${r.rows[0].name}. Open *Holiday hours* under More.`;}
+function status(row){if(row.exception_type==='closed')return '✅ Closed';if(row.exception_type==='open')return `✅ Open ${fmtTime(row.starts_local)}–${fmtTime(row.ends_local)}`;return '⚠️ Not confirmed · closed by default';}
+function overviewReply(rows){const lines=['*Holiday hours*','','Choose a holiday to update:',''];rows.forEach((r,i)=>{lines.push(`${i+1}️⃣ ${fmtDate(r.holiday_date)} — ${r.name}${r.observed?' (observed)':''}`);lines.push(`   ${status(r)}`);});lines.push('','0️⃣ Back','','Reply with a number.');return lines.join('\n');}
+function choiceReply(row){return [`*${row.name}*`,fmtDate(row.holiday_date),'','What are the clinic hours?','','1️⃣ Closed','2️⃣ Normal business hours','3️⃣ Special hours','','0️⃣ Back'].join('\n');}
+async function normalHoursForDate(date){const r=await pool.query(`SELECT lwh.starts_local,lwh.ends_local FROM location_working_hours lwh JOIN locations l ON l.id=lwh.location_id WHERE l.status='active' AND lwh.iso_weekday=EXTRACT(ISODOW FROM $1::date)::int AND lwh.is_open=TRUE ORDER BY l.id LIMIT 1`,[date]);return r.rows[0]||null;}
+async function setHolidayHours(admin,location,date,value){const holiday=await pool.query(`SELECT holiday_date::text,name FROM public_holidays WHERE country_code='ZA' AND holiday_date=$1::date`,[date]);if(!holiday.rowCount)return `I couldn't find ${date} in the South African public-holiday calendar.`;let type='closed',start=null,end=null;if(!/^(closed|close)$/i.test(value)){const m=clean(value).match(/^([0-2]\d:[0-5]\d)\s*-\s*([0-2]\d:[0-5]\d)$/);if(!m)return 'Send the hours like this: 08:00-14:00';if(m[2]<=m[1])return 'Closing time must be later than opening time.';type='open';start=m[1];end=m[2];}await pool.query(`INSERT INTO location_hours_exceptions(location_id,exception_date,exception_type,starts_local,ends_local,reason,actor_admin_id,updated_at) VALUES($1,$2::date,$3,$4::time,$5::time,$6,$7,NOW()) ON CONFLICT(location_id,exception_date) DO UPDATE SET exception_type=EXCLUDED.exception_type,starts_local=EXCLUDED.starts_local,ends_local=EXCLUDED.ends_local,reason=EXCLUDED.reason,actor_admin_id=EXCLUDED.actor_admin_id,updated_at=NOW()`,[location.id,date,type,start,end,`Public holiday: ${holiday.rows[0].name}`,admin.id]);await pool.query(`INSERT INTO crm_audit_events(actor_admin_id,action,entity_type,entity_id,metadata) VALUES($1,'admin.holiday_hours_updated','location',$2,$3::jsonb)`,[admin.id,location.id,JSON.stringify({date,holiday:holiday.rows[0].name,type,start,end})]);return type==='closed'?`✅ ${holiday.rows[0].name}\n${fmtDate(date)}\n\nClinic: Closed\n\nReply *Holiday hours* to update another day.`:`✅ ${holiday.rows[0].name}\n${fmtDate(date)}\n\nClinic: ${start}–${end}\n\nReply *Holiday hours* to update another day.`;}
+async function processAdminHolidayHoursMessage(sender,text){const raw=clean(text),v=raw.toLowerCase();const key=normalizePhone(sender);const session=sessions.get(key);const direct=/^set\s+holiday\s+hours\s+(\d{4}-\d{2}-\d{2})\s*\|\s*(.+)$/i.exec(raw);if(!session&&!['holiday hours','public holiday hours','8'].includes(v)&&!direct)return {handled:false};const admin=await getAdmin(sender);if(!admin)return {handled:false};if(!has(admin,'schedule:manage'))return {handled:true,admin,reply:"You don't have permission to manage clinic hours."};const location=await getLocation();if(!location)return {handled:true,admin,reply:'I cannot safely manage holiday hours because the CRM does not resolve to exactly one active clinic location.'};if(direct)return {handled:true,admin,reply:await setHolidayHours(admin,location,direct[1],direct[2])};if(v==='menu'){sessions.delete(key);return {handled:false};}
+ if(!session||['holiday hours','public holiday hours','8'].includes(v)){const rows=await holidayOverview(location.id);sessions.set(key,{step:'pick',rows});return {handled:true,admin,reply:rows.length?overviewReply(rows):'*Holiday hours*\n\nNo upcoming holidays are loaded.'};}
+ if(session.step==='pick'){if(v==='0'){sessions.delete(key);return {handled:true,admin,reply:'Reply *MENU* to return to Shiloh Admin.'};}const n=Number(v);if(!Number.isInteger(n)||n<1||n>session.rows.length)return {handled:true,admin,reply:'Reply with the holiday number shown, or 0 to go back.'};const row=session.rows[n-1];sessions.set(key,{step:'action',row});return {handled:true,admin,reply:choiceReply(row)};}
+ if(session.step==='action'){if(v==='0'){const rows=await holidayOverview(location.id);sessions.set(key,{step:'pick',rows});return {handled:true,admin,reply:overviewReply(rows)};}if(v==='1'){sessions.delete(key);return {handled:true,admin,reply:await setHolidayHours(admin,location,session.row.holiday_date,'CLOSED')};}if(v==='2'){const normal=await normalHoursForDate(session.row.holiday_date);if(!normal)return {handled:true,admin,reply:'Normal business hours for this day are closed.\n\n1️⃣ Confirm closed\n3️⃣ Set special hours\n0️⃣ Back'};sessions.delete(key);return {handled:true,admin,reply:await setHolidayHours(admin,location,session.row.holiday_date,`${fmtTime(normal.starts_local)}-${fmtTime(normal.ends_local)}`)};}if(v==='3'){sessions.set(key,{step:'special',row:session.row});return {handled:true,admin,reply:`*${session.row.name}*\n\nSend the opening hours.\n\nExample: 08:00-14:00\n\n0️⃣ Back`};}return {handled:true,admin,reply:'Choose 1, 2, 3, or 0.'};}
+ if(session.step==='special'){if(v==='0'){sessions.set(key,{step:'action',row:session.row});return {handled:true,admin,reply:choiceReply(session.row)};}const reply=await setHolidayHours(admin,location,session.row.holiday_date,raw);if(reply.startsWith('Send ')||reply.startsWith('Closing '))return {handled:true,admin,reply};sessions.delete(key);return {handled:true,admin,reply};}
+ return {handled:false};}
 module.exports={processAdminHolidayHoursMessage,getHolidayReminder};
