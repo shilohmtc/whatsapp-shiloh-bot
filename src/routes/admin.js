@@ -23,6 +23,7 @@ const {
 const {
   getSummary: getReconciliationSummary,
   getRecommendations: getReconciliationRecommendations,
+  getAppointmentIdentityEvidence,
   getCanonicalizationAudit,
   canonicalizeClients: canonicalizeReconciliationClients,
   getCases: getReconciliationCases,
@@ -68,6 +69,7 @@ router.post("/imports/goldie/clients", csvUpload, stageGoldieClients);
 router.post("/imports/goldie/appointments", csvUpload, stageGoldieAppointments);
 router.get("/reconciliation/clients/summary", getReconciliationSummary);
 router.get("/reconciliation/clients/recommendations", getReconciliationRecommendations);
+router.get("/reconciliation/clients/appointment-evidence", getAppointmentIdentityEvidence);
 router.get("/reconciliation/clients/canonicalization-audit", getCanonicalizationAudit);
 router.post("/reconciliation/clients/canonicalize", canonicalizeReconciliationClients);
 router.get("/reconciliation/clients", getReconciliationCases);
