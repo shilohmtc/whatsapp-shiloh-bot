@@ -23,4 +23,5 @@ CREATE INDEX IF NOT EXISTS idx_admin_booking_sessions_starts_at
 UPDATE staff_admin_accounts
 SET permissions = COALESCE(permissions, '{}'::jsonb) || '{"appointment:create":true}'::jsonb,
     updated_at = NOW()
-WHERE active = TRUE;
+WHERE active = TRUE
+  AND role IN ('manager', 'admin');
