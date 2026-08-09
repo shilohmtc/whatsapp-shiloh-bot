@@ -6,6 +6,7 @@ const { processBookingMessage } = require("../services/bookingIntent");
 const { processAppointmentChangeMessage } = require("../services/appointmentChange");
 const { processCustomerExperienceMessage } = require("../services/customerExperience");
 const { processClientIdentityMessage } = require("../services/clientIdentityOnboarding");
+const { processAdminWalkinMessage } = require("../services/adminWalkin");
 const {
   forceMatchedClientNameConfirmation,
   guardActiveNameConfirmation,
@@ -62,6 +63,18 @@ exports.receiveWebhook = async (req, res) => {
     log.info({ from: maskPhone(from) }, "Processing incoming WhatsApp message");
 
     try {
+      // Authenticated staff CRM commands run before client identity/onboarding so a
+      // manager's WhatsApp conversation cannot be mistaken for a client workflow.
+      const adminWalkin = await processAdminWalkinMessage(from, text);
+      if (adminWalkin.handled) {
+        log.info(
+          { from: maskPhone(from), admin: adminWalkin.admin?.display_name },
+          "Handled authenticated admin walk-in CRM conversation"
+        );
+        await sendWhatsAppMessage(from, adminWalkin.reply);
+        return res.sendStatus(200);
+      }
+
       // Satisfaction replies remain first because they can be a single number or
       // private free-form feedback and must not be mistaken for onboarding input.
       const customerExperience = await processCustomerExperienceMessage(from, text);
