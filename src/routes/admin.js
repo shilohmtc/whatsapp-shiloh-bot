@@ -16,7 +16,10 @@ const {
   syncGoldie,
   getGoldieSyncStatus,
 } = require("../controllers/goldieController");
-const { stageClients: stageGoldieClients } = require("../controllers/goldieImportController");
+const {
+  stageClients: stageGoldieClients,
+  stageAppointments: stageGoldieAppointments,
+} = require("../controllers/goldieImportController");
 const {
   getSummary: getReconciliationSummary,
   getRecommendations: getReconciliationRecommendations,
@@ -62,6 +65,7 @@ router.patch("/profiles/:phone", patchProfileByPhone);
 router.get("/sync/goldie", getGoldieSyncStatus);
 router.post("/sync/goldie", syncGoldie);
 router.post("/imports/goldie/clients", csvUpload, stageGoldieClients);
+router.post("/imports/goldie/appointments", csvUpload, stageGoldieAppointments);
 router.get("/reconciliation/clients/summary", getReconciliationSummary);
 router.get("/reconciliation/clients/recommendations", getReconciliationRecommendations);
 router.get("/reconciliation/clients/canonicalization-audit", getCanonicalizationAudit);
