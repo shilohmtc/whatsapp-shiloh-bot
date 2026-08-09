@@ -73,6 +73,95 @@ function candidateNames(rows, field) {
   return rows.slice(0, 8).map((row) => `• ${row[field]} (#${row.id})`).join("\n");
 }
 
+async function checkAuthoritativeSchedule({ db = pool, staffId, startsAt, endsAt }) {
+  const result = await db.query(
+    `WITH requested AS (
+       SELECT $2::timestamptz AS starts_at,
+              $3::timestamptz AS ends_at,
+              ($2::timestamptz AT TIME ZONE 'Africa/Johannesburg')::date AS local_date,
+              ($2::timestamptz AT TIME ZONE 'Africa/Johannesburg')::time AS local_start,
+              ($3::timestamptz AT TIME ZONE 'Africa/Johannesburg')::time AS local_end,
+              EXTRACT(DOW FROM ($2::timestamptz AT TIME ZONE 'Africa/Johannesburg')::date)::int AS dow
+     ),
+     schedule AS (
+       SELECT
+         EXISTS (
+           SELECT 1 FROM staff_working_hours wh, requested r
+            WHERE wh.staff_id = $1
+              AND wh.day_of_week = r.dow
+              AND wh.active = TRUE
+              AND wh.starts_local <= r.local_start
+              AND wh.ends_local >= r.local_end
+         ) AS inside_base_hours,
+         EXISTS (
+           SELECT 1 FROM staff_schedule_exceptions ex, requested r
+            WHERE ex.staff_id = $1
+              AND ex.exception_date = r.local_date
+              AND ex.exception_type = 'available'
+              AND ex.starts_local IS NOT NULL
+              AND ex.ends_local IS NOT NULL
+              AND ex.starts_local <= r.local_start
+              AND ex.ends_local >= r.local_end
+         ) AS inside_available_exception,
+         EXISTS (
+           SELECT 1 FROM staff_schedule_exceptions ex, requested r
+            WHERE ex.staff_id = $1
+              AND ex.exception_date = r.local_date
+              AND ex.exception_type = 'unavailable'
+              AND ex.starts_local IS NULL
+              AND ex.ends_local IS NULL
+         ) AS all_day_unavailable,
+         EXISTS (
+           SELECT 1 FROM staff_schedule_exceptions ex, requested r
+            WHERE ex.staff_id = $1
+              AND ex.exception_date = r.local_date
+              AND ex.exception_type = 'unavailable'
+              AND ex.starts_local IS NOT NULL
+              AND ex.ends_local IS NOT NULL
+              AND r.local_start < ex.ends_local
+              AND r.local_end > ex.starts_local
+         ) AS partial_unavailable
+     )
+     SELECT * FROM schedule`,
+    [staffId, startsAt, endsAt]
+  );
+  const row = result.rows[0];
+  const covered = row.inside_available_exception || (row.inside_base_hours && !row.all_day_unavailable);
+  return {
+    covered,
+    allDayUnavailable: row.all_day_unavailable,
+    partialUnavailable: row.partial_unavailable,
+    insideAvailableException: row.inside_available_exception,
+  };
+}
+
+async function getConflicts({ db = pool, staffId, startsAt, endsAt }) {
+  const result = await db.query(
+    `SELECT DISTINCT conflict_type, id, starts_at, ends_at, label
+       FROM (
+         SELECT 'appointment'::text AS conflict_type, a.id, a.starts_at, a.ends_at,
+                COALESCE(c.display_name, a.source_client_name, 'Unknown client') AS label
+           FROM appointment_staff ast
+           JOIN appointments a ON a.id = ast.appointment_id
+           LEFT JOIN clients c ON c.id = a.client_id
+          WHERE ast.staff_id = $1
+            AND a.status <> 'cancelled'
+            AND a.starts_at < $3
+            AND a.ends_at > $2
+         UNION
+         SELECT 'calendar_block'::text AS conflict_type, cb.id, cb.starts_at, cb.ends_at,
+                COALESCE(cb.title, cb.block_type, 'Calendar block') AS label
+           FROM calendar_blocks cb
+          WHERE cb.staff_id = $1
+            AND cb.starts_at < $3
+            AND cb.ends_at > $2
+       ) conflicts
+      ORDER BY starts_at, id`,
+    [staffId, startsAt, endsAt]
+  );
+  return result.rows;
+}
+
 async function checkAvailability({ staffName, serviceName, localDateTime }) {
   const parsedDateTime = parseLocalDateTime(localDateTime);
   if (!parsedDateTime) {
@@ -92,75 +181,46 @@ async function checkAvailability({ staffName, serviceName, localDateTime }) {
     const suggestionText = suggestions.length
       ? `\n\nActive canonical services you can use:\n${candidateNames(suggestions, "name")}\n\nRetry the command using one of these exact service names.`
       : "\n\nThere are currently no active canonical services available to suggest.";
-    return {
-      status: "service_not_found",
-      reply: `I couldn't find an active service matching “${clean(serviceName)}”.${suggestionText}`,
-    };
+    return { status: "service_not_found", reply: `I couldn't find an active service matching “${clean(serviceName)}”.${suggestionText}` };
   }
   if (serviceMatches.length > 1 && serviceMatches[0].name.toLowerCase() !== clean(serviceName).toLowerCase()) {
     return { status: "service_ambiguous", reply: `I found more than one possible service match. Please be more specific:\n${candidateNames(serviceMatches, "name")}` };
   }
   const service = serviceMatches[0];
 
-  const eligibility = await pool.query(
-    `SELECT 1 FROM staff_services WHERE staff_id = $1 AND service_id = $2 LIMIT 1`,
-    [staff.id, service.id]
-  );
+  const eligibility = await pool.query(`SELECT 1 FROM staff_services WHERE staff_id = $1 AND service_id = $2 LIMIT 1`, [staff.id, service.id]);
   if (!eligibility.rowCount) {
-    return {
-      status: "not_eligible",
-      staff,
-      service,
-      reply: `${staff.display_name} is not currently mapped as eligible for ${service.name} in the canonical CRM catalogue. No booking should be created for this combination.`,
-    };
+    return { status: "not_eligible", staff, service, reply: `${staff.display_name} is not currently mapped as eligible for ${service.name} in the canonical CRM catalogue. No booking should be created for this combination.` };
   }
 
   const totalMinutes = Number(service.duration_minutes || 0) + Number(service.processing_time_minutes || 0) + Number(service.extra_time_minutes || 0);
-  if (totalMinutes <= 0) {
-    return { status: "invalid_duration", staff, service, reply: `${service.name} does not have a usable positive duration in the canonical service catalogue.` };
-  }
-
-  const conflictResult = await pool.query(
-    `WITH requested AS (
-       SELECT
-         ($2::timestamp AT TIME ZONE 'Africa/Johannesburg') AS starts_at,
-         (($2::timestamp + ($3::text || ' minutes')::interval) AT TIME ZONE 'Africa/Johannesburg') AS ends_at
-     )
-     SELECT 'appointment' AS conflict_type, a.id, a.starts_at, a.ends_at,
-            COALESCE(c.display_name, a.source_client_name, 'Unknown client') AS label
-       FROM requested r
-       JOIN appointment_staff ast ON ast.staff_id = $1
-       JOIN appointments a ON a.id = ast.appointment_id
-       LEFT JOIN clients c ON c.id = a.client_id
-      WHERE a.status <> 'cancelled'
-        AND a.starts_at < r.ends_at
-        AND a.ends_at > r.starts_at
-     UNION ALL
-     SELECT 'calendar_block' AS conflict_type, cb.id, cb.starts_at, cb.ends_at,
-            COALESCE(cb.title, cb.block_type, 'Calendar block') AS label
-       FROM requested r
-       JOIN calendar_blocks cb ON cb.staff_id = $1
-      WHERE cb.starts_at < r.ends_at
-        AND cb.ends_at > r.starts_at
-     ORDER BY starts_at, id`,
-    [staff.id, parsedDateTime, totalMinutes]
-  );
+  if (totalMinutes <= 0) return { status: "invalid_duration", staff, service, reply: `${service.name} does not have a usable positive duration in the canonical service catalogue.` };
 
   const windowResult = await pool.query(
-    `SELECT
-       ($1::timestamp AT TIME ZONE 'Africa/Johannesburg') AS starts_at,
-       (($1::timestamp + ($2::text || ' minutes')::interval) AT TIME ZONE 'Africa/Johannesburg') AS ends_at`,
+    `SELECT ($1::timestamp AT TIME ZONE 'Africa/Johannesburg') AS starts_at,
+            (($1::timestamp + ($2::text || ' minutes')::interval) AT TIME ZONE 'Africa/Johannesburg') AS ends_at`,
     [parsedDateTime, totalMinutes]
   );
+  const startsAt = windowResult.rows[0].starts_at;
+  const endsAt = windowResult.rows[0].ends_at;
 
+  const schedule = await checkAuthoritativeSchedule({ staffId: staff.id, startsAt, endsAt });
+  if (schedule.partialUnavailable || (schedule.allDayUnavailable && !schedule.insideAvailableException)) {
+    return { status: "schedule_exception", staff, service, startsAt, endsAt, totalMinutes, conflicts: [] };
+  }
+  if (!schedule.covered) {
+    return { status: "outside_working_hours", staff, service, startsAt, endsAt, totalMinutes, conflicts: [] };
+  }
+
+  const conflicts = await getConflicts({ staffId: staff.id, startsAt, endsAt });
   return {
-    status: conflictResult.rows.length ? "conflict" : "clear",
+    status: conflicts.length ? "conflict" : "available",
     staff,
     service,
-    startsAt: windowResult.rows[0].starts_at,
-    endsAt: windowResult.rows[0].ends_at,
+    startsAt,
+    endsAt,
     totalMinutes,
-    conflicts: conflictResult.rows,
+    conflicts,
   };
 }
 
@@ -182,6 +242,12 @@ function formatAvailabilityReply(result) {
   const end = formatLocalDateTime(result.endsAt);
   const heading = `${result.staff.display_name} — ${result.service.name}\nRequested: ${start} to ${end}`;
 
+  if (result.status === "outside_working_hours") {
+    return [heading, "", "Not available: the full service window falls outside the practitioner's configured working hours.", "", "Choose a time fully contained within the authoritative staff schedule."].join("\n");
+  }
+  if (result.status === "schedule_exception") {
+    return [heading, "", "Not available: a staff schedule exception marks this time unavailable.", "", "Choose another time or review the practitioner's schedule exceptions."].join("\n");
+  }
   if (result.status === "conflict") {
     const lines = [heading, "", "CRM conflict found:"];
     for (const conflict of result.conflicts.slice(0, 8)) {
@@ -191,13 +257,7 @@ function formatAvailabilityReply(result) {
     return lines.join("\n");
   }
 
-  return [
-    heading,
-    "",
-    "No conflicting canonical appointment or staff calendar block was found.",
-    "",
-    "Important: this is a CRM conflict check, not a complete working-hours guarantee. Recurring staff working-hours rules are not yet modeled, so the admin must still confirm the practitioner is working at this time before any production booking is created.",
-  ].join("\n");
+  return [heading, "", "Available.", "", "This time is inside the practitioner's configured working hours, the staff member is eligible for the service, and no conflicting canonical appointment, calendar block, or unavailable schedule exception was found."].join("\n");
 }
 
-module.exports = { checkAvailability, formatAvailabilityReply };
+module.exports = { checkAvailability, formatAvailabilityReply, checkAuthoritativeSchedule, getConflicts };
