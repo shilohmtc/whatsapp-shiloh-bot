@@ -1,5 +1,6 @@
 const crm = require("../services/crmReadService");
 const availability = require("../services/availabilityService");
+const staffSchedule = require("../services/staffScheduleService");
 
 function ok(res, data, meta) { return res.json({ ok: true, data, ...(meta ? { meta } : {}) }); }
 function fail(res, status, code, message) { return res.status(status).json({ ok: false, error: { code, message } }); }
@@ -38,5 +39,35 @@ async function listAvailableSlots(req, res, next) {
     return ok(res, data, { count: data.slots.length });
   } catch (e) { next(e); }
 }
+async function getStaffWorkingHours(req, res, next) {
+  try {
+    if (!validId(req.params.id)) return fail(res, 400, "INVALID_ID", "Staff id must be a positive integer.");
+    const data = await staffSchedule.getWorkingHours(req.params.id);
+    return data ? ok(res, data) : fail(res, 404, "STAFF_NOT_FOUND", "Staff member not found.");
+  } catch (e) { next(e); }
+}
+async function replaceStaffWorkingHoursDay(req, res, next) {
+  try {
+    if (!validId(req.params.id)) return fail(res, 400, "INVALID_ID", "Staff id must be a positive integer.");
+    const result = await staffSchedule.replaceWorkingHoursDay({ staffId: req.params.id, dayOfWeek: req.params.day, windows: req.body?.windows || [], locationId: req.body?.locationId || null });
+    if (result.status !== "updated") return fail(res, 400, "SCHEDULE_UPDATE_REJECTED", result.reply || "Working-hours update rejected.");
+    return ok(res, result);
+  } catch (e) { next(e); }
+}
+async function addStaffScheduleException(req, res, next) {
+  try {
+    if (!validId(req.params.id)) return fail(res, 400, "INVALID_ID", "Staff id must be a positive integer.");
+    const result = await staffSchedule.addScheduleException({ staffId: req.params.id, date: req.body?.date, type: req.body?.type, startsLocal: req.body?.startsLocal || null, endsLocal: req.body?.endsLocal || null, reason: req.body?.reason || null, locationId: req.body?.locationId || null });
+    if (result.status !== "created") return fail(res, 400, "SCHEDULE_EXCEPTION_REJECTED", result.reply || "Schedule exception rejected.");
+    return ok(res, result);
+  } catch (e) { next(e); }
+}
+async function removeStaffScheduleException(req, res, next) {
+  try {
+    if (!validId(req.params.id) || !validId(req.params.exceptionId)) return fail(res, 400, "INVALID_ID", "Staff and exception ids must be positive integers.");
+    const result = await staffSchedule.removeScheduleException({ staffId: req.params.id, exceptionId: req.params.exceptionId });
+    return result.status === "removed" ? ok(res, result) : fail(res, 404, "EXCEPTION_NOT_FOUND", "Schedule exception not found.");
+  } catch (e) { next(e); }
+}
 
-module.exports = { listClients, getClient, getClientAppointments, listServices, listStaff, listAppointments, getAppointment, listAvailableSlots };
+module.exports = { listClients, getClient, getClientAppointments, listServices, listStaff, listAppointments, getAppointment, listAvailableSlots, getStaffWorkingHours, replaceStaffWorkingHoursDay, addStaffScheduleException, removeStaffScheduleException };
