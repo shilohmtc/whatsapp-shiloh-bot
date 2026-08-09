@@ -1,16 +1,5 @@
-const { Pool } = require("pg");
+const { pool } = require("../db/pool");
 const logger = require("../lib/logger");
-
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL?.includes("render.com")
-    ? { rejectUnauthorized: false }
-    : undefined,
-});
-
-pool.on("error", (error) => {
-  logger.error({ err: error }, "unexpected user profile PostgreSQL pool error");
-});
 
 let initialized = false;
 
