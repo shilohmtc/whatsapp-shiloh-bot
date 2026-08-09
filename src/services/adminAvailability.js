@@ -1,5 +1,5 @@
 const { pool } = require("../db/pool");
-const { checkClinicHours } = require("./clinicHours");
+const { checkClinicHours, getDefaultActiveLocation } = require("./clinicHours");
 
 function clean(value = "") {
   return String(value).trim().replace(/\s+/g, " ").slice(0, 120);
@@ -74,11 +74,12 @@ function candidateNames(rows, field) {
   return rows.slice(0, 8).map((row) => `• ${row[field]} (#${row.id})`).join("\n");
 }
 
-async function checkAuthoritativeSchedule({ db = pool, staffId, startsAt, endsAt }) {
+async function checkAuthoritativeSchedule({ db = pool, staffId, locationId = null, startsAt, endsAt }) {
   const result = await db.query(
     `WITH requested AS (
        SELECT $2::timestamptz AS starts_at,
               $3::timestamptz AS ends_at,
+              $4::bigint AS location_id,
               ($2::timestamptz AT TIME ZONE 'Africa/Johannesburg')::date AS local_date,
               ($2::timestamptz AT TIME ZONE 'Africa/Johannesburg')::time AS local_start,
               ($3::timestamptz AT TIME ZONE 'Africa/Johannesburg')::time AS local_end,
@@ -92,12 +93,14 @@ async function checkAuthoritativeSchedule({ db = pool, staffId, startsAt, endsAt
             WHERE wh.staff_id = $1
               AND wh.day_of_week = r.dow
               AND wh.active = TRUE
+              AND (wh.location_id IS NULL OR wh.location_id = r.location_id)
          ) AS has_base_override,
          EXISTS (
            SELECT 1 FROM staff_working_hours wh, requested r
             WHERE wh.staff_id = $1
               AND wh.day_of_week = r.dow
               AND wh.active = TRUE
+              AND (wh.location_id IS NULL OR wh.location_id = r.location_id)
               AND wh.starts_local <= r.local_start
               AND wh.ends_local >= r.local_end
          ) AS inside_base_hours,
@@ -105,11 +108,13 @@ async function checkAuthoritativeSchedule({ db = pool, staffId, startsAt, endsAt
            SELECT 1 FROM staff_recurring_day_closures c, requested r
             WHERE c.staff_id = $1
               AND c.day_of_week = r.dow
+              AND (c.location_id IS NULL OR c.location_id = r.location_id)
          ) AS recurring_closed,
          EXISTS (
            SELECT 1 FROM staff_schedule_exceptions ex, requested r
             WHERE ex.staff_id = $1
               AND ex.exception_date = r.local_date
+              AND (ex.location_id IS NULL OR ex.location_id = r.location_id)
               AND ex.exception_type = 'available'
               AND ex.starts_local IS NOT NULL
               AND ex.ends_local IS NOT NULL
@@ -120,6 +125,7 @@ async function checkAuthoritativeSchedule({ db = pool, staffId, startsAt, endsAt
            SELECT 1 FROM staff_schedule_exceptions ex, requested r
             WHERE ex.staff_id = $1
               AND ex.exception_date = r.local_date
+              AND (ex.location_id IS NULL OR ex.location_id = r.location_id)
               AND ex.exception_type = 'unavailable'
               AND ex.starts_local IS NULL
               AND ex.ends_local IS NULL
@@ -128,6 +134,7 @@ async function checkAuthoritativeSchedule({ db = pool, staffId, startsAt, endsAt
            SELECT 1 FROM staff_schedule_exceptions ex, requested r
             WHERE ex.staff_id = $1
               AND ex.exception_date = r.local_date
+              AND (ex.location_id IS NULL OR ex.location_id = r.location_id)
               AND ex.exception_type = 'unavailable'
               AND ex.starts_local IS NOT NULL
               AND ex.ends_local IS NOT NULL
@@ -136,7 +143,7 @@ async function checkAuthoritativeSchedule({ db = pool, staffId, startsAt, endsAt
          ) AS partial_unavailable
      )
      SELECT * FROM schedule`,
-    [staffId, startsAt, endsAt]
+    [staffId, startsAt, endsAt, locationId]
   );
   const row = result.rows[0];
   const inherited = row.scheduling_type === 'regular' && !row.has_base_override && !row.recurring_closed;
@@ -177,7 +184,7 @@ async function getConflicts({ db = pool, staffId, startsAt, endsAt }) {
   return result.rows;
 }
 
-async function checkAvailability({ staffName, serviceName, localDateTime }) {
+async function checkAvailability({ staffName, serviceName, localDateTime, locationId = null }) {
   const parsedDateTime = parseLocalDateTime(localDateTime);
   if (!parsedDateTime) {
     return { status: "invalid_datetime", reply: "Please use DD/MM/YYYY HH:MM, for example 10/08/2026 14:30." };
@@ -211,6 +218,11 @@ async function checkAvailability({ staffName, serviceName, localDateTime }) {
   const totalMinutes = Number(service.duration_minutes || 0) + Number(service.processing_time_minutes || 0) + Number(service.extra_time_minutes || 0);
   if (totalMinutes <= 0) return { status: "invalid_duration", staff, service, reply: `${service.name} does not have a usable positive duration in the canonical service catalogue.` };
 
+  const location = locationId ? { id: Number(locationId) } : await getDefaultActiveLocation();
+  if (!location?.id) {
+    return { status: "location_unresolved", staff, service, reply: "I can't safely determine availability because the CRM does not resolve to exactly one active clinic location." };
+  }
+
   const windowResult = await pool.query(
     `SELECT ($1::timestamp AT TIME ZONE 'Africa/Johannesburg') AS starts_at,
             (($1::timestamp + ($2::text || ' minutes')::interval) AT TIME ZONE 'Africa/Johannesburg') AS ends_at`,
@@ -219,12 +231,12 @@ async function checkAvailability({ staffName, serviceName, localDateTime }) {
   const startsAt = windowResult.rows[0].starts_at;
   const endsAt = windowResult.rows[0].ends_at;
 
-  const clinic = await checkClinicHours({ startsAt, endsAt });
+  const clinic = await checkClinicHours({ locationId: location.id, startsAt, endsAt });
   if (!clinic.covered) {
     return { status: "outside_clinic_hours", staff, service, startsAt, endsAt, totalMinutes, conflicts: [] };
   }
 
-  const schedule = await checkAuthoritativeSchedule({ staffId: staff.id, startsAt, endsAt });
+  const schedule = await checkAuthoritativeSchedule({ staffId: staff.id, locationId: location.id, startsAt, endsAt });
   if (schedule.partialUnavailable || (schedule.allDayUnavailable && !schedule.insideAvailableException)) {
     return { status: "schedule_exception", staff, service, startsAt, endsAt, totalMinutes, conflicts: [] };
   }
