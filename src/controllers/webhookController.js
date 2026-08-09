@@ -22,8 +22,12 @@ function maskPhone(phone = "") { return phone.length > 4 ? `***${phone.slice(-4)
 function isGreetingOnly(text = "") { return /^(hi|hello|hey|good morning|good afternoon|good evening|howzit|hiya)[!. ]*$/i.test(String(text).trim()); }
 exports.verifyWebhook = (req,res)=>{const mode=req.query["hub.mode"],token=req.query["hub.verify_token"],challenge=req.query["hub.challenge"];if(mode==="subscribe"&&token===process.env.VERIFY_TOKEN){(req.log||logger).info("WhatsApp webhook verified");return res.status(200).send(challenge);}(req.log||logger).warn("WhatsApp webhook verification rejected");return res.sendStatus(403);};
 exports.receiveWebhook=async(req,res)=>{const log=req.log||logger;try{const value=req.body.entry?.[0]?.changes?.[0]?.value;if(!value?.messages)return res.sendStatus(200);const message=value.messages[0];if(message.type!=="text"){log.info({messageType:message.type},"Ignoring unsupported WhatsApp message");return res.sendStatus(200);}const from=message.from,text=message.text?.body?.trim();if(!from||!text){log.warn("Received malformed WhatsApp text message");return res.sendStatus(200);}log.info({from:maskPhone(from)},"Processing incoming WhatsApp message");try{
-// Active guided booking sessions must consume free-form replies (dates, client names, etc.)
-// before legacy admin command routers can interpret them as unknown admin commands.
+// Explicit authoritative availability commands always take priority over guided
+// booking/menu state. This prevents stale booking sessions from consuming commands
+// such as: Check availability STAFF | SERVICE | DD/MM/YYYY HH:MM.
+const adminSlots=await processAdminAvailableSlotsMessage(from,text);if(adminSlots.handled){log.info({from:maskPhone(from),admin:adminSlots.admin?.display_name},"Handled authoritative available-slots request");await sendWhatsAppMessage(from,adminSlots.reply);return res.sendStatus(200);}
+// Active guided booking sessions consume other free-form replies (dates, client names, etc.)
+// after explicit admin commands have had first priority.
 const activeMobileBooking=await processAdminMobileBookingFlowMessage(from,text);if(activeMobileBooking.handled){await sendWhatsAppMessage(from,activeMobileBooking.reply);return res.sendStatus(200);}
 const adminAppointments=await processAdminAppointmentsByDateMessage(from,text);if(adminAppointments.handled){await sendWhatsAppMessage(from,adminAppointments.reply);return res.sendStatus(200);}
 const adminMobile=await processAdminMobileMenuMessage(from,text);if(adminMobile.handled){await sendWhatsAppMessage(from,adminMobile.reply);return res.sendStatus(200);}
@@ -32,7 +36,6 @@ const nailAudit=await processAdminNailServicesAuditMessage(from,text);if(nailAud
 const legacyOrphanAudit=await processAdminLegacyOrphanAuditMessage(from,text);if(legacyOrphanAudit.handled){await sendWhatsAppMessage(from,legacyOrphanAudit.reply);return res.sendStatus(200);}
 const adminHelp=await processAdminHelpMessage(from,text);if(adminHelp.handled){await sendWhatsAppMessage(from,adminHelp.reply);return res.sendStatus(200);}
 const adminWalkin=await processAdminWalkinMessage(from,text);if(adminWalkin.handled){await sendWhatsAppMessage(from,adminWalkin.reply);return res.sendStatus(200);}
-const adminSlots=await processAdminAvailableSlotsMessage(from,text);if(adminSlots.handled){log.info({from:maskPhone(from),admin:adminSlots.admin?.display_name},"Handled authoritative available-slots request");await sendWhatsAppMessage(from,adminSlots.reply);return res.sendStatus(200);}
 const adminAssistant=await processAdminAssistantMessage(from,text);if(adminAssistant.handled){await sendWhatsAppMessage(from,adminAssistant.reply);return res.sendStatus(200);}
 const customerExperience=await processCustomerExperienceMessage(from,text);if(customerExperience.handled){await sendWhatsAppMessage(from,customerExperience.reply);return res.sendStatus(200);}
 const nameGuard=await guardActiveNameConfirmation(from,text);if(nameGuard.handled){await sendWhatsAppMessage(from,nameGuard.reply);return res.sendStatus(200);}
