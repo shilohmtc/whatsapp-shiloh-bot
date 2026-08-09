@@ -6,6 +6,22 @@ const sessions = new Map();
 const MONTHS = {jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
 function clean(v=''){return String(v).trim().replace(/\s+/g,' ');}
 function key(sender){return normalizePhone(sender);}
+function isGlobalAdminCommand(raw=''){
+  const v=clean(raw);
+  return /^(?:check\s+)?availability\b/i.test(v)
+    || /^available\s+slots\b/i.test(v)
+    || /^next\s+available\b/i.test(v)
+    || /^working\s+hours\b/i.test(v)
+    || /^set\s+working\s+hours\b/i.test(v)
+    || /^add\s+schedule\s+exception\b/i.test(v)
+    || /^remove\s+schedule\s+exception\b/i.test(v)
+    || /^book\s+client\b/i.test(v)
+    || /^(?:find|lookup|search(?: for)?)\s+client\b/i.test(v)
+    || /^add\s+walk-?in\b/i.test(v)
+    || /^(?:today|tomorrow)$/i.test(v)
+    || /^(?:holiday\s+hours|staff\s+schedule|schedule|menu|admin\s+menu|home)$/i.test(v)
+    || /^(?:confirm|cancel)\s+booking$/i.test(v);
+}
 async function getAdmin(sender){const r=await pool.query(`SELECT id,display_name,permissions FROM staff_admin_accounts WHERE normalized_whatsapp=$1 AND active=TRUE`,[key(sender)]);return r.rows[0]||null;}
 function has(admin,p){return admin?.permissions?.[p]===true;}
 async function freelancers(){const r=await pool.query(`SELECT id,display_name FROM staff WHERE status='active' AND scheduling_type='freelance' ORDER BY display_name,id`);return r.rows;}
@@ -21,6 +37,10 @@ function confirmReply(staff,date,hours,label='Add availability'){return [`*${sta
 async function processAdminFreelancerAvailabilityMessage(sender,text){
   const raw=clean(text),v=raw.toLowerCase(),k=key(sender),session=sessions.get(k);
   const direct=/^(?:freelancer availability|freelancers|freelance schedule)$/i.test(raw);
+  if(session && isGlobalAdminCommand(raw) && !/^menu$/i.test(raw)){
+    sessions.delete(k);
+    return {handled:false};
+  }
   if(!session&&!direct)return {handled:false};
   const admin=await getAdmin(sender);if(!admin)return {handled:false};
   if(!has(admin,'schedule:manage'))return {handled:true,admin,reply:"You don't have permission to manage staff schedules."};
