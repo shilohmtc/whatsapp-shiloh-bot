@@ -26,18 +26,13 @@ function clientGuide(){return ['*Find a client*','','Send the client name or mob
 function moreMenu(){return ['*More — Schedule management*','','1️⃣ Staff hours','2️⃣ Leave / special availability','3️⃣ Freelancer availability','4️⃣ Holiday hours','','0️⃣ Back','','Reply with a number.'].join('\n');}
 
 async function processAdminMobileMenuMessage(sender,text){
-  const bookingFlow=await processAdminMobileBookingFlowMessage(sender,text);if(bookingFlow.handled)return bookingFlow;
-  const staffFlow=await processAdminStaffScheduleFlowMessage(sender,text);if(staffFlow.handled){if(staffFlow.returnToMore){moreSessions.delete(senderKey(sender));return {handled:true,admin:staffFlow.admin,reply:moreMenu()};}return staffFlow;}
-  const holiday=await processAdminHolidayHoursMessage(sender,text);if(holiday.handled)return holiday;
-  const freelancer=await processAdminFreelancerAvailabilityMessage(sender,text);if(freelancer.handled)return freelancer;
+  const k=senderKey(sender);
   const admin=await getAdmin(sender);if(!admin)return {handled:false};
-  const raw=String(text||'').trim();const v=raw.toLowerCase().replace(/\s+/g,' ');const k=senderKey(sender);
-  if(['menu','admin menu','home'].includes(v)||isGreeting(raw)){
-    moreSessions.delete(k);
-    await audit(admin.id,'admin.mobile_menu_viewed',{entry:isGreeting(raw)?'greeting':'menu'});
-    const reminder=has(admin,'schedule:manage')?await getHolidayReminder():null;
-    return {handled:true,admin,reply:reminder?`${menu(admin)}\n\n${reminder}`:menu(admin)};
-  }
+  const raw=String(text||'').trim();const v=raw.toLowerCase().replace(/\s+/g,' ');
+
+  // An active More-session owns numeric options 0-4. Handle it before the
+  // booking/staff/freelancer flows so option 3 cannot be mistaken for the
+  // top-level "Find an available time" command.
   const more=moreSessions.get(k);
   if(more?.step==='menu'){
     if(v==='0'){moreSessions.delete(k);return {handled:true,admin,reply:menu(admin)};}
@@ -46,6 +41,18 @@ async function processAdminMobileMenuMessage(sender,text){
     if(v==='3'){moreSessions.delete(k);return processAdminFreelancerAvailabilityMessage(sender,'Freelancer availability');}
     if(v==='4'){moreSessions.delete(k);return processAdminHolidayHoursMessage(sender,'Holiday hours');}
     return {handled:true,admin,reply:'Choose 1, 2, 3, 4, or 0.'};
+  }
+
+  const bookingFlow=await processAdminMobileBookingFlowMessage(sender,text);if(bookingFlow.handled)return bookingFlow;
+  const staffFlow=await processAdminStaffScheduleFlowMessage(sender,text);if(staffFlow.handled){if(staffFlow.returnToMore){moreSessions.delete(k);return {handled:true,admin:staffFlow.admin,reply:moreMenu()};}return staffFlow;}
+  const holiday=await processAdminHolidayHoursMessage(sender,text);if(holiday.handled)return holiday;
+  const freelancer=await processAdminFreelancerAvailabilityMessage(sender,text);if(freelancer.handled)return freelancer;
+
+  if(['menu','admin menu','home'].includes(v)||isGreeting(raw)){
+    moreSessions.delete(k);
+    await audit(admin.id,'admin.mobile_menu_viewed',{entry:isGreeting(raw)?'greeting':'menu'});
+    const reminder=has(admin,'schedule:manage')?await getHolidayReminder():null;
+    return {handled:true,admin,reply:reminder?`${menu(admin)}\n\n${reminder}`:menu(admin)};
   }
   if(v==='3'||v==='find an available time'||v==='find availability'){
     if(!has(admin,'appointment:view')||!has(admin,'appointment:create'))return {handled:false};
