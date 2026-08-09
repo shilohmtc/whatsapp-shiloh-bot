@@ -1,5 +1,6 @@
 const { pool } = require("../db/pool");
 const { normalizePhone } = require("./clientIdentityOnboarding");
+const { findClients, formatClientLookupReply } = require("./adminClientLookup");
 
 function normalizeText(text = "") {
   return String(text).trim().toLowerCase().replace(/\s+/g, " ");
@@ -46,7 +47,7 @@ function menu(admin) {
     lines.push("• Add walk-in — register a walk-in client");
   }
   if (hasPermission(admin, "client:lookup")) {
-    lines.push("• Find client [name/number] — client lookup is coming next");
+    lines.push("• Find client [name/number] — look up a canonical CRM client");
   }
 
   lines.push(
@@ -104,6 +105,13 @@ function scheduleReply(label, rows) {
   return lines.join("\n");
 }
 
+function extractClientLookup(text = "") {
+  const value = String(text).trim();
+  const match = value.match(/^(?:find|lookup|search(?: for)?)\s+client\s+(.+)$/i)
+    || value.match(/^client\s+(?:find|lookup|search)\s+(.+)$/i);
+  return match ? match[1].trim() : null;
+}
+
 async function processAdminAssistantMessage(sender, text) {
   const admin = await getAdmin(sender);
   if (!admin) return { handled: false, isAdmin: false };
@@ -112,6 +120,28 @@ async function processAdminAssistantMessage(sender, text) {
   if (isGreeting(text)) {
     await audit(admin.id, "admin.whatsapp_greeting");
     return { handled: true, isAdmin: true, admin, reply: menu(admin) };
+  }
+
+  const clientLookup = extractClientLookup(text);
+  if (clientLookup !== null) {
+    if (!hasPermission(admin, "client:lookup")) {
+      return { handled: true, isAdmin: true, admin, reply: "Your admin account does not currently have permission to look up client information." };
+    }
+    if (!clientLookup) {
+      return { handled: true, isAdmin: true, admin, reply: "Please send a client name or number, for example: Find client Christel or Find client 0821234567." };
+    }
+    const lookup = await findClients(clientLookup);
+    await audit(admin.id, "admin.client_lookup", {
+      queryType: lookup.queryType,
+      resultCount: lookup.clients.length,
+      resultClientIds: lookup.clients.map((client) => client.id),
+    });
+    return {
+      handled: true,
+      isAdmin: true,
+      admin,
+      reply: formatClientLookupReply(clientLookup, lookup.clients),
+    };
   }
 
   if (["today", "today's appointments", "todays appointments", "appointments today", "show today", "show today's appointments"].includes(value)) {
