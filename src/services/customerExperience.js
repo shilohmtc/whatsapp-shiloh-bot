@@ -1,12 +1,5 @@
-const { Pool } = require("pg");
+const { pool } = require("../db/pool");
 const logger = require("../lib/logger");
-
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL?.includes("render.com")
-    ? { rejectUnauthorized: false }
-    : undefined,
-});
 
 const GOOGLE_REVIEW_URL =
   process.env.SHILOH_GOOGLE_REVIEW_URL ||
