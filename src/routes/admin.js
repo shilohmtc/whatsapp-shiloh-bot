@@ -33,6 +33,8 @@ const {
   getTables: getDatabaseTables,
   getSchema: getDatabaseSchema,
   getOverview: getDatabaseOverview,
+  getMigrations: getDatabaseMigrations,
+  applyMigrations: applyDatabaseMigrations,
 } = require("../controllers/databaseController");
 
 const router = express.Router();
@@ -67,5 +69,7 @@ router.get("/database/status", getDatabaseStatus);
 router.get("/database/tables", getDatabaseTables);
 router.get("/database/schema", getDatabaseSchema);
 router.get("/database/overview", getDatabaseOverview);
+router.get("/database/migrations", getDatabaseMigrations);
+router.post("/database/migrations/apply", applyDatabaseMigrations);
 
 module.exports = router;
