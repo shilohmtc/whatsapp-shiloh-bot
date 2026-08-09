@@ -2,6 +2,7 @@ const express = require("express");
 const adminAuth = require("../middleware/adminAuth");
 const { documentUpload } = require("../middleware/documentUpload");
 const { csvUpload } = require("../middleware/csvUpload");
+const crmRoutes = require("./crm");
 const { createDocument, uploadDocument, getDocuments, removeDocument, getProfiles, getProfileByPhone, patchProfileByPhone, sendTemplateTest } = require("../controllers/adminController");
 const { syncGoldie, getGoldieSyncStatus } = require("../controllers/goldieController");
 const { stageClients: stageGoldieClients, stageAppointments: stageGoldieAppointments } = require("../controllers/goldieImportController");
@@ -11,6 +12,11 @@ const { getFeedback, getReviews, getCustomerSatisfaction, resolveCustomerFeedbac
 const { getStatus: getDatabaseStatus, getTables: getDatabaseTables, getSchema: getDatabaseSchema, getOverview: getDatabaseOverview, getMigrations: getDatabaseMigrations, applyMigrations: applyDatabaseMigrations } = require("../controllers/databaseController");
 const router = express.Router();
 router.use(adminAuth);
+
+// Production CRM canonical API. This surface reads canonical CRM tables only and
+// intentionally remains separate from legacy profiles and Goldie reconciliation.
+router.use("/crm", crmRoutes);
+
 router.get("/documents", getDocuments); router.post("/documents", createDocument); router.post("/documents/upload", documentUpload, uploadDocument); router.delete("/documents/:id", removeDocument);
 router.get("/profiles", getProfiles); router.get("/profiles/:phone", getProfileByPhone); router.patch("/profiles/:phone", patchProfileByPhone);
 router.get("/sync/goldie", getGoldieSyncStatus); router.post("/sync/goldie", syncGoldie);
