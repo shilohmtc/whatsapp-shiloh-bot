@@ -27,7 +27,7 @@ async function buildAppointmentReconciliationPlan({ appointmentBatchId = '2', cl
   const [appointments, clientLinks, services, staff] = await Promise.all([
     pool.query(`SELECT id, external_id, source_payload FROM external_records WHERE import_batch_id=$1 AND source='goldie' AND entity_type='appointment' AND reconciliation_status='unmatched' ORDER BY id`, [appointmentBatchId]),
     pool.query(`SELECT ecr.display_name, er.shiloh_entity_id AS client_id FROM external_records er JOIN external_client_records ecr ON ecr.external_record_id=er.id WHERE er.import_batch_id=$1 AND er.source='goldie' AND er.entity_type='client' AND er.reconciliation_status='matched' AND er.shiloh_entity_id IS NOT NULL`, [clientBatchId]),
-    pool.query(`SELECT id,name FROM services WHERE status='active'`),
+    pool.query(`SELECT id,name FROM services WHERE status='active' OR external_source='goldie_historical'`),
     pool.query(`SELECT id,display_name,source_name,status FROM staff`),
   ]);
 
@@ -117,6 +117,8 @@ async function buildAppointmentReconciliationPlan({ appointmentBatchId = '2', cl
       requireExactlyOneUniquelyCanonicalClient: true,
       requireAllServicesExactOrApprovedAlias: true,
       approvedServiceAliases: Object.fromEntries(SERVICE_ALIASES),
+      allowEvidenceBackedHistoricalInactiveServices: true,
+      historicalServiceSource: 'goldie_historical',
       allowHistoricalInactiveStaffByGoldieSourceName: true,
       requireAllStaffExact: true,
       timezone: 'Africa/Johannesburg (+02:00)',
