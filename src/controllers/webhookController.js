@@ -12,6 +12,12 @@ function maskPhone(phone = "") {
   return phone.length > 4 ? `***${phone.slice(-4)}` : "***";
 }
 
+function isGreetingOnly(text = "") {
+  return /^(hi|hello|hey|good morning|good afternoon|good evening|howzit|hiya)[!. ]*$/i.test(
+    String(text).trim()
+  );
+}
+
 exports.verifyWebhook = (req, res) => {
   const mode = req.query["hub.mode"];
   const token = req.query["hub.verify_token"];
@@ -90,6 +96,25 @@ exports.receiveWebhook = async (req, res) => {
         }
 
         await sendWhatsAppMessage(from, reply);
+        return res.sendStatus(200);
+      }
+
+      // Recognition and onboarding are intentionally separate. A unique canonical
+      // client may be welcomed by name even when DOB/contact verification is still
+      // incomplete; those missing fields remain mandatory at the booking gate.
+      if (
+        identity.identityStatus === "matched_incomplete" &&
+        identity.client?.display_name &&
+        isGreetingOnly(text)
+      ) {
+        log.info(
+          { from: maskPhone(from), identityStatus: identity.identityStatus },
+          "Recognized incomplete canonical client greeting"
+        );
+        await sendWhatsAppMessage(
+          from,
+          `Welcome back, ${identity.client.display_name} 👋 How can I help you today?`
+        );
         return res.sendStatus(200);
       }
 
