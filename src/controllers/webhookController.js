@@ -11,6 +11,7 @@ const { processAdminHelpMessage } = require("../services/adminHelp");
 const { processAdminMobileMenuMessage } = require("../services/adminMobileMenu");
 const { processAdminRosterAuditMessage } = require("../services/adminRosterAudit");
 const { processAdminNailServicesAuditMessage } = require("../services/adminNailServicesAudit");
+const { processAdminLegacyOrphanAuditMessage } = require("../services/adminLegacyOrphanAudit");
 const { processAdminAvailableSlotsMessage } = require("../services/adminAvailableSlots");
 const { processAdminAssistantMessage } = require("../services/adminAssistant");
 const { forceMatchedClientNameConfirmation, guardActiveNameConfirmation } = require("../services/identityOnboardingGuard");
@@ -22,6 +23,7 @@ exports.receiveWebhook=async(req,res)=>{const log=req.log||logger;try{const valu
 const adminMobile=await processAdminMobileMenuMessage(from,text);if(adminMobile.handled){await sendWhatsAppMessage(from,adminMobile.reply);return res.sendStatus(200);}
 const rosterAudit=await processAdminRosterAuditMessage(from,text);if(rosterAudit.handled){await sendWhatsAppMessage(from,rosterAudit.reply);return res.sendStatus(200);}
 const nailAudit=await processAdminNailServicesAuditMessage(from,text);if(nailAudit.handled){await sendWhatsAppMessage(from,nailAudit.reply);return res.sendStatus(200);}
+const legacyOrphanAudit=await processAdminLegacyOrphanAuditMessage(from,text);if(legacyOrphanAudit.handled){await sendWhatsAppMessage(from,legacyOrphanAudit.reply);return res.sendStatus(200);}
 const adminHelp=await processAdminHelpMessage(from,text);if(adminHelp.handled){await sendWhatsAppMessage(from,adminHelp.reply);return res.sendStatus(200);}
 const adminWalkin=await processAdminWalkinMessage(from,text);if(adminWalkin.handled){await sendWhatsAppMessage(from,adminWalkin.reply);return res.sendStatus(200);}
 const adminSlots=await processAdminAvailableSlotsMessage(from,text);if(adminSlots.handled){log.info({from:maskPhone(from),admin:adminSlots.admin?.display_name},"Handled authoritative available-slots request");await sendWhatsAppMessage(from,adminSlots.reply);return res.sendStatus(200);}
