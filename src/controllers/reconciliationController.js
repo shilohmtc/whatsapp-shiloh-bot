@@ -5,6 +5,7 @@ const {
 } = require("../services/reconciliationReport");
 const { getRecommendationReport } = require("../services/reconciliationRecommendations");
 const { canonicalizeClients } = require("../services/clientCanonicalization");
+const { getPostCanonicalizationAudit } = require("../services/canonicalizationAudit");
 
 exports.getSummary = async (req, res) => {
   try {
@@ -23,6 +24,19 @@ exports.getRecommendations = async (req, res) => {
   } catch (error) {
     (req.log || console).error?.({ err: error }, "Failed to build reconciliation recommendations");
     return res.status(500).json({ error: "Could not build reconciliation recommendations", requestId: req.id });
+  }
+};
+
+exports.getCanonicalizationAudit = async (req, res) => {
+  try {
+    const report = await getPostCanonicalizationAudit(req.query.batchId || null);
+    return res.status(200).json({ report, requestId: req.id });
+  } catch (error) {
+    (req.log || console).error?.({ err: error }, "Failed to build canonicalization audit");
+    if (/batchId is required/.test(error.message || "")) {
+      return res.status(400).json({ error: error.message, requestId: req.id });
+    }
+    return res.status(500).json({ error: "Could not build canonicalization audit", requestId: req.id });
   }
 };
 
