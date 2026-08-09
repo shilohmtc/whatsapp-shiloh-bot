@@ -23,6 +23,24 @@ async function holidayOverview(locationId){
   return r.rows;
 }
 
+async function getHolidayReminder(){
+  const location=await getLocation();if(!location)return null;
+  const r=await pool.query(`
+    SELECT ph.holiday_date::text,ph.name
+      FROM public_holidays ph
+      LEFT JOIN location_hours_exceptions lhe
+        ON lhe.location_id=$1 AND lhe.exception_date=ph.holiday_date
+     WHERE ph.country_code='ZA'
+       AND ph.holiday_date >= (NOW() AT TIME ZONE 'Africa/Johannesburg')::date
+       AND ph.holiday_date <= ((NOW() AT TIME ZONE 'Africa/Johannesburg')::date + INTERVAL '30 days')
+       AND lhe.id IS NULL
+     ORDER BY ph.holiday_date
+     LIMIT 1`,[location.id]);
+  if(!r.rowCount)return null;
+  const row=r.rows[0];
+  return `⚠️ Holiday hours need attention: ${fmtDate(row.holiday_date)} — ${row.name}. Open *Holiday hours* under More to confirm CLOSED or set special hours.`;
+}
+
 function overviewReply(rows){
   const lines=['*Holiday hours*','','Public holidays are closed by default until hours are confirmed.',''];
   if(!rows.length){lines.push('No upcoming South African public holidays are loaded in the next 180 days.');return lines.join('\n');}
@@ -68,4 +86,4 @@ async function processAdminHolidayHoursMessage(sender,text){
   await pool.query(`INSERT INTO crm_audit_events(actor_admin_id,action,entity_type,entity_id,metadata) VALUES($1,'admin.holiday_hours_viewed','location',$2,$3::jsonb)`,[admin.id,location.id,JSON.stringify({upcoming:rows.length,unconfigured:rows.filter(r=>!r.exception_type).length})]);
   return {handled:true,admin,reply:overviewReply(rows)};
 }
-module.exports={processAdminHolidayHoursMessage};
+module.exports={processAdminHolidayHoursMessage,getHolidayReminder};
