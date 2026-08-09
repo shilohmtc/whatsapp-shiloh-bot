@@ -1,5 +1,6 @@
 const { pool } = require('../db/pool');
 const { normalizePhone } = require('./clientIdentityOnboarding');
+const { processAdminHolidayHoursMessage } = require('./adminHolidayHours');
 
 function has(admin,p){return admin?.permissions?.[p]===true;}
 async function getAdmin(sender){const r=await pool.query(`SELECT id,staff_id,display_name,role,permissions FROM staff_admin_accounts WHERE normalized_whatsapp=$1 AND active=TRUE`,[normalizePhone(sender)]);return r.rows[0]||null;}
@@ -23,6 +24,7 @@ function scheduleMenu(){return ['*Staff schedule*','','1️⃣ View working hour
 function scheduleGuide(choice){if(choice==='1')return ['*View working hours*','','Send: Working hours STAFF','','Example: Working hours Christel'].join('\n');if(choice==='2')return ['*Change regular hours*','','Send: Set working hours STAFF | DAY | HOURS','','Example: Set working hours Christel | Monday | 09:00-17:00','','Use CLOSED when the practitioner does not work that day.'].join('\n');if(choice==='3')return ['*Add leave / special hours*','','Leave:','Add schedule exception STAFF | YYYY-MM-DD | unavailable | ALL-DAY | REASON','','Special hours:','Add schedule exception STAFF | YYYY-MM-DD | available | HH:MM-HH:MM | REASON'].join('\n');return ['*Remove an exception*','','First send: Working hours STAFF','Then use the exception number shown:','Remove schedule exception STAFF | NUMBER'].join('\n');}
 
 async function processAdminMobileMenuMessage(sender,text){
+  const holiday=await processAdminHolidayHoursMessage(sender,text);if(holiday.handled)return holiday;
   const admin=await getAdmin(sender);if(!admin)return {handled:false};
   const raw=String(text||'').trim();const v=raw.toLowerCase().replace(/\s+/g,' ');
   if(['menu','admin menu','home'].includes(v)){await audit(admin.id,'admin.mobile_menu_viewed');return {handled:true,admin,reply:menu(admin)};}
