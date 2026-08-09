@@ -24,7 +24,7 @@ function parseLocalDateTime(value = "") {
 async function resolveStaff(name) {
   const query = clean(name);
   const result = await pool.query(
-    `SELECT id, display_name, resource_type, status
+    `SELECT id, display_name, resource_type, scheduling_type, status
        FROM staff
       WHERE status = 'active' AND display_name ILIKE $1
       ORDER BY CASE WHEN LOWER(display_name) = LOWER($2) THEN 0 ELSE 1 END, display_name, id
@@ -86,6 +86,13 @@ async function checkAuthoritativeSchedule({ db = pool, staffId, startsAt, endsAt
      ),
      schedule AS (
        SELECT
+         (SELECT scheduling_type FROM staff WHERE id=$1) AS scheduling_type,
+         EXISTS (
+           SELECT 1 FROM staff_working_hours wh, requested r
+            WHERE wh.staff_id = $1
+              AND wh.day_of_week = r.dow
+              AND wh.active = TRUE
+         ) AS has_base_override,
          EXISTS (
            SELECT 1 FROM staff_working_hours wh, requested r
             WHERE wh.staff_id = $1
@@ -94,6 +101,11 @@ async function checkAuthoritativeSchedule({ db = pool, staffId, startsAt, endsAt
               AND wh.starts_local <= r.local_start
               AND wh.ends_local >= r.local_end
          ) AS inside_base_hours,
+         EXISTS (
+           SELECT 1 FROM staff_recurring_day_closures c, requested r
+            WHERE c.staff_id = $1
+              AND c.day_of_week = r.dow
+         ) AS recurring_closed,
          EXISTS (
            SELECT 1 FROM staff_schedule_exceptions ex, requested r
             WHERE ex.staff_id = $1
@@ -127,9 +139,11 @@ async function checkAuthoritativeSchedule({ db = pool, staffId, startsAt, endsAt
     [staffId, startsAt, endsAt]
   );
   const row = result.rows[0];
-  const covered = row.inside_available_exception || (row.inside_base_hours && !row.all_day_unavailable);
+  const inherited = row.scheduling_type === 'regular' && !row.has_base_override && !row.recurring_closed;
+  const covered = row.inside_available_exception || ((row.inside_base_hours || inherited) && !row.all_day_unavailable);
   return {
     covered,
+    inherited,
     allDayUnavailable: row.all_day_unavailable,
     partialUnavailable: row.partial_unavailable,
     insideAvailableException: row.inside_available_exception,
@@ -249,10 +263,10 @@ function formatAvailabilityReply(result) {
   const heading = `${result.staff.display_name} — ${result.service.name}\nRequested: ${start} to ${end}`;
 
   if (result.status === "outside_clinic_hours") {
-    return [heading, "", "Not available: the full service window falls outside the clinic's operating hours.", "", "Clinic hours: Monday–Friday 08:00–17:00, Saturday 08:00–14:00, Sunday closed."].join("\n");
+    return [heading, "", "Not available: the full service window falls outside the clinic's operating hours.", "", "Clinic hours are authoritative and include configured holiday/location exceptions."].join("\n");
   }
   if (result.status === "outside_working_hours") {
-    return [heading, "", "Not available: the full service window falls outside the practitioner's configured working hours.", "", "Choose a time fully contained within the authoritative staff schedule."].join("\n");
+    return [heading, "", "Not available: the full service window falls outside the practitioner's authoritative schedule.", "", "Regular practitioners inherit clinic hours unless an explicit recurring staff override applies."].join("\n");
   }
   if (result.status === "schedule_exception") {
     return [heading, "", "Not available: a staff schedule exception marks this time unavailable.", "", "Choose another time or review the practitioner's schedule exceptions."].join("\n");
