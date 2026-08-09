@@ -1,4 +1,5 @@
 const { pool } = require("../db/pool");
+const { checkClinicHours } = require("./clinicHours");
 
 function clean(value = "") {
   return String(value).trim().replace(/\s+/g, " ").slice(0, 120);
@@ -204,6 +205,11 @@ async function checkAvailability({ staffName, serviceName, localDateTime }) {
   const startsAt = windowResult.rows[0].starts_at;
   const endsAt = windowResult.rows[0].ends_at;
 
+  const clinic = await checkClinicHours({ startsAt, endsAt });
+  if (!clinic.covered) {
+    return { status: "outside_clinic_hours", staff, service, startsAt, endsAt, totalMinutes, conflicts: [] };
+  }
+
   const schedule = await checkAuthoritativeSchedule({ staffId: staff.id, startsAt, endsAt });
   if (schedule.partialUnavailable || (schedule.allDayUnavailable && !schedule.insideAvailableException)) {
     return { status: "schedule_exception", staff, service, startsAt, endsAt, totalMinutes, conflicts: [] };
@@ -242,6 +248,9 @@ function formatAvailabilityReply(result) {
   const end = formatLocalDateTime(result.endsAt);
   const heading = `${result.staff.display_name} — ${result.service.name}\nRequested: ${start} to ${end}`;
 
+  if (result.status === "outside_clinic_hours") {
+    return [heading, "", "Not available: the full service window falls outside the clinic's operating hours.", "", "Clinic hours: Monday–Friday 08:00–17:00, Saturday 08:00–14:00, Sunday closed."].join("\n");
+  }
   if (result.status === "outside_working_hours") {
     return [heading, "", "Not available: the full service window falls outside the practitioner's configured working hours.", "", "Choose a time fully contained within the authoritative staff schedule."].join("\n");
   }
@@ -257,7 +266,7 @@ function formatAvailabilityReply(result) {
     return lines.join("\n");
   }
 
-  return [heading, "", "Available.", "", "This time is inside the practitioner's configured working hours, the staff member is eligible for the service, and no conflicting canonical appointment, calendar block, or unavailable schedule exception was found."].join("\n");
+  return [heading, "", "Available.", "", "This time is inside clinic operating hours and the practitioner's authoritative schedule, the staff member is eligible for the service, and no conflicting canonical appointment, calendar block, or unavailable schedule exception was found."].join("\n");
 }
 
 module.exports = { checkAvailability, formatAvailabilityReply, checkAuthoritativeSchedule, getConflicts };
