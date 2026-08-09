@@ -47,13 +47,13 @@ async function processAdminFreelancerAvailabilityMessage(sender,text){
   if(v==='menu'){sessions.delete(k);return {handled:false};}
   if(!session){const rows=await freelancers();if(!rows.length)return {handled:true,admin,reply:'No active freelancers are configured.'};sessions.set(k,{step:'pick-staff',staffRows:rows});return {handled:true,admin,reply:['*Freelancer availability*','','Choose a practitioner:','',...rows.map((r,i)=>`${i+1}️⃣ ${r.display_name}`),'','0️⃣ Back'].join('\n')};}
   if(session.step==='pick-staff'){
-    if(v==='0'){sessions.delete(k);return {handled:true,admin,reply:'Reply *Staff schedule* to return.'};}
+    if(v==='0'){sessions.delete(k);return {handled:true,admin,reply:'*More — Schedule management*\n\n1️⃣ Staff hours\n2️⃣ Leave / special availability\n3️⃣ Freelancer availability\n4️⃣ Holiday hours\n\n0️⃣ Back\n\nReply with a number.'};}
     const n=Number(v);if(!Number.isInteger(n)||n<1||n>session.staffRows.length)return {handled:true,admin,reply:'Reply with the practitioner number shown, or 0 to go back.'};
     const staff=session.staffRows[n-1];sessions.set(k,{step:'staff-menu',staff});return {handled:true,admin,reply:staffMenu(staff)};
   }
   if(session.step==='staff-menu'){
     const staff=session.staff;
-    if(v==='0'){const rows=await freelancers();sessions.set(k,{step:'pick-staff',staffRows:rows});return {handled:true,admin,reply:['*Freelancer availability*','',...rows.map((r,i)=>`${i+1}️⃣ ${r.display_name}`),'','0️⃣ Back'].join('\n')};}
+    if(v==='0'){const rows=await freelancers();sessions.set(k,{step:'pick-staff',staffRows:rows});return {handled:true,admin,reply:['*Freelancer availability*','','Choose a practitioner:','',...rows.map((r,i)=>`${i+1}️⃣ ${r.display_name}`),'','0️⃣ Back'].join('\n')};}
     if(v==='1'){const rows=await availability(staff.id);return {handled:true,admin,reply:listReply(staff,rows)};}
     if(v==='2'){sessions.set(k,{step:'add-date',staff});return {handled:true,admin,reply:[`*${staff.display_name} — Add available date*`,'','What date is available?','Example: 12 Aug','','0️⃣ Cancel'].join('\n')};}
     if(v==='3'||v==='4'){const rows=await availability(staff.id);if(!rows.length)return {handled:true,admin,reply:listReply(staff,rows)};sessions.set(k,{step:v==='3'?'change-pick':'remove-pick',staff,rows});return {handled:true,admin,reply:listReply(staff,rows,v==='3'?'Choose availability to change':'Choose availability to remove')};}
@@ -84,7 +84,7 @@ async function processAdminFreelancerAvailabilityMessage(sender,text){
     const hours=parseHours(raw);if(!hours)return {handled:true,admin,reply:'Send the new hours as HH:MM-HH:MM.'};sessions.set(k,{step:'change-confirm',staff:session.staff,row:session.row,hours});return {handled:true,admin,reply:confirmReply(session.staff,session.row.exception_date,hours,'Change availability')};
   }
   if(session.step==='change-confirm'){
-    if(v==='0'){sessions.set(k,{step:'staff-menu',staff:session.staff});return {handled:true,admin,reply:staffMenu(session.staff)};}if(v==='2'){sessions.set(k,{step:'change-hours',staff:session.staff,row:session.row});return {handled:true,admin,reply:'Send the new hours.'};}if(v!=='1')return {handled:true,admin,reply:'Choose 1 to confirm, 2 to change, or 0 to cancel.'};
+    if(v==='0'){sessions.set(k,{step:'staff-menu',staff:session.staff});return {handled:true,admin,reply:staffMenu(session.staff);}if(v==='2'){sessions.set(k,{step:'change-hours',staff:session.staff,row:session.row});return {handled:true,admin,reply:'Send the new hours.'};}if(v!=='1')return {handled:true,admin,reply:'Choose 1 to confirm, 2 to change, or 0 to cancel.'};
     const r=await updateScheduleException({staffId:session.staff.id,exceptionId:session.row.id,date:session.row.exception_date,startsLocal:session.hours.start,endsLocal:session.hours.end,actorAdminId:admin.id});sessions.set(k,{step:'staff-menu',staff:session.staff});return {handled:true,admin,reply:r.status==='updated'?`✅ Availability updated to ${session.hours.start}–${session.hours.end}.\n\n${staffMenu(session.staff)}`:'Availability could not be updated.'};
   }
   if(session.step==='remove-confirm'){
