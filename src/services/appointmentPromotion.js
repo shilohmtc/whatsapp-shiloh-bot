@@ -1,5 +1,5 @@
 const { pool } = require('../db/pool');
-const { parseGoldieDateTime, serviceKey } = require('./appointmentReconciliationPlan');
+const { parseGoldieDateTime, serviceKey, resolveServiceList } = require('./appointmentReconciliationPlan');
 
 const EXEC_CONFIRMATION = 'EXECUTE_SAFE_GOLDIE_APPOINTMENTS';
 function norm(v){return String(v||'').normalize('NFKC').trim().toLowerCase().replace(/\s+/g,' ');}
@@ -32,7 +32,9 @@ async function executeSafeAppointmentPromotion({appointmentBatchId='2',clientBat
       if(norm(p.Type)!=='appointment') reasons.push('not_appointment_type');
       const start=parseGoldieDateTime(p.Date,p['Start Time']), end=parseGoldieDateTime(p.Date,p['End Time']); if(!(start&&end&&end>start)) reasons.push('invalid_time_range');
       const cn=splitList(p.Clients); let clientId=null; if(cn.length!==1) reasons.push(cn.length?'multiple_named_clients':'client_blank'); else {const ids=cm.get(norm(cn[0])); if(!ids||ids.size!==1) reasons.push(!ids||!ids.size?'client_unresolved':'client_ambiguous'); else clientId=[...ids][0];}
-      const sn=splitList(p.Services); const svc=sn.map(n=>({name:n,row:sm.get(serviceKey(n))||null})); if(!sn.length||svc.some(x=>!x.row)) reasons.push(!sn.length?'services_blank':'services_not_all_exact_or_approved_alias');
+      const resolvedServices=resolveServiceList(String(p.Services||''),new Map([...sm.entries()].map(([k,row])=>[k,row])));
+      const svc=resolvedServices.map(x=>({name:x.name,row:x.id||null}));
+      if(!String(p.Services||'').trim()||!svc.length||svc.some(x=>!x.row)) reasons.push(!String(p.Services||'').trim()?'services_blank':'services_not_all_exact_or_approved_alias');
       const stn=splitList(p.Staff); const sta=stn.map(n=>({name:n,row:stm.get(norm(n))||stm.get(norm(n.replace(/\s+\.$/,'')))||null})); if(!stn.length||sta.some(x=>!x.row)) reasons.push(!stn.length?'staff_blank':'staff_not_all_exact');
       if(reasons.length){skipped++;for(const r of reasons)skippedReasons.set(r,(skippedReasons.get(r)||0)+1);continue;}
       const ins=await db.query(`INSERT INTO appointments (client_id,starts_at,ends_at,status,title,notes,total_price,currency,source,external_id,external_key,source_client_name,source_recurrence) VALUES ($1,$2,$3,$4,$5,$6,$7,'ZAR','goldie',$8,$8,$9,$10) ON CONFLICT (source,external_id) DO NOTHING RETURNING id`,[clientId,start.toISOString(),end.toISOString(),statusMap(p.Status),p.Title||null,p.Notes||null,price(p.Price),rec.external_id,p.Clients||null,p.Recurrence||null]);
@@ -45,7 +47,7 @@ async function executeSafeAppointmentPromotion({appointmentBatchId='2',clientBat
         await db.query(`INSERT INTO appointment_status_history (appointment_id,from_status,to_status,changed_by,reason) VALUES ($1,NULL,$2,'system:goldie_appointment_promotion','initial Goldie import')`,[appointmentId,statusMap(p.Status)]);
         created++;
       }
-      await db.query(`UPDATE external_records SET shiloh_entity_type='appointment',shiloh_entity_id=$2,reconciliation_status='matched',match_method='safe_exact_or_approved_alias_appointment_promotion',match_confidence=1.0,reconciled_at=NOW(),updated_at=NOW() WHERE id=$1`,[rec.id,appointmentId]);
+      await db.query(`UPDATE external_records SET shiloh_entity_type='appointment',shiloh_entity_id=$2,reconciliation_status='matched',match_method='safe_catalogue_aware_appointment_promotion',match_confidence=1.0,reconciled_at=NOW(),updated_at=NOW() WHERE id=$1`,[rec.id,appointmentId]);
     }
     await db.query('COMMIT');
     return {mode:'execute',writesPerformed:true,appointmentBatchId:String(appointmentBatchId),created,skipped,skippedReasons:[...skippedReasons.entries()].sort((a,b)=>b[1]-a[1]).map(([reason,count])=>({reason,count}))};
