@@ -14,6 +14,7 @@ function localDate(value) {
 async function getServiceAndStaff(staffId, serviceId) {
   const result = await pool.query(
     `SELECT st.id AS staff_id, st.display_name AS staff_name, st.status AS staff_status,
+            st.scheduling_type,
             s.id AS service_id, s.name AS service_name, s.status AS service_status,
             s.duration_minutes, s.processing_time_minutes, s.extra_time_minutes
        FROM staff st
@@ -86,17 +87,40 @@ async function listAvailableSlots({ staffId, serviceId, date, locationId, interv
         WHERE wh.staff_id = $2
           AND wh.day_of_week = r.dow
           AND wh.active = TRUE
-          AND (r.location_id IS NULL OR wh.location_id IS NULL OR wh.location_id = r.location_id)
+          AND (wh.location_id IS NULL OR wh.location_id = r.location_id)
+     ),
+     recurring_closed AS (
+       SELECT 1
+         FROM staff_recurring_day_closures c, requested r
+        WHERE c.staff_id = $2
+          AND c.day_of_week = r.dow
+          AND (c.location_id IS NULL OR c.location_id = r.location_id)
+        LIMIT 1
      ),
      exception_windows AS (
        SELECT ex.exception_type, ex.starts_local, ex.ends_local
          FROM staff_schedule_exceptions ex, requested r
         WHERE ex.staff_id = $2
           AND ex.exception_date = r.local_date
-          AND (r.location_id IS NULL OR ex.location_id IS NULL OR ex.location_id = r.location_id)
+          AND (ex.location_id IS NULL OR ex.location_id = r.location_id)
+     ),
+     inherited_windows AS (
+       SELECT cw.starts_local, cw.ends_local
+         FROM clinic_windows cw
+         JOIN staff st ON st.id = $2
+        WHERE st.scheduling_type = 'regular'
+          AND NOT EXISTS (SELECT 1 FROM base_windows)
+          AND NOT EXISTS (SELECT 1 FROM recurring_closed)
      ),
      staff_windows AS (
        SELECT starts_local, ends_local FROM base_windows
+        WHERE NOT EXISTS (
+          SELECT 1 FROM exception_windows ex
+           WHERE ex.exception_type = 'unavailable'
+             AND ex.starts_local IS NULL AND ex.ends_local IS NULL
+        )
+       UNION ALL
+       SELECT starts_local, ends_local FROM inherited_windows
         WHERE NOT EXISTS (
           SELECT 1 FROM exception_windows ex
            WHERE ex.exception_type = 'unavailable'
