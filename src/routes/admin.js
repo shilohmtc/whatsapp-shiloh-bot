@@ -1,6 +1,7 @@
 const express = require("express");
 const adminAuth = require("../middleware/adminAuth");
 const { documentUpload } = require("../middleware/documentUpload");
+const { csvUpload } = require("../middleware/csvUpload");
 const {
   createDocument,
   uploadDocument,
@@ -15,6 +16,7 @@ const {
   syncGoldie,
   getGoldieSyncStatus,
 } = require("../controllers/goldieController");
+const { stageClients: stageGoldieClients } = require("../controllers/goldieImportController");
 const {
   createLifecycleAppointment,
   getLifecycleAppointments,
@@ -51,6 +53,7 @@ router.patch("/profiles/:phone", patchProfileByPhone);
 
 router.get("/sync/goldie", getGoldieSyncStatus);
 router.post("/sync/goldie", syncGoldie);
+router.post("/imports/goldie/clients", csvUpload, stageGoldieClients);
 
 router.get("/appointments", getLifecycleAppointments);
 router.post("/appointments", createLifecycleAppointment);
