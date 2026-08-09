@@ -33,6 +33,8 @@ function fmtDate(v){return new Intl.DateTimeFormat('en-ZA',{timeZone:'Africa/Joh
 function staffMenu(staff){return [`*${staff.display_name} — Freelancer*`,'','1️⃣ View availability','2️⃣ Add available date','3️⃣ Change availability','4️⃣ Remove availability','','0️⃣ Back','Reply with a number.'].join('\n');}
 function listReply(staff,rows,title='Upcoming availability'){const lines=[`*${staff.display_name} — ${title}*`,''];if(!rows.length)lines.push('No upcoming dated availability is configured.');else rows.forEach((r,i)=>lines.push(`${i+1}️⃣ ${fmtDate(r.exception_date)} · ${r.starts_local.slice(0,5)}–${r.ends_local.slice(0,5)}`));lines.push('','0️⃣ Back');return lines.join('\n');}
 function confirmReply(staff,date,hours,label='Add availability'){return [`*${staff.display_name} — ${label}*`,'',fmtDate(date),`${hours.start}–${hours.end}`,'','1️⃣ Confirm','2️⃣ Change','0️⃣ Cancel'].join('\n');}
+function scheduleManagementMenu(){return '*More — Schedule management*\n\n1️⃣ Staff hours\n2️⃣ Leave / special availability\n3️⃣ Freelancer availability\n4️⃣ Holiday hours\n\n0️⃣ Back\n\nReply with a number.';}
+function freelancerListReply(rows){return ['*Freelancer availability*','','Choose a practitioner:','',...rows.map((r,i)=>`${i+1}️⃣ ${r.display_name}`),'','0️⃣ Back'].join('\n');}
 
 async function processAdminFreelancerAvailabilityMessage(sender,text){
   const raw=clean(text),v=raw.toLowerCase(),k=key(sender),session=sessions.get(k);
@@ -41,19 +43,23 @@ async function processAdminFreelancerAvailabilityMessage(sender,text){
     sessions.delete(k);
     return {handled:false};
   }
-  if(!session&&!direct)return {handled:false};
   const admin=await getAdmin(sender);if(!admin)return {handled:false};
   if(!has(admin,'schedule:manage'))return {handled:true,admin,reply:"You don't have permission to manage staff schedules."};
+  // A bare Back can arrive on a different Render instance after a rolling deploy,
+  // where the in-memory session does not exist. Recover safely to the parent menu
+  // instead of falling through and letting another handler consume the 0.
+  if(!session&&!direct&&v==='0')return {handled:true,admin,reply:scheduleManagementMenu()};
+  if(!session&&!direct)return {handled:false};
   if(v==='menu'){sessions.delete(k);return {handled:false};}
-  if(!session){const rows=await freelancers();if(!rows.length)return {handled:true,admin,reply:'No active freelancers are configured.'};sessions.set(k,{step:'pick-staff',staffRows:rows});return {handled:true,admin,reply:['*Freelancer availability*','','Choose a practitioner:','',...rows.map((r,i)=>`${i+1}️⃣ ${r.display_name}`),'','0️⃣ Back'].join('\n')};}
+  if(!session){const rows=await freelancers();if(!rows.length)return {handled:true,admin,reply:'No active freelancers are configured.'};sessions.set(k,{step:'pick-staff',staffRows:rows});return {handled:true,admin,reply:freelancerListReply(rows)};}
   if(session.step==='pick-staff'){
-    if(v==='0'){sessions.delete(k);return {handled:true,admin,reply:'*More — Schedule management*\n\n1️⃣ Staff hours\n2️⃣ Leave / special availability\n3️⃣ Freelancer availability\n4️⃣ Holiday hours\n\n0️⃣ Back\n\nReply with a number.'};}
+    if(v==='0'){sessions.delete(k);return {handled:true,admin,reply:scheduleManagementMenu()};}
     const n=Number(v);if(!Number.isInteger(n)||n<1||n>session.staffRows.length)return {handled:true,admin,reply:'Reply with the practitioner number shown, or 0 to go back.'};
     const staff=session.staffRows[n-1];sessions.set(k,{step:'staff-menu',staff});return {handled:true,admin,reply:staffMenu(staff)};
   }
   if(session.step==='staff-menu'){
     const staff=session.staff;
-    if(v==='0'){const rows=await freelancers();sessions.set(k,{step:'pick-staff',staffRows:rows});return {handled:true,admin,reply:['*Freelancer availability*','','Choose a practitioner:','',...rows.map((r,i)=>`${i+1}️⃣ ${r.display_name}`),'','0️⃣ Back'].join('\n')};}
+    if(v==='0'){const rows=await freelancers();sessions.set(k,{step:'pick-staff',staffRows:rows});return {handled:true,admin,reply:freelancerListReply(rows)};}
     if(v==='1'){const rows=await availability(staff.id);return {handled:true,admin,reply:listReply(staff,rows)};}
     if(v==='2'){sessions.set(k,{step:'add-date',staff});return {handled:true,admin,reply:[`*${staff.display_name} — Add available date*`,'','What date is available?','Example: 12 Aug','','0️⃣ Cancel'].join('\n')};}
     if(v==='3'||v==='4'){const rows=await availability(staff.id);if(!rows.length)return {handled:true,admin,reply:listReply(staff,rows)};sessions.set(k,{step:v==='3'?'change-pick':'remove-pick',staff,rows});return {handled:true,admin,reply:listReply(staff,rows,v==='3'?'Choose availability to change':'Choose availability to remove')};}
