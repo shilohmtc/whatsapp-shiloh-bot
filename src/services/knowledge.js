@@ -1,13 +1,6 @@
-const { Pool } = require("pg");
+const { pool } = require("../db/pool");
 const { createEmbedding } = require("./embeddings");
 const logger = require("../lib/logger");
-
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL?.includes("render.com")
-    ? { rejectUnauthorized: false }
-    : undefined,
-});
 
 let initialized = false;
 
