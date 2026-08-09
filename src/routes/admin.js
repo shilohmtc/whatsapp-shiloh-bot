@@ -20,6 +20,7 @@ const {
   getLifecycleAppointments,
   patchLifecycleAppointment,
   runLifecycleScan,
+  runControlledLifecycleTest,
 } = require("../controllers/appointmentLifecycleController");
 const {
   getFeedback,
@@ -47,6 +48,7 @@ router.get("/appointments", getLifecycleAppointments);
 router.post("/appointments", createLifecycleAppointment);
 router.patch("/appointments/:id", patchLifecycleAppointment);
 router.post("/appointments/scan", runLifecycleScan);
+router.post("/appointments/test-lifecycle", runControlledLifecycleTest);
 
 router.post("/whatsapp/templates/test", sendTemplateTest);
 
