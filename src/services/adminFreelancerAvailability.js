@@ -84,7 +84,9 @@ async function processAdminFreelancerAvailabilityMessage(sender,text){
     const hours=parseHours(raw);if(!hours)return {handled:true,admin,reply:'Send the new hours as HH:MM-HH:MM.'};sessions.set(k,{step:'change-confirm',staff:session.staff,row:session.row,hours});return {handled:true,admin,reply:confirmReply(session.staff,session.row.exception_date,hours,'Change availability')};
   }
   if(session.step==='change-confirm'){
-    if(v==='0'){sessions.set(k,{step:'staff-menu',staff:session.staff});return {handled:true,admin,reply:staffMenu(session.staff);}if(v==='2'){sessions.set(k,{step:'change-hours',staff:session.staff,row:session.row});return {handled:true,admin,reply:'Send the new hours.'};}if(v!=='1')return {handled:true,admin,reply:'Choose 1 to confirm, 2 to change, or 0 to cancel.'};
+    if(v==='0'){sessions.set(k,{step:'staff-menu',staff:session.staff});return {handled:true,admin,reply:staffMenu(session.staff)};}
+    if(v==='2'){sessions.set(k,{step:'change-hours',staff:session.staff,row:session.row});return {handled:true,admin,reply:'Send the new hours.'};}
+    if(v!=='1')return {handled:true,admin,reply:'Choose 1 to confirm, 2 to change, or 0 to cancel.'};
     const r=await updateScheduleException({staffId:session.staff.id,exceptionId:session.row.id,date:session.row.exception_date,startsLocal:session.hours.start,endsLocal:session.hours.end,actorAdminId:admin.id});sessions.set(k,{step:'staff-menu',staff:session.staff});return {handled:true,admin,reply:r.status==='updated'?`✅ Availability updated to ${session.hours.start}–${session.hours.end}.\n\n${staffMenu(session.staff)}`:'Availability could not be updated.'};
   }
   if(session.step==='remove-confirm'){
