@@ -8,6 +8,7 @@ const { processCustomerExperienceMessage } = require("../services/customerExperi
 const { processClientIdentityMessage } = require("../services/clientIdentityOnboarding");
 const { processAdminWalkinMessage } = require("../services/adminWalkin");
 const { processAdminHelpMessage } = require("../services/adminHelp");
+const { processAdminAssistantMessage } = require("../services/adminAssistant");
 const {
   forceMatchedClientNameConfirmation,
   guardActiveNameConfirmation,
@@ -67,12 +68,22 @@ exports.receiveWebhook = async (req, res) => {
         return res.sendStatus(200);
       }
 
-      // Authenticated staff CRM commands run before client identity/onboarding so a
-      // manager's WhatsApp conversation cannot be mistaken for a client workflow.
+      // Active walk-in sessions and new walk-in commands run before the general
+      // Admin Assistant router so form answers are preserved as admin workflow data.
       const adminWalkin = await processAdminWalkinMessage(from, text);
       if (adminWalkin.handled) {
         log.info({ from: maskPhone(from), admin: adminWalkin.admin?.display_name }, "Handled authenticated admin walk-in CRM conversation");
         await sendWhatsAppMessage(from, adminWalkin.reply);
+        return res.sendStatus(200);
+      }
+
+      // Every other message from an authenticated admin remains inside Admin mode.
+      // This prevents an admin number from being mistaken for a client identity and
+      // provides role/permission-aware operational options.
+      const adminAssistant = await processAdminAssistantMessage(from, text);
+      if (adminAssistant.handled) {
+        log.info({ from: maskPhone(from), admin: adminAssistant.admin?.display_name }, "Handled authenticated WhatsApp Admin Assistant message");
+        await sendWhatsAppMessage(from, adminAssistant.reply);
         return res.sendStatus(200);
       }
 
