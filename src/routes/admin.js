@@ -19,6 +19,7 @@ const {
 const { stageClients: stageGoldieClients } = require("../controllers/goldieImportController");
 const {
   getSummary: getReconciliationSummary,
+  getRecommendations: getReconciliationRecommendations,
   getCases: getReconciliationCases,
   getCase: getReconciliationCase,
 } = require("../controllers/reconciliationController");
@@ -60,6 +61,7 @@ router.get("/sync/goldie", getGoldieSyncStatus);
 router.post("/sync/goldie", syncGoldie);
 router.post("/imports/goldie/clients", csvUpload, stageGoldieClients);
 router.get("/reconciliation/clients/summary", getReconciliationSummary);
+router.get("/reconciliation/clients/recommendations", getReconciliationRecommendations);
 router.get("/reconciliation/clients", getReconciliationCases);
 router.get("/reconciliation/clients/:id", getReconciliationCase);
 
