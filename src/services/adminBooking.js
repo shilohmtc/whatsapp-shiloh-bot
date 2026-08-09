@@ -46,7 +46,7 @@ async function prepareAdminBooking({ adminId, clientId, staffName, serviceName, 
     return { status: "location_ambiguous", reply: "I can't safely create this booking because the CRM does not currently resolve to exactly one active clinic location." };
   }
 
-  const availability = await checkAvailability({ staffName, serviceName, localDateTime });
+  const availability = await checkAvailability({ staffName, serviceName, localDateTime, locationId: location.id });
   if (availability.status !== "available") {
     return { status: availability.status, reply: formatAvailabilityReply(availability), availability };
   }
@@ -160,7 +160,7 @@ async function confirmAdminBooking(admin) {
       return { status: "clinic_hours_changed", reply: "The clinic's authoritative opening hours no longer permit this time. Nothing was written. Please check holiday/business hours and run availability again." };
     }
 
-    const schedule = await checkAuthoritativeSchedule({ db, staffId: session.staff_id, startsAt: session.starts_at, endsAt: session.ends_at });
+    const schedule = await checkAuthoritativeSchedule({ db, staffId: session.staff_id, locationId: session.location_id, startsAt: session.starts_at, endsAt: session.ends_at });
     if (schedule.partialUnavailable || (schedule.allDayUnavailable && !schedule.insideAvailableException) || !schedule.covered) {
       await db.query(`DELETE FROM admin_booking_sessions WHERE admin_id = $1`, [admin.id]);
       await db.query("COMMIT");
