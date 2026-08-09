@@ -13,6 +13,7 @@ const { applyPendingMigrations } = require("./src/services/migrations");
 const { repairJeanPierreIdentity } = require("./src/services/identityRepair");
 const { inspectCheniqueIdentity } = require("./src/services/cheniqueDiagnostic");
 const { startGoldieSyncScheduler } = require("./src/services/goldieSync");
+const { startGoogleBusinessProfileSyncScheduler } = require("./src/services/googleBusinessProfileSync");
 const { startAppointmentLifecycleScheduler } = require("./src/services/appointmentLifecycle");
 
 const app = express();
@@ -63,6 +64,7 @@ async function start() {
   server = app.listen(PORT, () => {
     logger.info({ port: PORT }, "Shiloh started");
     startGoldieSyncScheduler();
+    startGoogleBusinessProfileSyncScheduler();
     startAppointmentLifecycleScheduler();
   });
 }
