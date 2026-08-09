@@ -11,7 +11,7 @@ function menu(admin){
   if(has(admin,'appointment:view')){lines.push('*Appointments*',`${n++}️⃣ Today`,`${n++}️⃣ Tomorrow`,`${n++}️⃣ Find an available time`);}
   if(has(admin,'appointment:create')) lines.push(`${n++}️⃣ Make a booking`);
   if(has(admin,'client:lookup')||has(admin,'walkin:create')){lines.push('','*Clients*');if(has(admin,'client:lookup'))lines.push(`${n++}️⃣ Find a client`);if(has(admin,'walkin:create'))lines.push(`${n++}️⃣ Add a walk-in`);}
-  if(has(admin,'schedule:manage')){lines.push('','*More*',`${n++}️⃣ Staff schedule`);}
+  if(has(admin,'schedule:manage')){lines.push('','*More*',`${n++}️⃣ Staff schedule`,`${n++}️⃣ Holiday hours`);}
   lines.push(`${n}️⃣ Help`,'','Reply with a number or option name.');
   return lines.join('\n');
 }
