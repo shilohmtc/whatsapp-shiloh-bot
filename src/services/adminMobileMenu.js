@@ -1,6 +1,6 @@
 const { pool } = require('../db/pool');
 const { normalizePhone } = require('./clientIdentityOnboarding');
-const { processAdminHolidayHoursMessage } = require('./adminHolidayHours');
+const { processAdminHolidayHoursMessage, getHolidayReminder } = require('./adminHolidayHours');
 
 function has(admin,p){return admin?.permissions?.[p]===true;}
 async function getAdmin(sender){const r=await pool.query(`SELECT id,staff_id,display_name,role,permissions FROM staff_admin_accounts WHERE normalized_whatsapp=$1 AND active=TRUE`,[normalizePhone(sender)]);return r.rows[0]||null;}
@@ -27,7 +27,11 @@ async function processAdminMobileMenuMessage(sender,text){
   const holiday=await processAdminHolidayHoursMessage(sender,text);if(holiday.handled)return holiday;
   const admin=await getAdmin(sender);if(!admin)return {handled:false};
   const raw=String(text||'').trim();const v=raw.toLowerCase().replace(/\s+/g,' ');
-  if(['menu','admin menu','home'].includes(v)){await audit(admin.id,'admin.mobile_menu_viewed');return {handled:true,admin,reply:menu(admin)};}
+  if(['menu','admin menu','home'].includes(v)){
+    await audit(admin.id,'admin.mobile_menu_viewed');
+    const reminder=has(admin,'schedule:manage')?await getHolidayReminder():null;
+    return {handled:true,admin,reply:reminder?`${menu(admin)}\n\n${reminder}`:menu(admin)};
+  }
   if(v==='3'||v==='find an available time'||v==='find availability'){if(!has(admin,'appointment:view'))return {handled:false};await audit(admin.id,'admin.mobile_menu_selected',{option:'availability'});return {handled:true,admin,reply:availabilityGuide()};}
   if(v==='4'||v==='make a booking'||v==='new booking'){if(!has(admin,'appointment:create'))return {handled:false};await audit(admin.id,'admin.mobile_menu_selected',{option:'booking'});return {handled:true,admin,reply:bookingGuide()};}
   if(v==='5'||v==='find a client'){if(!has(admin,'client:lookup'))return {handled:false};await audit(admin.id,'admin.mobile_menu_selected',{option:'client'});return {handled:true,admin,reply:clientGuide()};}
