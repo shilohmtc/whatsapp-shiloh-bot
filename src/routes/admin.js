@@ -9,6 +9,7 @@ const {
   getProfiles,
   getProfileByPhone,
   patchProfileByPhone,
+  sendTemplateTest,
 } = require("../controllers/adminController");
 const {
   syncGoldie,
@@ -46,6 +47,8 @@ router.get("/appointments", getLifecycleAppointments);
 router.post("/appointments", createLifecycleAppointment);
 router.patch("/appointments/:id", patchLifecycleAppointment);
 router.post("/appointments/scan", runLifecycleScan);
+
+router.post("/whatsapp/templates/test", sendTemplateTest);
 
 router.get("/feedback", getFeedback);
 router.patch("/feedback/:id/resolve", resolveCustomerFeedback);
