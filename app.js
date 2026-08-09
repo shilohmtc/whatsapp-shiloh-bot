@@ -11,6 +11,7 @@ const auditReadRoutes = require("./src/routes/auditRead");
 const { checkDatabase } = require("./src/services/memory");
 const { applyPendingMigrations } = require("./src/services/migrations");
 const { repairJeanPierreIdentity } = require("./src/services/identityRepair");
+const { inspectCheniqueIdentity } = require("./src/services/cheniqueDiagnostic");
 const { startGoldieSyncScheduler } = require("./src/services/goldieSync");
 const { startAppointmentLifecycleScheduler } = require("./src/services/appointmentLifecycle");
 
@@ -52,6 +53,11 @@ async function start() {
   if (process.env.RUN_JEAN_PIERRE_IDENTITY_REPAIR === "true") {
     const repairResult = await repairJeanPierreIdentity();
     logger.info(repairResult, "Guarded Jean-Pierre identity repair completed");
+  }
+
+  if (process.env.RUN_CHENIQUE_IDENTITY_DIAGNOSTIC === "true") {
+    const diagnosticResult = await inspectCheniqueIdentity();
+    logger.info(diagnosticResult, "Read-only Chenique identity diagnostic completed");
   }
 
   server = app.listen(PORT, () => {
