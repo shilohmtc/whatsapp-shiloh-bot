@@ -1,15 +1,8 @@
-const { Pool } = require("pg");
+const { pool } = require("../db/pool");
 const { sendWhatsAppTemplate } = require("./whatsapp");
 const { getProfile } = require("./profile");
 const { createPendingExperience } = require("./customerExperience");
 const logger = require("../lib/logger");
-
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL?.includes("render.com")
-    ? { rejectUnauthorized: false }
-    : undefined,
-});
 
 const REMINDER_HOURS = Number(process.env.APPOINTMENT_REMINDER_HOURS || 24);
 const FOLLOWUP_HOURS = Number(process.env.APPOINTMENT_FOLLOWUP_HOURS || 4);
