@@ -33,19 +33,29 @@ async function audit(adminId,action,metadata){await pool.query(`INSERT INTO crm_
 async function processAdminAvailableSlotsMessage(sender,text){
   const value=String(text).trim();
   const availableMatch=value.match(/^available\s+slots\s+(.+?)\s*\|\s*(.+?)\s*\|\s*(.+)$/i);
+  const checkMatch=value.match(/^check\s+availability\s+(.+?)\s*\|\s*(.+?)\s*\|\s*(.+)$/i);
   const nextMatch=value.match(/^next\s+available\s+(.+?)\s*\|\s*(.+?)(?:\s*\|\s*(.+))?$/i);
-  if(!availableMatch&&!nextMatch) return {handled:false};
+  if(!availableMatch&&!checkMatch&&!nextMatch) return {handled:false};
   const admin=await getAdmin(sender); if(!admin) return {handled:false};
-  const m=availableMatch||nextMatch;
+  const m=availableMatch||checkMatch||nextMatch;
   const resources=await resolveResources(admin,m[1],m[2]); if(resources.reply) return {handled:true,admin,reply:resources.reply};
   const {staff,service}=resources;
 
-  if(availableMatch){
-    const date=parseDate(m[3]); if(!date) return {handled:true,admin,reply:'Use: Available slots STAFF | SERVICE | DD/MM/YYYY'};
+  if(availableMatch||checkMatch){
+    const dateTime=m[3];
+    const date=parseDate(dateTime) || parseDate(dateTime.split(/\s+/)[0]);
+    if(!date) return {handled:true,admin,reply:'Use: Check availability STAFF | SERVICE | DD/MM/YYYY HH:MM'};
     const result=await listAvailableSlots({staffId:staff.id,serviceId:service.id,date,intervalMinutes:15});
-    await audit(admin.id,'admin.available_slots_viewed',{staffId:staff.id,serviceId:service.id,date,status:result.status,slotCount:result.slots.length});
+    await audit(admin.id,'admin.available_slots_viewed',{staffId:staff.id,serviceId:service.id,date,status:result.status,slotCount:result.slots.length,command:checkMatch?'check availability':'available slots'});
     if(result.status==='not_eligible') return {handled:true,admin,reply:`${staff.display_name} is not eligible for ${service.name}.`};
     if(result.status==='invalid_duration') return {handled:true,admin,reply:`${service.name} does not have a usable duration.`};
+    const requestedTime = dateTime.match(/\b(\d{1,2}):(\d{2})\b/);
+    if(requestedTime){
+      const hh=Number(requestedTime[1]), mm=Number(requestedTime[2]);
+      const matching=result.slots.find(s=>{const d=new Date(s.starts_at); const local=new Intl.DateTimeFormat('en-ZA',{timeZone:'Africa/Johannesburg',hour:'2-digit',minute:'2-digit',hour12:false}).format(d).split(':').map(Number); return local[0]===hh&&local[1]===mm;});
+      if(matching) return {handled:true,admin,reply:`Availability confirmed — ${staff.display_name} — ${service.name}\nDate: ${date}\nTime: ${fmtTime(matching.starts_at)}–${fmtTime(matching.ends_at)}\n\nThis is an authoritative bookable slot.`};
+      return {handled:true,admin,reply:`No authoritative bookable slot was found for ${staff.display_name} — ${service.name} at ${hh.toString().padStart(2,'0')}:${mm.toString().padStart(2,'0')} on ${date}.`};
+    }
     if(!result.slots.length) return {handled:true,admin,reply:`Available slots — ${staff.display_name} — ${service.name}\nDate: ${date}\n\nNo authoritative bookable slots were found. Working hours, schedule exceptions, existing appointments and calendar blocks were all applied.`};
     const lines=[`Available slots — ${staff.display_name} — ${service.name}`,`Date: ${date}`,`Service window: ${result.totalMinutes} minutes`,''];
     for(const s of result.slots.slice(0,5)) lines.push(`• ${fmtTime(s.starts_at)}–${fmtTime(s.ends_at)}`);
