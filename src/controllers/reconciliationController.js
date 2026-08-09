@@ -4,6 +4,7 @@ const {
   getReconciliationCase,
 } = require("../services/reconciliationReport");
 const { getRecommendationReport } = require("../services/reconciliationRecommendations");
+const { canonicalizeClients } = require("../services/clientCanonicalization");
 
 exports.getSummary = async (req, res) => {
   try {
@@ -22,6 +23,29 @@ exports.getRecommendations = async (req, res) => {
   } catch (error) {
     (req.log || console).error?.({ err: error }, "Failed to build reconciliation recommendations");
     return res.status(500).json({ error: "Could not build reconciliation recommendations", requestId: req.id });
+  }
+};
+
+exports.canonicalizeClients = async (req, res) => {
+  try {
+    const result = await canonicalizeClients({
+      batchId: req.body?.batchId,
+      mode: req.body?.mode || "dry_run",
+      confirmation: req.body?.confirmation,
+    });
+    return res.status(200).json({ result, requestId: req.id });
+  } catch (error) {
+    (req.log || console).error?.({ err: error }, "Client canonicalization failed");
+    if (error.code === "CONFIRMATION_REQUIRED") {
+      return res.status(409).json({ error: error.message, requestId: req.id });
+    }
+    if (error.code === "PLAN_BLOCKED") {
+      return res.status(409).json({ error: error.message, plan: error.plan, requestId: req.id });
+    }
+    if (/batchId is required|mode must be/.test(error.message || "")) {
+      return res.status(400).json({ error: error.message, requestId: req.id });
+    }
+    return res.status(500).json({ error: "Could not canonicalize clients", requestId: req.id });
   }
 };
 
