@@ -3,6 +3,7 @@ const { normalizePhone } = require('./clientIdentityOnboarding');
 const { processAdminHolidayHoursMessage, getHolidayReminder } = require('./adminHolidayHours');
 
 function has(admin,p){return admin?.permissions?.[p]===true;}
+function isGreeting(text=''){return /^(hi|hello|hey|howzit|hiya|good morning|good afternoon|good evening)[!. ]*$/i.test(String(text).trim());}
 async function getAdmin(sender){const r=await pool.query(`SELECT id,staff_id,display_name,role,permissions FROM staff_admin_accounts WHERE normalized_whatsapp=$1 AND active=TRUE`,[normalizePhone(sender)]);return r.rows[0]||null;}
 async function audit(id,action,metadata={}){await pool.query(`INSERT INTO crm_audit_events (actor_admin_id,action,entity_type,entity_id,metadata) VALUES ($1,$2,'admin_assistant',NULL,$3::jsonb)`,[id,action,JSON.stringify(metadata)]);}
 
@@ -27,8 +28,8 @@ async function processAdminMobileMenuMessage(sender,text){
   const holiday=await processAdminHolidayHoursMessage(sender,text);if(holiday.handled)return holiday;
   const admin=await getAdmin(sender);if(!admin)return {handled:false};
   const raw=String(text||'').trim();const v=raw.toLowerCase().replace(/\s+/g,' ');
-  if(['menu','admin menu','home'].includes(v)){
-    await audit(admin.id,'admin.mobile_menu_viewed');
+  if(['menu','admin menu','home'].includes(v)||isGreeting(raw)){
+    await audit(admin.id,'admin.mobile_menu_viewed',{entry:isGreeting(raw)?'greeting':'menu'});
     const reminder=has(admin,'schedule:manage')?await getHolidayReminder():null;
     return {handled:true,admin,reply:reminder?`${menu(admin)}\n\n${reminder}`:menu(admin)};
   }
