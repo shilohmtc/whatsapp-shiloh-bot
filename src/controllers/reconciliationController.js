@@ -3,6 +3,7 @@ const {
   listReconciliationCases,
   getReconciliationCase,
 } = require("../services/reconciliationReport");
+const { getRecommendationReport } = require("../services/reconciliationRecommendations");
 
 exports.getSummary = async (req, res) => {
   try {
@@ -11,6 +12,16 @@ exports.getSummary = async (req, res) => {
   } catch (error) {
     (req.log || console).error?.({ err: error }, "Failed to build reconciliation summary");
     return res.status(500).json({ error: "Could not build reconciliation summary", requestId: req.id });
+  }
+};
+
+exports.getRecommendations = async (req, res) => {
+  try {
+    const report = await getRecommendationReport(req.query.batchId || null);
+    return res.status(200).json({ report, requestId: req.id });
+  } catch (error) {
+    (req.log || console).error?.({ err: error }, "Failed to build reconciliation recommendations");
+    return res.status(500).json({ error: "Could not build reconciliation recommendations", requestId: req.id });
   }
 };
 
