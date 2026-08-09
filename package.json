@@ -8,7 +8,7 @@
     "node": "24.14.1"
   },
   "scripts": {
-    "start": "node app.js",
+    "start": "node scripts/report-unresolved-appointment-clients.js && node app.js",
     "dev": "nodemon app.js",
     "db:migrate": "node scripts/migrate.js"
   },
