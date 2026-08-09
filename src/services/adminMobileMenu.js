@@ -24,15 +24,16 @@ function menu(admin){
 }
 function clientGuide(){return ['*Find a client*','','Send the client name or mobile number after “Find client”.','','Example:','Find client Chenique'].join('\n');}
 function moreMenu(){return ['*More — Schedule management*','','1️⃣ Staff hours','2️⃣ Leave / special availability','3️⃣ Freelancer availability','4️⃣ Holiday hours','','0️⃣ Back','','Reply with a number.'].join('\n');}
+function returnedToMore(reply=''){return /\*More — Schedule management\*/i.test(String(reply));}
 
 async function processAdminMobileMenuMessage(sender,text){
   const k=senderKey(sender);
   const admin=await getAdmin(sender);if(!admin)return {handled:false};
   const raw=String(text||'').trim();const v=raw.toLowerCase().replace(/\s+/g,' ');
 
-  // An active More-session owns numeric options 0-4. Handle it before the
-  // booking/staff/freelancer flows so option 3 cannot be mistaken for the
-  // top-level "Find an available time" command.
+  // The More menu owns numeric options 0-4 while active. Keep this parent
+  // marker alive when child schedule flows return to More so the next `0`
+  // is handled by this menu rather than falling through to another flow.
   const more=moreSessions.get(k);
   if(more?.step==='menu'){
     if(v==='0'){moreSessions.delete(k);return {handled:true,admin,reply:menu(admin)};}
@@ -44,9 +45,18 @@ async function processAdminMobileMenuMessage(sender,text){
   }
 
   const bookingFlow=await processAdminMobileBookingFlowMessage(sender,text);if(bookingFlow.handled)return bookingFlow;
-  const staffFlow=await processAdminStaffScheduleFlowMessage(sender,text);if(staffFlow.handled){if(staffFlow.returnToMore){moreSessions.delete(k);return {handled:true,admin:staffFlow.admin,reply:moreMenu()};}return staffFlow;}
-  const holiday=await processAdminHolidayHoursMessage(sender,text);if(holiday.handled)return holiday;
-  const freelancer=await processAdminFreelancerAvailabilityMessage(sender,text);if(freelancer.handled)return freelancer;
+  const staffFlow=await processAdminStaffScheduleFlowMessage(sender,text);if(staffFlow.handled){
+    if(staffFlow.returnToMore || returnedToMore(staffFlow.reply)){moreSessions.set(k,{step:'menu'});return {handled:true,admin:staffFlow.admin,reply:moreMenu()};}
+    return staffFlow;
+  }
+  const holiday=await processAdminHolidayHoursMessage(sender,text);if(holiday.handled){
+    if(returnedToMore(holiday.reply))moreSessions.set(k,{step:'menu'});
+    return holiday;
+  }
+  const freelancer=await processAdminFreelancerAvailabilityMessage(sender,text);if(freelancer.handled){
+    if(returnedToMore(freelancer.reply))moreSessions.set(k,{step:'menu'});
+    return freelancer;
+  }
 
   if(['menu','admin menu','home'].includes(v)||isGreeting(raw)){
     moreSessions.delete(k);
