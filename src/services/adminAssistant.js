@@ -3,6 +3,7 @@ const { normalizePhone } = require("./clientIdentityOnboarding");
 const { findClients, formatClientLookupReply } = require("./adminClientLookup");
 const { checkAvailability, formatAvailabilityReply } = require("./adminAvailability");
 const { prepareAdminBooking, confirmAdminBooking, cancelPendingBooking } = require("./adminBooking");
+const { resolveStaff, getWorkingHours, replaceWorkingHoursDay, addScheduleException, removeScheduleException, formatWorkingHours } = require("./staffScheduleService");
 
 function normalizeText(text = "") { return String(text).trim().toLowerCase().replace(/\s+/g, " "); }
 function isGreeting(text = "") { return /^(hi|hello|hey|howzit|hiya|good morning|good afternoon|good evening)[!. ]*$/i.test(String(text).trim()); }
@@ -21,6 +22,7 @@ function menu(admin) {
   const lines = [`Welcome back, ${admin.display_name} 👋`, "Admin mode is active.", "", "You can use:"];
   if (hasPermission(admin, "appointment:view")) lines.push("• Today — view today's appointments", "• Tomorrow — view tomorrow's appointments", "• Check availability STAFF | SERVICE | DD/MM/YYYY HH:MM — conflict check");
   if (hasPermission(admin, "appointment:create")) lines.push("• Book client CRM_ID | STAFF | SERVICE | DD/MM/YYYY HH:MM — prepare a guarded booking");
+  if (hasPermission(admin, "schedule:manage")) lines.push("• Working hours STAFF — view recurring hours/exceptions", "• Set working hours STAFF | DAY | HH:MM-HH:MM — replace one day", "• Add schedule exception STAFF | YYYY-MM-DD | TYPE | RANGE | REASON");
   if (hasPermission(admin, "walkin:create")) lines.push("• Add walk-in — register a walk-in client");
   if (hasPermission(admin, "client:lookup")) lines.push("• Find client [name/number] — look up a canonical CRM client");
   lines.push("• Help or Menu — show admin options", "", "Production bookings are only written after explicit CONFIRM BOOKING confirmation and a final conflict re-check.");
@@ -62,6 +64,76 @@ function extractBookingRequest(text = "") {
   return match ? { clientId: match[1], staffName: match[2].trim(), serviceName: match[3].trim(), localDateTime: match[4].trim() } : null;
 }
 
+function parseWindows(value) {
+  if (/^(closed|none)$/i.test(String(value).trim())) return [];
+  const windows = [];
+  for (const piece of String(value).split(',')) {
+    const match = piece.trim().match(/^([0-2]\d:[0-5]\d)\s*-\s*([0-2]\d:[0-5]\d)$/);
+    if (!match) return null;
+    windows.push({ startsLocal: match[1], endsLocal: match[2] });
+  }
+  return windows;
+}
+
+async function resolvedStaffOrReply(value) {
+  const resolved = await resolveStaff(value);
+  if (resolved.exact) return { staff: resolved.exact };
+  if (!resolved.matches.length) return { reply: `I couldn't find an active staff member matching “${value}”.` };
+  return { reply: `I found more than one staff match. Please use the exact name:\n${resolved.matches.map((s)=>`• ${s.display_name} (#${s.id})`).join('\n')}` };
+}
+
+async function handleScheduleCommand(admin, text) {
+  const value = String(text).trim();
+  let match = value.match(/^working\s+hours\s+(.+)$/i);
+  if (match) {
+    if (!hasPermission(admin, "schedule:manage")) return { handled:true, reply:"Your admin account does not currently have permission to manage staff schedules." };
+    const resolved = await resolvedStaffOrReply(match[1].trim()); if (resolved.reply) return { handled:true, reply:resolved.reply };
+    const data = await getWorkingHours(resolved.staff.id);
+    return { handled:true, reply:formatWorkingHours(data) };
+  }
+
+  match = value.match(/^set\s+working\s+hours\s+(.+?)\s*\|\s*([^|]+)\s*\|\s*(.+)$/i);
+  if (match) {
+    if (!hasPermission(admin, "schedule:manage")) return { handled:true, reply:"Your admin account does not currently have permission to manage staff schedules." };
+    const windows = parseWindows(match[3]);
+    if (windows === null) return { handled:true, reply:"Use HH:MM-HH:MM. Multiple windows may be comma-separated. Use CLOSED to clear the day." };
+    const resolved = await resolvedStaffOrReply(match[1].trim()); if (resolved.reply) return { handled:true, reply:resolved.reply };
+    const result = await replaceWorkingHoursDay({ staffId:resolved.staff.id, dayOfWeek:match[2].trim(), windows, actorAdminId:admin.id });
+    if (result.status !== 'updated') return { handled:true, reply:result.reply || 'Working-hours update rejected.' };
+    const data = await getWorkingHours(resolved.staff.id);
+    return { handled:true, reply:`Working hours updated for ${resolved.staff.display_name}.\n\n${formatWorkingHours(data)}` };
+  }
+
+  match = value.match(/^add\s+schedule\s+exception\s+(.+?)\s*\|\s*(\d{4}-\d{2}-\d{2})\s*\|\s*(available|unavailable)\s*\|\s*([^|]+?)(?:\s*\|\s*(.+))?$/i);
+  if (match) {
+    if (!hasPermission(admin, "schedule:manage")) return { handled:true, reply:"Your admin account does not currently have permission to manage staff schedules." };
+    const resolved = await resolvedStaffOrReply(match[1].trim()); if (resolved.reply) return { handled:true, reply:resolved.reply };
+    const range = match[4].trim();
+    let startsLocal=null, endsLocal=null;
+    if (!/^all[- ]?day$/i.test(range)) {
+      const rangeMatch = range.match(/^([0-2]\d:[0-5]\d)\s*-\s*([0-2]\d:[0-5]\d)$/);
+      if (!rangeMatch) return { handled:true, reply:"Exception range must be ALL-DAY or HH:MM-HH:MM." };
+      startsLocal=rangeMatch[1]; endsLocal=rangeMatch[2];
+    }
+    const result = await addScheduleException({ staffId:resolved.staff.id, date:match[2], type:match[3].toLowerCase(), startsLocal, endsLocal, reason:match[5] || null, actorAdminId:admin.id });
+    if (result.status !== 'created') return { handled:true, reply:result.reply || 'Schedule exception rejected.' };
+    return { handled:true, reply:`Schedule exception #${result.exception.id} added for ${resolved.staff.display_name} on ${match[2]} (${match[3].toLowerCase()}, ${range}).` };
+  }
+
+  match = value.match(/^remove\s+schedule\s+exception\s+(.+?)\s*\|\s*(\d+)$/i);
+  if (match) {
+    if (!hasPermission(admin, "schedule:manage")) return { handled:true, reply:"Your admin account does not currently have permission to manage staff schedules." };
+    const resolved = await resolvedStaffOrReply(match[1].trim()); if (resolved.reply) return { handled:true, reply:resolved.reply };
+    const result = await removeScheduleException({ staffId:resolved.staff.id, exceptionId:match[2], actorAdminId:admin.id });
+    return { handled:true, reply:result.status === 'removed' ? `Schedule exception #${match[2]} removed for ${resolved.staff.display_name}.` : `Schedule exception #${match[2]} was not found for ${resolved.staff.display_name}.` };
+  }
+
+  if (/^(working\s+hours|set\s+working\s+hours|add\s+schedule\s+exception|remove\s+schedule\s+exception)\b/i.test(value)) {
+    return { handled:true, reply:["Schedule commands:","• Working hours STAFF","• Set working hours STAFF | DAY | HH:MM-HH:MM","• Set working hours STAFF | DAY | CLOSED","• Add schedule exception STAFF | YYYY-MM-DD | unavailable | ALL-DAY | REASON","• Add schedule exception STAFF | YYYY-MM-DD | available | HH:MM-HH:MM | REASON","• Remove schedule exception STAFF | EXCEPTION_ID"].join('\n') };
+  }
+  return { handled:false };
+}
+
 async function processAdminAssistantMessage(sender, text) {
   const admin = await getAdmin(sender);
   if (!admin) return { handled: false, isAdmin: false };
@@ -79,6 +151,9 @@ async function processAdminAssistantMessage(sender, text) {
     return { handled: true, isAdmin: true, admin, reply: cancelled ? "Pending admin booking cancelled. No appointment was created." : "There is no pending admin booking to cancel." };
   }
 
+  const scheduleCommand = await handleScheduleCommand(admin, text);
+  if (scheduleCommand.handled) return { handled:true, isAdmin:true, admin, reply:scheduleCommand.reply };
+
   const bookingRequest = extractBookingRequest(text);
   if (bookingRequest) {
     if (!hasPermission(admin, "appointment:create")) return { handled: true, isAdmin: true, admin, reply: "Your admin account does not currently have permission to create appointments." };
@@ -87,7 +162,7 @@ async function processAdminAssistantMessage(sender, text) {
     return { handled: true, isAdmin: true, admin, reply: result.reply };
   }
 
-  if (/^book\s+client\b/i.test(String(text).trim())) return { handled: true, isAdmin: true, admin, reply: "Use: Book client CRM_ID | STAFF | SERVICE | DD/MM/YYYY HH:MM\nExample: Book client 123 | Christel | Swedish Massage | 10/08/2026 14:30" };
+  if (/^book\s+client\b/i.test(String(text).trim())) return { handled: true, isAdmin: true, admin, reply: "Use: Book client CRM_ID | STAFF | SERVICE | DD/MM/YYYY HH:MM\nExample: Book client 123 | Christel | Full Body Swedish | 10/08/2026 14:30" };
 
   if (isGreeting(text)) { await audit(admin.id, "admin.whatsapp_greeting"); return { handled: true, isAdmin: true, admin, reply: menu(admin) }; }
 
@@ -98,7 +173,7 @@ async function processAdminAssistantMessage(sender, text) {
     await audit(admin.id, "admin.availability_checked", { status: result.status, staffId: result.staff?.id || null, serviceId: result.service?.id || null, startsAt: result.startsAt || null, endsAt: result.endsAt || null, conflictCount: result.conflicts?.length || 0 });
     return { handled: true, isAdmin: true, admin, reply: formatAvailabilityReply(result) };
   }
-  if (/^(?:check\s+)?availability\b/i.test(String(text).trim())) return { handled: true, isAdmin: true, admin, reply: "Use: Check availability STAFF | SERVICE | DD/MM/YYYY HH:MM\nExample: Check availability Christel | Swedish Massage | 10/08/2026 14:30" };
+  if (/^(?:check\s+)?availability\b/i.test(String(text).trim())) return { handled: true, isAdmin: true, admin, reply: "Use: Check availability STAFF | SERVICE | DD/MM/YYYY HH:MM\nExample: Check availability Christel | Full Body Swedish | 10/08/2026 14:30" };
 
   const clientLookup = extractClientLookup(text);
   if (clientLookup !== null) {
