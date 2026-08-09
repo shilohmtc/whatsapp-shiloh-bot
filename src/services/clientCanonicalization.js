@@ -315,12 +315,7 @@ async function canonicalizeClients({ batchId, mode = "dry_run", confirmation }) 
   }
 
   const eligibleGroups = plan.groups.filter((group) => group.eligibility === "eligible_create_canonical");
-  if (plan.groups.some((group) => group.eligibility === "blocked")) {
-    const error = new Error("Execution blocked because one or more high-confidence groups have a canonical identity collision or inconsistent state");
-    error.code = "PLAN_BLOCKED";
-    error.plan = plan;
-    throw error;
-  }
+  const blockedGroups = plan.groups.filter((group) => group.eligibility === "blocked");
   if (plan.approvedExistingMatch.eligibility === "blocked") {
     const error = new Error("Execution blocked because the approved Chenique match no longer satisfies guardrails");
     error.code = "PLAN_BLOCKED";
@@ -344,6 +339,13 @@ async function canonicalizeClients({ batchId, mode = "dry_run", confirmation }) 
       createdCanonicalClients: created.length,
       created,
       approvedExistingMatch: chenique,
+      skippedBlockedGroups: blockedGroups.map((group) => ({
+        normalizedPhone: group.normalizedPhone,
+        goldieClientIds: group.goldieClientIds,
+        blockReason: group.blockReason,
+        canonicalPhoneOwners: group.canonicalPhoneOwners,
+        canonicalEmailOwner: group.canonicalEmailOwner,
+      })),
       skippedAlreadyAppliedGroups: plan.groups.filter((group) => group.eligibility === "already_applied").length,
     };
   } catch (error) {
