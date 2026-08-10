@@ -1,5 +1,10 @@
 const { pool } = require("../db/pool");
 const { normalizePhone } = require("./clientIdentityOnboarding");
+const {
+  calendarEnabled,
+  findBookingEventByAppointmentId,
+  cancelBookingEvent,
+} = require("./googleBookingCalendar");
 
 let initialized = false;
 
@@ -107,6 +112,59 @@ async function saveIntent(phone, appointmentId, reason, status) {
   return result.rows[0];
 }
 
+async function syncCancelledAppointmentToGoogleCalendar(appointmentId) {
+  if (!calendarEnabled()) return { enabled: false, status: "disabled" };
+
+  try {
+    const mapping = await pool.query(
+      `SELECT event_id
+         FROM appointment_calendar_events
+        WHERE appointment_id=$1 AND provider='google_calendar'
+        LIMIT 1`,
+      [appointmentId]
+    );
+
+    let eventId = mapping.rows[0]?.event_id || null;
+    if (!eventId) {
+      const discovered = await findBookingEventByAppointmentId(appointmentId);
+      eventId = discovered?.id || null;
+    }
+
+    if (!eventId) {
+      return { enabled: true, status: "no_event" };
+    }
+
+    await cancelBookingEvent(eventId);
+    await pool.query(
+      `INSERT INTO appointment_calendar_events
+         (appointment_id, provider, calendar_id, event_id, sync_status, updated_at)
+       VALUES ($1, 'google_calendar', $2, $3, 'cancelled', NOW())
+       ON CONFLICT (appointment_id, provider) DO UPDATE SET
+         calendar_id=EXCLUDED.calendar_id,
+         event_id=EXCLUDED.event_id,
+         sync_status='cancelled',
+         last_error=NULL,
+         updated_at=NOW()`,
+      [appointmentId, process.env.GOOGLE_BOOKING_CALENDAR_ID, eventId]
+    );
+    return { enabled: true, status: "cancelled", eventId };
+  } catch (error) {
+    try {
+      await pool.query(
+        `UPDATE appointment_calendar_events
+            SET sync_status='error', last_error=$2, updated_at=NOW()
+          WHERE appointment_id=$1 AND provider='google_calendar'`,
+        [appointmentId, String(error.message || error).slice(0, 2000)]
+      );
+    } catch (_) {}
+    console.error("CRM-3 Google Calendar cancellation sync failed", {
+      appointmentId,
+      error: error.message,
+    });
+    return { enabled: true, status: "error", error: error.message };
+  }
+}
+
 async function cancelAppointment({ sender, adminId, appointmentId, reason }) {
   const client = await pool.connect();
   try {
@@ -166,9 +224,10 @@ async function cancelAppointment({ sender, adminId, appointmentId, reason }) {
     );
 
     await client.query("COMMIT");
-    return { status: "cancelled", appointment: updated.rows[0] };
+    const calendarSync = await syncCancelledAppointmentToGoogleCalendar(appointmentId);
+    return { status: "cancelled", appointment: updated.rows[0], calendarSync };
   } catch (error) {
-    await client.query("ROLLBACK");
+    try { await client.query("ROLLBACK"); } catch (_) {}
     throw error;
   } finally {
     client.release();
@@ -230,7 +289,12 @@ async function processAdminAppointmentCancellationMessage(sender, text) {
     const result = await cancelAppointment({ sender, adminId: admin.id, appointmentId: appointment.id, reason: intent.reason });
     await clearIntent(phone);
     if (result.status === "cancelled") {
-      return { handled: true, reply: `✅ Appointment #${appointment.id} cancelled.\nReason: ${intent.reason}` };
+      const calendarLine = result.calendarSync?.enabled
+        ? (result.calendarSync.status === "cancelled" || result.calendarSync.status === "no_event"
+          ? "\nShared Google Calendar: synced."
+          : "\n⚠️ CRM cancellation succeeded, but Google Calendar sync needs attention.")
+        : "";
+      return { handled: true, reply: `✅ Appointment #${appointment.id} cancelled.\nReason: ${intent.reason}${calendarLine}` };
     }
     if (result.status === "already_cancelled") return { handled: true, reply: `Appointment #${appointment.id} was already cancelled.` };
     if (result.status === "conflict") return { handled: true, reply: `Appointment #${appointment.id} changed before cancellation. No cancellation was written.` };
