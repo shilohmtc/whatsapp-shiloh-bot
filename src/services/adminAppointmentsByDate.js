@@ -7,7 +7,7 @@ function has(admin,p){ return admin?.permissions?.[p] === true; }
 
 async function getAdmin(sender){
   const r = await pool.query(
-    `SELECT id, display_name, permissions
+    `SELECT id, staff_id, display_name, role, permissions, service_scope
        FROM staff_admin_accounts
       WHERE normalized_whatsapp=$1 AND active=TRUE`,
     [key(sender)]
@@ -31,7 +31,28 @@ function fmtTime(v){
   return new Intl.DateTimeFormat('en-ZA',{timeZone:'Africa/Johannesburg',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(v));
 }
 
-async function rowsForDate(date){
+function scopeClause(){
+  return `(
+    $2::text = 'all_services'
+    OR (
+      $3::bigint IS NOT NULL
+      AND EXISTS (
+        SELECT 1 FROM appointment_staff ast_scope
+         WHERE ast_scope.appointment_id = a.id AND ast_scope.staff_id = $3
+      )
+      AND EXISTS (
+        SELECT 1
+          FROM appointment_services aps_scope
+          JOIN staff_services ss_scope
+            ON ss_scope.service_id = aps_scope.service_id
+           AND ss_scope.staff_id = $3
+         WHERE aps_scope.appointment_id = a.id
+      )
+    )
+  )`;
+}
+
+async function rowsForDate(date, admin){
   const r = await pool.query(`
     WITH bounds AS (
       SELECT ($1::date::timestamp AT TIME ZONE 'Africa/Johannesburg') AS start_utc,
@@ -49,12 +70,13 @@ async function rowsForDate(date){
      WHERE a.starts_at >= b.start_utc
        AND a.starts_at < b.end_utc
        AND a.status <> 'cancelled'
+       AND ${scopeClause()}
      GROUP BY a.id,a.starts_at,a.ends_at,a.status,c.display_name,a.source_client_name
-     ORDER BY a.starts_at,a.id`, [date]);
+     ORDER BY a.starts_at,a.id`, [date, admin.service_scope, admin.staff_id]);
   return r.rows;
 }
 
-async function upcomingRows(){
+async function upcomingRows(admin){
   const r = await pool.query(`
     SELECT a.id, a.starts_at, a.ends_at, a.status,
            COALESCE(c.display_name, a.source_client_name, 'Unknown client') AS client_name,
@@ -66,14 +88,26 @@ async function upcomingRows(){
       LEFT JOIN appointment_staff ast ON ast.appointment_id=a.id
      WHERE a.starts_at >= NOW()
        AND a.status <> 'cancelled'
+       AND (
+         $1::text = 'all_services'
+         OR (
+           $2::bigint IS NOT NULL
+           AND EXISTS (SELECT 1 FROM appointment_staff ast_scope WHERE ast_scope.appointment_id=a.id AND ast_scope.staff_id=$2)
+           AND EXISTS (
+             SELECT 1 FROM appointment_services aps_scope
+             JOIN staff_services ss_scope ON ss_scope.service_id=aps_scope.service_id AND ss_scope.staff_id=$2
+             WHERE aps_scope.appointment_id=a.id
+           )
+         )
+       )
      GROUP BY a.id,a.starts_at,a.ends_at,a.status,c.display_name,a.source_client_name
      ORDER BY a.starts_at,a.id
-     LIMIT 30`);
+     LIMIT 30`, [admin.service_scope, admin.staff_id]);
   return r.rows;
 }
 
 function renderRows(title, rows){
-  if(!rows.length) return `${title}: there are no active appointments in the CRM.`;
+  if(!rows.length) return `${title}: there are no active appointments in your authorized service scope.`;
   const lines=[`*${title} — ${rows.length} appointment${rows.length===1?'':'s'}*`,''];
   for(const row of rows){
     lines.push(`${fmtDate(row.starts_at)} · ${fmtTime(row.starts_at)}–${fmtTime(row.ends_at)} · ${row.client_name}${row.services?` — ${row.services}`:''}${row.staff?` — ${row.staff}`:''} · #${row.id}`);
@@ -92,13 +126,13 @@ async function processAdminAppointmentsByDateMessage(sender,text){
   if(!has(admin,'appointment:view')) return {handled:true,admin,reply:'Your admin account does not currently have permission to view appointments.'};
 
   if(upcoming){
-    const rows=await upcomingRows();
+    const rows=await upcomingRows(admin);
     return {handled:true,admin,reply:renderRows('Upcoming appointments',rows)};
   }
 
   const date=parseDate(dated[1]);
   if(!date) return {handled:true,admin,reply:'Use: Appointments DD/MM/YYYY\nExample: Appointments 17/08/2026'};
-  const rows=await rowsForDate(date);
+  const rows=await rowsForDate(date, admin);
   const label=new Intl.DateTimeFormat('en-ZA',{timeZone:'Africa/Johannesburg',weekday:'long',day:'2-digit',month:'long',year:'numeric'}).format(new Date(`${date}T12:00:00+02:00`));
   return {handled:true,admin,reply:renderRows(label,rows)};
 }
