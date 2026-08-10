@@ -21,6 +21,7 @@ const { runStartupTestCommand } = require("./src/services/startupTestCommand");
 const { runGoldieFutureImportFromEnv } = require("./src/services/goldieFutureImport");
 const { runFromEnv: runGoogleCalendarReconciliationFromEnv } = require("./src/services/googleCalendarReconciliation");
 const { runGoogleCalendarAccessSetupFromEnv } = require("./src/services/googleCalendarAccessSetup");
+const { repairNatashaStaffAssignment } = require("./src/services/natashaStaffRepair");
 
 const app = express();
 app.disable("x-powered-by");
@@ -35,6 +36,7 @@ async function start(){
  if(process.env.RUN_DB_MIGRATIONS_ON_STARTUP==="true"){const migrationResult=await applyPendingMigrations();logger.info({applied:migrationResult.applied},"Explicit startup database migrations applied");}
  if(process.env.RUN_JEAN_PIERRE_IDENTITY_REPAIR==="true"){const repairResult=await repairJeanPierreIdentity();logger.info(repairResult,"Guarded Jean-Pierre identity repair completed");}
  if(process.env.RUN_CHENIQUE_IDENTITY_DIAGNOSTIC==="true"){const diagnosticResult=await inspectCheniqueIdentity();logger.info(diagnosticResult,"Read-only Chenique identity diagnostic completed");}
+ if(process.env.RUN_NATASHA_STAFF_REPAIR==="true"){const repairResult=await repairNatashaStaffAssignment();logger.info(repairResult,"Guarded Natasha practitioner repair completed");}
  server=app.listen(PORT,()=>{logger.info({port:PORT},"Shiloh started");startGoldieSyncScheduler();startGoogleBusinessProfileSyncScheduler();startAppointmentLifecycleScheduler();setImmediate(()=>{
   runStartupTestCommand(startupTestRequest).catch(error=>logger.error({err:error},"Deploy-triggered Shiloh test command did not complete"));
   runGoldieFutureImportFromEnv().catch(error=>logger.error({err:error},"Goldie future booking import did not complete"));
