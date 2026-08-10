@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const zlib = require('zlib');
 const { pool } = require('../db/pool');
 const { checkCalendarAvailability, createBookingEvent } = require('./googleBookingCalendar');
 const logger = require('../lib/logger');
@@ -11,7 +12,7 @@ function parseLocal(date,time){const m=String(date).match(/^(\d{2})\/(\d{2})\/(\
 function classify(row){if(!row.Services||norm(row.Services)==='personal')return 'calendar_block';return 'appointment';}
 function statusFor(v){return norm(v)==='confirmed'?'confirmed':'scheduled';}
 
-function decodePayload(){const encoded=process.env.GOLDIE_FUTURE_IMPORT_PAYLOAD_B64;if(!encoded)return null;return JSON.parse(Buffer.from(encoded,'base64').toString('utf8'));}
+function decodePayload(){const encoded=process.env.GOLDIE_FUTURE_IMPORT_PAYLOAD_B64;if(!encoded)return null;const bytes=Buffer.from(encoded,'base64');const raw=bytes[0]===0x1f&&bytes[1]===0x8b?zlib.gunzipSync(bytes):bytes;return JSON.parse(raw.toString('utf8'));}
 
 async function loadReferenceData(db){
  const [staffR,serviceR,locationR]=await Promise.all([
@@ -68,7 +69,7 @@ async function runGoldieFutureImport({mode='dry-run'}={}){
    summary.createdAppointments++;
    try{if(staffResolved.length===1){const cal=await checkCalendarAvailability({startsAt:starts,endsAt:ends,staffName:staffResolved[0].display_name});if(cal.enabled&&cal.available){const ev=await createBookingEvent({appointmentId,clientName:row.Clients,serviceName:services.map(s=>s.name).join(' + '),staffName:staffResolved[0].display_name,locationName:ref.location.name,startsAt:starts,endsAt:ends,source:'goldie_import'});if(ev.enabled&&ev.event){await db.query(`INSERT INTO appointment_calendar_events(appointment_id,provider,calendar_id,event_id,sync_status,updated_at) VALUES($1,'google_calendar',$2,$3,'synced',NOW()) ON CONFLICT(appointment_id,provider) DO UPDATE SET calendar_id=EXCLUDED.calendar_id,event_id=EXCLUDED.event_id,sync_status='synced',last_error=NULL,updated_at=NOW()`,[appointmentId,process.env.GOOGLE_BOOKING_CALENDAR_ID,ev.event.id]);summary.calendarSynced++;}}else if(cal.enabled&&!cal.available)summary.calendarExistingConflict++;}else summary.calendarSkippedMultiStaff++;}catch(e){issues.push({externalKey:ext,type:'google_calendar_sync_failed'});}
   }
-  if(commit&&batchId)await db.query(`UPDATE import_batches SET status=$2,completed_at=NOW(),metadata=metadata||$3::jsonb WHERE id=$1`,[batchId,summary.unresolved?'completed':'completed',JSON.stringify({summary,issues})]);
+  if(commit&&batchId)await db.query(`UPDATE import_batches SET status='completed',completed_at=NOW(),metadata=metadata||$2::jsonb WHERE id=$1`,[batchId,JSON.stringify({summary,issues})]);
   logger.info({summary,issueTypes:issues.reduce((m,i)=>(m[i.type]=(m[i.type]||0)+1,m),{})},`Goldie future import ${mode} completed`);return {status:'ok',summary,issues};
  }catch(error){if(commit&&batchId){try{await db.query(`UPDATE import_batches SET status='failed',completed_at=NOW(),metadata=metadata||$2::jsonb WHERE id=$1`,[batchId,JSON.stringify({error:String(error.message||error)})]);}catch(_){}}logger.error({err:error},'Goldie future import failed');throw error;}finally{db.release();}
 }
