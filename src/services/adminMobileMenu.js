@@ -31,6 +31,13 @@ async function processAdminMobileMenuMessage(sender,text){
   const admin=await getAdmin(sender);if(!admin)return {handled:false};
   const raw=String(text||'').trim();const v=raw.toLowerCase().replace(/\s+/g,' ');
 
+  // Always give an explicit guided-booking command a chance to start/resume
+  // before a stale parent More-menu session can consume the message.
+  const bookingFlow=await processAdminMobileBookingFlowMessage(sender,text);if(bookingFlow.handled){
+    moreSessions.delete(k);
+    return bookingFlow;
+  }
+
   // The More menu owns numeric options 0-4 while active. Keep this parent
   // marker alive when child schedule flows return to More so the next `0`
   // is handled by this menu rather than falling through to another flow.
@@ -44,7 +51,6 @@ async function processAdminMobileMenuMessage(sender,text){
     return {handled:true,admin,reply:'Choose 1, 2, 3, 4, or 0.'};
   }
 
-  const bookingFlow=await processAdminMobileBookingFlowMessage(sender,text);if(bookingFlow.handled)return bookingFlow;
   const staffFlow=await processAdminStaffScheduleFlowMessage(sender,text);if(staffFlow.handled){
     if(staffFlow.returnToMore || returnedToMore(staffFlow.reply)){moreSessions.set(k,{step:'menu'});return {handled:true,admin:staffFlow.admin,reply:moreMenu()};}
     return staffFlow;
@@ -69,7 +75,7 @@ async function processAdminMobileMenuMessage(sender,text){
     await audit(admin.id,'admin.mobile_menu_selected',{option:'availability_booking_flow'});
     return processAdminMobileBookingFlowMessage(sender,'Find an available time');
   }
-  if(v==='4'||v==='make a booking'||v==='new booking'){
+  if(v==='4'||v==='make a booking'||v==='new booking'||v==='book client'||v==='book a client'||v==='book appointment'){
     if(!has(admin,'appointment:create')||!has(admin,'appointment:view'))return {handled:false};
     await audit(admin.id,'admin.mobile_menu_selected',{option:'booking_flow'});
     return processAdminMobileBookingFlowMessage(sender,'Make a booking');
