@@ -7,6 +7,7 @@ const { guardClientFreelancerBooking } = require("../services/clientBookingStaff
 const { guardEnglishOnly } = require("../services/englishLanguageGuard");
 const { processAppointmentChangeMessage } = require("../services/appointmentChange");
 const { processCustomerExperienceMessage } = require("../services/customerExperience");
+const { processCustomerCareMessage } = require("../services/customerCare");
 const { processClientIdentityMessage } = require("../services/clientIdentityOnboarding");
 const { processAdminWalkinMessage } = require("../services/adminWalkin");
 const { processAdminHelpMessage } = require("../services/adminHelp");
@@ -38,6 +39,7 @@ const adminHelp=await processAdminHelpMessage(from,text);if(adminHelp.handled){a
 const adminWalkin=await processAdminWalkinMessage(from,text);if(adminWalkin.handled){await sendWhatsAppMessage(from,adminWalkin.reply);return res.sendStatus(200);}
 const adminAssistant=await processAdminAssistantMessage(from,text);if(adminAssistant.handled){await sendWhatsAppMessage(from,adminAssistant.reply);return res.sendStatus(200);}
 const customerExperience=await processCustomerExperienceMessage(from,text);if(customerExperience.handled){await sendWhatsAppMessage(from,customerExperience.reply);return res.sendStatus(200);}
+const customerCare=await processCustomerCareMessage(from,text);if(customerCare.handled){await sendWhatsAppMessage(from,customerCare.reply);return res.sendStatus(200);}
 const nameGuard=await guardActiveNameConfirmation(from,text);if(nameGuard.handled){await sendWhatsAppMessage(from,nameGuard.reply);return res.sendStatus(200);}
 const identity=await processClientIdentityMessage(from,text);if(identity.handled){let reply=identity.reply;if(identity.identityStatus==="matched_incomplete"&&identity.client?.id){const forced=await forceMatchedClientNameConfirmation(from,identity.client.id);if(forced)reply=`Welcome back, ${identity.client.display_name}. Before I can continue with the booking, please confirm your full name.`;}if(identity.onboardingComplete&&identity.resumeBooking){const booking=await processBookingMessage(from,"I want to book an appointment");if(booking.handled&&booking.reply)reply=`${reply}\n\n${booking.reply}`;}await sendWhatsAppMessage(from,reply);return res.sendStatus(200);}
 if(identity.identityStatus==="matched_incomplete"&&identity.client?.display_name&&isGreetingOnly(text)){await sendWhatsAppMessage(from,`Welcome back, ${identity.client.display_name} 👋 How can I help you today?`);return res.sendStatus(200);}
