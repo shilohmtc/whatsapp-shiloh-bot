@@ -8,292 +8,31 @@ const DEFAULT_TIMEZONE = "Africa/Johannesburg";
 let cachedToken = null;
 let cachedTokenExpiresAt = 0;
 
-function calendarEnabled() {
-  return String(process.env.GOOGLE_CALENDAR_ENABLED || "").toLowerCase() === "true";
-}
+function calendarEnabled() { return String(process.env.GOOGLE_CALENDAR_ENABLED || "").toLowerCase() === "true"; }
+function authMode() { return String(process.env.GOOGLE_CALENDAR_AUTH_MODE || "service_account").trim().toLowerCase(); }
+function requireCalendarConfig() { const calendarId=String(process.env.GOOGLE_BOOKING_CALENDAR_ID||"").trim(); if(!calendarId)throw new Error("Google Calendar is enabled but GOOGLE_BOOKING_CALENDAR_ID is missing."); return {calendarId}; }
+function requireServiceAccountConfig(){const clientEmail=String(process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL||"").trim();const privateKey=String(process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY||"").replace(/\\n/g,"\n");if(!clientEmail||!privateKey)throw new Error("GOOGLE_CALENDAR_AUTH_MODE=service_account requires GOOGLE_SERVICE_ACCOUNT_EMAIL and GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY.");return{clientEmail,privateKey};}
+function cleanOAuthEnv(value){return String(value||"").trim();}
+function requireOAuthConfig(){const clientId=cleanOAuthEnv(process.env.GOOGLE_OAUTH_CLIENT_ID),clientSecret=cleanOAuthEnv(process.env.GOOGLE_OAUTH_CLIENT_SECRET),refreshToken=cleanOAuthEnv(process.env.GOOGLE_OAUTH_REFRESH_TOKEN);if(!clientId||!clientSecret||!refreshToken)throw new Error("GOOGLE_CALENDAR_AUTH_MODE=oauth_refresh_token requires GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET, and GOOGLE_OAUTH_REFRESH_TOKEN.");return{clientId,clientSecret,refreshToken};}
+function base64url(input){return Buffer.from(input).toString("base64url");}
+function normalizeName(value=""){return String(value).trim().toLowerCase().replace(/\s+/g," ");}
 
-function authMode() {
-  return String(process.env.GOOGLE_CALENDAR_AUTH_MODE || "service_account").trim().toLowerCase();
-}
+async function getServiceAccountAccessToken(){const{clientEmail,privateKey}=requireServiceAccountConfig();const now=Math.floor(Date.now()/1000);const header=base64url(JSON.stringify({alg:"RS256",typ:"JWT"}));const payload=base64url(JSON.stringify({iss:clientEmail,scope:SCOPE,aud:TOKEN_URL,iat:now,exp:now+3600}));const unsigned=`${header}.${payload}`;const signature=crypto.sign("RSA-SHA256",Buffer.from(unsigned),privateKey).toString("base64url");const response=await fetch(TOKEN_URL,{method:"POST",headers:{"content-type":"application/x-www-form-urlencoded"},body:new URLSearchParams({grant_type:"urn:ietf:params:oauth:grant-type:jwt-bearer",assertion:`${unsigned}.${signature}`})});if(!response.ok){const detail=await response.text();throw new Error(`Google service-account token request failed (${response.status}): ${detail.slice(0,500)}`);}return response.json();}
+async function getOAuthRefreshAccessToken(){const{clientId,clientSecret,refreshToken}=requireOAuthConfig();const response=await fetch(TOKEN_URL,{method:"POST",headers:{"content-type":"application/x-www-form-urlencoded"},body:new URLSearchParams({client_id:clientId,client_secret:clientSecret,refresh_token:refreshToken,grant_type:"refresh_token"})});if(!response.ok){const detail=await response.text();const clientHint=clientId.length>16?`${clientId.slice(0,12)}…${clientId.slice(-12)}`:"configured";throw new Error(`Google OAuth refresh-token request failed (${response.status}) for client ${clientHint}; refresh token length=${refreshToken.length}: ${detail.slice(0,500)}`);}return response.json();}
+async function getAccessToken(){if(cachedToken&&Date.now()<cachedTokenExpiresAt-60000)return cachedToken;const mode=authMode();let token;if(mode==="oauth_refresh_token")token=await getOAuthRefreshAccessToken();else if(mode==="service_account")token=await getServiceAccountAccessToken();else throw new Error(`Unsupported GOOGLE_CALENDAR_AUTH_MODE: ${mode}`);cachedToken=token.access_token;cachedTokenExpiresAt=Date.now()+Number(token.expires_in||3600)*1000;return cachedToken;}
+async function googleRequest(path,options={}){requireCalendarConfig();const token=await getAccessToken();const response=await fetch(`${CALENDAR_API}${path}`,{...options,headers:{authorization:`Bearer ${token}`,"content-type":"application/json",...(options.headers||{})}});if(response.status===204)return null;const text=await response.text();let body=null;try{body=text?JSON.parse(text):null;}catch(_){body=text;}if(!response.ok){const error=new Error(`Google Calendar API request failed (${response.status})`);error.status=response.status;error.body=body;throw error;}return body;}
+function deterministicEventId(idempotencyKey){return crypto.createHash("sha256").update(String(idempotencyKey)).digest("hex").slice(0,40);}
+function eventAppliesToStaff(event,staffName){if(!staffName)return true;const requested=normalizeName(staffName);const taggedStaff=normalizeName(event.extendedProperties?.private?.shilohStaffName||"");if(taggedStaff)return taggedStaff===requested;const searchable=normalizeName(`${event.summary||""} ${event.description||""}`);if(searchable.includes(requested))return true;return !/\bstaff\s*:/i.test(String(event.description||""));}
+function serviceIcon(serviceName=""){const n=normalizeName(serviceName);if(/massage|lymphatic/.test(n))return "💆";if(/pedicure|foot|heel|toe/.test(n))return "🦶";if(/facial|hifu|plasma|microneed|needling|ozone|pelvic|vaginal|brow|permanent makeup/.test(n))return "✨";return "🌿";}
+function bookingSummary({clientName,serviceName,staffName}){return `${serviceIcon(serviceName)} ${serviceName||"Booking"} — ${clientName||"Client"}${staffName?` — ${staffName}`:""}`;}
+function bookingDescription({appointmentId,clientName,serviceName,staffName,locationName,source}){return [`Shiloh CRM appointment #${appointmentId}`,clientName?`Client: ${clientName}`:null,serviceName?`Service: ${serviceName}`:null,staffName?`Practitioner: ${staffName}`:null,locationName?`Location: ${locationName}`:null,source?`Source: ${source}`:null].filter(Boolean).join("\n");}
 
-function requireCalendarConfig() {
-  const calendarId = String(process.env.GOOGLE_BOOKING_CALENDAR_ID || "").trim();
-  if (!calendarId) {
-    throw new Error("Google Calendar is enabled but GOOGLE_BOOKING_CALENDAR_ID is missing.");
-  }
-  return { calendarId };
-}
+async function checkCalendarAvailability({startsAt,endsAt,staffName=null,ignoreEventId=null}){if(!calendarEnabled())return{enabled:false,available:true,conflicts:[]};const{calendarId}=requireCalendarConfig();const query=new URLSearchParams({timeMin:new Date(startsAt).toISOString(),timeMax:new Date(endsAt).toISOString(),singleEvents:"true",orderBy:"startTime",showDeleted:"false",maxResults:"50"});const result=await googleRequest(`/calendars/${encodeURIComponent(calendarId)}/events?${query.toString()}`);const conflicts=(result.items||[]).filter(event=>{if(ignoreEventId&&event.id===ignoreEventId)return false;if(event.status==="cancelled"||event.transparency==="transparent")return false;if(!eventAppliesToStaff(event,staffName))return false;const start=event.start?.dateTime||event.start?.date,end=event.end?.dateTime||event.end?.date;if(!start||!end)return false;return new Date(start)<new Date(endsAt)&&new Date(end)>new Date(startsAt);});return{enabled:true,available:conflicts.length===0,conflicts};}
 
-function requireServiceAccountConfig() {
-  const clientEmail = String(process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || "").trim();
-  const privateKey = String(process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY || "").replace(/\\n/g, "\n");
-  if (!clientEmail || !privateKey) {
-    throw new Error("GOOGLE_CALENDAR_AUTH_MODE=service_account requires GOOGLE_SERVICE_ACCOUNT_EMAIL and GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY.");
-  }
-  return { clientEmail, privateKey };
-}
+async function createBookingEvent({appointmentId,clientName,serviceName,staffName,locationName,startsAt,endsAt,source="shiloh"}){if(!calendarEnabled())return{enabled:false,event:null};const{calendarId}=requireCalendarConfig();const eventId=deterministicEventId(`shiloh-appointment:${appointmentId}`);const body={id:eventId,summary:bookingSummary({clientName,serviceName,staffName}),description:bookingDescription({appointmentId,clientName,serviceName,staffName,locationName,source}),start:{dateTime:new Date(startsAt).toISOString(),timeZone:DEFAULT_TIMEZONE},end:{dateTime:new Date(endsAt).toISOString(),timeZone:DEFAULT_TIMEZONE},extendedProperties:{private:{shilohAppointmentId:String(appointmentId),shilohSource:String(source),...(staffName?{shilohStaffName:String(staffName)}:{}),...(serviceName?{shilohServiceName:String(serviceName)}:{})}}};try{const event=await googleRequest(`/calendars/${encodeURIComponent(calendarId)}/events`,{method:"POST",body:JSON.stringify(body)});return{enabled:true,event};}catch(error){if(error.status!==409)throw error;const event=await getBookingEvent(eventId);return{enabled:true,event,idempotentReplay:true};}}
+async function getBookingEvent(eventId){if(!calendarEnabled())return null;const{calendarId}=requireCalendarConfig();try{return await googleRequest(`/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`);}catch(error){if(error.status===404||error.status===410)return null;throw error;}}
+async function findBookingEventByAppointmentId(appointmentId){if(!calendarEnabled())return null;const{calendarId}=requireCalendarConfig();const query=new URLSearchParams({privateExtendedProperty:`shilohAppointmentId=${appointmentId}`,singleEvents:"true",showDeleted:"false",maxResults:"10"});const result=await googleRequest(`/calendars/${encodeURIComponent(calendarId)}/events?${query.toString()}`);return(result.items||[])[0]||null;}
+async function updateBookingEvent({eventId,appointmentId,startsAt,endsAt,clientName,serviceName,staffName,locationName}){if(!calendarEnabled())return{enabled:false,event:null};const{calendarId}=requireCalendarConfig();const current=await getBookingEvent(eventId);if(!current)throw new Error(`Google Calendar event ${eventId} was not found for update.`);const existingPrivate=current.extendedProperties?.private||{};const resolvedAppointmentId=appointmentId||existingPrivate.shilohAppointmentId||null;const resolvedSource=existingPrivate.shilohSource||"shiloh";const resolvedClient=clientName||null,resolvedService=serviceName||existingPrivate.shilohServiceName||null,resolvedStaff=staffName||existingPrivate.shilohStaffName||null;const patch={summary:bookingSummary({clientName:resolvedClient,serviceName:resolvedService,staffName:resolvedStaff}),description:bookingDescription({appointmentId:resolvedAppointmentId||"",clientName:resolvedClient,serviceName:resolvedService,staffName:resolvedStaff,locationName,source:resolvedSource}),extendedProperties:{private:{...existingPrivate,...(resolvedAppointmentId?{shilohAppointmentId:String(resolvedAppointmentId)}:{}),shilohSource:String(resolvedSource),...(resolvedStaff?{shilohStaffName:String(resolvedStaff)}:{}),...(resolvedService?{shilohServiceName:String(resolvedService)}:{})}}};if(startsAt)patch.start={dateTime:new Date(startsAt).toISOString(),timeZone:DEFAULT_TIMEZONE};if(endsAt)patch.end={dateTime:new Date(endsAt).toISOString(),timeZone:DEFAULT_TIMEZONE};const event=await googleRequest(`/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`,{method:"PATCH",body:JSON.stringify(patch)});return{enabled:true,event};}
+async function cancelBookingEvent(eventId){if(!calendarEnabled())return{enabled:false,cancelled:false};const{calendarId}=requireCalendarConfig();try{await googleRequest(`/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`,{method:"DELETE"});return{enabled:true,cancelled:true};}catch(error){if(error.status===404||error.status===410)return{enabled:true,cancelled:true,alreadyMissing:true};throw error;}}
 
-function cleanOAuthEnv(value) {
-  // Render values are normally exact strings, but secrets copied from browsers or
-  // OAuth Playground can accidentally include surrounding whitespace/newlines.
-  // Google treats that as a different credential and returns invalid_grant.
-  return String(value || "").trim();
-}
-
-function requireOAuthConfig() {
-  const clientId = cleanOAuthEnv(process.env.GOOGLE_OAUTH_CLIENT_ID);
-  const clientSecret = cleanOAuthEnv(process.env.GOOGLE_OAUTH_CLIENT_SECRET);
-  const refreshToken = cleanOAuthEnv(process.env.GOOGLE_OAUTH_REFRESH_TOKEN);
-  if (!clientId || !clientSecret || !refreshToken) {
-    throw new Error("GOOGLE_CALENDAR_AUTH_MODE=oauth_refresh_token requires GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET, and GOOGLE_OAUTH_REFRESH_TOKEN.");
-  }
-  return { clientId, clientSecret, refreshToken };
-}
-
-function base64url(input) {
-  return Buffer.from(input).toString("base64url");
-}
-
-function normalizeName(value = "") {
-  return String(value).trim().toLowerCase().replace(/\s+/g, " ");
-}
-
-async function getServiceAccountAccessToken() {
-  const { clientEmail, privateKey } = requireServiceAccountConfig();
-  const now = Math.floor(Date.now() / 1000);
-  const header = base64url(JSON.stringify({ alg: "RS256", typ: "JWT" }));
-  const payload = base64url(JSON.stringify({
-    iss: clientEmail,
-    scope: SCOPE,
-    aud: TOKEN_URL,
-    iat: now,
-    exp: now + 3600,
-  }));
-  const unsigned = `${header}.${payload}`;
-  const signature = crypto.sign("RSA-SHA256", Buffer.from(unsigned), privateKey).toString("base64url");
-  const assertion = `${unsigned}.${signature}`;
-
-  const response = await fetch(TOKEN_URL, {
-    method: "POST",
-    headers: { "content-type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
-      assertion,
-    }),
-  });
-
-  if (!response.ok) {
-    const detail = await response.text();
-    throw new Error(`Google service-account token request failed (${response.status}): ${detail.slice(0, 500)}`);
-  }
-  return response.json();
-}
-
-async function getOAuthRefreshAccessToken() {
-  const { clientId, clientSecret, refreshToken } = requireOAuthConfig();
-  const response = await fetch(TOKEN_URL, {
-    method: "POST",
-    headers: { "content-type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      client_id: clientId,
-      client_secret: clientSecret,
-      refresh_token: refreshToken,
-      grant_type: "refresh_token",
-    }),
-  });
-
-  if (!response.ok) {
-    const detail = await response.text();
-    const clientHint = clientId.length > 16 ? `${clientId.slice(0, 12)}…${clientId.slice(-12)}` : "configured";
-    throw new Error(`Google OAuth refresh-token request failed (${response.status}) for client ${clientHint}; refresh token length=${refreshToken.length}: ${detail.slice(0, 500)}`);
-  }
-  return response.json();
-}
-
-async function getAccessToken() {
-  if (cachedToken && Date.now() < cachedTokenExpiresAt - 60_000) return cachedToken;
-
-  const mode = authMode();
-  let token;
-  if (mode === "oauth_refresh_token") {
-    token = await getOAuthRefreshAccessToken();
-  } else if (mode === "service_account") {
-    token = await getServiceAccountAccessToken();
-  } else {
-    throw new Error(`Unsupported GOOGLE_CALENDAR_AUTH_MODE: ${mode}`);
-  }
-
-  cachedToken = token.access_token;
-  cachedTokenExpiresAt = Date.now() + Number(token.expires_in || 3600) * 1000;
-  return cachedToken;
-}
-
-async function googleRequest(path, options = {}) {
-  requireCalendarConfig();
-  const token = await getAccessToken();
-  const response = await fetch(`${CALENDAR_API}${path}`, {
-    ...options,
-    headers: {
-      authorization: `Bearer ${token}`,
-      "content-type": "application/json",
-      ...(options.headers || {}),
-    },
-  });
-
-  if (response.status === 204) return null;
-  const text = await response.text();
-  let body = null;
-  try { body = text ? JSON.parse(text) : null; } catch (_) { body = text; }
-
-  if (!response.ok) {
-    const error = new Error(`Google Calendar API request failed (${response.status})`);
-    error.status = response.status;
-    error.body = body;
-    throw error;
-  }
-  return body;
-}
-
-function deterministicEventId(idempotencyKey) {
-  return crypto.createHash("sha256").update(String(idempotencyKey)).digest("hex").slice(0, 40);
-}
-
-function eventAppliesToStaff(event, staffName) {
-  if (!staffName) return true;
-  const requested = normalizeName(staffName);
-  const taggedStaff = normalizeName(event.extendedProperties?.private?.shilohStaffName || "");
-  if (taggedStaff) return taggedStaff === requested;
-
-  const searchable = normalizeName(`${event.summary || ""} ${event.description || ""}`);
-  if (searchable.includes(requested)) return true;
-
-  // A busy event with no identifiable practitioner is treated as a clinic-wide block.
-  return !/\bstaff\s*:/i.test(String(event.description || ""));
-}
-
-async function checkCalendarAvailability({ startsAt, endsAt, staffName = null, ignoreEventId = null }) {
-  if (!calendarEnabled()) return { enabled: false, available: true, conflicts: [] };
-  const { calendarId } = requireCalendarConfig();
-  const query = new URLSearchParams({
-    timeMin: new Date(startsAt).toISOString(),
-    timeMax: new Date(endsAt).toISOString(),
-    singleEvents: "true",
-    orderBy: "startTime",
-    showDeleted: "false",
-    maxResults: "50",
-  });
-  const result = await googleRequest(`/calendars/${encodeURIComponent(calendarId)}/events?${query.toString()}`);
-  const conflicts = (result.items || []).filter((event) => {
-    if (ignoreEventId && event.id === ignoreEventId) return false;
-    if (event.status === "cancelled" || event.transparency === "transparent") return false;
-    if (!eventAppliesToStaff(event, staffName)) return false;
-    const start = event.start?.dateTime || event.start?.date;
-    const end = event.end?.dateTime || event.end?.date;
-    if (!start || !end) return false;
-    return new Date(start) < new Date(endsAt) && new Date(end) > new Date(startsAt);
-  });
-
-  return { enabled: true, available: conflicts.length === 0, conflicts };
-}
-
-async function createBookingEvent({ appointmentId, clientName, serviceName, staffName, locationName, startsAt, endsAt, source = "shiloh" }) {
-  if (!calendarEnabled()) return { enabled: false, event: null };
-  const { calendarId } = requireCalendarConfig();
-  const eventId = deterministicEventId(`shiloh-appointment:${appointmentId}`);
-  const body = {
-    id: eventId,
-    summary: `${clientName || "Client"} — ${serviceName || "Booking"}${staffName ? ` — ${staffName}` : ""}`,
-    description: [
-      `Shiloh CRM appointment #${appointmentId}`,
-      staffName ? `Staff: ${staffName}` : null,
-      locationName ? `Location: ${locationName}` : null,
-      `Source: ${source}`,
-    ].filter(Boolean).join("\n"),
-    start: { dateTime: new Date(startsAt).toISOString(), timeZone: DEFAULT_TIMEZONE },
-    end: { dateTime: new Date(endsAt).toISOString(), timeZone: DEFAULT_TIMEZONE },
-    extendedProperties: {
-      private: {
-        shilohAppointmentId: String(appointmentId),
-        shilohSource: String(source),
-        ...(staffName ? { shilohStaffName: String(staffName) } : {}),
-      },
-    },
-  };
-
-  try {
-    const event = await googleRequest(`/calendars/${encodeURIComponent(calendarId)}/events`, {
-      method: "POST",
-      body: JSON.stringify(body),
-    });
-    return { enabled: true, event };
-  } catch (error) {
-    if (error.status !== 409) throw error;
-    const event = await getBookingEvent(eventId);
-    return { enabled: true, event, idempotentReplay: true };
-  }
-}
-
-async function getBookingEvent(eventId) {
-  if (!calendarEnabled()) return null;
-  const { calendarId } = requireCalendarConfig();
-  try {
-    return await googleRequest(`/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`);
-  } catch (error) {
-    if (error.status === 404 || error.status === 410) return null;
-    throw error;
-  }
-}
-
-async function findBookingEventByAppointmentId(appointmentId) {
-  if (!calendarEnabled()) return null;
-  const { calendarId } = requireCalendarConfig();
-  const query = new URLSearchParams({
-    privateExtendedProperty: `shilohAppointmentId=${appointmentId}`,
-    singleEvents: "true",
-    showDeleted: "false",
-    maxResults: "10",
-  });
-  const result = await googleRequest(`/calendars/${encodeURIComponent(calendarId)}/events?${query.toString()}`);
-  return (result.items || [])[0] || null;
-}
-
-async function updateBookingEvent({ eventId, startsAt, endsAt, clientName, serviceName, staffName, locationName }) {
-  if (!calendarEnabled()) return { enabled: false, event: null };
-  const { calendarId } = requireCalendarConfig();
-  const patch = {};
-  if (clientName || serviceName || staffName) patch.summary = `${clientName || "Client"} — ${serviceName || "Booking"}${staffName ? ` — ${staffName}` : ""}`;
-  if (startsAt) patch.start = { dateTime: new Date(startsAt).toISOString(), timeZone: DEFAULT_TIMEZONE };
-  if (endsAt) patch.end = { dateTime: new Date(endsAt).toISOString(), timeZone: DEFAULT_TIMEZONE };
-  if (staffName || locationName) patch.description = [staffName ? `Staff: ${staffName}` : null, locationName ? `Location: ${locationName}` : null].filter(Boolean).join("\n");
-  if (staffName) patch.extendedProperties = { private: { shilohStaffName: String(staffName) } };
-
-  const event = await googleRequest(`/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`, {
-    method: "PATCH",
-    body: JSON.stringify(patch),
-  });
-  return { enabled: true, event };
-}
-
-async function cancelBookingEvent(eventId) {
-  if (!calendarEnabled()) return { enabled: false, cancelled: false };
-  const { calendarId } = requireCalendarConfig();
-  try {
-    await googleRequest(`/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`, { method: "DELETE" });
-    return { enabled: true, cancelled: true };
-  } catch (error) {
-    if (error.status === 404 || error.status === 410) return { enabled: true, cancelled: true, alreadyMissing: true };
-    throw error;
-  }
-}
-
-module.exports = {
-  calendarEnabled,
-  authMode,
-  checkCalendarAvailability,
-  createBookingEvent,
-  getBookingEvent,
-  findBookingEventByAppointmentId,
-  updateBookingEvent,
-  cancelBookingEvent,
-  deterministicEventId,
-};
+module.exports={calendarEnabled,authMode,checkCalendarAvailability,createBookingEvent,getBookingEvent,findBookingEventByAppointmentId,updateBookingEvent,cancelBookingEvent,deterministicEventId,bookingSummary,serviceIcon};
