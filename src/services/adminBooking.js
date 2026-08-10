@@ -63,11 +63,12 @@ async function prepareAdminBooking({ adminId, clientId, staffName, serviceName, 
   const externalCalendar = await checkCalendarAvailability({
     startsAt: availability.startsAt,
     endsAt: availability.endsAt,
+    staffName: availability.staff.display_name,
   });
   if (externalCalendar.enabled && !externalCalendar.available) {
     return {
       status: "external_calendar_conflict",
-      reply: "That time is already occupied on the shared Shiloh booking calendar. Please choose another time.",
+      reply: "That practitioner is already occupied on the shared Shiloh booking calendar. Please choose another time.",
       externalCalendar,
     };
   }
@@ -110,7 +111,7 @@ async function prepareAdminBooking({ adminId, clientId, staffName, serviceName, 
       `• Price: ${price}`,
       "",
       "No production appointment has been created yet.",
-      externalCalendar.enabled ? "The shared Google booking calendar is clear for this slot." : "Google Calendar enforcement is not enabled yet; CRM scheduling rules are currently authoritative.",
+      externalCalendar.enabled ? "The shared Google booking calendar is clear for this practitioner and slot." : "Google Calendar enforcement is not enabled yet; CRM scheduling rules are currently authoritative.",
       "Reply exactly CONFIRM BOOKING to create it, or CANCEL BOOKING to discard it.",
     ].join("\n"),
   };
@@ -196,11 +197,12 @@ async function confirmAdminBooking(admin) {
     const externalCalendar = await checkCalendarAvailability({
       startsAt: session.starts_at,
       endsAt: session.ends_at,
+      staffName: session.staff_name,
     });
     if (externalCalendar.enabled && !externalCalendar.available) {
       await db.query(`DELETE FROM admin_booking_sessions WHERE admin_id = $1`, [admin.id]);
       await db.query("COMMIT");
-      return { status: "external_calendar_conflict", reply: "The shared Shiloh booking calendar changed before confirmation and this slot is no longer free. Nothing was written; please choose another time." };
+      return { status: "external_calendar_conflict", reply: "The shared Shiloh booking calendar changed before confirmation and this practitioner is no longer free. Nothing was written; please choose another time." };
     }
 
     const totalPrice = session.variable_price ? null : session.price;
