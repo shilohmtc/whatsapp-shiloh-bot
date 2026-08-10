@@ -4,6 +4,7 @@ const { processAdminHolidayHoursMessage, getHolidayReminder } = require('./admin
 const { processAdminFreelancerAvailabilityMessage } = require('./adminFreelancerAvailability');
 const { processAdminMobileBookingFlowMessage } = require('./adminMobileBookingFlow');
 const { processAdminStaffScheduleFlowMessage } = require('./adminStaffScheduleFlow');
+const { processAdminAppointmentCancellationMessage } = require('./adminAppointmentCancellation');
 
 const moreSessions = new Map();
 function has(admin,p){return admin?.permissions?.[p]===true;}
@@ -30,6 +31,13 @@ async function processAdminMobileMenuMessage(sender,text){
   const k=senderKey(sender);
   const admin=await getAdmin(sender);if(!admin)return {handled:false};
   const raw=String(text||'').trim();const v=raw.toLowerCase().replace(/\s+/g,' ');
+
+  // Appointment cancellation must get first refusal on explicit cancellation commands
+  // so a stale mobile menu or booking session cannot consume the message.
+  const cancellationFlow=await processAdminAppointmentCancellationMessage(sender,text);if(cancellationFlow.handled){
+    moreSessions.delete(k);
+    return cancellationFlow;
+  }
 
   // Always give an explicit guided-booking command a chance to start/resume
   // before a stale parent More-menu session can consume the message.
