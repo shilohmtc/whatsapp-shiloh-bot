@@ -1,9 +1,11 @@
 const express = require("express");
 const adminAuth = require("../middleware/adminAuth");
+const testCommandAuth = require("../middleware/testCommandAuth");
 const { documentUpload } = require("../middleware/documentUpload");
 const { csvUpload } = require("../middleware/csvUpload");
 const crmRoutes = require("./crm");
 const { createDocument, uploadDocument, getDocuments, removeDocument, getProfiles, getProfileByPhone, patchProfileByPhone, sendTemplateTest } = require("../controllers/adminController");
+const { runTestCommand } = require("../controllers/testCommandController");
 const { syncGoldie, getGoldieSyncStatus } = require("../controllers/goldieController");
 const { stageClients: stageGoldieClients, stageAppointments: stageGoldieAppointments } = require("../controllers/goldieImportController");
 const { getSummary: getReconciliationSummary, getRecommendations: getReconciliationRecommendations, getAppointmentIdentityEvidence, getSecondPassReconciliation, getManualQueue, decideManualCase, getChantelDuplicatePlan, executeChantelDuplicate, getSeparateIdentityPlan, executeSeparateIdentity, getCanonicalizationAudit, canonicalizeClients: canonicalizeReconciliationClients, getCases: getReconciliationCases, getCase: getReconciliationCase } = require("../controllers/reconciliationController");
@@ -16,6 +18,12 @@ router.use(adminAuth);
 // Production CRM canonical API. This surface reads canonical CRM tables only and
 // intentionally remains separate from legacy profiles and Goldie reconciliation.
 router.use("/crm", crmRoutes);
+
+// Protected internal test harness. This endpoint is disabled unless explicitly
+// enabled and requires both the normal admin key and a dedicated test key.
+// The controller only accepts authoritative availability commands and always
+// uses the fixed test-admin identity configured in Render.
+router.post("/test-command", testCommandAuth, runTestCommand);
 
 router.get("/documents", getDocuments); router.post("/documents", createDocument); router.post("/documents/upload", documentUpload, uploadDocument); router.delete("/documents/:id", removeDocument);
 router.get("/profiles", getProfiles); router.get("/profiles/:phone", getProfileByPhone); router.patch("/profiles/:phone", patchProfileByPhone);
