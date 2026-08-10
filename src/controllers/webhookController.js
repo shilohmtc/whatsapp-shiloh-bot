@@ -16,6 +16,7 @@ const { processAdminRosterAuditMessage } = require("../services/adminRosterAudit
 const { processAdminNailServicesAuditMessage } = require("../services/adminNailServicesAudit");
 const { processAdminLegacyOrphanAuditMessage } = require("../services/adminLegacyOrphanAudit");
 const { processAdminAvailableSlotsMessage } = require("../services/adminAvailableSlots");
+const { processAdminStaffServicesMessage } = require("../services/adminStaffServices");
 const { processAdminAssistantMessage } = require("../services/adminAssistant");
 const { forceMatchedClientNameConfirmation, guardActiveNameConfirmation } = require("../services/identityOnboardingGuard");
 const logger = require("../lib/logger");
@@ -23,12 +24,8 @@ function maskPhone(phone = "") { return phone.length > 4 ? `***${phone.slice(-4)
 function isGreetingOnly(text = "") { return /^(hi|hello|hey|good morning|good afternoon|good evening|howzit|hiya)[!. ]*$/i.test(String(text).trim()); }
 exports.verifyWebhook = (req,res)=>{const mode=req.query["hub.mode"],token=req.query["hub.verify_token"],challenge=req.query["hub.challenge"];if(mode==="subscribe"&&token===process.env.VERIFY_TOKEN){(req.log||logger).info("WhatsApp webhook verified");return res.status(200).send(challenge);}(req.log||logger).warn("WhatsApp webhook verification rejected");return res.sendStatus(403);};
 exports.receiveWebhook=async(req,res)=>{const log=req.log||logger;try{const value=req.body.entry?.[0]?.changes?.[0]?.value;if(!value?.messages)return res.sendStatus(200);const message=value.messages[0];if(message.type!=="text"){log.info({messageType:message.type},"Ignoring unsupported WhatsApp message");return res.sendStatus(200);}const from=message.from,text=message.text?.body?.trim();if(!from||!text){log.warn("Received malformed WhatsApp text message");return res.sendStatus(200);}log.info({from:maskPhone(from)},"Processing incoming WhatsApp message");try{
-// Explicit authoritative availability commands always take priority over guided
-// booking/menu state. This prevents stale booking sessions from consuming commands
-// such as: Check availability STAFF | SERVICE | DD/MM/YYYY HH:MM.
 const adminSlots=await processAdminAvailableSlotsMessage(from,text);if(adminSlots.handled){log.info({from:maskPhone(from),admin:adminSlots.admin?.display_name},"Handled authoritative available-slots request");await sendWhatsAppMessage(from,adminSlots.reply);return res.sendStatus(200);}
-// Active guided booking sessions consume other free-form replies (dates, client names, etc.)
-// after explicit admin commands have had first priority.
+const staffServices=await processAdminStaffServicesMessage(from,text);if(staffServices.handled){await sendWhatsAppMessage(from,staffServices.reply);return res.sendStatus(200);}
 const activeMobileBooking=await processAdminMobileBookingFlowMessage(from,text);if(activeMobileBooking.handled){await sendWhatsAppMessage(from,activeMobileBooking.reply);return res.sendStatus(200);}
 const adminAppointments=await processAdminAppointmentsByDateMessage(from,text);if(adminAppointments.handled){await sendWhatsAppMessage(from,adminAppointments.reply);return res.sendStatus(200);}
 const adminMobile=await processAdminMobileMenuMessage(from,text);if(adminMobile.handled){await sendWhatsAppMessage(from,adminMobile.reply);return res.sendStatus(200);}
