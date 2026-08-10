@@ -20,6 +20,7 @@ const { startAppointmentLifecycleScheduler } = require("./src/services/appointme
 const { runStartupTestCommand } = require("./src/services/startupTestCommand");
 const { runGoldieFutureImportFromEnv } = require("./src/services/goldieFutureImport");
 const { runFromEnv: runGoogleCalendarReconciliationFromEnv } = require("./src/services/googleCalendarReconciliation");
+const { runGoogleCalendarAccessSetupFromEnv } = require("./src/services/googleCalendarAccessSetup");
 
 const app = express();
 app.disable("x-powered-by");
@@ -38,6 +39,7 @@ async function start(){
   runStartupTestCommand(startupTestRequest).catch(error=>logger.error({err:error},"Deploy-triggered Shiloh test command did not complete"));
   runGoldieFutureImportFromEnv().catch(error=>logger.error({err:error},"Goldie future booking import did not complete"));
   runGoogleCalendarReconciliationFromEnv().catch(error=>logger.error({err:error},"Google Calendar future reconciliation did not complete"));
+  runGoogleCalendarAccessSetupFromEnv().catch(error=>logger.error({err:error},"Google Calendar staff access setup did not complete"));
  });});
 }
 start().catch(error=>{logger.fatal({err:error},"Shiloh failed during startup");process.exit(1);});
