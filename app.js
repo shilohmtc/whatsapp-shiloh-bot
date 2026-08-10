@@ -18,6 +18,7 @@ const { inspectCheniqueIdentity } = require("./src/services/cheniqueDiagnostic")
 const { startGoldieSyncScheduler } = require("./src/services/goldieSync");
 const { startGoogleBusinessProfileSyncScheduler } = require("./src/services/googleBusinessProfileSync");
 const { startAppointmentLifecycleScheduler } = require("./src/services/appointmentLifecycle");
+const { startCustomerCareScheduler } = require("./src/services/customerCare");
 const { runStartupTestCommand } = require("./src/services/startupTestCommand");
 const { runGoldieFutureImportFromEnv } = require("./src/services/goldieFutureImport");
 const { runFromEnv: runGoogleCalendarReconciliationFromEnv } = require("./src/services/googleCalendarReconciliation");
@@ -41,7 +42,7 @@ async function start(){
  if(process.env.RUN_CHENIQUE_IDENTITY_DIAGNOSTIC==="true"){const diagnosticResult=await inspectCheniqueIdentity();logger.info(diagnosticResult,"Read-only Chenique identity diagnostic completed");}
  if(process.env.RUN_NATASHA_STAFF_REPAIR==="true"){const repairResult=await repairNatashaStaffAssignment();logger.info(repairResult,"Guarded Natasha practitioner repair completed");}
  if(process.env.RUN_CRM6_SMOKE_TEST==="true"){await runCrm6ProductionSmokeTest();}
- server=app.listen(PORT,()=>{logger.info({port:PORT},"Shiloh started");startGoldieSyncScheduler();startGoogleBusinessProfileSyncScheduler();startAppointmentLifecycleScheduler();setImmediate(()=>{
+ server=app.listen(PORT,()=>{logger.info({port:PORT},"Shiloh started");startGoldieSyncScheduler();startGoogleBusinessProfileSyncScheduler();startAppointmentLifecycleScheduler();startCustomerCareScheduler();setImmediate(()=>{
   runStartupTestCommand(startupTestRequest).catch(error=>logger.error({err:error},"Deploy-triggered Shiloh test command did not complete"));
   runGoldieFutureImportFromEnv().catch(error=>logger.error({err:error},"Goldie future booking import did not complete"));
   runGoogleCalendarReconciliationFromEnv().catch(error=>logger.error({err:error},"Google Calendar future reconciliation did not complete"));
