@@ -19,19 +19,28 @@
 - Existing booking confirmation flow remains idempotent through `crm_audit_events`.
 - Confirmation contains service, practitioner, date/time, location, Google Calendar link and secure ICS link where available.
 - New Shiloh bookings that actually receive a confirmation are now enrolled into the appointment lifecycle using the canonical CRM appointment ID.
-- 24-hour reminder and post-appointment follow-up templates are already configured in production.
+- 24-hour reminder and post-appointment follow-up templates are configured in production.
 - Reminder/follow-up delivery is idempotent via lifecycle timestamps.
 - Migrated Goldie appointments are not bulk-enrolled by this change, so this rollout does not suddenly message historical migrated bookings.
 - Follow-up feedback is attached to the canonical appointment ID and can route low ratings to clinic follow-up.
 
 ### P3.4 Native client cancellation and reschedule
 - The previous client-facing Goldie handoff has been removed from the active appointment-change flow.
-- Shiloh now resolves the requesting WhatsApp number to that client's own upcoming canonical CRM appointments.
+- Shiloh resolves the requesting WhatsApp number to that client's own upcoming canonical CRM appointments.
 - If more than one booking exists, the client is required to choose the specific booking number; unrelated bookings remain untouched.
 - Cancellation requires explicit confirmation, writes canonical status/history/audit records, marks the lifecycle cancelled, and removes the matching Google Calendar event where available.
 - Rescheduling requires explicit confirmation and re-checks clinic hours, practitioner schedule, CRM conflicts and Google Calendar conflicts before writing the new time.
 - Successful reschedules update the CRM appointment, reminder lifecycle and Google Calendar event together.
 - The 24-hour/50% late-cancellation policy is surfaced when relevant; this flow does not automatically charge a fee.
+
+### P3.6 Loyalty and birthday customer care foundation
+- Canonical loyalty ledgers now exist for qualifying completed Shiloh appointments.
+- Every five qualifying completed visits creates an auditable 10% reward entry; rewards are not inferred from WhatsApp messages or calendar events.
+- Clients can send `LOYALTY`, `MY LOYALTY`, or `REWARDS` to see their recorded progress and available rewards.
+- Birthday messaging is explicit opt-in only: `BIRTHDAY ON` enables it and `BIRTHDAY OFF` disables it.
+- Birthday delivery is idempotent once per client per birthday year.
+- The customer-care scheduler runs every six hours and safely maintains loyalty state.
+- Production currently has no `WHATSAPP_BIRTHDAY_TEMPLATE`, so the scheduler does **not** send birthday messages yet even for opted-in clients. This is intentionally fail-closed until an approved template is configured.
 
 ## Safety rules
 - CRM remains the appointment source of truth.
@@ -40,12 +49,14 @@
 - No historical Goldie bookings were sent new booking confirmations.
 - QR registration never exposes admin routes or credentials.
 - Client appointment mutations are always scoped back to the WhatsApp number's canonical client identity and require explicit confirmation.
+- Birthday messages require both explicit client opt-in and a configured WhatsApp template.
+- Loyalty rewards count only appointments explicitly recorded as completed in Shiloh; no-show/cancelled/scheduled appointments do not qualify.
 
 ## Still to complete in P3
 - Explicit reminder confirmation tracking if desired (for example a dedicated `CONFIRM APPOINTMENT` response).
-- Treatment-aware aftercare/rebooking copy rather than a single generic template.
-- Loyalty ledger and 10% reward after 5 qualifying completed visits.
-- Birthday/customer-care preferences with explicit opt-in/frequency controls.
+- Treatment-aware aftercare/rebooking copy rather than a single generic follow-up template.
+- Configure and approve the birthday WhatsApp template before birthday outbound messaging is enabled.
+- Define reward redemption rules in the booking/payment layer (the 10% reward ledger is live; automatic redemption is intentionally not yet enabled).
 
 ## Production commits
 - `919a2614a468a03ec1760b32476288a21c86ee8d` — premium greeting + walk-in registration intent.
@@ -56,3 +67,7 @@
 - `c781298cbfd98c9a3d00d594be234e5bbf7f5481` — booking confirmations enroll new Shiloh appointments into lifecycle.
 - `f97b44b2f2876f1fcb085958f090f155f199b015` — canonical client change-intent migration.
 - `f3612094eafdf21182d2f4436b81a67f22a7ccbf` — Shiloh-native client cancel/reschedule flow.
+- `562a7fed4ad3d7a0345010f01f2a4bf7d048b624` — customer-care/loyalty/birthday schema.
+- `9d70e01e7e0a37c34306d240c816dc0fab619f29` — safe birthday/loyalty maintenance scheduler.
+- `ab30a917c6ee96faefa54d420dd2a50f9e35d634` — customer-care WhatsApp commands.
+- `03ff45783f3ba8024136881cb325b92351b8d181` — production customer-care scheduler startup.
