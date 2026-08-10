@@ -4,13 +4,14 @@ const { findClients, formatClientLookupReply } = require("./adminClientLookup");
 const { checkAvailability, formatAvailabilityReply } = require("./adminAvailability");
 const { prepareAdminBooking, confirmAdminBooking, cancelPendingBooking } = require("./adminBooking");
 const { resolveStaff, getWorkingHours, replaceWorkingHoursDay, addScheduleException, removeScheduleException, formatWorkingHours } = require("./staffScheduleService");
+const { authorizeRequestedStaffService } = require("./staffScopeAuthorization");
 
 function normalizeText(text = "") { return String(text).trim().toLowerCase().replace(/\s+/g, " "); }
 function isGreeting(text = "") { return /^(hi|hello|hey|howzit|hiya|good morning|good afternoon|good evening)[!. ]*$/i.test(String(text).trim()); }
 function hasPermission(admin, permission) { return admin?.permissions?.[permission] === true; }
 
 async function getAdmin(sender) {
-  const result = await pool.query(`SELECT id, staff_id, display_name, role, permissions FROM staff_admin_accounts WHERE normalized_whatsapp = $1 AND active = TRUE`, [normalizePhone(sender)]);
+  const result = await pool.query(`SELECT id, staff_id, display_name, role, permissions, service_scope FROM staff_admin_accounts WHERE normalized_whatsapp = $1 AND active = TRUE`, [normalizePhone(sender)]);
   return result.rows[0] || null;
 }
 
@@ -33,13 +34,49 @@ function formatTime(date) {
   return new Intl.DateTimeFormat("en-ZA", { timeZone: "Africa/Johannesburg", hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(date));
 }
 
-async function getSchedule(dayOffset) {
-  const result = await pool.query(`WITH bounds AS (SELECT ((CURRENT_DATE + $1::int)::timestamp AT TIME ZONE 'Africa/Johannesburg') AS start_utc, ((CURRENT_DATE + $1::int + 1)::timestamp AT TIME ZONE 'Africa/Johannesburg') AS end_utc) SELECT a.id, a.starts_at, a.ends_at, a.status, COALESCE(c.display_name, a.source_client_name, 'Unknown client') AS client_name, COALESCE(string_agg(DISTINCT aps.service_name_snapshot, ', ') FILTER (WHERE aps.service_name_snapshot IS NOT NULL), '') AS services, COALESCE(string_agg(DISTINCT ast.staff_name_snapshot, ', ') FILTER (WHERE ast.staff_name_snapshot IS NOT NULL), '') AS staff FROM appointments a CROSS JOIN bounds b LEFT JOIN clients c ON c.id = a.client_id LEFT JOIN appointment_services aps ON aps.appointment_id = a.id LEFT JOIN appointment_staff ast ON ast.appointment_id = a.id WHERE a.starts_at >= b.start_utc AND a.starts_at < b.end_utc AND a.status NOT IN ('cancelled') GROUP BY a.id, a.starts_at, a.ends_at, a.status, c.display_name, a.source_client_name ORDER BY a.starts_at, a.id`, [dayOffset]);
+async function getSchedule(dayOffset, admin) {
+  const result = await pool.query(`
+    WITH bounds AS (
+      SELECT ((CURRENT_DATE + $1::int)::timestamp AT TIME ZONE 'Africa/Johannesburg') AS start_utc,
+             ((CURRENT_DATE + $1::int + 1)::timestamp AT TIME ZONE 'Africa/Johannesburg') AS end_utc
+    )
+    SELECT a.id, a.starts_at, a.ends_at, a.status,
+           COALESCE(c.display_name, a.source_client_name, 'Unknown client') AS client_name,
+           COALESCE(string_agg(DISTINCT aps.service_name_snapshot, ', ') FILTER (WHERE aps.service_name_snapshot IS NOT NULL), '') AS services,
+           COALESCE(string_agg(DISTINCT ast.staff_name_snapshot, ', ') FILTER (WHERE ast.staff_name_snapshot IS NOT NULL), '') AS staff
+      FROM appointments a
+      CROSS JOIN bounds b
+      LEFT JOIN clients c ON c.id = a.client_id
+      LEFT JOIN appointment_services aps ON aps.appointment_id = a.id
+      LEFT JOIN appointment_staff ast ON ast.appointment_id = a.id
+     WHERE a.starts_at >= b.start_utc
+       AND a.starts_at < b.end_utc
+       AND a.status NOT IN ('cancelled')
+       AND (
+         $2::text = 'all_services'
+         OR (
+           $3::bigint IS NOT NULL
+           AND EXISTS (
+             SELECT 1 FROM appointment_staff ast_scope
+              WHERE ast_scope.appointment_id = a.id AND ast_scope.staff_id = $3
+           )
+           AND EXISTS (
+             SELECT 1
+               FROM appointment_services aps_scope
+               JOIN staff_services ss_scope
+                 ON ss_scope.service_id = aps_scope.service_id
+                AND ss_scope.staff_id = $3
+              WHERE aps_scope.appointment_id = a.id
+           )
+         )
+       )
+     GROUP BY a.id, a.starts_at, a.ends_at, a.status, c.display_name, a.source_client_name
+     ORDER BY a.starts_at, a.id`, [dayOffset, admin.service_scope, admin.staff_id]);
   return result.rows;
 }
 
 function scheduleReply(label, rows) {
-  if (!rows.length) return `${label}: there are no active appointments in the CRM.`;
+  if (!rows.length) return `${label}: there are no active appointments in your authorized service scope.`;
   const lines = [`${label} — ${rows.length} appointment${rows.length === 1 ? "" : "s"}`];
   for (const row of rows.slice(0, 25)) lines.push(`${formatTime(row.starts_at)} ${row.client_name}${row.services ? ` — ${row.services}` : ""}${row.staff ? ` — ${row.staff}` : ""}`);
   if (rows.length > 25) lines.push(`…and ${rows.length - 25} more.`);
@@ -157,6 +194,8 @@ async function processAdminAssistantMessage(sender, text) {
   const bookingRequest = extractBookingRequest(text);
   if (bookingRequest) {
     if (!hasPermission(admin, "appointment:create")) return { handled: true, isAdmin: true, admin, reply: "Your admin account does not currently have permission to create appointments." };
+    const scope = await authorizeRequestedStaffService(admin, bookingRequest.staffName, bookingRequest.serviceName);
+    if (!scope.allowed) return { handled:true, isAdmin:true, admin, reply:scope.reply };
     const result = await prepareAdminBooking({ adminId: admin.id, ...bookingRequest });
     await audit(admin.id, "admin.booking_prepared", { status: result.status, clientId: result.client?.id || Number(bookingRequest.clientId), staffId: result.staff?.id || null, serviceId: result.service?.id || null, startsAt: result.startsAt || null });
     return { handled: true, isAdmin: true, admin, reply: result.reply };
@@ -169,6 +208,8 @@ async function processAdminAssistantMessage(sender, text) {
   const availabilityCheck = extractAvailabilityCheck(text);
   if (availabilityCheck) {
     if (!hasPermission(admin, "appointment:view")) return { handled: true, isAdmin: true, admin, reply: "Your admin account does not currently have permission to view appointment availability." };
+    const scope = await authorizeRequestedStaffService(admin, availabilityCheck.staffName, availabilityCheck.serviceName);
+    if (!scope.allowed) return { handled:true, isAdmin:true, admin, reply:scope.reply };
     const result = await checkAvailability(availabilityCheck);
     await audit(admin.id, "admin.availability_checked", { status: result.status, staffId: result.staff?.id || null, serviceId: result.service?.id || null, startsAt: result.startsAt || null, endsAt: result.endsAt || null, conflictCount: result.conflicts?.length || 0 });
     return { handled: true, isAdmin: true, admin, reply: formatAvailabilityReply(result) };
@@ -183,13 +224,13 @@ async function processAdminAssistantMessage(sender, text) {
     return { handled: true, isAdmin: true, admin, reply: formatClientLookupReply(clientLookup, lookup.clients) };
   }
 
-  if (["today", "today's appointments", "todays appointments", "appointments today", "show today", "show today's appointments"].includes(value)) {
+  if (["today", "today's clients", "todays clients", "today's appointments", "todays appointments", "appointments today", "show today", "show today's appointments"].includes(value)) {
     if (!hasPermission(admin, "appointment:view")) return { handled: true, isAdmin: true, admin, reply: "Your admin account does not currently have permission to view appointments." };
-    const rows = await getSchedule(0); await audit(admin.id, "admin.appointments_viewed", { day: "today", count: rows.length }); return { handled: true, isAdmin: true, admin, reply: scheduleReply("Today's schedule", rows) };
+    const rows = await getSchedule(0, admin); await audit(admin.id, "admin.appointments_viewed", { day: "today", count: rows.length, serviceScope: admin.service_scope }); return { handled: true, isAdmin: true, admin, reply: scheduleReply("Today's schedule", rows) };
   }
-  if (["tomorrow", "tomorrow's appointments", "tomorrows appointments", "appointments tomorrow", "show tomorrow", "show tomorrow's appointments"].includes(value)) {
+  if (["tomorrow", "tomorrow's clients", "tomorrows clients", "tomorrow's appointments", "tomorrows appointments", "appointments tomorrow", "show tomorrow", "show tomorrow's appointments"].includes(value)) {
     if (!hasPermission(admin, "appointment:view")) return { handled: true, isAdmin: true, admin, reply: "Your admin account does not currently have permission to view appointments." };
-    const rows = await getSchedule(1); await audit(admin.id, "admin.appointments_viewed", { day: "tomorrow", count: rows.length }); return { handled: true, isAdmin: true, admin, reply: scheduleReply("Tomorrow's schedule", rows) };
+    const rows = await getSchedule(1, admin); await audit(admin.id, "admin.appointments_viewed", { day: "tomorrow", count: rows.length, serviceScope: admin.service_scope }); return { handled: true, isAdmin: true, admin, reply: scheduleReply("Tomorrow's schedule", rows) };
   }
 
   await audit(admin.id, "admin.whatsapp_unrecognized_command", { text: String(text).slice(0, 200) });
