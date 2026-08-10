@@ -17,7 +17,7 @@ function authMode() {
 }
 
 function requireCalendarConfig() {
-  const calendarId = process.env.GOOGLE_BOOKING_CALENDAR_ID;
+  const calendarId = String(process.env.GOOGLE_BOOKING_CALENDAR_ID || "").trim();
   if (!calendarId) {
     throw new Error("Google Calendar is enabled but GOOGLE_BOOKING_CALENDAR_ID is missing.");
   }
@@ -25,7 +25,7 @@ function requireCalendarConfig() {
 }
 
 function requireServiceAccountConfig() {
-  const clientEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
+  const clientEmail = String(process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || "").trim();
   const privateKey = String(process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY || "").replace(/\\n/g, "\n");
   if (!clientEmail || !privateKey) {
     throw new Error("GOOGLE_CALENDAR_AUTH_MODE=service_account requires GOOGLE_SERVICE_ACCOUNT_EMAIL and GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY.");
@@ -33,10 +33,17 @@ function requireServiceAccountConfig() {
   return { clientEmail, privateKey };
 }
 
+function cleanOAuthEnv(value) {
+  // Render values are normally exact strings, but secrets copied from browsers or
+  // OAuth Playground can accidentally include surrounding whitespace/newlines.
+  // Google treats that as a different credential and returns invalid_grant.
+  return String(value || "").trim();
+}
+
 function requireOAuthConfig() {
-  const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID;
-  const clientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET;
-  const refreshToken = process.env.GOOGLE_OAUTH_REFRESH_TOKEN;
+  const clientId = cleanOAuthEnv(process.env.GOOGLE_OAUTH_CLIENT_ID);
+  const clientSecret = cleanOAuthEnv(process.env.GOOGLE_OAUTH_CLIENT_SECRET);
+  const refreshToken = cleanOAuthEnv(process.env.GOOGLE_OAUTH_REFRESH_TOKEN);
   if (!clientId || !clientSecret || !refreshToken) {
     throw new Error("GOOGLE_CALENDAR_AUTH_MODE=oauth_refresh_token requires GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET, and GOOGLE_OAUTH_REFRESH_TOKEN.");
   }
@@ -97,7 +104,8 @@ async function getOAuthRefreshAccessToken() {
 
   if (!response.ok) {
     const detail = await response.text();
-    throw new Error(`Google OAuth refresh-token request failed (${response.status}): ${detail.slice(0, 500)}`);
+    const clientHint = clientId.length > 16 ? `${clientId.slice(0, 12)}…${clientId.slice(-12)}` : "configured";
+    throw new Error(`Google OAuth refresh-token request failed (${response.status}) for client ${clientHint}; refresh token length=${refreshToken.length}: ${detail.slice(0, 500)}`);
   }
   return response.json();
 }
