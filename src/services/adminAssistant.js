@@ -5,6 +5,7 @@ const { checkAvailability, formatAvailabilityReply } = require("./adminAvailabil
 const { prepareAdminBooking, confirmAdminBooking, cancelPendingBooking } = require("./adminBooking");
 const { resolveStaff, getWorkingHours, replaceWorkingHoursDay, addScheduleException, removeScheduleException, formatWorkingHours } = require("./staffScheduleService");
 const { authorizeRequestedStaffService } = require("./staffScopeAuthorization");
+const { archiveClientForAdmin } = require("./adminClientDeletion");
 
 function normalizeText(text = "") { return String(text).trim().toLowerCase().replace(/\s+/g, " "); }
 function isGreeting(text = "") { return /^(hi|hello|hey|howzit|hiya|good morning|good afternoon|good evening)[!. ]*$/i.test(String(text).trim()); }
@@ -26,6 +27,7 @@ function menu(admin) {
   if (hasPermission(admin, "schedule:manage")) lines.push("• Working hours STAFF — view recurring hours/exceptions", "• Set working hours STAFF | DAY | HH:MM-HH:MM — replace one day", "• Add schedule exception STAFF | YYYY-MM-DD | TYPE | RANGE | REASON");
   if (hasPermission(admin, "walkin:create")) lines.push("• Add walk-in — register a walk-in client");
   if (hasPermission(admin, "client:lookup")) lines.push("• Find client [name/number] — look up a canonical CRM client");
+  if (hasPermission(admin, "client:delete")) lines.push("• Delete client CRM_ID — archive an authorized client record");
   lines.push("• Help or Menu — show admin options", "", "Production bookings are only written after explicit CONFIRM BOOKING confirmation and a final conflict re-check.");
   return lines.join("\n");
 }
@@ -186,6 +188,16 @@ async function processAdminAssistantMessage(sender, text) {
     const cancelled = await cancelPendingBooking(admin.id);
     await audit(admin.id, "admin.booking_cancelled", { hadPendingBooking: cancelled });
     return { handled: true, isAdmin: true, admin, reply: cancelled ? "Pending admin booking cancelled. No appointment was created." : "There is no pending admin booking to cancel." };
+  }
+
+  const deleteMatch = String(text).trim().match(/^delete\s+client\s+(?:crm\s*#?\s*)?(\d+)$/i);
+  if (deleteMatch) {
+    if (!hasPermission(admin, "client:delete")) return { handled:true, isAdmin:true, admin, reply:"Your admin account does not currently have permission to delete clients." };
+    const result = await archiveClientForAdmin(admin, deleteMatch[1]);
+    return { handled:true, isAdmin:true, admin, reply:result.reply };
+  }
+  if (/^delete\s+client\b/i.test(String(text).trim())) {
+    return { handled:true, isAdmin:true, admin, reply:"Use: Delete client CRM_ID\nExample: Delete client 123" };
   }
 
   const scheduleCommand = await handleScheduleCommand(admin, text);
