@@ -18,6 +18,7 @@ const { startGoldieSyncScheduler } = require("./src/services/goldieSync");
 const { startGoogleBusinessProfileSyncScheduler } = require("./src/services/googleBusinessProfileSync");
 const { startAppointmentLifecycleScheduler } = require("./src/services/appointmentLifecycle");
 const { runStartupTestCommand } = require("./src/services/startupTestCommand");
+const { runGoldieFutureImportFromEnv } = require("./src/services/goldieFutureImport");
 
 const app = express();
 app.disable("x-powered-by");
@@ -74,6 +75,9 @@ async function start() {
     setImmediate(() => {
       runStartupTestCommand(startupTestRequest).catch((error) => {
         logger.error({ err: error }, "Deploy-triggered Shiloh test command did not complete");
+      });
+      runGoldieFutureImportFromEnv().catch((error) => {
+        logger.error({ err: error }, "Goldie future booking import did not complete");
       });
     });
   });
