@@ -8,16 +8,16 @@ function normalize(value = '') {
   return clean(value).toLowerCase();
 }
 
-async function findRequestedFreelancer(text) {
+async function findRequestedStaff(text) {
   const value = normalize(text);
   if (!value) return null;
 
   const result = await pool.query(`
-    SELECT id, display_name
+    SELECT id, display_name, scheduling_type, client_bookable
       FROM staff
      WHERE status = 'active'
-       AND scheduling_type = 'freelance'
-     ORDER BY display_name, id
+       AND resource_type = 'practitioner'
+     ORDER BY LENGTH(display_name) DESC, display_name, id
   `);
 
   for (const staff of result.rows) {
@@ -28,6 +28,24 @@ async function findRequestedFreelancer(text) {
   return null;
 }
 
+async function listClientBookableStaff() {
+  const result = await pool.query(`
+    SELECT id, display_name
+      FROM staff
+     WHERE status = 'active'
+       AND resource_type = 'practitioner'
+       AND client_bookable = TRUE
+     ORDER BY CASE LOWER(display_name)
+       WHEN 'christel' THEN 1
+       WHEN 'abigail' THEN 2
+       WHEN 'marietjie' THEN 3
+       ELSE 9 END,
+       display_name,
+       id
+  `);
+  return result.rows;
+}
+
 async function guardClientFreelancerBooking(text) {
   const value = normalize(text);
   if (!value) return { blocked: false };
@@ -35,21 +53,35 @@ async function guardClientFreelancerBooking(text) {
   const bookingLanguage = /\b(book|booking|appointment|schedule|reserve|availability|available|with|therapist|practitioner)\b/i.test(value);
   if (!bookingLanguage) return { blocked: false };
 
-  const requestedFreelancer = await findRequestedFreelancer(text);
+  const requestedStaff = await findRequestedStaff(text);
   const genericFreelancerRequest = /\bfreelancer(s)?\b/i.test(value);
 
-  if (!requestedFreelancer && !genericFreelancerRequest) return { blocked: false };
+  if (requestedStaff && requestedStaff.client_bookable !== true) {
+    const allowed = await listClientBookableStaff();
+    const allowedNames = allowed.map((row) => row.display_name).join(', ');
+    return {
+      blocked: true,
+      staff: requestedStaff,
+      reply: requestedStaff.scheduling_type === 'freelance'
+        ? `${requestedStaff.display_name} is an internal overflow freelancer and is not available for direct client bookings. Client bookings are routed only to ${allowedNames}.`
+        : `${requestedStaff.display_name} is not available for direct client bookings. Client bookings are routed only to ${allowedNames}.`,
+    };
+  }
 
-  return {
-    blocked: true,
-    staff: requestedFreelancer,
-    reply: requestedFreelancer
-      ? `${requestedFreelancer.display_name} is a freelance practitioner and is not available for direct client bookings. I can help you book with one of Shiloh's regular practitioners instead.`
-      : `Freelance practitioners are not available for direct client bookings. I can help you book with one of Shiloh's regular practitioners instead.`,
-  };
+  if (genericFreelancerRequest) {
+    const allowed = await listClientBookableStaff();
+    return {
+      blocked: true,
+      staff: null,
+      reply: `Freelance practitioners are internal overflow resources and are not available for direct client bookings. Client bookings are routed only to ${allowed.map((row) => row.display_name).join(', ')}.`,
+    };
+  }
+
+  return { blocked: false, staff: requestedStaff || null };
 }
 
 module.exports = {
   guardClientFreelancerBooking,
-  findRequestedFreelancer,
+  findRequestedStaff,
+  listClientBookableStaff,
 };
