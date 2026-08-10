@@ -13,17 +13,18 @@ const { createLifecycleAppointment, getLifecycleAppointments, patchLifecycleAppo
 const { getFeedback, getReviews, getCustomerSatisfaction, resolveCustomerFeedback } = require("../controllers/customerExperienceController");
 const { getStatus: getDatabaseStatus, getTables: getDatabaseTables, getSchema: getDatabaseSchema, getOverview: getDatabaseOverview, getMigrations: getDatabaseMigrations, applyMigrations: applyDatabaseMigrations } = require("../controllers/databaseController");
 const router = express.Router();
+
+// Protected internal test harness. It is intentionally authenticated with its
+// own dedicated key and remains disabled unless explicitly enabled in Render.
+// The controller only accepts authoritative availability commands and always
+// uses the fixed test-admin WhatsApp identity configured server-side.
+router.post("/test-command", testCommandAuth, runTestCommand);
+
 router.use(adminAuth);
 
 // Production CRM canonical API. This surface reads canonical CRM tables only and
 // intentionally remains separate from legacy profiles and Goldie reconciliation.
 router.use("/crm", crmRoutes);
-
-// Protected internal test harness. This endpoint is disabled unless explicitly
-// enabled and requires both the normal admin key and a dedicated test key.
-// The controller only accepts authoritative availability commands and always
-// uses the fixed test-admin identity configured in Render.
-router.post("/test-command", testCommandAuth, runTestCommand);
 
 router.get("/documents", getDocuments); router.post("/documents", createDocument); router.post("/documents/upload", documentUpload, uploadDocument); router.delete("/documents/:id", removeDocument);
 router.get("/profiles", getProfiles); router.get("/profiles/:phone", getProfileByPhone); router.patch("/profiles/:phone", patchProfileByPhone);
