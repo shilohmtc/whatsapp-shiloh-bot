@@ -26,6 +26,7 @@ const { runGoogleCalendarAccessSetupFromEnv } = require("./src/services/googleCa
 const { repairNatashaStaffAssignment } = require("./src/services/natashaStaffRepair");
 const { runCrm6ProductionSmokeTest } = require("./src/services/crm6ProductionSmokeTest");
 const { runCalendarPresentationReconciliation } = require("./src/services/calendarPresentationReconciliation");
+const { runP2StaffRolloutSmokeTest } = require("./src/services/p2StaffRolloutSmokeTest");
 
 const app = express();
 app.disable("x-powered-by");
@@ -42,6 +43,7 @@ async function start(){
  if(process.env.RUN_CHENIQUE_IDENTITY_DIAGNOSTIC==="true"){const diagnosticResult=await inspectCheniqueIdentity();logger.info(diagnosticResult,"Read-only Chenique identity diagnostic completed");}
  if(process.env.RUN_NATASHA_STAFF_REPAIR==="true"){const repairResult=await repairNatashaStaffAssignment();logger.info(repairResult,"Guarded Natasha practitioner repair completed");}
  if(process.env.RUN_CRM6_SMOKE_TEST==="true"){await runCrm6ProductionSmokeTest();}
+ if(process.env.RUN_P2_STAFF_ROLLOUT_SMOKE_TEST==="true"){await runP2StaffRolloutSmokeTest();}
  server=app.listen(PORT,()=>{logger.info({port:PORT},"Shiloh started");startGoldieSyncScheduler();startGoogleBusinessProfileSyncScheduler();startAppointmentLifecycleScheduler();startCustomerCareScheduler();setImmediate(()=>{
   runStartupTestCommand(startupTestRequest).catch(error=>logger.error({err:error},"Deploy-triggered Shiloh test command did not complete"));
   runGoldieFutureImportFromEnv().catch(error=>logger.error({err:error},"Goldie future booking import did not complete"));
