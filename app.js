@@ -23,6 +23,7 @@ const { runFromEnv: runGoogleCalendarReconciliationFromEnv } = require("./src/se
 const { runGoogleCalendarAccessSetupFromEnv } = require("./src/services/googleCalendarAccessSetup");
 const { repairNatashaStaffAssignment } = require("./src/services/natashaStaffRepair");
 const { runCrm6ProductionSmokeTest } = require("./src/services/crm6ProductionSmokeTest");
+const { runCalendarPresentationReconciliation } = require("./src/services/calendarPresentationReconciliation");
 
 const app = express();
 app.disable("x-powered-by");
@@ -44,6 +45,7 @@ async function start(){
   runGoldieFutureImportFromEnv().catch(error=>logger.error({err:error},"Goldie future booking import did not complete"));
   runGoogleCalendarReconciliationFromEnv().catch(error=>logger.error({err:error},"Google Calendar future reconciliation did not complete"));
   runGoogleCalendarAccessSetupFromEnv().catch(error=>logger.error({err:error},"Google Calendar staff access setup did not complete"));
+  runCalendarPresentationReconciliation().catch(error=>logger.error({err:error},"CRM-6 calendar presentation reconciliation did not complete"));
  });});
 }
 start().catch(error=>{logger.fatal({err:error},"Shiloh failed during startup");process.exit(1);});
