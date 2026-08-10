@@ -3,6 +3,7 @@ const express = require("express");
 const { validateEnv } = require("./src/config/env");
 const logger = require("./src/lib/logger");
 const requestContext = require("./src/middleware/requestContext");
+const startupTestRequest = require("./config/shiloh-test-request.json");
 validateEnv();
 
 const webhookRoutes = require("./src/routes/webhook");
@@ -15,6 +16,7 @@ const { inspectCheniqueIdentity } = require("./src/services/cheniqueDiagnostic")
 const { startGoldieSyncScheduler } = require("./src/services/goldieSync");
 const { startGoogleBusinessProfileSyncScheduler } = require("./src/services/googleBusinessProfileSync");
 const { startAppointmentLifecycleScheduler } = require("./src/services/appointmentLifecycle");
+const { runStartupTestCommand } = require("./src/services/startupTestCommand");
 
 const app = express();
 app.disable("x-powered-by");
@@ -66,6 +68,12 @@ async function start() {
     startGoldieSyncScheduler();
     startGoogleBusinessProfileSyncScheduler();
     startAppointmentLifecycleScheduler();
+
+    setImmediate(() => {
+      runStartupTestCommand(startupTestRequest).catch((error) => {
+        logger.error({ err: error }, "Deploy-triggered Shiloh test command did not complete");
+      });
+    });
   });
 }
 
