@@ -1,0 +1,227 @@
+const { pool } = require("../db/pool");
+const { normalizePhone } = require("./clientIdentityOnboarding");
+
+let initialized = false;
+
+async function ensureTable() {
+  if (initialized) return;
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS admin_appointment_cancellation_intents (
+      phone VARCHAR(32) PRIMARY KEY,
+      appointment_id BIGINT NOT NULL,
+      reason TEXT,
+      status TEXT NOT NULL DEFAULT 'collecting_reason',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  initialized = true;
+}
+
+function clean(value = "") {
+  return String(value).trim().replace(/\s+/g, " ");
+}
+
+function isConfirmation(value = "") {
+  return /^(yes|y|confirm|confirmed|proceed|continue|ok|okay|confirm cancellation)$/i.test(clean(value));
+}
+
+function isAbort(value = "") {
+  return /^(0|cancel|stop|abort|never mind|nevermind|forget it)$/i.test(clean(value));
+}
+
+async function getAdmin(sender) {
+  const result = await pool.query(
+    `SELECT id, display_name, permissions
+       FROM staff_admin_accounts
+      WHERE normalized_whatsapp=$1 AND active=TRUE`,
+    [normalizePhone(sender)]
+  );
+  return result.rows[0] || null;
+}
+
+async function getAppointment(appointmentId) {
+  const result = await pool.query(`
+    SELECT a.id, a.starts_at, a.ends_at, a.status,
+           COALESCE(c.display_name, a.source_client_name, 'Unknown client') AS client_name,
+           COALESCE(string_agg(DISTINCT aps.service_name_snapshot, ', ') FILTER (WHERE aps.service_name_snapshot IS NOT NULL), '') AS services,
+           COALESCE(string_agg(DISTINCT ast.staff_name_snapshot, ', ') FILTER (WHERE ast.staff_name_snapshot IS NOT NULL), '') AS staff
+      FROM appointments a
+      LEFT JOIN clients c ON c.id=a.client_id
+      LEFT JOIN appointment_services aps ON aps.appointment_id=a.id
+      LEFT JOIN appointment_staff ast ON ast.appointment_id=a.id
+     WHERE a.id=$1
+     GROUP BY a.id,a.starts_at,a.ends_at,a.status,c.display_name,a.source_client_name`,
+    [appointmentId]
+  );
+  return result.rows[0] || null;
+}
+
+function formatDateTime(value) {
+  return new Intl.DateTimeFormat("en-ZA", {
+    timeZone: "Africa/Johannesburg",
+    weekday: "short",
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(new Date(value));
+}
+
+function appointmentSummary(row) {
+  return [
+    `Appointment #${row.id}`,
+    `• ${formatDateTime(row.starts_at)}–${new Intl.DateTimeFormat("en-ZA", { timeZone: "Africa/Johannesburg", hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(row.ends_at))}`,
+    `• Client: ${row.client_name}`,
+    row.services ? `• Service: ${row.services}` : null,
+    row.staff ? `• Staff: ${row.staff}` : null,
+  ].filter(Boolean).join("\n");
+}
+
+async function getIntent(phone) {
+  await ensureTable();
+  const result = await pool.query(`SELECT * FROM admin_appointment_cancellation_intents WHERE phone=$1`, [phone]);
+  return result.rows[0] || null;
+}
+
+async function clearIntent(phone) {
+  await ensureTable();
+  await pool.query(`DELETE FROM admin_appointment_cancellation_intents WHERE phone=$1`, [phone]);
+}
+
+async function saveIntent(phone, appointmentId, reason, status) {
+  await ensureTable();
+  const result = await pool.query(`
+    INSERT INTO admin_appointment_cancellation_intents (phone, appointment_id, reason, status, updated_at)
+    VALUES ($1,$2,$3,$4,NOW())
+    ON CONFLICT (phone) DO UPDATE SET
+      appointment_id=EXCLUDED.appointment_id,
+      reason=EXCLUDED.reason,
+      status=EXCLUDED.status,
+      updated_at=NOW()
+    RETURNING *`,
+    [phone, appointmentId, reason || null, status]
+  );
+  return result.rows[0];
+}
+
+async function cancelAppointment({ sender, adminId, appointmentId, reason }) {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    const current = await client.query(`
+      SELECT id, starts_at, ends_at, status
+        FROM appointments
+       WHERE id=$1
+       FOR UPDATE`,
+      [appointmentId]
+    );
+    const row = current.rows[0];
+    if (!row) {
+      await client.query("ROLLBACK");
+      return { status: "not_found" };
+    }
+    if (row.status === "cancelled") {
+      await client.query("ROLLBACK");
+      return { status: "already_cancelled" };
+    }
+
+    const updated = await client.query(`
+      UPDATE appointments
+         SET status='cancelled', updated_at=NOW()
+       WHERE id=$1 AND status <> 'cancelled'
+       RETURNING id, starts_at, ends_at, status`,
+      [appointmentId]
+    );
+
+    if (!updated.rows[0]) {
+      await client.query("ROLLBACK");
+      return { status: "conflict" };
+    }
+
+    await client.query(`
+      INSERT INTO crm_audit_events (actor_admin_id, action, entity_type, entity_id, metadata)
+      VALUES ($1, 'admin.appointment_cancelled', 'appointment', $2, $3::jsonb)`,
+      [adminId, appointmentId, JSON.stringify({ phone: normalizePhone(sender), reason: clean(reason) })]
+    );
+
+    await client.query("COMMIT");
+    return { status: "cancelled", appointment: updated.rows[0] };
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function processAdminAppointmentCancellationMessage(sender, text) {
+  const admin = await getAdmin(sender);
+  if (!admin) return { handled: false };
+  if (admin.permissions?.["appointment:view"] !== true) {
+    return { handled: true, reply: "Your admin account does not currently have permission to manage appointments." };
+  }
+
+  const phone = normalizePhone(sender);
+  const value = clean(text);
+  let intent = await getIntent(phone);
+
+  const direct = value.match(/^cancel\s+(?:appointment|booking)\s+#?(\d+)$/i);
+  if (direct) {
+    const appointmentId = Number(direct[1]);
+    const appointment = await getAppointment(appointmentId);
+    if (!appointment) return { handled: true, reply: `Appointment #${appointmentId} was not found.` };
+    if (appointment.status === "cancelled") return { handled: true, reply: `Appointment #${appointmentId} is already cancelled.` };
+    await saveIntent(phone, appointmentId, null, "collecting_reason");
+    return { handled: true, reply: `${appointmentSummary(appointment)}\n\nReason is required. Send a short reason for cancelling this appointment.\n\n0️⃣ Back` };
+  }
+
+  if (!intent) return { handled: false };
+
+  if (isAbort(value)) {
+    await clearIntent(phone);
+    return { handled: true, reply: "Cancellation stopped. The appointment has not been changed." };
+  }
+
+  const appointment = await getAppointment(intent.appointment_id);
+  if (!appointment) {
+    await clearIntent(phone);
+    return { handled: true, reply: `Appointment #${intent.appointment_id} was not found. The cancellation request was cleared.` };
+  }
+  if (appointment.status === "cancelled") {
+    await clearIntent(phone);
+    return { handled: true, reply: `Appointment #${appointment.id} is already cancelled.` };
+  }
+
+  if (intent.status === "collecting_reason") {
+    if (!value) return { handled: true, reply: "Reason is required. Send a short reason for cancelling this appointment." };
+    await saveIntent(phone, appointment.id, value, "awaiting_confirmation");
+    return {
+      handled: true,
+      reply: `${appointmentSummary(appointment)}\n\nReason: ${value}\n\nReply CONFIRM CANCELLATION to cancel this appointment, or 0️⃣ Back.`,
+    };
+  }
+
+  if (intent.status === "awaiting_confirmation") {
+    if (!isConfirmation(value)) {
+      return { handled: true, reply: "Reply CONFIRM CANCELLATION to cancel this appointment, or 0️⃣ Back." };
+    }
+
+    const result = await cancelAppointment({ sender, adminId: admin.id, appointmentId: appointment.id, reason: intent.reason });
+    await clearIntent(phone);
+    if (result.status === "cancelled") {
+      return { handled: true, reply: `✅ Appointment #${appointment.id} cancelled.\nReason: ${intent.reason}` };
+    }
+    if (result.status === "already_cancelled") return { handled: true, reply: `Appointment #${appointment.id} was already cancelled.` };
+    if (result.status === "conflict") return { handled: true, reply: `Appointment #${appointment.id} changed before cancellation. No cancellation was written.` };
+    return { handled: true, reply: `Appointment #${appointment.id} could not be found.` };
+  }
+
+  await clearIntent(phone);
+  return { handled: false };
+}
+
+module.exports = { processAdminAppointmentCancellationMessage, ensureTable };
