@@ -4,10 +4,13 @@ const { processAdminHolidayHoursMessage, getHolidayReminder } = require('./admin
 const { processAdminFreelancerAvailabilityMessage } = require('./adminFreelancerAvailability');
 const { processAdminMobileBookingFlowMessage } = require('./adminMobileBookingFlow');
 const { processAdminStaffScheduleFlowMessage } = require('./adminStaffScheduleFlow');
+const { processAdminOwnScheduleMessage } = require('./adminOwnSchedule');
 const { processAdminAppointmentCancellationMessage } = require('./adminAppointmentCancellation');
 const { processAdminStaffServicesMessage } = require('./adminStaffServices');
 const { processAdminServicePricingMessage } = require('./adminServicePricing');
 const { processAdminBookingUpdateMessage } = require('./adminBookingUpdate');
+const { findClients, formatClientLookupReply } = require('./adminClientLookup');
+const { filterClientsForAdminScope } = require('./staffAdminScope');
 
 const moreSessions = new Map();
 function has(admin,p){return admin?.permissions?.[p]===true;}
@@ -18,6 +21,7 @@ function isTenant(admin){return admin?.business_role==='tenant_practitioner';}
 function isEmployeePractitioner(admin){return admin?.business_role==='employee_practitioner';}
 async function getAdmin(sender){const r=await pool.query(`SELECT id,staff_id,display_name,role,permissions,service_scope,business_role,calendar_scope FROM staff_admin_accounts WHERE normalized_whatsapp=$1 AND active=TRUE`,[senderKey(sender)]);return r.rows[0]||null;}
 async function audit(id,action,metadata={}){await pool.query(`INSERT INTO crm_audit_events (actor_admin_id,action,entity_type,entity_id,metadata) VALUES ($1,$2,'admin_assistant',NULL,$3::jsonb)`,[id,action,JSON.stringify(metadata)]);}
+async function scopedClientLookup(admin,q){const found=await findClients(q);const clients=await filterClientsForAdminScope(admin,found.clients);await audit(admin.id,'admin.client_lookup',{queryType:found.queryType,resultCount:clients.length,resultClientIds:clients.map(c=>c.id),scoped:!isBusinessWide(admin)});return formatClientLookupReply(q,clients);}
 
 function getMenuOptions(admin){
   const options=[];
@@ -49,6 +53,9 @@ function returnedToMore(reply=''){return /\*(?:More — )?Schedule management\*/
 
 async function processAdminMobileMenuMessage(sender,text){
   const k=senderKey(sender);const admin=await getAdmin(sender);if(!admin)return {handled:false};const raw=String(text||'').trim();const v=raw.toLowerCase().replace(/\s+/g,' ');
+  if(isTenant(admin)){const ownSchedule=await processAdminOwnScheduleMessage(sender,text);if(ownSchedule.handled){moreSessions.delete(k);return ownSchedule;}}
+  const clientCommand=raw.match(/^(?:find|lookup|search(?: for)?)\s+client\s+(.+)$/i)||raw.match(/^client\s+(?:find|lookup|search)\s+(.+)$/i);
+  if(clientCommand&&has(admin,'client:lookup'))return{handled:true,admin,reply:await scopedClientLookup(admin,clientCommand[1].trim())};
   const bookingUpdateFlow=await processAdminBookingUpdateMessage(sender,text);if(bookingUpdateFlow.handled){moreSessions.delete(k);return bookingUpdateFlow;}
   const pricingFlow=await processAdminServicePricingMessage(sender,text);if(pricingFlow.handled){moreSessions.delete(k);return pricingFlow;}
   const cancellationFlow=await processAdminAppointmentCancellationMessage(sender,text);if(cancellationFlow.handled){moreSessions.delete(k);return cancellationFlow;}
@@ -56,13 +63,13 @@ async function processAdminMobileMenuMessage(sender,text){
   const more=moreSessions.get(k);
   if(more?.step==='menu'){
     if(v==='0'||v==='back'){moreSessions.delete(k);return {handled:true,admin,reply:menu(admin)};}
-    if(v==='1'||v==='staff hours'||v==='my regular hours'){moreSessions.delete(k);return processAdminStaffScheduleFlowMessage(sender,'Staff hours');}
-    if(v==='2'||v==='leave / special availability'||v==='leave'||v==='special availability'||v==='my leave / special availability'){moreSessions.delete(k);return processAdminStaffScheduleFlowMessage(sender,'Leave / special availability');}
+    if(v==='1'||v==='staff hours'||v==='my regular hours'){moreSessions.delete(k);return isTenant(admin)?processAdminOwnScheduleMessage(sender,'My regular hours'):processAdminStaffScheduleFlowMessage(sender,'Staff hours');}
+    if(v==='2'||v==='leave / special availability'||v==='leave'||v==='special availability'||v==='my leave / special availability'){moreSessions.delete(k);return isTenant(admin)?processAdminOwnScheduleMessage(sender,'My leave'):processAdminStaffScheduleFlowMessage(sender,'Leave / special availability');}
     if(!isTenant(admin)&&v==='3'){moreSessions.delete(k);return processAdminFreelancerAvailabilityMessage(sender,'Freelancer availability');}
     if(!isTenant(admin)&&v==='4'){moreSessions.delete(k);return processAdminHolidayHoursMessage(sender,'Holiday hours');}
     return {handled:true,admin,reply:isTenant(admin)?'Choose 1, 2, or 0.':'Choose 1, 2, 3, 4, or 0.'};
   }
-  const staffFlow=await processAdminStaffScheduleFlowMessage(sender,text);if(staffFlow.handled){if(staffFlow.returnToMore||returnedToMore(staffFlow.reply)){moreSessions.set(k,{step:'menu'});return {handled:true,admin:staffFlow.admin,reply:scheduleMenu(admin)};}return staffFlow;}
+  if(!isTenant(admin)){const staffFlow=await processAdminStaffScheduleFlowMessage(sender,text);if(staffFlow.handled){if(staffFlow.returnToMore||returnedToMore(staffFlow.reply)){moreSessions.set(k,{step:'menu'});return {handled:true,admin:staffFlow.admin,reply:scheduleMenu(admin)};}return staffFlow;}}
   const holiday=await processAdminHolidayHoursMessage(sender,text);if(holiday.handled){if(isTenant(admin))return {handled:true,admin,reply:'Holiday hours are managed by the Shiloh business owner/admin. You can manage your own working hours and exceptions.'};if(returnedToMore(holiday.reply))moreSessions.set(k,{step:'menu'});return holiday;}
   const freelancer=await processAdminFreelancerAvailabilityMessage(sender,text);if(freelancer.handled){if(isTenant(admin))return {handled:true,admin,reply:'Freelancer availability is managed by the Shiloh business owner/admin.'};if(returnedToMore(freelancer.reply))moreSessions.set(k,{step:'menu'});return freelancer;}
   if(['menu','admin menu','home'].includes(v)||isGreeting(raw)){moreSessions.delete(k);await audit(admin.id,'admin.mobile_menu_viewed',{entry:isGreeting(raw)?'greeting':'menu',businessRole:admin.business_role});const reminder=isBusinessWide(admin)&&has(admin,'schedule:manage')?await getHolidayReminder():null;return {handled:true,admin,reply:reminder?`${menu(admin)}\n\n${reminder}`:menu(admin)};}
@@ -89,8 +96,9 @@ async function processAdminMobileMenuMessage(sender,text){
   if(['staff services','my services','services by staff','services per staff'].includes(v))return processAdminStaffServicesMessage(sender,'Staff services');
   if(['services & pricing','my services & pricing','manage services & pricing','service pricing','pricing'].includes(v))return processAdminServicePricingMessage(sender,'Manage services & pricing');
   if(['schedule management','my schedule','staff schedule','schedule'].includes(v)){if(!has(admin,'schedule:manage'))return {handled:false};moreSessions.set(k,{step:'menu'});return {handled:true,admin,reply:scheduleMenu(admin)};}
-  if(v==='staff hours'||v==='regular staff hours'||v==='my regular hours')return processAdminStaffScheduleFlowMessage(sender,'Staff hours');
-  if(['leave','leave / special availability','my leave / special availability','leave and special availability','special availability'].includes(v))return processAdminStaffScheduleFlowMessage(sender,'Leave / special availability');
+  if(v==='staff hours'||v==='regular staff hours'||v==='my regular hours')return isTenant(admin)?processAdminOwnScheduleMessage(sender,'My regular hours'):processAdminStaffScheduleFlowMessage(sender,'Staff hours');
+  if(['leave','leave / special availability','my leave / special availability','leave and special availability','special availability'].includes(v))return isTenant(admin)?processAdminOwnScheduleMessage(sender,'My leave'):processAdminStaffScheduleFlowMessage(sender,'Leave / special availability');
+  if(isTenant(admin)&&/^(working hours|set working hours|add schedule exception|remove schedule exception)\b/i.test(raw))return{handled:true,admin,reply:'For privacy and safety, your tenant account can only change your own schedule. Send *My schedule* for the scoped commands.'};
   if(['freelancer availability','freelancers','freelance schedule'].includes(v)){if(!isBusinessWide(admin))return {handled:true,admin,reply:'Freelancer availability is managed by the Shiloh business owner/admin.'};return processAdminFreelancerAvailabilityMessage(sender,'Freelancer availability');}
   if(v==='holiday hours'||v==='public holiday hours'){if(!isBusinessWide(admin))return {handled:true,admin,reply:'Holiday hours are managed by the Shiloh business owner/admin.'};return processAdminHolidayHoursMessage(sender,'Holiday hours');}
   if(v==='help')return {handled:false};
