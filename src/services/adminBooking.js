@@ -1,6 +1,11 @@
 const { pool } = require("../db/pool");
 const { checkAvailability, formatAvailabilityReply, checkAuthoritativeSchedule, getConflicts } = require("./adminAvailability");
 const { checkClinicHours } = require("./clinicHours");
+const {
+  checkCalendarAvailability,
+  createBookingEvent,
+  cancelBookingEvent,
+} = require("./googleBookingCalendar");
 
 function formatLocalDateTime(value) {
   return new Intl.DateTimeFormat("en-ZA", {
@@ -55,6 +60,18 @@ async function prepareAdminBooking({ adminId, clientId, staffName, serviceName, 
     return { status: "past_time", reply: "I won't prepare a new booking in the past. Please choose a future date and time." };
   }
 
+  const externalCalendar = await checkCalendarAvailability({
+    startsAt: availability.startsAt,
+    endsAt: availability.endsAt,
+  });
+  if (externalCalendar.enabled && !externalCalendar.available) {
+    return {
+      status: "external_calendar_conflict",
+      reply: "That time is already occupied on the shared Shiloh booking calendar. Please choose another time.",
+      externalCalendar,
+    };
+  }
+
   await pool.query(
     `INSERT INTO admin_booking_sessions
        (admin_id, client_id, staff_id, service_id, location_id, starts_at, ends_at, state, updated_at)
@@ -93,6 +110,7 @@ async function prepareAdminBooking({ adminId, clientId, staffName, serviceName, 
       `• Price: ${price}`,
       "",
       "No production appointment has been created yet.",
+      externalCalendar.enabled ? "The shared Google booking calendar is clear for this slot." : "Google Calendar enforcement is not enabled yet; CRM scheduling rules are currently authoritative.",
       "Reply exactly CONFIRM BOOKING to create it, or CANCEL BOOKING to discard it.",
     ].join("\n"),
   };
@@ -105,6 +123,7 @@ async function cancelPendingBooking(adminId) {
 
 async function confirmAdminBooking(admin) {
   const db = await pool.connect();
+  let googleEventCreatedByThisAttempt = null;
   try {
     await db.query("BEGIN");
 
@@ -174,6 +193,16 @@ async function confirmAdminBooking(admin) {
       return { status: "conflict", reply: "A conflicting appointment or staff calendar block appeared before confirmation. Nothing was written. Please run availability again." };
     }
 
+    const externalCalendar = await checkCalendarAvailability({
+      startsAt: session.starts_at,
+      endsAt: session.ends_at,
+    });
+    if (externalCalendar.enabled && !externalCalendar.available) {
+      await db.query(`DELETE FROM admin_booking_sessions WHERE admin_id = $1`, [admin.id]);
+      await db.query("COMMIT");
+      return { status: "external_calendar_conflict", reply: "The shared Shiloh booking calendar changed before confirmation and this slot is no longer free. Nothing was written; please choose another time." };
+    }
+
     const totalPrice = session.variable_price ? null : session.price;
     const appointmentResult = await db.query(
       `INSERT INTO appointments
@@ -198,6 +227,33 @@ async function confirmAdminBooking(admin) {
       [appointment.id, session.staff_id, session.staff_name]
     );
 
+    const googleCalendarResult = await createBookingEvent({
+      appointmentId: appointment.id,
+      clientName: session.client_name,
+      serviceName: session.service_name,
+      staffName: session.staff_name,
+      locationName: session.location_name,
+      startsAt: session.starts_at,
+      endsAt: session.ends_at,
+      source: "shiloh_admin_whatsapp",
+    });
+
+    if (googleCalendarResult.enabled && googleCalendarResult.event) {
+      if (!googleCalendarResult.idempotentReplay) googleEventCreatedByThisAttempt = googleCalendarResult.event.id;
+      await db.query(
+        `INSERT INTO appointment_calendar_events
+           (appointment_id, provider, calendar_id, event_id, sync_status, updated_at)
+         VALUES ($1, 'google_calendar', $2, $3, 'synced', NOW())
+         ON CONFLICT (appointment_id, provider) DO UPDATE SET
+           calendar_id = EXCLUDED.calendar_id,
+           event_id = EXCLUDED.event_id,
+           sync_status = 'synced',
+           last_error = NULL,
+           updated_at = NOW()`,
+        [appointment.id, process.env.GOOGLE_BOOKING_CALENDAR_ID, googleCalendarResult.event.id]
+      );
+    }
+
     await db.query(
       `INSERT INTO appointment_status_history
          (appointment_id, from_status, to_status, changed_by, reason)
@@ -209,7 +265,18 @@ async function confirmAdminBooking(admin) {
       `INSERT INTO crm_audit_events
          (actor_admin_id, action, entity_type, entity_id, metadata)
        VALUES ($1, 'admin.booking_created', 'appointment', $2, $3::jsonb)`,
-      [admin.id, appointment.id, JSON.stringify({ clientId: session.client_id, staffId: session.staff_id, serviceId: session.service_id, locationId: session.location_id, startsAt: session.starts_at, endsAt: session.ends_at, authoritativeClinicHoursChecked: true, authoritativeScheduleChecked: true })]
+      [admin.id, appointment.id, JSON.stringify({
+        clientId: session.client_id,
+        staffId: session.staff_id,
+        serviceId: session.service_id,
+        locationId: session.location_id,
+        startsAt: session.starts_at,
+        endsAt: session.ends_at,
+        authoritativeClinicHoursChecked: true,
+        authoritativeScheduleChecked: true,
+        sharedGoogleCalendarChecked: externalCalendar.enabled,
+        googleCalendarEventId: googleCalendarResult.event?.id || null,
+      })]
     );
 
     await db.query(`DELETE FROM admin_booking_sessions WHERE admin_id = $1`, [admin.id]);
@@ -218,6 +285,7 @@ async function confirmAdminBooking(admin) {
     return {
       status: "created",
       appointmentId: appointment.id,
+      googleCalendarEventId: googleCalendarResult.event?.id || null,
       reply: [
         `Booking created successfully — appointment #${appointment.id}.`,
         `• Client: ${session.client_name} — CRM #${session.client_id}`,
@@ -225,12 +293,18 @@ async function confirmAdminBooking(admin) {
         `• Staff: ${session.staff_name}`,
         `• Time: ${formatLocalDateTime(session.starts_at)}`,
         `• Location: ${session.location_name}`,
+        googleCalendarResult.enabled ? "• Shared Google Calendar: synced" : "• Shared Google Calendar: not enabled yet",
         "",
-        "The production write occurred only after your explicit CONFIRM BOOKING message and a final clinic-hours, staff-schedule, eligibility, and conflict re-check.",
+        "The production write occurred only after explicit CONFIRM BOOKING plus final clinic-hours, staff-schedule, CRM-conflict and shared-calendar checks.",
       ].join("\n"),
     };
   } catch (error) {
     try { await db.query("ROLLBACK"); } catch (_) {}
+    if (googleEventCreatedByThisAttempt) {
+      try { await cancelBookingEvent(googleEventCreatedByThisAttempt); } catch (cleanupError) {
+        console.error("CRM-3 Google Calendar compensation failed", { eventId: googleEventCreatedByThisAttempt, error: cleanupError.message });
+      }
+    }
     throw error;
   } finally {
     db.release();
