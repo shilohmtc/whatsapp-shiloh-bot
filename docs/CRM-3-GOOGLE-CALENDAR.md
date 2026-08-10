@@ -8,6 +8,12 @@ The dedicated Google Calendar **Shiloh — Bookings** is the shared operational 
 
 An opaque/busy event created directly by an admin in the shared calendar blocks Shiloh from creating an overlapping booking.
 
+## Recommended production authentication
+
+For the current Render deployment, use **Google OAuth 2.0 refresh-token authentication** with the dedicated `shilohmtc@gmail.com` account. This avoids downloadable Google service-account private keys and does not require changing the organisation policy that blocks service-account key creation.
+
+Render currently does not provide a native Google managed-OIDC integration for this service, so Google Workload Identity Federation is not the simplest operational choice for this interim deployment.
+
 ## Production environment variables
 
 Set these on the Render web service:
@@ -15,24 +21,34 @@ Set these on the Render web service:
 ```text
 GOOGLE_CALENDAR_ENABLED=true
 GOOGLE_BOOKING_CALENDAR_ID=<secondary calendar ID>
-GOOGLE_SERVICE_ACCOUNT_EMAIL=<service account email>
-GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY=<service account private key, including BEGIN/END lines>
+GOOGLE_CALENDAR_AUTH_MODE=oauth_refresh_token
+GOOGLE_OAUTH_CLIENT_ID=<OAuth client ID>
+GOOGLE_OAUTH_CLIENT_SECRET=<OAuth client secret>
+GOOGLE_OAUTH_REFRESH_TOKEN=<refresh token granted by shilohmtc@gmail.com>
 ```
 
-Do not commit the private key or service-account JSON file to GitHub.
+The OAuth client secret and refresh token are production secrets. Store them only in Render secrets/environment variables and never commit them to GitHub.
 
-## Google Cloud one-time setup
+The code retains `service_account` auth mode for future environments that allow it:
 
-1. Create or select a Google Cloud project for Shiloh.
-2. Enable **Google Calendar API** for that project.
-3. Create a Google Cloud service account dedicated to Shiloh Calendar access.
-4. Create a JSON key for that service account and retain it securely.
-5. In Google Calendar, open **Settings and sharing** for `Shiloh — Bookings`.
-6. Under **Share with specific people or groups**, add the service-account email.
-7. Grant **Make changes to events** permission. Do not grant account-wide access.
-8. Put the service-account email and private key into Render environment variables.
-9. Put the dedicated secondary calendar ID into `GOOGLE_BOOKING_CALENDAR_ID`.
-10. Run database migrations before enabling the feature in production.
+```text
+GOOGLE_CALENDAR_AUTH_MODE=service_account
+GOOGLE_SERVICE_ACCOUNT_EMAIL=<service account email>
+GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY=<private key>
+```
+
+## Google Cloud one-time OAuth setup
+
+1. Use the existing **Shiloh OS** Google Cloud project.
+2. Keep **Google Calendar API** enabled.
+3. Configure the Google Auth Platform / OAuth consent screen for the Shiloh application.
+4. Create an OAuth client for the one-time authorization flow.
+5. Authorize with `shilohmtc@gmail.com` using the Calendar scope needed by CRM-3.
+6. Capture the refresh token and store it in Render as `GOOGLE_OAUTH_REFRESH_TOKEN`.
+7. Store the OAuth client ID and client secret in Render.
+8. Keep the dedicated secondary calendar ID in `GOOGLE_BOOKING_CALENDAR_ID`.
+9. Set `GOOGLE_CALENDAR_AUTH_MODE=oauth_refresh_token`.
+10. Enable `GOOGLE_CALENDAR_ENABLED=true` only after the credentials are installed.
 
 ## CRM-3 invariants
 
@@ -43,15 +59,17 @@ Do not commit the private key or service-account JSON file to GitHub.
 - If a booking transaction fails after creating a Google event, Shiloh attempts compensating event deletion.
 - Cancelling a CRM appointment attempts to remove its linked Google Calendar event and records sync errors for operational follow-up.
 - Google Calendar credentials are required only when `GOOGLE_CALENDAR_ENABLED=true`.
+- Access tokens are cached only in process memory and refreshed from Google when required.
 
 ## Rollout sequence
 
-1. Deploy the migration with `GOOGLE_CALENDAR_ENABLED=false` or unset.
+1. Deploy the code with `GOOGLE_CALENDAR_ENABLED=false`.
 2. Confirm `014_google_calendar_booking_bridge.sql` has applied.
-3. Configure the service-account credentials and dedicated calendar ID.
-4. Share `Shiloh — Bookings` with the service account.
-5. Set `GOOGLE_CALENDAR_ENABLED=true`.
-6. Test an admin-created busy event blocking a Shiloh booking.
-7. Test a Shiloh booking appearing in the shared calendar.
-8. Test cancellation removing the shared-calendar event.
-9. Only after these pass, expose conversational client booking through the same booking primitives.
+3. Create the OAuth client and obtain the refresh token.
+4. Configure the OAuth credentials in Render.
+5. Set `GOOGLE_CALENDAR_AUTH_MODE=oauth_refresh_token`.
+6. Set `GOOGLE_CALENDAR_ENABLED=true`.
+7. Test an admin-created busy event blocking a Shiloh booking.
+8. Test a Shiloh booking appearing in the shared calendar.
+9. Test cancellation removing the shared-calendar event.
+10. Only after these pass, expose conversational client booking through the same booking primitives.
