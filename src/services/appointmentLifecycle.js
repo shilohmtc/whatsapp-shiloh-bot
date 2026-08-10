@@ -18,9 +18,12 @@ async function ensureTable() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS appointment_lifecycle (
       id BIGSERIAL PRIMARY KEY,
+      appointment_id BIGINT,
+      client_id BIGINT,
       phone VARCHAR(32) NOT NULL,
       service_text TEXT NOT NULL,
       appointment_at TIMESTAMPTZ NOT NULL,
+      appointment_ends_at TIMESTAMPTZ,
       therapist_text TEXT,
       status TEXT NOT NULL DEFAULT 'confirmed',
       source TEXT NOT NULL DEFAULT 'admin',
@@ -30,37 +33,48 @@ async function ensureTable() {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
+  await pool.query(`ALTER TABLE appointment_lifecycle ADD COLUMN IF NOT EXISTS appointment_id BIGINT`);
+  await pool.query(`ALTER TABLE appointment_lifecycle ADD COLUMN IF NOT EXISTS client_id BIGINT`);
+  await pool.query(`ALTER TABLE appointment_lifecycle ADD COLUMN IF NOT EXISTS appointment_ends_at TIMESTAMPTZ`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_appointment_lifecycle_due ON appointment_lifecycle (status, appointment_at)`);
+  await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS uq_appointment_lifecycle_appointment_id ON appointment_lifecycle (appointment_id) WHERE appointment_id IS NOT NULL`);
   initialized = true;
 }
 
-function normalizePhone(phone) {
-  return String(phone || "").replace(/[^0-9]/g, "");
-}
+function normalizePhone(phone) { return String(phone || "").replace(/[^0-9]/g, ""); }
 
 function formatAppointmentDate(value) {
   return new Intl.DateTimeFormat("en-ZA", {
-    timeZone: "Africa/Johannesburg",
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
+    timeZone: "Africa/Johannesburg", weekday: "short", day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit",
   }).format(new Date(value));
 }
 
-async function createAppointment({ phone, service, appointmentAt, therapist, source = "admin" }) {
+async function createAppointment({ appointmentId = null, clientId = null, phone, service, appointmentAt, appointmentEndsAt = null, therapist, source = "admin" }) {
   await ensureTable();
   const cleanPhone = normalizePhone(phone);
   const when = new Date(appointmentAt);
-  if (!cleanPhone || !service || Number.isNaN(when.getTime())) {
-    throw new Error("phone, service and a valid appointmentAt are required");
+  const ends = appointmentEndsAt ? new Date(appointmentEndsAt) : null;
+  if (!cleanPhone || !service || Number.isNaN(when.getTime()) || (ends && Number.isNaN(ends.getTime()))) throw new Error("phone, service and a valid appointmentAt are required");
+
+  if (appointmentId) {
+    const result = await pool.query(
+      `INSERT INTO appointment_lifecycle
+         (appointment_id, client_id, phone, service_text, appointment_at, appointment_ends_at, therapist_text, source)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+       ON CONFLICT (appointment_id) WHERE appointment_id IS NOT NULL DO UPDATE SET
+         client_id=EXCLUDED.client_id, phone=EXCLUDED.phone, service_text=EXCLUDED.service_text,
+         appointment_at=EXCLUDED.appointment_at, appointment_ends_at=EXCLUDED.appointment_ends_at,
+         therapist_text=EXCLUDED.therapist_text, source=EXCLUDED.source, updated_at=NOW()
+       RETURNING *`,
+      [appointmentId, clientId, cleanPhone, String(service).trim(), when.toISOString(), ends?.toISOString() || null, therapist || null, source]
+    );
+    return result.rows[0];
   }
+
   const result = await pool.query(
-    `INSERT INTO appointment_lifecycle (phone, service_text, appointment_at, therapist_text, source)
-     VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-    [cleanPhone, String(service).trim(), when.toISOString(), therapist || null, source]
+    `INSERT INTO appointment_lifecycle (phone, service_text, appointment_at, appointment_ends_at, therapist_text, source)
+     VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+    [cleanPhone, String(service).trim(), when.toISOString(), ends?.toISOString() || null, therapist || null, source]
   );
   return result.rows[0];
 }
@@ -74,27 +88,21 @@ async function listAppointments(limit = 100) {
 
 async function updateAppointmentStatus(id, status) {
   await ensureTable();
-  const allowed = new Set(["confirmed", "cancelled", "completed"]);
+  const allowed = new Set(["confirmed", "confirmed_by_client", "cancelled", "completed"]);
   if (!allowed.has(status)) throw new Error("Invalid appointment status");
-  const result = await pool.query(
-    `UPDATE appointment_lifecycle SET status = $2, updated_at = NOW() WHERE id = $1 RETURNING *`,
-    [id, status]
-  );
+  const result = await pool.query(`UPDATE appointment_lifecycle SET status=$2,updated_at=NOW() WHERE id=$1 RETURNING *`, [id, status]);
   return result.rows[0] || null;
 }
 
 async function claimDueReminder() {
   await ensureTable();
   const result = await pool.query(
-    `UPDATE appointment_lifecycle a SET reminder_sent_at = NOW(), updated_at = NOW()
-     WHERE a.id = (
-       SELECT id FROM appointment_lifecycle
-       WHERE status = 'confirmed' AND reminder_sent_at IS NULL
-         AND appointment_at > NOW()
-         AND appointment_at <= NOW() + ($1 * INTERVAL '1 hour')
-       ORDER BY appointment_at ASC FOR UPDATE SKIP LOCKED LIMIT 1
-     ) RETURNING a.*`,
-    [REMINDER_HOURS]
+    `UPDATE appointment_lifecycle a SET reminder_sent_at=NOW(),updated_at=NOW()
+     WHERE a.id=(SELECT id FROM appointment_lifecycle
+       WHERE status IN ('confirmed','confirmed_by_client') AND reminder_sent_at IS NULL
+         AND appointment_at>NOW() AND appointment_at<=NOW()+($1*INTERVAL '1 hour')
+       ORDER BY appointment_at ASC FOR UPDATE SKIP LOCKED LIMIT 1)
+     RETURNING a.*`, [REMINDER_HOURS]
   );
   return result.rows[0] || null;
 }
@@ -102,114 +110,34 @@ async function claimDueReminder() {
 async function claimDueFollowup() {
   await ensureTable();
   const result = await pool.query(
-    `UPDATE appointment_lifecycle a SET followup_sent_at = NOW(), updated_at = NOW()
-     WHERE a.id = (
-       SELECT id FROM appointment_lifecycle
-       WHERE status IN ('confirmed', 'completed') AND followup_sent_at IS NULL
-         AND appointment_at <= NOW() - ($1 * INTERVAL '1 hour')
-       ORDER BY appointment_at ASC FOR UPDATE SKIP LOCKED LIMIT 1
-     ) RETURNING a.*`,
-    [FOLLOWUP_HOURS]
+    `UPDATE appointment_lifecycle a SET followup_sent_at=NOW(),updated_at=NOW()
+     WHERE a.id=(SELECT id FROM appointment_lifecycle
+       WHERE status IN ('confirmed','confirmed_by_client','completed') AND followup_sent_at IS NULL
+         AND COALESCE(appointment_ends_at,appointment_at)<=NOW()-($1*INTERVAL '1 hour')
+       ORDER BY COALESCE(appointment_ends_at,appointment_at) ASC FOR UPDATE SKIP LOCKED LIMIT 1)
+     RETURNING a.*`, [FOLLOWUP_HOURS]
   );
   return result.rows[0] || null;
 }
 
-async function undoClaim(id, column) {
-  if (!["reminder_sent_at", "followup_sent_at"].includes(column)) return;
-  await pool.query(`UPDATE appointment_lifecycle SET ${column} = NULL, updated_at = NOW() WHERE id = $1`, [id]);
-}
-
-async function customerName(phone) {
-  const profile = await getProfile(phone);
-  return profile?.name || "there";
-}
+async function undoClaim(id,column){if(!["reminder_sent_at","followup_sent_at"].includes(column))return;await pool.query(`UPDATE appointment_lifecycle SET ${column}=NULL,updated_at=NOW() WHERE id=$1`,[id]);}
+async function customerName(phone){const profile=await getProfile(phone);return profile?.name||"there";}
 
 async function processReminders() {
-  const reminderTemplate = process.env.WHATSAPP_REMINDER_TEMPLATE;
-  const followupTemplate = process.env.WHATSAPP_FOLLOWUP_TEMPLATE;
-  if (!reminderTemplate && !followupTemplate) return;
+  const reminderTemplate=process.env.WHATSAPP_REMINDER_TEMPLATE;
+  const followupTemplate=process.env.WHATSAPP_FOLLOWUP_TEMPLATE;
+  if(!reminderTemplate&&!followupTemplate)return;
 
-  if (reminderTemplate) {
-    for (let i = 0; i < 20; i += 1) {
-      const appointment = await claimDueReminder();
-      if (!appointment) break;
-      try {
-        const name = await customerName(appointment.phone);
-        const formatted = formatAppointmentDate(appointment.appointment_at);
-        const parts = formatted.split(", ");
-        const time = parts[parts.length - 1] || formatted;
-        const date = parts.slice(0, -1).join(", ") || formatted;
-        await sendWhatsAppTemplate(
-          appointment.phone,
-          reminderTemplate,
-          [name, appointment.service_text, date, time],
-          LANGUAGE_CODE
-        );
-      } catch (error) {
-        await undoClaim(appointment.id, "reminder_sent_at");
-        logger.error({ err: error, appointmentId: appointment.id }, "Appointment reminder failed");
-        break;
-      }
-    }
+  if(reminderTemplate){
+    for(let i=0;i<20;i+=1){const appointment=await claimDueReminder();if(!appointment)break;try{const name=await customerName(appointment.phone);const formatted=formatAppointmentDate(appointment.appointment_at);const parts=formatted.split(", ");const time=parts[parts.length-1]||formatted;const date=parts.slice(0,-1).join(", ")||formatted;await sendWhatsAppTemplate(appointment.phone,reminderTemplate,[name,appointment.service_text,date,time],LANGUAGE_CODE);logger.info({appointmentId:appointment.appointment_id||appointment.id},"Customer appointment reminder sent");}catch(error){await undoClaim(appointment.id,"reminder_sent_at");logger.error({err:error,appointmentId:appointment.appointment_id||appointment.id},"Appointment reminder failed");break;}}
   }
 
-  if (followupTemplate) {
-    for (let i = 0; i < 20; i += 1) {
-      const appointment = await claimDueFollowup();
-      if (!appointment) break;
-      try {
-        const name = await customerName(appointment.phone);
-        await sendWhatsAppTemplate(
-          appointment.phone,
-          followupTemplate,
-          [name, appointment.service_text],
-          LANGUAGE_CODE
-        );
-        await createPendingExperience({
-          appointmentId: appointment.id,
-          phone: appointment.phone,
-          service: appointment.service_text,
-        });
-      } catch (error) {
-        await undoClaim(appointment.id, "followup_sent_at");
-        logger.error({ err: error, appointmentId: appointment.id }, "Appointment follow-up failed");
-        break;
-      }
-    }
+  if(followupTemplate){
+    for(let i=0;i<20;i+=1){const appointment=await claimDueFollowup();if(!appointment)break;try{const name=await customerName(appointment.phone);await sendWhatsAppTemplate(appointment.phone,followupTemplate,[name,appointment.service_text],LANGUAGE_CODE);await createPendingExperience({appointmentId:appointment.appointment_id||appointment.id,phone:appointment.phone,service:appointment.service_text});logger.info({appointmentId:appointment.appointment_id||appointment.id},"Customer aftercare/follow-up sent");}catch(error){await undoClaim(appointment.id,"followup_sent_at");logger.error({err:error,appointmentId:appointment.appointment_id||appointment.id},"Appointment follow-up failed");break;}}
   }
 }
 
-async function runScan() {
-  if (running) return;
-  running = true;
-  try {
-    await processReminders();
-  } catch (error) {
-    logger.error({ err: error }, "Appointment lifecycle scan failed");
-  } finally {
-    running = false;
-  }
-}
+async function runScan(){if(running)return;running=true;try{await processReminders();}catch(error){logger.error({err:error},"Appointment lifecycle scan failed");}finally{running=false;}}
+function startAppointmentLifecycleScheduler(){if(timer)return;logger.info({scanMinutes:SCAN_MINUTES,reminderHours:REMINDER_HOURS,followupHours:FOLLOWUP_HOURS,reminderTemplateConfigured:Boolean(process.env.WHATSAPP_REMINDER_TEMPLATE),followupTemplateConfigured:Boolean(process.env.WHATSAPP_FOLLOWUP_TEMPLATE)},"Appointment lifecycle scheduler started");setTimeout(runScan,5000).unref();timer=setInterval(runScan,Math.max(SCAN_MINUTES,1)*60*1000);timer.unref();}
 
-function startAppointmentLifecycleScheduler() {
-  if (timer) return;
-  logger.info({
-    scanMinutes: SCAN_MINUTES,
-    reminderHours: REMINDER_HOURS,
-    followupHours: FOLLOWUP_HOURS,
-    reminderTemplateConfigured: Boolean(process.env.WHATSAPP_REMINDER_TEMPLATE),
-    followupTemplateConfigured: Boolean(process.env.WHATSAPP_FOLLOWUP_TEMPLATE),
-  }, "Appointment lifecycle scheduler started");
-  setTimeout(runScan, 5000).unref();
-  timer = setInterval(runScan, Math.max(SCAN_MINUTES, 1) * 60 * 1000);
-  timer.unref();
-}
-
-module.exports = {
-  ensureTable,
-  createAppointment,
-  listAppointments,
-  updateAppointmentStatus,
-  processReminders,
-  startAppointmentLifecycleScheduler,
-};
+module.exports={ensureTable,createAppointment,listAppointments,updateAppointmentStatus,processReminders,startAppointmentLifecycleScheduler};
