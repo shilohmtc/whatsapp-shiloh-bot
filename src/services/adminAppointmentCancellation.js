@@ -113,9 +113,10 @@ async function cancelAppointment({ sender, adminId, appointmentId, reason }) {
     await client.query("BEGIN");
 
     const current = await client.query(`
-      SELECT id, starts_at, ends_at, status
-        FROM appointments
-       WHERE id=$1
+      SELECT a.id, a.starts_at, a.ends_at, a.status,
+             COALESCE((SELECT staff_id FROM appointment_staff WHERE appointment_id=a.id ORDER BY position LIMIT 1), 0) AS staff_id
+        FROM appointments a
+       WHERE a.id=$1
        FOR UPDATE`,
       [appointmentId]
     );
@@ -127,6 +128,15 @@ async function cancelAppointment({ sender, adminId, appointmentId, reason }) {
     if (row.status === "cancelled") {
       await client.query("ROLLBACK");
       return { status: "already_cancelled" };
+    }
+
+    if (Number(row.staff_id) > 0) {
+      await client.query(`SELECT pg_advisory_xact_lock($1::bigint)`, [Number(row.staff_id)]);
+      const locked = await client.query(`SELECT status FROM appointments WHERE id=$1 FOR UPDATE`, [appointmentId]);
+      if (!locked.rows[0] || locked.rows[0].status === "cancelled") {
+        await client.query("ROLLBACK");
+        return { status: "conflict" };
+      }
     }
 
     const updated = await client.query(`
@@ -143,9 +153,16 @@ async function cancelAppointment({ sender, adminId, appointmentId, reason }) {
     }
 
     await client.query(`
+      INSERT INTO appointment_status_history
+        (appointment_id, from_status, to_status, changed_by, reason)
+      VALUES ($1, $2, 'cancelled', $3, $4)`,
+      [appointmentId, row.status, `admin:${adminId}`, clean(reason)]
+    );
+
+    await client.query(`
       INSERT INTO crm_audit_events (actor_admin_id, action, entity_type, entity_id, metadata)
       VALUES ($1, 'admin.appointment_cancelled', 'appointment', $2, $3::jsonb)`,
-      [adminId, appointmentId, JSON.stringify({ phone: normalizePhone(sender), reason: clean(reason) })]
+      [adminId, appointmentId, JSON.stringify({ phone: normalizePhone(sender), reason: clean(reason), authoritativeAppointmentStateRechecked: true })]
     );
 
     await client.query("COMMIT");
