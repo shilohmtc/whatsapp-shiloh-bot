@@ -9,6 +9,7 @@ validateEnv();
 const webhookRoutes = require("./src/routes/webhook");
 const adminRoutes = require("./src/routes/admin");
 const auditReadRoutes = require("./src/routes/auditRead");
+const calendarRoutes = require("./src/routes/calendar");
 const { checkDatabase } = require("./src/services/memory");
 const { applyPendingMigrations } = require("./src/services/migrations");
 const { repairJeanPierreIdentity } = require("./src/services/identityRepair");
@@ -35,6 +36,7 @@ app.get("/health", async (req, res) => {
 
 app.use("/audit-read", auditReadRoutes);
 app.use("/admin", adminRoutes);
+app.use("/calendar", calendarRoutes);
 app.use("/", webhookRoutes);
 
 app.use((err, req, res, next) => {
