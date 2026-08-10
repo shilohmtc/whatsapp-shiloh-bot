@@ -24,16 +24,25 @@
 - Migrated Goldie appointments are not bulk-enrolled by this change, so this rollout does not suddenly message historical migrated bookings.
 - Follow-up feedback is attached to the canonical appointment ID and can route low ratings to clinic follow-up.
 
+### P3.4 Native client cancellation and reschedule
+- The previous client-facing Goldie handoff has been removed from the active appointment-change flow.
+- Shiloh now resolves the requesting WhatsApp number to that client's own upcoming canonical CRM appointments.
+- If more than one booking exists, the client is required to choose the specific booking number; unrelated bookings remain untouched.
+- Cancellation requires explicit confirmation, writes canonical status/history/audit records, marks the lifecycle cancelled, and removes the matching Google Calendar event where available.
+- Rescheduling requires explicit confirmation and re-checks clinic hours, practitioner schedule, CRM conflicts and Google Calendar conflicts before writing the new time.
+- Successful reschedules update the CRM appointment, reminder lifecycle and Google Calendar event together.
+- The 24-hour/50% late-cancellation policy is surfaced when relevant; this flow does not automatically charge a fee.
+
 ## Safety rules
 - CRM remains the appointment source of truth.
 - Google Calendar is a synchronized operational view.
 - No bulk customer messaging was triggered during this rollout.
 - No historical Goldie bookings were sent new booking confirmations.
 - QR registration never exposes admin routes or credentials.
+- Client appointment mutations are always scoped back to the WhatsApp number's canonical client identity and require explicit confirmation.
 
 ## Still to complete in P3
-- Direct Shiloh-native client cancellation/reschedule confirmation for canonical appointments (current legacy client-change flow still contains a Goldie handoff and must be replaced carefully).
-- Explicit reminder confirmation tracking if desired (e.g. client replies `CONFIRM`).
+- Explicit reminder confirmation tracking if desired (for example a dedicated `CONFIRM APPOINTMENT` response).
 - Treatment-aware aftercare/rebooking copy rather than a single generic template.
 - Loyalty ledger and 10% reward after 5 qualifying completed visits.
 - Birthday/customer-care preferences with explicit opt-in/frequency controls.
@@ -45,3 +54,5 @@
 - `eb12dedbf64d7247049badc436d969a612af4d53` — canonical lifecycle migration.
 - `b31766508e37b831e0f1ae83d7cdf7978fe2113a` — canonical reminder/aftercare lifecycle.
 - `c781298cbfd98c9a3d00d594be234e5bbf7f5481` — booking confirmations enroll new Shiloh appointments into lifecycle.
+- `f97b44b2f2876f1fcb085958f090f155f199b015` — canonical client change-intent migration.
+- `f3612094eafdf21182d2f4436b81a67f22a7ccbf` — Shiloh-native client cancel/reschedule flow.
