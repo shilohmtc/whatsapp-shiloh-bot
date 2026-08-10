@@ -12,16 +12,35 @@ function calendarEnabled() {
   return String(process.env.GOOGLE_CALENDAR_ENABLED || "").toLowerCase() === "true";
 }
 
-function requireConfig() {
+function authMode() {
+  return String(process.env.GOOGLE_CALENDAR_AUTH_MODE || "service_account").trim().toLowerCase();
+}
+
+function requireCalendarConfig() {
   const calendarId = process.env.GOOGLE_BOOKING_CALENDAR_ID;
+  if (!calendarId) {
+    throw new Error("Google Calendar is enabled but GOOGLE_BOOKING_CALENDAR_ID is missing.");
+  }
+  return { calendarId };
+}
+
+function requireServiceAccountConfig() {
   const clientEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
   const privateKey = String(process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY || "").replace(/\\n/g, "\n");
-
-  if (!calendarId || !clientEmail || !privateKey) {
-    throw new Error("Google Calendar is enabled but GOOGLE_BOOKING_CALENDAR_ID, GOOGLE_SERVICE_ACCOUNT_EMAIL, or GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY is missing.");
+  if (!clientEmail || !privateKey) {
+    throw new Error("GOOGLE_CALENDAR_AUTH_MODE=service_account requires GOOGLE_SERVICE_ACCOUNT_EMAIL and GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY.");
   }
+  return { clientEmail, privateKey };
+}
 
-  return { calendarId, clientEmail, privateKey };
+function requireOAuthConfig() {
+  const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET;
+  const refreshToken = process.env.GOOGLE_OAUTH_REFRESH_TOKEN;
+  if (!clientId || !clientSecret || !refreshToken) {
+    throw new Error("GOOGLE_CALENDAR_AUTH_MODE=oauth_refresh_token requires GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET, and GOOGLE_OAUTH_REFRESH_TOKEN.");
+  }
+  return { clientId, clientSecret, refreshToken };
 }
 
 function base64url(input) {
@@ -32,10 +51,8 @@ function normalizeName(value = "") {
   return String(value).trim().toLowerCase().replace(/\s+/g, " ");
 }
 
-async function getAccessToken() {
-  if (cachedToken && Date.now() < cachedTokenExpiresAt - 60_000) return cachedToken;
-
-  const { clientEmail, privateKey } = requireConfig();
+async function getServiceAccountAccessToken() {
+  const { clientEmail, privateKey } = requireServiceAccountConfig();
   const now = Math.floor(Date.now() / 1000);
   const header = base64url(JSON.stringify({ alg: "RS256", typ: "JWT" }));
   const payload = base64url(JSON.stringify({
@@ -60,16 +77,51 @@ async function getAccessToken() {
 
   if (!response.ok) {
     const detail = await response.text();
-    throw new Error(`Google OAuth token request failed (${response.status}): ${detail.slice(0, 500)}`);
+    throw new Error(`Google service-account token request failed (${response.status}): ${detail.slice(0, 500)}`);
+  }
+  return response.json();
+}
+
+async function getOAuthRefreshAccessToken() {
+  const { clientId, clientSecret, refreshToken } = requireOAuthConfig();
+  const response = await fetch(TOKEN_URL, {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      client_id: clientId,
+      client_secret: clientSecret,
+      refresh_token: refreshToken,
+      grant_type: "refresh_token",
+    }),
+  });
+
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(`Google OAuth refresh-token request failed (${response.status}): ${detail.slice(0, 500)}`);
+  }
+  return response.json();
+}
+
+async function getAccessToken() {
+  if (cachedToken && Date.now() < cachedTokenExpiresAt - 60_000) return cachedToken;
+
+  const mode = authMode();
+  let token;
+  if (mode === "oauth_refresh_token") {
+    token = await getOAuthRefreshAccessToken();
+  } else if (mode === "service_account") {
+    token = await getServiceAccountAccessToken();
+  } else {
+    throw new Error(`Unsupported GOOGLE_CALENDAR_AUTH_MODE: ${mode}`);
   }
 
-  const token = await response.json();
   cachedToken = token.access_token;
   cachedTokenExpiresAt = Date.now() + Number(token.expires_in || 3600) * 1000;
   return cachedToken;
 }
 
 async function googleRequest(path, options = {}) {
+  requireCalendarConfig();
   const token = await getAccessToken();
   const response = await fetch(`${CALENDAR_API}${path}`, {
     ...options,
@@ -113,7 +165,7 @@ function eventAppliesToStaff(event, staffName) {
 
 async function checkCalendarAvailability({ startsAt, endsAt, staffName = null, ignoreEventId = null }) {
   if (!calendarEnabled()) return { enabled: false, available: true, conflicts: [] };
-  const { calendarId } = requireConfig();
+  const { calendarId } = requireCalendarConfig();
   const query = new URLSearchParams({
     timeMin: new Date(startsAt).toISOString(),
     timeMax: new Date(endsAt).toISOString(),
@@ -138,7 +190,7 @@ async function checkCalendarAvailability({ startsAt, endsAt, staffName = null, i
 
 async function createBookingEvent({ appointmentId, clientName, serviceName, staffName, locationName, startsAt, endsAt, source = "shiloh" }) {
   if (!calendarEnabled()) return { enabled: false, event: null };
-  const { calendarId } = requireConfig();
+  const { calendarId } = requireCalendarConfig();
   const eventId = deterministicEventId(`shiloh-appointment:${appointmentId}`);
   const body = {
     id: eventId,
@@ -175,7 +227,7 @@ async function createBookingEvent({ appointmentId, clientName, serviceName, staf
 
 async function getBookingEvent(eventId) {
   if (!calendarEnabled()) return null;
-  const { calendarId } = requireConfig();
+  const { calendarId } = requireCalendarConfig();
   try {
     return await googleRequest(`/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`);
   } catch (error) {
@@ -186,7 +238,7 @@ async function getBookingEvent(eventId) {
 
 async function findBookingEventByAppointmentId(appointmentId) {
   if (!calendarEnabled()) return null;
-  const { calendarId } = requireConfig();
+  const { calendarId } = requireCalendarConfig();
   const query = new URLSearchParams({
     privateExtendedProperty: `shilohAppointmentId=${appointmentId}`,
     singleEvents: "true",
@@ -199,7 +251,7 @@ async function findBookingEventByAppointmentId(appointmentId) {
 
 async function updateBookingEvent({ eventId, startsAt, endsAt, clientName, serviceName, staffName, locationName }) {
   if (!calendarEnabled()) return { enabled: false, event: null };
-  const { calendarId } = requireConfig();
+  const { calendarId } = requireCalendarConfig();
   const patch = {};
   if (clientName || serviceName || staffName) patch.summary = `${clientName || "Client"} — ${serviceName || "Booking"}${staffName ? ` — ${staffName}` : ""}`;
   if (startsAt) patch.start = { dateTime: new Date(startsAt).toISOString(), timeZone: DEFAULT_TIMEZONE };
@@ -216,7 +268,7 @@ async function updateBookingEvent({ eventId, startsAt, endsAt, clientName, servi
 
 async function cancelBookingEvent(eventId) {
   if (!calendarEnabled()) return { enabled: false, cancelled: false };
-  const { calendarId } = requireConfig();
+  const { calendarId } = requireCalendarConfig();
   try {
     await googleRequest(`/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`, { method: "DELETE" });
     return { enabled: true, cancelled: true };
@@ -228,6 +280,7 @@ async function cancelBookingEvent(eventId) {
 
 module.exports = {
   calendarEnabled,
+  authMode,
   checkCalendarAvailability,
   createBookingEvent,
   getBookingEvent,
