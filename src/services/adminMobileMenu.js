@@ -6,6 +6,8 @@ const { processAdminMobileBookingFlowMessage } = require('./adminMobileBookingFl
 const { processAdminStaffScheduleFlowMessage } = require('./adminStaffScheduleFlow');
 const { processAdminAppointmentCancellationMessage } = require('./adminAppointmentCancellation');
 const { processAdminStaffServicesMessage } = require('./adminStaffServices');
+const { processAdminServicePricingMessage } = require('./adminServicePricing');
+const { processAdminBookingUpdateMessage } = require('./adminBookingUpdate');
 
 const moreSessions = new Map();
 function has(admin,p){return admin?.permissions?.[p]===true;}
@@ -21,10 +23,14 @@ function getMenuOptions(admin){
     options.push({key:'tomorrow',label:"Tomorrow's clients",section:'Appointments'});
     if(has(admin,'appointment:create')) options.push({key:'availability',label:'Find an available time',section:'Appointments'});
   }
-  if(has(admin,'appointment:create')&&has(admin,'appointment:view')) options.push({key:'booking',label:'Make a booking',section:'Appointments'});
+  if(has(admin,'appointment:create')&&has(admin,'appointment:view')){
+    options.push({key:'booking',label:'Make a booking',section:'Appointments'});
+    options.push({key:'manage_booking',label:'Manage a booking',section:'Appointments'});
+  }
   if(has(admin,'client:lookup')) options.push({key:'client',label:'Find a client',section:'Clients'});
   if(has(admin,'walkin:create')) options.push({key:'walkin',label:'Add a walk-in',section:'Clients'});
   if(has(admin,'appointment:view')) options.push({key:'staff_services',label:'Staff services',section:'Staff'});
+  if(has(admin,'appointment:create')) options.push({key:'pricing',label:'Services & pricing',section:'Staff'});
   if(has(admin,'schedule:manage')) options.push({key:'schedule',label:'Schedule management',section:'Staff'});
   options.push({key:'help',label:'Help',section:'More'});
   return options.map((o,i)=>({...o,number:i+1}));
@@ -41,6 +47,8 @@ function returnedToMore(reply=''){return /\*(?:More — )?Schedule management\*/
 
 async function processAdminMobileMenuMessage(sender,text){
   const k=senderKey(sender);const admin=await getAdmin(sender);if(!admin)return {handled:false};const raw=String(text||'').trim();const v=raw.toLowerCase().replace(/\s+/g,' ');
+  const bookingUpdateFlow=await processAdminBookingUpdateMessage(sender,text);if(bookingUpdateFlow.handled){moreSessions.delete(k);return bookingUpdateFlow;}
+  const pricingFlow=await processAdminServicePricingMessage(sender,text);if(pricingFlow.handled){moreSessions.delete(k);return pricingFlow;}
   const cancellationFlow=await processAdminAppointmentCancellationMessage(sender,text);if(cancellationFlow.handled){moreSessions.delete(k);return cancellationFlow;}
   const bookingFlow=await processAdminMobileBookingFlowMessage(sender,text);if(bookingFlow.handled){moreSessions.delete(k);return bookingFlow;}
   const more=moreSessions.get(k);
@@ -63,18 +71,22 @@ async function processAdminMobileMenuMessage(sender,text){
     if(selected.key==='tomorrow')return {handled:false};
     if(selected.key==='availability')return processAdminMobileBookingFlowMessage(sender,'Find an available time');
     if(selected.key==='booking')return processAdminMobileBookingFlowMessage(sender,'Make a booking');
+    if(selected.key==='manage_booking')return processAdminBookingUpdateMessage(sender,'Manage booking');
     if(selected.key==='client')return {handled:true,admin,reply:clientGuide()};
     if(selected.key==='walkin')return {handled:false};
     if(selected.key==='staff_services')return processAdminStaffServicesMessage(sender,'Staff services');
+    if(selected.key==='pricing')return processAdminServicePricingMessage(sender,'Manage services & pricing');
     if(selected.key==='schedule'){moreSessions.set(k,{step:'menu'});return {handled:true,admin,reply:moreMenu()};}
     if(selected.key==='help')return {handled:false};
   }
   if(v==='today'||v==="today's clients"||v==='todays clients'||v==='tomorrow'||v==="tomorrow's clients"||v==='tomorrows clients')return {handled:false};
   if(v==='find an available time'||v==='find availability')return processAdminMobileBookingFlowMessage(sender,'Find an available time');
   if(['make a booking','new booking','book client','book a client','book appointment'].includes(v))return processAdminMobileBookingFlowMessage(sender,'Make a booking');
+  if(['manage a booking','manage booking','update booking','edit booking'].includes(v))return processAdminBookingUpdateMessage(sender,'Manage booking');
   if(v==='find a client'){if(!has(admin,'client:lookup'))return {handled:false};return {handled:true,admin,reply:clientGuide()};}
   if(v==='add a walk-in'||v==='add walk-in')return {handled:false};
   if(v==='staff services'||v==='services by staff'||v==='services per staff')return processAdminStaffServicesMessage(sender,'Staff services');
+  if(['services & pricing','manage services & pricing','service pricing','pricing'].includes(v))return processAdminServicePricingMessage(sender,'Manage services & pricing');
   if(['schedule management','staff schedule','schedule'].includes(v)){if(!has(admin,'schedule:manage'))return {handled:false};moreSessions.set(k,{step:'menu'});return {handled:true,admin,reply:moreMenu()};}
   if(v==='staff hours'||v==='regular staff hours')return processAdminStaffScheduleFlowMessage(sender,'Staff hours');
   if(['leave','leave / special availability','leave and special availability','special availability'].includes(v))return processAdminStaffScheduleFlowMessage(sender,'Leave / special availability');
