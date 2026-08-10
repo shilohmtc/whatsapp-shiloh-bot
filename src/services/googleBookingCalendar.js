@@ -28,6 +28,10 @@ function base64url(input) {
   return Buffer.from(input).toString("base64url");
 }
 
+function normalizeName(value = "") {
+  return String(value).trim().toLowerCase().replace(/\s+/g, " ");
+}
+
 async function getAccessToken() {
   if (cachedToken && Date.now() < cachedTokenExpiresAt - 60_000) return cachedToken;
 
@@ -94,7 +98,20 @@ function deterministicEventId(idempotencyKey) {
   return crypto.createHash("sha256").update(String(idempotencyKey)).digest("hex").slice(0, 40);
 }
 
-async function checkCalendarAvailability({ startsAt, endsAt, ignoreEventId = null }) {
+function eventAppliesToStaff(event, staffName) {
+  if (!staffName) return true;
+  const requested = normalizeName(staffName);
+  const taggedStaff = normalizeName(event.extendedProperties?.private?.shilohStaffName || "");
+  if (taggedStaff) return taggedStaff === requested;
+
+  const searchable = normalizeName(`${event.summary || ""} ${event.description || ""}`);
+  if (searchable.includes(requested)) return true;
+
+  // A busy event with no identifiable practitioner is treated as a clinic-wide block.
+  return !/\bstaff\s*:/i.test(String(event.description || ""));
+}
+
+async function checkCalendarAvailability({ startsAt, endsAt, staffName = null, ignoreEventId = null }) {
   if (!calendarEnabled()) return { enabled: false, available: true, conflicts: [] };
   const { calendarId } = requireConfig();
   const query = new URLSearchParams({
@@ -109,6 +126,7 @@ async function checkCalendarAvailability({ startsAt, endsAt, ignoreEventId = nul
   const conflicts = (result.items || []).filter((event) => {
     if (ignoreEventId && event.id === ignoreEventId) return false;
     if (event.status === "cancelled" || event.transparency === "transparent") return false;
+    if (!eventAppliesToStaff(event, staffName)) return false;
     const start = event.start?.dateTime || event.start?.date;
     const end = event.end?.dateTime || event.end?.date;
     if (!start || !end) return false;
@@ -124,7 +142,7 @@ async function createBookingEvent({ appointmentId, clientName, serviceName, staf
   const eventId = deterministicEventId(`shiloh-appointment:${appointmentId}`);
   const body = {
     id: eventId,
-    summary: `${clientName || "Client"} — ${serviceName || "Booking"}`,
+    summary: `${clientName || "Client"} — ${serviceName || "Booking"}${staffName ? ` — ${staffName}` : ""}`,
     description: [
       `Shiloh CRM appointment #${appointmentId}`,
       staffName ? `Staff: ${staffName}` : null,
@@ -137,6 +155,7 @@ async function createBookingEvent({ appointmentId, clientName, serviceName, staf
       private: {
         shilohAppointmentId: String(appointmentId),
         shilohSource: String(source),
+        ...(staffName ? { shilohStaffName: String(staffName) } : {}),
       },
     },
   };
@@ -182,10 +201,11 @@ async function updateBookingEvent({ eventId, startsAt, endsAt, clientName, servi
   if (!calendarEnabled()) return { enabled: false, event: null };
   const { calendarId } = requireConfig();
   const patch = {};
-  if (clientName || serviceName) patch.summary = `${clientName || "Client"} — ${serviceName || "Booking"}`;
+  if (clientName || serviceName || staffName) patch.summary = `${clientName || "Client"} — ${serviceName || "Booking"}${staffName ? ` — ${staffName}` : ""}`;
   if (startsAt) patch.start = { dateTime: new Date(startsAt).toISOString(), timeZone: DEFAULT_TIMEZONE };
   if (endsAt) patch.end = { dateTime: new Date(endsAt).toISOString(), timeZone: DEFAULT_TIMEZONE };
   if (staffName || locationName) patch.description = [staffName ? `Staff: ${staffName}` : null, locationName ? `Location: ${locationName}` : null].filter(Boolean).join("\n");
+  if (staffName) patch.extendedProperties = { private: { shilohStaffName: String(staffName) } };
 
   const event = await googleRequest(`/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`, {
     method: "PATCH",
