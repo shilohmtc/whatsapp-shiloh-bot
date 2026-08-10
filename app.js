@@ -10,6 +10,7 @@ const webhookRoutes = require("./src/routes/webhook");
 const adminRoutes = require("./src/routes/admin");
 const auditReadRoutes = require("./src/routes/auditRead");
 const calendarRoutes = require("./src/routes/calendar");
+const walkinRoutes = require("./src/routes/walkin");
 const { checkDatabase } = require("./src/services/memory");
 const { applyPendingMigrations } = require("./src/services/migrations");
 const { repairJeanPierreIdentity } = require("./src/services/identityRepair");
@@ -31,7 +32,7 @@ app.use(express.json({ limit: "2mb" }));
 app.use(requestContext);
 app.get("/", (req,res)=>res.status(200).json({service:"shiloh-whatsapp-bot",status:"running"}));
 app.get("/health",async(req,res)=>{const ok=await checkDatabase();return res.status(ok?200:503).json({status:ok?"ok":"degraded",database:ok?"ok":"unavailable",timestamp:new Date().toISOString()});});
-app.use("/audit-read",auditReadRoutes);app.use("/admin",adminRoutes);app.use("/calendar",calendarRoutes);app.use("/",webhookRoutes);
+app.use("/audit-read",auditReadRoutes);app.use("/admin",adminRoutes);app.use("/calendar",calendarRoutes);app.use("/",walkinRoutes);app.use("/",webhookRoutes);
 app.use((err,req,res,next)=>{const log=req.log||logger;log.error({err},"Unhandled Express error");if(res.headersSent)return next(err);return res.status(500).json({error:"Internal server error",requestId:req.id});});
 const PORT=process.env.PORT||3000;let server;
 async function start(){
