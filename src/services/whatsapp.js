@@ -15,6 +15,18 @@ function requestConfig() {
   };
 }
 
+function triggerBookingCustomerConfirmation(message = "") {
+  const match = String(message).match(/Booking created successfully\s*[—-]\s*appointment\s+#(\d+)/i);
+  if (!match) return;
+  const appointmentId = Number(match[1]);
+  setImmediate(() => {
+    const { sendCustomerBookingConfirmationForAppointment } = require('./customerBookingConfirmation');
+    sendCustomerBookingConfirmationForAppointment(appointmentId).catch((error) => {
+      logger.error({ err: error, appointmentId }, "Post-booking customer confirmation trigger failed");
+    });
+  });
+}
+
 async function sendWhatsAppMessage(to, message) {
   try {
     const response = await axios.post(
@@ -33,6 +45,7 @@ async function sendWhatsAppMessage(to, message) {
       "WhatsApp message sent"
     );
 
+    triggerBookingCustomerConfirmation(message);
     return response.data;
   } catch (error) {
     logger.error(
