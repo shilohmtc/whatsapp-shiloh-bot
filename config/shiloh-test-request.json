@@ -1,6 +1,6 @@
 {
-  "enabled": false,
-  "nonce": "disabled-initial",
+  "enabled": true,
+  "nonce": "2026-08-10T17:36:45Z-crm3-whatsapp-test-1",
   "command": "Check availability Christel | Full Body Swedish | 11/08/2026 10:00",
   "sendReplyToWhatsApp": true
 }
