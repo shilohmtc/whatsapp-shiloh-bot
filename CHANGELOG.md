@@ -4,6 +4,47 @@ All notable changes to Shiloh are documented in this file.
 
 This project follows Semantic Versioning: MAJOR.MINOR.PATCH.
 
+## [1.2.0] - 2026-08-11
+
+### Production CRM & Customer Experience
+
+#### Added
+- CRM-backed booking and customer lifecycle with Shiloh replacing Goldie as the active booking system of record.
+- Staff-scoped WhatsApp administration with owner/business-admin and practitioner-specific permissions.
+- Dedicated Google Calendars for Marietjie and Abigail with practitioner-scoped appointment visibility.
+- Public Shiloh booking landing page with direct WhatsApp AI booking intent.
+- Public CRM-backed service catalogue with professional descriptions, service imagery and WhatsApp deep links.
+- Versioned Booking Policy with explicit WhatsApp consent gate and safe synthetic production verification.
+- Staff-scoped operational `Today` reporting with business-wide owner/admin summaries and practitioner-self summaries.
+- Birthday customer-care foundations, opt-in/out controls, once-per-year delivery protection and Meta template provisioning workflow.
+- Loyalty visit and reward foundations based on completed appointments.
+- Walk-in QR registration and premium customer greeting flows.
+- Client cancellation/rescheduling, booking confirmation, calendar-add and customer-care scheduling infrastructure.
+
+#### Changed
+- Retired Goldie from active production booking; historical Goldie data remains archival only.
+- Established Shiloh CRM and Google Calendar as authoritative operational sources alongside GitHub `main` and Render production.
+- Updated public booking branding to `Shiloh Massage Therapy and Aesthetic Clinic` and identified Shiloh as the AI assistant.
+- Added the Shiloh booking URL as the preferred Google Business Profile booking link while Goldie provider-link removal completes.
+- Hardened normal startup so only intended long-running production schedulers run automatically.
+
+#### Production hardening
+- Safe self-test-first engineering is now the authoritative change-management rule.
+- Regression suite protects staff scope, calendar presentation, booking conflict guards, cancellation synchronization, post-cutover startup and maintenance safety acknowledgements.
+- Fixed OpenAI language-guard compatibility by using the provider-supported minimum output-token budget while retaining fail-open WhatsApp availability.
+- Removed temporary birthday-template startup inspection hooks after provider-side submission.
+- GitHub CI and Render auto-deploy remain the release validation path.
+
+#### Pending P3 work
+- WhatsApp birthday template approval/configuration, including resolving the legacy clinic-name wording before enabling outbound birthday delivery.
+- Treatment-aware aftercare and rebooking specialization.
+- Loyalty redemption automation.
+- Reporting expansion: Tomorrow → This Week → Services/Trends → Availability → optional weekly owner summary.
+- Optional dedicated reminder-confirmation response state.
+
+#### Next phase
+- P4 Ozow/payment/voucher architecture remains unstarted and will begin with discovery/design, payment-ledger truth, webhook idempotency and voucher lifecycle design.
+
 ## [1.0.1] - 2026-08-07
 
 ### Maintenance
