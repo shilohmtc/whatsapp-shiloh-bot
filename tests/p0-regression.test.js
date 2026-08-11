@@ -101,11 +101,12 @@ test('Goldie future import retains structural replay and duplicate safeguards', 
   assert.doesNotMatch(goldie, /sendWhatsAppMessage\s*\(/);
 });
 
-test('normal application startup contains schedulers but no one-time maintenance jobs', () => {
+test('normal post-cutover startup contains only current long-running schedulers and no Goldie sync or one-time maintenance jobs', () => {
   const app = source('app.js');
-  assert.match(app, /startGoldieSyncScheduler/);
+  assert.match(app, /startGoogleBusinessProfileSyncScheduler/);
   assert.match(app, /startAppointmentLifecycleScheduler/);
   assert.match(app, /startCustomerCareScheduler/);
+  assert.doesNotMatch(app, /startGoldieSyncScheduler|goldieSync/);
   assert.doesNotMatch(app, /RUN_[A-Z0-9_]+/);
   assert.doesNotMatch(app, /repairJeanPierreIdentity|repairNatashaStaffAssignment/);
   assert.doesNotMatch(app, /runGoldieFutureImport|runGoogleCalendarReconciliation/);
