@@ -61,6 +61,53 @@ async function sendWhatsAppMessage(to, message) {
   }
 }
 
+async function sendWhatsAppReplyButtons(to, body, buttons = []) {
+  const safeBody = String(body || "").trim();
+  if (!safeBody) throw new Error("WhatsApp reply-button body is required");
+  if (!Array.isArray(buttons) || buttons.length < 1 || buttons.length > 3) {
+    throw new Error("WhatsApp reply buttons require between 1 and 3 buttons");
+  }
+  const normalized = buttons.map((button) => {
+    const id = String(button?.id || "").trim();
+    const title = String(button?.title || "").trim();
+    if (!id || id.length > 256) throw new Error("WhatsApp reply-button id must be 1-256 characters");
+    if (!title || title.length > 20) throw new Error("WhatsApp reply-button title must be 1-20 characters");
+    return { type: "reply", reply: { id, title } };
+  });
+
+  try {
+    const response = await axios.post(
+      messagesUrl(),
+      {
+        messaging_product: "whatsapp",
+        to,
+        type: "interactive",
+        interactive: {
+          type: "button",
+          body: { text: safeBody },
+          action: { buttons: normalized },
+        },
+      },
+      requestConfig()
+    );
+    logger.info(
+      { messageId: response.data.messages?.[0]?.id || null, buttonCount: normalized.length },
+      "WhatsApp reply buttons sent"
+    );
+    return response.data;
+  } catch (error) {
+    logger.error(
+      {
+        err: error,
+        status: error.response?.status,
+        metaError: error.response?.data?.error,
+      },
+      "WhatsApp reply-button send failed"
+    );
+    throw error;
+  }
+}
+
 async function sendWhatsAppTemplate(to, templateName, bodyParameters = [], languageCode = "en") {
   if (!templateName) {
     throw new Error("WhatsApp template name is required");
@@ -117,4 +164,4 @@ async function sendWhatsAppTemplate(to, templateName, bodyParameters = [], langu
   }
 }
 
-module.exports = { sendWhatsAppMessage, sendWhatsAppTemplate };
+module.exports = { sendWhatsAppMessage, sendWhatsAppReplyButtons, sendWhatsAppTemplate };

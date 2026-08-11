@@ -1,4 +1,4 @@
-const { sendWhatsAppMessage } = require("../services/whatsapp");
+const { sendWhatsAppMessage, sendWhatsAppReplyButtons } = require("../services/whatsapp");
 const { generateReply } = require("../services/ai");
 const { updateProfileFromMessage } = require("../services/profileExtractor");
 const { CLINIC_REDIRECT, evaluateClinicScope } = require("../services/scopeGuard");
@@ -25,12 +25,18 @@ const { processAdminStaffServicesMessage } = require("../services/adminStaffServ
 const { processAdminLoyaltyRedemptionMessage } = require("../services/adminLoyaltyRedemption");
 const { processAdminClientDemoMessage } = require("../services/adminClientDemo");
 const { processAdminAssistantMessage } = require("../services/adminAssistant");
+const { commandForAdminButton } = require("../services/adminEarningsButtons");
 const { forceMatchedClientNameConfirmation, guardActiveNameConfirmation } = require("../services/identityOnboardingGuard");
 const logger = require("../lib/logger");
 function maskPhone(phone = "") { return phone.length > 4 ? `***${phone.slice(-4)}` : "***"; }
 function isGreetingOnly(text = "") { return /^(hi|hello|hey|good morning|good afternoon|good evening|howzit|hiya)[!. ]*$/i.test(String(text).trim()); }
+function inboundText(message){
+  if(message?.type==="text") return message.text?.body?.trim()||null;
+  if(message?.type==="interactive"&&message.interactive?.type==="button_reply") return commandForAdminButton(message.interactive.button_reply?.id);
+  return null;
+}
 exports.verifyWebhook = (req,res)=>{const mode=req.query["hub.mode"],token=req.query["hub.verify_token"],challenge=req.query["hub.challenge"];if(mode==="subscribe"&&token===process.env.VERIFY_TOKEN){(req.log||logger).info("WhatsApp webhook verified");return res.status(200).send(challenge);}(req.log||logger).warn("WhatsApp webhook verification rejected");return res.sendStatus(403);};
-exports.receiveWebhook=async(req,res)=>{const log=req.log||logger;try{const value=req.body.entry?.[0]?.changes?.[0]?.value;if(!value?.messages)return res.sendStatus(200);const message=value.messages[0];if(message.type!=="text"){log.info({messageType:message.type},"Ignoring unsupported WhatsApp message");return res.sendStatus(200);}const from=message.from,text=message.text?.body?.trim();if(!from||!text){log.warn("Received malformed WhatsApp text message");return res.sendStatus(200);}log.info({from:maskPhone(from)},"Processing incoming WhatsApp message");try{
+exports.receiveWebhook=async(req,res)=>{const log=req.log||logger;try{const value=req.body.entry?.[0]?.changes?.[0]?.value;if(!value?.messages)return res.sendStatus(200);const message=value.messages[0];const from=message.from,text=inboundText(message);if(!text){log.info({messageType:message.type},"Ignoring unsupported or unknown WhatsApp message");return res.sendStatus(200);}if(!from){log.warn("Received WhatsApp message without sender");return res.sendStatus(200);}log.info({from:maskPhone(from),messageType:message.type},"Processing incoming WhatsApp message");try{
 const language=await guardEnglishOnly(text);if(!language.allowed){log.info({from:maskPhone(from)},"Rejected non-English WhatsApp message");await sendWhatsAppMessage(from,language.reply);return res.sendStatus(200);}
 const adminClientDemo=await processAdminClientDemoMessage(from,text);if(adminClientDemo.handled){log.info({from:maskPhone(from),admin:adminClientDemo.admin?.display_name},"Handled controlled client demo message");await sendWhatsAppMessage(from,adminClientDemo.reply);return res.sendStatus(200);}
 const adminSlots=await processAdminAvailableSlotsMessage(from,text);if(adminSlots.handled){log.info({from:maskPhone(from),admin:adminSlots.admin?.display_name},"Handled authoritative available-slots request");await sendWhatsAppMessage(from,adminSlots.reply);return res.sendStatus(200);}
@@ -39,7 +45,7 @@ const activeMobileBooking=await processAdminMobileBookingFlowMessage(from,text);
 const adminReports=await processAdminReportsMessage(from,text);if(adminReports.handled){await sendWhatsAppMessage(from,adminReports.reply);return res.sendStatus(200);}
 const serviceTrends=await processAdminServiceTrendsMessage(from,text);if(serviceTrends.handled){await sendWhatsAppMessage(from,serviceTrends.reply);return res.sendStatus(200);}
 const adminAppointments=await processAdminAppointmentsByDateMessage(from,text);if(adminAppointments.handled){await sendWhatsAppMessage(from,adminAppointments.reply);return res.sendStatus(200);}
-const adminMobile=await processAdminMobileMenuMessage(from,text);if(adminMobile.handled){await sendWhatsAppMessage(from,adminMobile.reply);return res.sendStatus(200);}
+const adminMobile=await processAdminMobileMenuMessage(from,text);if(adminMobile.handled){if(adminMobile.interactive){await sendWhatsAppReplyButtons(from,adminMobile.interactive.body,adminMobile.interactive.buttons);}else{await sendWhatsAppMessage(from,adminMobile.reply);}return res.sendStatus(200);}
 const rosterAudit=await processAdminRosterAuditMessage(from,text);if(rosterAudit.handled){await sendWhatsAppMessage(from,rosterAudit.reply);return res.sendStatus(200);}
 const nailAudit=await processAdminNailServicesAuditMessage(from,text);if(nailAudit.handled){await sendWhatsAppMessage(from,nailAudit.reply);return res.sendStatus(200);}
 const legacyOrphanAudit=await processAdminLegacyOrphanAuditMessage(from,text);if(legacyOrphanAudit.handled){await sendWhatsAppMessage(from,legacyOrphanAudit.reply);return res.sendStatus(200);}
