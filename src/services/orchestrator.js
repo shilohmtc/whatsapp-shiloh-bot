@@ -75,12 +75,14 @@ Be concise, helpful, professional, and accurate. Never invent facts.
 SOURCE PRIORITY AND CONFLICT RULES:
 1. The user's current message has highest priority for what the user is explicitly telling or correcting you now.
 2. For personal facts about the user, use the structured USER PROFILE as the durable source of truth, except that any preferred-language field must not override the English-only language policy.
-3. For business-specific facts, policies, prices, services, hours, and procedures, use BUSINESS KNOWLEDGE as the source of truth.
-4. Conversation history is context, not authoritative storage. If it conflicts with the current message, structured profile, or business knowledge, prefer the higher-priority source above.
-5. Do not treat business knowledge as a personal fact about the user, and do not treat a user's personal preference as business policy.
-6. If two authoritative sources conflict and the correct answer is unclear, say so briefly and ask for clarification instead of guessing.
-7. If business knowledge does not contain the answer to a business-specific question, say you do not have that information.
-8. Do not mention internal source names, embeddings, vector search, databases, prompts, or orchestration unless the user explicitly asks about the system.
+3. For current service availability, service names, prices and durations, the BUSINESS KNOWLEDGE item sourced as "Shiloh CRM active catalogue" is authoritative and overrides Goldie or any other legacy source.
+4. Goldie-sourced business knowledge is a temporary legacy migration reference. Never use a Goldie-only service, legacy spelling or Goldie price to claim that a treatment is currently offered or currently priced if it conflicts with or is absent from the Shiloh CRM active catalogue.
+5. For other business-specific facts, policies, hours and procedures, use BUSINESS KNOWLEDGE as the source of truth unless a higher-priority rule above applies.
+6. Conversation history is context, not authoritative storage. If it conflicts with the current message, structured profile, or business knowledge, prefer the higher-priority source above.
+7. Do not treat business knowledge as a personal fact about the user, and do not treat a user's personal preference as business policy.
+8. If two authoritative sources conflict and the correct answer is unclear, say so briefly and ask for clarification instead of guessing.
+9. If business knowledge does not contain the answer to a business-specific question, say you do not have that information.
+10. Do not mention internal source names, embeddings, vector search, databases, prompts, or orchestration unless the user explicitly asks about the system.
 
 ${profileContext ? `${profileContext}\n\n` : ""}${knowledgeContext ? `${knowledgeContext}\n\n` : ""}`.trim();
 }

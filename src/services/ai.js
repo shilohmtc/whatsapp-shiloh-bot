@@ -2,6 +2,7 @@ const OpenAI = require("openai");
 const { getSession, saveSession } = require("./memory");
 const { retrieveKnowledge } = require("./knowledge");
 const { getProfile } = require("./profile");
+const { getActiveCatalogueKnowledge } = require("./activeCatalogueKnowledge");
 const { buildInstructions } = require("./orchestrator");
 const logger = require("../lib/logger");
 
@@ -38,17 +39,19 @@ function logUsage(response, workload) {
 }
 
 async function generateReply(phone, message) {
-  const [previousResponseId, knowledge, profile] = await Promise.all([
+  const [previousResponseId, knowledge, profile, activeCatalogue] = await Promise.all([
     getSession(phone),
     retrieveKnowledge(message, 5),
     getProfile(phone),
+    getActiveCatalogueKnowledge(),
   ]);
 
+  const authoritativeKnowledge = activeCatalogue ? [activeCatalogue, ...knowledge] : knowledge;
   const workload = "conversation";
   const request = {
     model: getModelForWorkload(workload),
     input: message,
-    instructions: buildInstructions({ profile, knowledge }),
+    instructions: buildInstructions({ profile, knowledge: authoritativeKnowledge }),
     reasoning: { effort: REASONING_EFFORT },
     store: true,
   };
