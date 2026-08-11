@@ -23,8 +23,9 @@
 - ✅ Christel personal-account Google Calendar read/create/edit/delete permission verification.
 - ✅ Automated regression tests + CI.
 - ✅ Production observability / maintenance cleanup. Normal `npm start` contains no migrations, one-time repairs, imports, rollout jobs, reconciliations or smoke tests. Explicit maintenance commands and rollback/runbook safeguards are documented.
+- 🟡 Render environment-variable hygiene pass requested 11 Aug 2026. Temporary `PEXELS_API_KEY` was neutralized after the imagery import; complete removal/audit of historical variables still requires reconciliation against the actual Render Environment variable-name inventory because the connector does not expose a read/list-secrets operation.
 
-**P0 status: ✅ CLOSED / COMPLETE. Reopen only for a new regression.**
+**P0 status: ✅ CLOSED / COMPLETE for production stability. Environment-variable hygiene is housekeeping and not a production blocker.**
 
 ### P1 — Catalogue, data presentation and Goldie exit readiness
 
@@ -60,13 +61,13 @@
 - ✅ Reminder/customer-care infrastructure.
 - ✅ Birthday and loyalty foundations.
 - ✅ **CRM-backed customer service catalogue + WhatsApp booking UX — VERIFIED 11 Aug 2026.** The 49 active CRM services now have customer-facing professional descriptions. `/services` and `/services/:id` render current active treatments grouped by the canonical CRM categories with authoritative duration/price presentation and service-specific **Book via WhatsApp** links that prefill the selected treatment. Shiloh's AI consumes the same CRM customer descriptions and booking notes, preventing website/WhatsApp content divergence. Migrations 038/039 were applied once through a guarded one-shot path, verified idempotent, and all temporary migration plumbing was removed afterward.
-- 🟡 **Service imagery:** image support is implemented in the CRM/service-card contract, but production coverage is currently 0/49. Populate only approved/licensed Shiloh-owned or otherwise explicitly approved imagery; missing images do not block booking.
+- ✅ **Service imagery — VERIFIED 11 Aug 2026.** Owner approved curated third-party Pexels imagery as an interim solution. Twelve approved/licensed source images were ingested through a temporary API bridge, converted to optimized Shiloh-controlled WebP assets under `public/service-images`, and the temporary bridge/importer was retired afterward. All 49 currently seeded active services resolve to an approved image; unknown future services fail closed with no automatic misleading image. Sensitive services such as Areola Reconstruction, Pelvic Floor Strengthening and intimate HIFU use neutral consultation/clinic imagery. Production smoke verification confirmed `/services` renders Shiloh-hosted image URLs plus WhatsApp booking controls and a representative WebP asset is served successfully.
 - 🟡 Birthday outbound messaging remains fail-closed until an approved WhatsApp birthday template is configured.
 - 🟡 Treatment-aware aftercare/rebooking specialization remains.
 - 🟡 Loyalty redemption automation remains.
 - 🟡 Dedicated reminder-confirmation response state remains optional/unimplemented.
 
-**P3 status: 🟡 CORE COMPLETE; customer catalogue descriptions + WhatsApp booking UX are live, with approved imagery and remaining customer-care enhancements listed below.**
+**P3 status: 🟡 CORE EXPERIENCE COMPLETE; catalogue descriptions, WhatsApp booking UX and service imagery are live. Remaining work is customer-care automation specialization.**
 
 ### P4 — Payments and vouchers
 
@@ -97,7 +98,7 @@
 
 Work one item at a time and verify GitHub + Render after production changes.
 
-1. **P3 — Service imagery:** audit available Shiloh-owned/approved treatment and clinic photography, then populate service/category imagery without changing catalogue business data.
+1. **Render environment-variable hygiene:** reconcile the visible Render Environment variable names against current production requirements; remove obsolete Goldie/import/rollout/test keys and permanently remove the now-unused `PEXELS_API_KEY` entry. Do not use bulk replace without a verified inventory.
 2. **P3 — Configure an approved WhatsApp birthday template** before enabling birthday outbound messaging.
 3. **P3 — Treatment-aware aftercare/rebooking specialization.**
 4. **P3 — Loyalty redemption automation.**
@@ -122,6 +123,9 @@ Work one item at a time and verify GitHub + Render after production changes.
 - ✅ P3 — Public `/services` catalogue + individual treatment pages + WhatsApp service deep links verified live.
 - ✅ P3 — AI catalogue knowledge aligned to the same CRM descriptions and booking notes.
 - ✅ P3 — One-shot migrations 038/039 verified and temporary migration plumbing removed.
+- ✅ P3 — Twelve licensed interim service images ingested as Shiloh-controlled WebP assets.
+- ✅ P3 — Effective image mapping verified for all 49 current active services; unknown future services fail closed.
+- ✅ P3 — Production catalogue/asset/WhatsApp imagery smoke test passed; temporary Pexels bridge removed and importer/smoke workflows archived.
 
 ## Safety rules retained
 
@@ -132,7 +136,8 @@ Work one item at a time and verify GitHub + Render after production changes.
 - Do not delete the Goldie account or historical data; it remains archival reference.
 - Do not redo production work already marked ✅ unless a new regression is discovered.
 - Use only Shiloh-owned/licensed or explicitly approved imagery for customer-facing service cards; do not hotlink arbitrary third-party images.
+- Do not bulk-replace Render environment variables without a verified inventory of all currently required production keys.
 
 ## Next action
 
-**P0 and P1 are CLOSED. P2 is functionally complete.** The highest-priority genuinely unfinished production item is now **P3 service imagery**: audit available Shiloh-owned/approved treatment and clinic photography and map it safely to the live CRM-backed service catalogue. Once imagery is handled (or explicitly deferred), continue with the approved WhatsApp birthday-template gate, treatment-aware aftercare/rebooking, and loyalty redemption.
+**P0 and P1 are CLOSED. P2 is functionally complete. P3 service catalogue imagery is now COMPLETE.** The immediate housekeeping item requested by the owner is the **Render environment-variable hygiene pass**. After that, continue with the approved WhatsApp birthday-template gate, treatment-aware aftercare/rebooking, and loyalty redemption.
