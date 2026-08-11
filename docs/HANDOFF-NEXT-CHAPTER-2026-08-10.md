@@ -23,9 +23,9 @@
 - ✅ Christel personal-account Google Calendar read/create/edit/delete permission verification.
 - ✅ Automated regression tests + CI.
 - ✅ Production observability / maintenance cleanup. Normal `npm start` contains no migrations, one-time repairs, imports, rollout jobs, reconciliations or smoke tests. Explicit maintenance commands and rollback/runbook safeguards are documented.
-- 🟡 Render environment-variable hygiene pass requested 11 Aug 2026. Temporary `PEXELS_API_KEY` was neutralized after the imagery import; complete removal/audit of historical variables still requires reconciliation against the actual Render Environment variable-name inventory because the connector does not expose a read/list-secrets operation.
+- ✅ Render environment-variable hygiene — VERIFIED 11 Aug 2026. Owner reviewed the complete Render Environment inventory and removed obsolete Goldie/import/rollout/migration/repair/test controls in guarded groups. Required database, Google Calendar/OAuth, OpenAI, Meta/WhatsApp, admin/audit and customer-care template configuration was retained. `PEXELS_API_KEY` is intentionally retained as a reusable asset-acquisition integration for future approved service imagery; current production service images remain Shiloh-controlled local WebP assets and do not depend on Pexels at runtime. Post-cleanup Render rebuild completed successfully and the production service remained live with one active instance and successful HTTP 200 traffic.
 
-**P0 status: ✅ CLOSED / COMPLETE for production stability. Environment-variable hygiene is housekeeping and not a production blocker.**
+**P0 status: ✅ CLOSED / COMPLETE. Reopen only for a new regression.**
 
 ### P1 — Catalogue, data presentation and Goldie exit readiness
 
@@ -98,18 +98,18 @@
 
 Work one item at a time and verify GitHub + Render after production changes.
 
-1. **Render environment-variable hygiene:** reconcile the visible Render Environment variable names against current production requirements; remove obsolete Goldie/import/rollout/test keys and permanently remove the now-unused `PEXELS_API_KEY` entry. Do not use bulk replace without a verified inventory.
-2. **P3 — Configure an approved WhatsApp birthday template** before enabling birthday outbound messaging.
-3. **P3 — Treatment-aware aftercare/rebooking specialization.**
-4. **P3 — Loyalty redemption automation.**
-5. **P3 optional — Dedicated reminder-confirmation response state**, only if operationally desired.
-6. **P4 — Ozow/payment/voucher discovery and design** after P3 production hardening.
+1. **P3 — Configure an approved WhatsApp birthday template** before enabling birthday outbound messaging. This is now the highest-priority genuinely unfinished production item.
+2. **P3 — Treatment-aware aftercare/rebooking specialization.**
+3. **P3 — Loyalty redemption automation.**
+4. **P3 optional — Dedicated reminder-confirmation response state**, only if operationally desired.
+5. **P4 — Ozow/payment/voucher discovery and design** after P3 production hardening.
 
 ## Completed during this chapter
 
 - ✅ P0 — Automated regression tests + CI.
 - ✅ P0 — Christel personal-account Calendar permission test.
 - ✅ P0 — Startup/maintenance separation + production runbook + rollback safeguards.
+- ✅ P0 — Render environment-variable hygiene; obsolete operational flags removed and production rebuild verified live.
 - ✅ P1 — Shared Calendar presentation audit and scoped normalization.
 - ✅ P1 — Live production catalogue audit + CRM-authority hardening.
 - ✅ P1 — Owner policy parity approval.
@@ -136,8 +136,9 @@ Work one item at a time and verify GitHub + Render after production changes.
 - Do not delete the Goldie account or historical data; it remains archival reference.
 - Do not redo production work already marked ✅ unless a new regression is discovered.
 - Use only Shiloh-owned/licensed or explicitly approved imagery for customer-facing service cards; do not hotlink arbitrary third-party images.
+- `PEXELS_API_KEY` may remain in Render for future approved image acquisition, but current production catalogue rendering must not depend on Pexels availability.
 - Do not bulk-replace Render environment variables without a verified inventory of all currently required production keys.
 
 ## Next action
 
-**P0 and P1 are CLOSED. P2 is functionally complete. P3 service catalogue imagery is now COMPLETE.** The immediate housekeeping item requested by the owner is the **Render environment-variable hygiene pass**. After that, continue with the approved WhatsApp birthday-template gate, treatment-aware aftercare/rebooking, and loyalty redemption.
+**P0 and P1 are CLOSED. P2 is functionally complete. P3 service catalogue imagery and Render environment cleanup are COMPLETE.** Proceed one item at a time with the highest-priority genuinely unfinished production item: **configure and approve the WhatsApp birthday template before enabling birthday outbound messaging**.
