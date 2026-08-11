@@ -24,5 +24,5 @@ test('this-week report is permission gated and auditable',()=>{
 
 test('today report remains supported',()=>{
   assert.match(source,/today report/);
-  assert.match(source,/period==='week'\?'week':'today'/);
+  assert.match(source,/const period=week\?'week':'today'/);
 });
