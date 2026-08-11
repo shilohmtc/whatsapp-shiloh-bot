@@ -1,4 +1,4 @@
-# Shiloh WhatsApp CRM
+# Shiloh OS
 
 Production WhatsApp booking, CRM and customer-care system for Shiloh Massage Therapy and Aesthetic Clinic.
 
