@@ -1,4 +1,5 @@
 const { pool } = require('../db/pool');
+const { resolveServiceImageUrl } = require('./serviceImageMap');
 
 function formatPrice(row) {
   if (row.display_price) return String(row.display_price).trim();
@@ -29,7 +30,7 @@ async function listPublicServices() {
     duration: formatDuration(row),
     price: formatPrice(row),
     description: row.customer_description || null,
-    imageUrl: row.image_url || null,
+    imageUrl: row.image_url || resolveServiceImageUrl(row.name),
     bookingNote: row.booking_note || null,
   }));
 }
