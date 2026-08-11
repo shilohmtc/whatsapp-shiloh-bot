@@ -1,6 +1,7 @@
 const logger = require("../lib/logger");
 const { processAdminAvailableSlotsMessage } = require("../services/adminAvailableSlots");
 const { sendWhatsAppMessage } = require("../services/whatsapp");
+const { runBookingPolicySelfTest } = require("../services/bookingPolicySelfTest");
 
 const WINDOW_MS = 10 * 60 * 1000;
 const MAX_REQUESTS = 10;
@@ -80,4 +81,21 @@ async function runTestCommand(req, res) {
   }
 }
 
-module.exports = { runTestCommand };
+async function runBookingPolicyTest(req, res) {
+  const log = req.log || logger;
+  try {
+    const result = await runBookingPolicySelfTest();
+    log.info({ policyVersion: result.policyVersion }, "Booking policy production self-test passed");
+    return res.status(200).json({ ...result, requestId: req.id });
+  } catch (error) {
+    log.error({ err: error }, "Booking policy production self-test failed");
+    return res.status(502).json({
+      ok: false,
+      error: "Booking policy self-test failed",
+      detail: error.message,
+      requestId: req.id,
+    });
+  }
+}
+
+module.exports = { runTestCommand, runBookingPolicyTest };
