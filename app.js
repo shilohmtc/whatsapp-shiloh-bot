@@ -1,4 +1,5 @@
 require("dotenv").config();
+const path = require("path");
 const express = require("express");
 const { validateEnv } = require("./src/config/env");
 const logger = require("./src/lib/logger");
@@ -12,7 +13,6 @@ const auditReadRoutes = require("./src/routes/auditRead");
 const calendarRoutes = require("./src/routes/calendar");
 const walkinRoutes = require("./src/routes/walkin");
 const serviceRoutes = require("./src/routes/services");
-const pexelsApprovedAssetRoutes = require("./src/routes/pexelsApprovedAssets");
 const { checkDatabase } = require("./src/services/memory");
 const { startGoogleBusinessProfileSyncScheduler } = require("./src/services/googleBusinessProfileSync");
 const { startAppointmentLifecycleScheduler } = require("./src/services/appointmentLifecycle");
@@ -22,6 +22,10 @@ const app = express();
 app.disable("x-powered-by");
 app.use(express.json({ limit: "2mb" }));
 app.use(requestContext);
+app.use("/assets/service-images", express.static(path.join(__dirname, "public", "service-images"), {
+  maxAge: "30d",
+  immutable: true,
+}));
 app.get("/", (req, res) => res.status(200).json({ service: "shiloh-whatsapp-bot", status: "running" }));
 app.get("/health", async (req, res) => {
   const ok = await checkDatabase();
@@ -30,7 +34,6 @@ app.get("/health", async (req, res) => {
 app.use("/audit-read", auditReadRoutes);
 app.use("/admin", adminRoutes);
 app.use("/calendar", calendarRoutes);
-app.use("/", pexelsApprovedAssetRoutes);
 app.use("/", serviceRoutes);
 app.use("/", walkinRoutes);
 app.use("/", webhookRoutes);
