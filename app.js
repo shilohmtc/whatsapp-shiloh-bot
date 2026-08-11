@@ -16,6 +16,7 @@ const { startGoldieSyncScheduler } = require("./src/services/goldieSync");
 const { startGoogleBusinessProfileSyncScheduler } = require("./src/services/googleBusinessProfileSync");
 const { startAppointmentLifecycleScheduler } = require("./src/services/appointmentLifecycle");
 const { startCustomerCareScheduler } = require("./src/services/customerCare");
+const { runGoldieDuplicate360RepairFromEnv } = require("./src/services/goldieDuplicate360Repair");
 
 const app = express();
 app.disable("x-powered-by");
@@ -46,9 +47,11 @@ const PORT = process.env.PORT || 3000;
 let server;
 
 async function start() {
-  // Normal production boot intentionally contains no migrations, one-time repairs,
-  // rollout jobs, imports, reconciliations or smoke tests. Those are explicit
-  // operator actions via scripts/maintenance.js and docs/PRODUCTION-RUNBOOK.md.
+  // Temporary one-shot cutover repair. This executes only when the operator
+  // explicitly enables RUN_GOLDIE_DUPLICATE_360_REPAIR in Render. The hook is
+  // removed immediately after the verified repair run.
+  await runGoldieDuplicate360RepairFromEnv();
+
   server = app.listen(PORT, () => {
     logger.info({ port: PORT }, "Shiloh started");
     startGoldieSyncScheduler();
