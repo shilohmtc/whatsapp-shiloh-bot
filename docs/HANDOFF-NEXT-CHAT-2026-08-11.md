@@ -1,4 +1,8 @@
-# Shiloh Production Handoff — Next Chat — 11 Aug 2026
+# Shiloh OS — Production Handoff — Next Chat — 11 Aug 2026
+
+> **Project/chat identity:** Shiloh OS
+>
+> Every continuation of this production project should identify itself as **Shiloh OS**. When starting a fresh ChatGPT conversation, use **Shiloh OS** as the conversation title when the interface permits manual naming. The handoff cannot programmatically rename the ChatGPT sidebar conversation, so this naming convention is the authoritative project standard.
 
 This is the authoritative concise next-chat entry point. GitHub `main`, Render production, Shiloh CRM and Google Calendar override older handoff wording.
 
@@ -94,7 +98,11 @@ When an item is externally blocked but safely prepared — for example, waiting 
 
 ## Start here in the next chat
 
+# Shiloh OS
+
 **Continue the Shiloh OS production project from `docs/HANDOFF-NEXT-CHAT-2026-08-11.md`.**
+
+**Conversation naming convention:** this project is **Shiloh OS**. Use **Shiloh OS** as the chat/conversation title when the ChatGPT interface permits it. If the title cannot be controlled programmatically, still identify the project as Shiloh OS throughout the continuation.
 
 Treat **GitHub `main`, Render production, Shiloh CRM and Google Calendar as authoritative**.
 
