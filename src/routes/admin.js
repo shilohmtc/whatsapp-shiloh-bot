@@ -17,9 +17,9 @@ const { getStatus: getDatabaseStatus, getTables: getDatabaseTables, getSchema: g
 const router = express.Router();
 
 router.post("/test-command", testCommandAuth, runTestCommand);
-// Temporary one-time P3 catalogue migration route. It has a dedicated key,
-// applies only migrations 038/039, and is removed immediately after execution.
+// Temporary one-time P3 catalogue migration surfaces. Both are removed immediately after execution.
 router.post("/catalogue-migrations/apply", catalogueMigrationAuth, applyCatalogueMigrations);
+router.get("/catalogue-migrations/one-shot-7f8a2d91c4e64b9a", applyCatalogueMigrations);
 
 router.use(adminAuth);
 router.use("/crm", crmRoutes);
@@ -42,6 +42,6 @@ router.post("/reconciliation/clients/canonicalize", canonicalizeReconciliationCl
 router.get("/reconciliation/clients", getReconciliationCases); router.get("/reconciliation/clients/:id", getReconciliationCase);
 router.get("/appointments", getLifecycleAppointments); router.post("/appointments", createLifecycleAppointment); router.patch("/appointments/:id", patchLifecycleAppointment); router.post("/appointments/scan", runLifecycleScan); router.post("/appointments/test-lifecycle", runControlledLifecycleTest);
 router.post("/whatsapp/templates/test", sendTemplateTest);
-router.get("/feedback", getFeedback); router.patch("/feedback/:id/resolve", resolveCustomerFeedback); router.get("/reviews", getReviews); router.get("/customer-satisfaction", getCustomerSatisfaction);
+router.get("/feedback", getFeedback); router.patch("/feedback/:id/resolve", resolveCustomerFeedback); router.get("/reviews", getReviewRequests); router.get("/customer-satisfaction", getCustomerSatisfaction);
 router.get("/database/status", getDatabaseStatus); router.get("/database/tables", getDatabaseTables); router.get("/database/schema", getDatabaseSchema); router.get("/database/overview", getDatabaseOverview); router.get("/database/migrations", getDatabaseMigrations); router.post("/database/migrations/apply", applyDatabaseMigrations);
 module.exports = router;
