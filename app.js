@@ -17,7 +17,7 @@ const { checkDatabase } = require("./src/services/memory");
 const { startGoogleBusinessProfileSyncScheduler } = require("./src/services/googleBusinessProfileSync");
 const { startAppointmentLifecycleScheduler } = require("./src/services/appointmentLifecycle");
 const { startCustomerCareScheduler } = require("./src/services/customerCare");
-const { getBirthdayTemplateStatus } = require("./src/services/birthdayTemplateProvisioning");
+const { submitBirthdayTemplate } = require("./src/services/birthdayTemplateProvisioning");
 
 const app = express();
 app.disable("x-powered-by");
@@ -42,10 +42,10 @@ async function start() {
     startGoogleBusinessProfileSyncScheduler();
     startAppointmentLifecycleScheduler();
     startCustomerCareScheduler();
-    if (process.env.BIRTHDAY_TEMPLATE_INSPECT_ONCE === "1") {
-      getBirthdayTemplateStatus()
-        .then((result) => logger.info({ ok: result.ok, wabaId: result.wabaId || null, templateName: result.templateName, configuredTemplateName: result.configuredTemplateName || null, template: result.template ? { id: result.template.id, name: result.template.name, status: result.template.status, category: result.template.category, language: result.template.language } : null }, "Birthday template WABA inspection completed"))
-        .catch((error) => logger.error({ err: error }, "Birthday template WABA inspection failed"));
+    if (process.env.BIRTHDAY_TEMPLATE_SUBMIT_ONCE === "1") {
+      submitBirthdayTemplate()
+        .then((result) => logger.info({ ok: result.ok, wabaId: result.wabaId || null, templateName: result.templateName, submitted: result.submitted || false, reason: result.reason || null, provider: result.provider || null, existingStatus: result.template?.status || null }, "Birthday template submission completed"))
+        .catch((error) => logger.error({ providerStatus: error.response?.status || null, providerError: error.response?.data?.error?.message || error.message, providerCode: error.response?.data?.error?.code || null, providerSubcode: error.response?.data?.error?.error_subcode || null }, "Birthday template submission failed"));
     }
   });
 }
