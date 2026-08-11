@@ -1,0 +1,33 @@
+name: Catalogue parity audit
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/catalogue-audit.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  live-catalogue-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Fetch sanitized production catalogue
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --retry 6 --retry-delay 5 \
+            https://shiloh-whatsapp-bot.onrender.com/audit-read/catalogue/status \
+            -o catalogue.json
+          python - <<'PY'
+          import json
+          with open('catalogue.json', encoding='utf-8') as f:
+              payload = json.load(f)
+          report = payload['report']
+          required = ['activeServiceCount', 'activeCategoryCount', 'checks', 'findings', 'categories', 'services']
+          missing = [key for key in required if key not in report]
+          if missing:
+              raise SystemExit(f'Missing audit fields: {missing}')
+          print(json.dumps(report, indent=2, ensure_ascii=False))
+          PY
