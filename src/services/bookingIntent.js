@@ -1,5 +1,4 @@
 const { pool } = require("../db/pool");
-const { retrieveKnowledge } = require("./knowledge");
 const logger = require("../lib/logger");
 
 const BOOKING_URL =
@@ -313,46 +312,57 @@ function significantServiceTokens(service = "") {
     .filter((token) => token.length >= 4 && !ignored.has(token));
 }
 
-async function hasLexicalKnowledgeMatch(service) {
-  const tokens = significantServiceTokens(service);
-  if (!tokens.length) return false;
+function comparableServiceName(service = "") {
+  return String(service || "")
+    .normalize("NFKC")
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9 ]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
-  await ensureTable();
+function matchActiveServiceName(requestedService, activeNames = []) {
+  const requested = normalizeServiceName(requestedService);
+  const requestedComparable = comparableServiceName(requested);
+  if (!requestedComparable) return { matched: false, reason: "missing" };
 
-  const result = await pool.query(
-    `SELECT EXISTS (
-       SELECT 1
-       FROM documents d
-       WHERE ${tokens.map((_, index) => `LOWER(d.content) LIKE $${index + 1}`).join(" AND ")}
-     ) AS found`,
-    tokens.map((token) => `%${token}%`)
-  );
+  const names = [...new Set((activeNames || []).map((name) => String(name || "").trim()).filter(Boolean))];
+  const exact = names.filter((name) => comparableServiceName(name) === requestedComparable);
+  if (exact.length === 1) return { matched: true, name: exact[0], reason: "exact_active_crm_match" };
+  if (exact.length > 1) return { matched: false, reason: "ambiguous_active_crm_match" };
 
-  return Boolean(result.rows[0]?.found);
+  const requestedTokens = significantServiceTokens(requested);
+  if (!requestedTokens.length) return { matched: false, reason: "not_active_in_crm" };
+
+  const tokenMatches = names.filter((name) => {
+    const candidateTokens = new Set(significantServiceTokens(name));
+    return requestedTokens.every((token) => candidateTokens.has(token));
+  });
+
+  if (tokenMatches.length === 1) {
+    return { matched: true, name: tokenMatches[0], reason: "unique_active_crm_token_match" };
+  }
+  if (tokenMatches.length > 1) return { matched: false, reason: "ambiguous_active_crm_match" };
+  return { matched: false, reason: "not_active_in_crm" };
 }
 
 async function verifyService(service) {
   if (!service?.trim()) return { verified: false, reason: "missing" };
 
   try {
-    if (await hasLexicalKnowledgeMatch(service)) {
-      return { verified: true, reason: "lexical_knowledge_match" };
-    }
-
-    const matches = await retrieveKnowledge(service, 8);
-    const tokens = significantServiceTokens(service);
-
-    const verified = matches.some((item) => {
-      if (Number(item.similarity) < 0.35) return false;
-      const haystack = `${item.title || ""} ${item.content || ""}`.toLowerCase();
-      if (tokens.length === 0) return Number(item.similarity) >= 0.58;
-      return tokens.every((token) => haystack.includes(token));
-    });
-
-    return { verified, reason: verified ? "semantic_knowledge_match" : "not_found" };
+    const result = await pool.query(
+      `SELECT name FROM services WHERE status = 'active' ORDER BY name`
+    );
+    const match = matchActiveServiceName(service, result.rows.map((row) => row.name));
+    return {
+      verified: match.matched,
+      reason: match.reason,
+      canonicalName: match.name || null,
+    };
   } catch (error) {
-    logger.warn({ err: error }, "Could not verify requested booking service");
-    return { verified: null, reason: "verification_unavailable" };
+    logger.warn({ err: error }, "Could not verify requested booking service against active CRM catalogue");
+    return { verified: false, reason: "verification_unavailable", canonicalName: null };
   }
 }
 
@@ -567,6 +577,7 @@ module.exports = {
   extractTime,
   extractTherapist,
   verifyService,
+  matchActiveServiceName,
   normalizeServiceName,
   displayDate,
 };
