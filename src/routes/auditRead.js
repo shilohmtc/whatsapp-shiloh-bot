@@ -3,6 +3,7 @@ const auditReadAuth = require("../middleware/auditReadAuth");
 const { getPostCanonicalizationAudit } = require("../services/canonicalizationAudit");
 const { getCatalogueParityAudit } = require("../services/catalogueParityAudit");
 const { getGoldieExitAudit } = require("../services/goldieExitAudit");
+const { getBirthdayTemplateStatus, TEMPLATE_BODY } = require("../services/birthdayTemplateProvisioning");
 
 const router = express.Router();
 
@@ -35,6 +36,32 @@ router.get("/goldie-exit/status", async (req, res) => {
   } catch (error) {
     (req.log || console).error?.({ err: error }, "Failed to build Goldie exit audit");
     return res.status(500).json({ error: "Could not build Goldie exit audit", requestId: req.id });
+  }
+});
+
+// Sanitized, read-only Meta template status. Provider/account IDs and credentials are intentionally not returned.
+router.get("/birthday-template/status", async (req, res) => {
+  try {
+    const provider = await getBirthdayTemplateStatus();
+    const currentBrand = "Shiloh Massage Therapy and Aesthetic Clinic";
+    const submittedCopyUsesCurrentBrand = TEMPLATE_BODY.includes(currentBrand);
+    return res.status(200).json({
+      status: {
+        ok: provider.ok === true,
+        templateName: provider.templateName || null,
+        configuredTemplateName: provider.configuredTemplateName || null,
+        providerStatus: provider.template?.status || null,
+        category: provider.template?.category || null,
+        language: provider.template?.language || null,
+        exists: Boolean(provider.template),
+        submittedCopyUsesCurrentBrand,
+        safeToEnable: provider.template?.status === "APPROVED" && submittedCopyUsesCurrentBrand,
+      },
+      requestId: req.id,
+    });
+  } catch (error) {
+    (req.log || console).error?.({ err: error }, "Failed to inspect sanitized birthday template status");
+    return res.status(502).json({ error: "Could not inspect birthday template status", requestId: req.id });
   }
 });
 
