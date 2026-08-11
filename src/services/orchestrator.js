@@ -1,3 +1,13 @@
+const ALLOWED_PROFILE_PREFERENCES = new Set([
+  "favorite_practitioner",
+  "favorite_therapist",
+  "favorite_pressure",
+]);
+
+function isAllowedProfilePreference(key) {
+  return ALLOWED_PROFILE_PREFERENCES.has(String(key || ""));
+}
+
 function buildProfileContext(profile) {
   if (!profile) return "";
 
@@ -7,7 +17,12 @@ function buildProfileContext(profile) {
   if (profile.location) lines.push(`Location: ${profile.location}`);
 
   for (const [key, value] of Object.entries(profile.preferences || {})) {
-    if (value !== undefined && value !== null && String(value).trim()) {
+    if (
+      isAllowedProfilePreference(key) &&
+      value !== undefined &&
+      value !== null &&
+      String(value).trim()
+    ) {
       lines.push(`Preference - ${key}: ${value}`);
     }
   }
@@ -17,10 +32,12 @@ function buildProfileContext(profile) {
     lines.push(`Tags: ${profile.tags.join(", ")}`);
   }
 
-  // Privacy boundary: custom_attributes is intentionally opaque and may hold
-  // operational or sensitive data. Never add it wholesale to general LLM
-  // context. Any future attribute that genuinely needs AI access must be
-  // explicitly classified and allowlisted instead.
+  // Privacy boundary: preferences are fail-closed. Only low-risk, explicitly
+  // classified clinic-experience keys above may enter general LLM context.
+  // Treatment/service preferences remain excluded because service names can
+  // imply sensitive health, pregnancy, intimate, or aesthetic information.
+  // custom_attributes is intentionally opaque and may hold operational or
+  // sensitive data, so it is never added wholesale to general LLM context.
 
   return lines.length ? `USER PROFILE:\n${lines.join("\n")}` : "";
 }
@@ -95,4 +112,5 @@ module.exports = {
   buildInstructions,
   buildProfileContext,
   buildKnowledgeContext,
+  isAllowedProfilePreference,
 };
