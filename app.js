@@ -13,12 +13,10 @@ const auditReadRoutes = require("./src/routes/auditRead");
 const calendarRoutes = require("./src/routes/calendar");
 const walkinRoutes = require("./src/routes/walkin");
 const serviceRoutes = require("./src/routes/services");
-const internalBirthdayTemplateRoutes = require("./src/routes/internalBirthdayTemplate");
 const { checkDatabase } = require("./src/services/memory");
 const { startGoogleBusinessProfileSyncScheduler } = require("./src/services/googleBusinessProfileSync");
 const { startAppointmentLifecycleScheduler } = require("./src/services/appointmentLifecycle");
 const { startCustomerCareScheduler } = require("./src/services/customerCare");
-const { getBirthdayTemplateStatus } = require("./src/services/birthdayTemplateProvisioning");
 
 const app = express();
 app.disable("x-powered-by");
@@ -34,7 +32,6 @@ app.get("/health", async (req, res) => {
   return res.status(ok ? 200 : 503).json({ status: ok ? "ok" : "degraded", database: ok ? "ok" : "unavailable", timestamp: new Date().toISOString() });
 });
 app.use("/audit-read", auditReadRoutes);
-app.use("/admin/internal", internalBirthdayTemplateRoutes);
 app.use("/admin", adminRoutes);
 app.use("/calendar", calendarRoutes);
 app.use("/", serviceRoutes);
@@ -49,33 +46,6 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 3000;
 let server;
-async function runTemporaryBirthdayTemplateVerifier() {
-  if (process.env.BIRTHDAY_TEMPLATE_PROVISIONING_ENABLED !== 'true') return;
-  try {
-    const result = await getBirthdayTemplateStatus();
-    logger.info({
-      ok: result.ok,
-      reason: result.reason || null,
-      wabaId: result.wabaId || null,
-      templateName: result.templateName || null,
-      configuredTemplateName: result.configuredTemplateName || null,
-      template: result.template ? {
-        id: result.template.id || null,
-        name: result.template.name,
-        status: result.template.status || null,
-        category: result.template.category || null,
-        language: result.template.language || null,
-      } : null,
-    }, "Birthday template provisioning inspection completed");
-  } catch (error) {
-    logger.error({
-      err: error,
-      providerStatus: error.response?.status || null,
-      providerError: error.response?.data?.error?.message || error.message,
-      providerCode: error.response?.data?.error?.code || null,
-    }, "Birthday template provisioning inspection failed");
-  }
-}
 async function start() {
   // Normal production boot intentionally contains no migrations, one-time repairs,
   // rollout jobs, imports, reconciliations or smoke tests. Goldie live knowledge
@@ -85,7 +55,6 @@ async function start() {
     startGoogleBusinessProfileSyncScheduler();
     startAppointmentLifecycleScheduler();
     startCustomerCareScheduler();
-    setTimeout(runTemporaryBirthdayTemplateVerifier, 5000).unref();
   });
 }
 start().catch((error) => { logger.fatal({ err: error }, "Shiloh failed during startup"); process.exit(1); });
