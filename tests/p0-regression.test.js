@@ -99,11 +99,13 @@ test('client cancellation remains explicit, scoped and calendar-synchronized', (
   assert.match(change, /crm_audit_events|audit/i);
 });
 
-test('Goldie future import retains idempotency safeguards', () => {
+test('Goldie future import retains structural replay and duplicate safeguards', () => {
   const goldie = source('src/services/goldieFutureImport.js');
-  assert.match(goldie, /idempot/i);
-  assert.match(goldie, /source/i);
-  assert.match(goldie, /appointment/i);
+  assert.match(goldie, /function rowKey/);
+  assert.match(goldie, /existingAppointment/);
+  assert.match(goldie, /source='goldie_import' AND external_key=\$1/);
+  assert.match(goldie, /ON CONFLICT\(source,entity_type,external_id\)/);
+  assert.match(goldie, /no customer confirmation sent/i);
   assert.doesNotMatch(goldie, /sendWhatsAppMessage\s*\(/);
 });
 
