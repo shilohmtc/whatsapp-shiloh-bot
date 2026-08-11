@@ -3,6 +3,7 @@ const { generateReply } = require("../services/ai");
 const { updateProfileFromMessage } = require("../services/profileExtractor");
 const { CLINIC_REDIRECT, evaluateClinicScope } = require("../services/scopeGuard");
 const { processBookingMessage } = require("../services/bookingIntent");
+const { processBookingPolicyMessage, sanitizeBookingReply } = require("../services/bookingPolicy");
 const { guardClientFreelancerBooking } = require("../services/clientBookingStaffGuard");
 const { guardEnglishOnly } = require("../services/englishLanguageGuard");
 const { processAppointmentChangeMessage } = require("../services/appointmentChange");
@@ -41,11 +42,12 @@ const adminAssistant=await processAdminAssistantMessage(from,text);if(adminAssis
 const customerExperience=await processCustomerExperienceMessage(from,text);if(customerExperience.handled){await sendWhatsAppMessage(from,customerExperience.reply);return res.sendStatus(200);}
 const customerCare=await processCustomerCareMessage(from,text);if(customerCare.handled){await sendWhatsAppMessage(from,customerCare.reply);return res.sendStatus(200);}
 const nameGuard=await guardActiveNameConfirmation(from,text);if(nameGuard.handled){await sendWhatsAppMessage(from,nameGuard.reply);return res.sendStatus(200);}
-const identity=await processClientIdentityMessage(from,text);if(identity.handled){let reply=identity.reply;if(identity.identityStatus==="matched_incomplete"&&identity.client?.id){const forced=await forceMatchedClientNameConfirmation(from,identity.client.id);if(forced)reply=`Welcome back, ${identity.client.display_name}. Before I can continue with the booking, please confirm your full name.`;}if(identity.onboardingComplete&&identity.resumeBooking){const booking=await processBookingMessage(from,"I want to book an appointment");if(booking.handled&&booking.reply)reply=`${reply}\n\n${booking.reply}`;}await sendWhatsAppMessage(from,reply);return res.sendStatus(200);}
+const identity=await processClientIdentityMessage(from,text);if(identity.handled){let reply=identity.reply;if(identity.identityStatus==="matched_incomplete"&&identity.client?.id){const forced=await forceMatchedClientNameConfirmation(from,identity.client.id);if(forced)reply=`Welcome back, ${identity.client.display_name}. Before I can continue with the booking, please confirm your full name.`;}if(identity.onboardingComplete&&identity.resumeBooking){const booking=await processBookingMessage(from,"I want to book an appointment");if(booking.handled&&booking.reply)reply=`${reply}\n\n${sanitizeBookingReply(booking.reply)}`;}await sendWhatsAppMessage(from,reply);return res.sendStatus(200);}
 if(identity.identityStatus==="matched_incomplete"&&identity.client?.display_name&&isGreetingOnly(text)){await sendWhatsAppMessage(from,`Welcome back, ${identity.client.display_name} 👋 How can I help you today?`);return res.sendStatus(200);}
 const scope=evaluateClinicScope(text);if(!scope.allowed){await sendWhatsAppMessage(from,CLINIC_REDIRECT);return res.sendStatus(200);}
 const freelancerGuard=await guardClientFreelancerBooking(text);if(freelancerGuard.blocked){log.info({from:maskPhone(from),staff:freelancerGuard.staff?.display_name||null},"Blocked client freelancer booking request");await sendWhatsAppMessage(from,freelancerGuard.reply);return res.sendStatus(200);}
 const appointmentChange=await processAppointmentChangeMessage(from,text);if(appointmentChange.handled){await sendWhatsAppMessage(from,appointmentChange.reply);return res.sendStatus(200);}
-const booking=await processBookingMessage(from,text);if(booking.handled){await sendWhatsAppMessage(from,booking.reply);return res.sendStatus(200);}
+const bookingPolicy=await processBookingPolicyMessage(from,text);if(bookingPolicy.handled){await sendWhatsAppMessage(from,bookingPolicy.reply);return res.sendStatus(200);}
+const booking=await processBookingMessage(from,text);if(booking.handled){await sendWhatsAppMessage(from,sanitizeBookingReply(booking.reply));return res.sendStatus(200);}
 await updateProfileFromMessage(from,text);const reply=await generateReply(from,text);await sendWhatsAppMessage(from,reply);
 }catch(error){log.error({err:error,from:maskPhone(from)},"Failed to process WhatsApp message");try{await sendWhatsAppMessage(from,"Sorry, I'm having trouble responding right now. Please try again in a moment.");}catch(fallbackError){log.error({err:fallbackError},"Failed to send WhatsApp fallback message");return res.sendStatus(500);}}return res.sendStatus(200);}catch(error){log.error({err:error},"Unhandled WhatsApp webhook error");return res.sendStatus(500);}};
