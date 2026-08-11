@@ -9,6 +9,7 @@ validateEnv();
 
 const webhookRoutes = require("./src/routes/webhook");
 const adminRoutes = require("./src/routes/admin");
+const privacyRoutes = require("./src/routes/privacy");
 const auditReadRoutes = require("./src/routes/auditRead");
 const calendarRoutes = require("./src/routes/calendar");
 const walkinRoutes = require("./src/routes/walkin");
@@ -34,6 +35,7 @@ app.get("/health", async (req, res) => {
   return res.status(ok ? 200 : 503).json({ status: ok ? "ok" : "degraded", database: ok ? "ok" : "unavailable", timestamp: new Date().toISOString() });
 });
 app.use("/audit-read", auditReadRoutes);
+app.use("/admin/privacy", privacyRoutes);
 app.use("/admin", adminRoutes);
 app.use("/calendar", calendarRoutes);
 app.use("/", serviceRoutes);
