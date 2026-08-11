@@ -33,13 +33,13 @@
 - ✅ Google Calendar presentation cleanup. All future shared-calendar events were audited; only confirmed presentation defects were repaired.
 - ✅ Business-policy parity — OWNER APPROVED 11 Aug 2026. Couples/group/spa-day wording: **“Couples and group/spa-day bookings are available for selected treatments. Please contact Shiloh to arrange the most suitable option.”** Existing Facebook and Instagram destinations remain the official Shiloh social links.
 - ✅ Non-PII Goldie archive manifest retained in Git; raw Goldie PII remains outside Git history.
-- ✅ **Final Goldie future-booking reconciliation — VERIFIED 11 Aug 2026.** The archived exact `export-2026-08-10.zip` was recovered from the Shiloh library. Owner/admin attested that no Goldie bookings were created, changed, cancelled or rescheduled after that export, so a ceremonial second export was not required. The baseline contained **38 future rows = 27 appointments + 11 non-booking blocks**. The original guarded import created 3 appointments, matched 23 existing appointments, created all 11 blocks and initially held one `SHILOH MTC` practitioner row. Final reconciliation proved that held row exists as CRM appointment **#369**, correctly routed to Christel. The final shared `Shiloh — Bookings` scan contains **27 future appointment events**, one-for-one with the 27 Goldie future appointment rows.
-- ✅ **Goldie duplicate #360 repaired.** Final reconciliation identified one import duplicate for the 15 Aug 09:00 Full Body Swedish booking. Owner confirmed `Maurusye Pedi` and `Maurusye Venter` are the same client. Production repair preserved canonical/import-resolved appointment **#551**, silently cancelled duplicate **#360**, deleted only #360's mapped Google Calendar event, and sent **0 WhatsApp messages**. Post-repair Calendar verification shows #551 remains and #360 is absent.
-- ✅ **Zero unresolved future Goldie bookings proven.** No missing future appointment remains and no duplicate Goldie future appointment remains after #360 repair.
-- ✅ **Shiloh-side Goldie live sync retired.** After reconciliation passed, the Goldie live knowledge-sync scheduler was removed from normal production startup. Shiloh no longer requires the public Goldie page to refresh current service/business knowledge.
-- 🟡 **Goldie public booking page disable still required in the Goldie account UI.** This is the only remaining Goldie exit action not executable through the currently connected production tooling. After the owner disables public booking in Goldie, verify the public booking surface is no longer bookable and then mark P1 fully closed.
+- ✅ Final Goldie future-booking reconciliation — VERIFIED 11 Aug 2026. Archived exact 10 Aug export baseline: 38 future rows = 27 appointments + 11 blocks. Previously held `SHILOH MTC` row is CRM appointment #369 routed to Christel. Final shared-calendar scan contains 27 future appointment events one-for-one with the 27 Goldie future appointment rows.
+- ✅ Goldie duplicate #360 repaired. Owner confirmed Maurusye Pedi and Mauryse Venter are the same client. Canonical #551 was retained; duplicate #360 was silently cancelled; only #360's mapped Calendar event was removed; 0 WhatsApp messages were sent.
+- ✅ Zero unresolved future Goldie bookings proven: zero missing, zero duplicate, zero unresolved.
+- ✅ Shiloh-side Goldie live knowledge sync retired; current Shiloh catalogue/CRM is authoritative.
+- ✅ **Goldie public online booking disabled and externally verified 11 Aug 2026.** Authenticated Goldie Online Booking was switched off by the owner. The resulting public Goldie page displayed **“This business may no longer be accepting appointments online. You can ask them to activate the online booking.”** and no customer service-selection/booking controls were presented. Historical Goldie data remains intact as reference; do not delete the Goldie account/history.
 
-**P1 status: 🟡 CUTOVER RECONCILIATION PASSED; awaiting Goldie-account public-booking disable + verification only.**
+**P1 status: ✅ CLOSED / COMPLETE. Goldie is retired from the active production booking flow. Reopen only for a new regression.**
 
 ### P2 — Staff-scoped CRM authorization and calendars
 
@@ -48,6 +48,8 @@
 - ✅ Abigail employee-practitioner permissions + `Shiloh — Abigail` calendar.
 - ✅ Existing future appointments populated into staff calendars.
 - 🟡 Optional real-practitioner acceptance testing remains; never impersonate Marietjie or Abigail.
+
+**P2 status: ✅ FUNCTIONALLY COMPLETE. Optional practitioner acceptance testing is not a production blocker.**
 
 ### P3 — Client experience and customer care
 
@@ -62,39 +64,42 @@
 - 🟡 Loyalty redemption automation remains.
 - 🟡 Dedicated reminder-confirmation response state remains optional/unimplemented.
 
+**P3 status: 🟡 CORE COMPLETE; remaining customer-care enhancements listed below.**
+
 ### P4 — Payments and vouchers
 
 - ⬜ Ozow discovery/design.
 - ⬜ Payment ledger + webhook idempotency.
 - ⬜ Voucher lifecycle.
 
-## Goldie disconnect gate — current status
+## Goldie disconnect gate — FINAL
 
-**Overall: 🟡 TECHNICAL RECONCILIATION CLEARED; public Goldie booking disable pending owner UI action.**
+**Overall: ✅ CLEARED / CLOSED 11 Aug 2026.**
 
-- ✅ Goldie delta since archived 10 Aug export: **ZERO**, owner/admin attested.
-- ✅ Exact archived 10 Aug export recovered and validated as cutover baseline.
+- ✅ Goldie delta since archived 10 Aug export: ZERO, owner/admin attested.
+- ✅ Exact archived 10 Aug export validated as cutover baseline.
 - ✅ Baseline future inventory: 27 appointments + 11 blocks.
-- ✅ Original import/reconciliation evidence accounted for all 38 rows.
-- ✅ Previously held `SHILOH MTC` future appointment proven in Shiloh as #369 / Christel.
+- ✅ Previously held `SHILOH MTC` appointment proven as #369 / Christel.
 - ✅ Duplicate #360 safely cancelled; #551 retained; no client message sent.
-- ✅ Final shared Calendar future appointment count: **27**, matching Goldie baseline appointments one-for-one.
+- ✅ Final shared Calendar: 27 future appointment events matching the Goldie baseline one-for-one.
 - ✅ Zero missing / zero duplicate / zero unresolved future Goldie bookings.
-- ✅ Active Shiloh catalogue authority protected from stale/retired Goldie offerings.
+- ✅ Active Shiloh catalogue protected from stale/retired Goldie offerings.
 - ✅ Business-policy parity owner-approved.
 - ✅ Client entry has Shiloh WhatsApp and walk-in QR paths.
 - ✅ Shiloh live Goldie knowledge-sync dependency retired.
-- ⬜ Disable Goldie public booking in the authenticated Goldie account UI.
-- ⬜ Verify the former Goldie public booking surface can no longer accept bookings.
+- ✅ Goldie public online booking disabled by owner.
+- ✅ Former Goldie public booking surface verified non-bookable.
+- ✅ Historical Goldie account/data retained; no destructive account deletion performed.
 
 ## Prioritized checklist
 
 Work one item at a time and verify GitHub + Render after production changes.
 
-1. **P1 FINAL UI CUTOVER — disable Goldie public booking in Goldie, then verify it is no longer bookable.** Once verified: mark **P1 ✅ CLOSED / COMPLETE**.
-2. **P3 — Configure approved birthday template** before enabling birthday outbound messaging.
-3. **P3 — Treatment-aware aftercare/rebooking and loyalty redemption rules**; add reminder-confirmation state only if operationally desired.
-4. **P4 — Ozow/payment/voucher discovery and design** after operational cutover/stability work.
+1. **P3 — Configure an approved WhatsApp birthday template** before enabling birthday outbound messaging.
+2. **P3 — Treatment-aware aftercare/rebooking specialization.**
+3. **P3 — Loyalty redemption automation.**
+4. **P3 optional — Dedicated reminder-confirmation response state**, only if operationally desired.
+5. **P4 — Ozow/payment/voucher discovery and design** after P3 production hardening.
 
 ## Completed during this chapter
 
@@ -106,8 +111,9 @@ Work one item at a time and verify GitHub + Render after production changes.
 - ✅ P1 — Owner policy parity approval.
 - ✅ P1 — Archived Goldie cutover baseline reconciliation.
 - ✅ P1 — Duplicate #360 silent repair; canonical #551 retained.
-- ✅ P1 — 27/27 future Goldie appointments proven in current Shiloh shared Calendar, with zero unresolved future bookings.
+- ✅ P1 — 27/27 future Goldie appointments proven with zero unresolved future bookings.
 - ✅ P1 — Shiloh Goldie live knowledge-sync scheduler retired.
+- ✅ P1 — Goldie public online booking disabled and public non-bookable state verified.
 
 ## Safety rules retained
 
@@ -115,8 +121,9 @@ Work one item at a time and verify GitHub + Render after production changes.
 - Do not send unnecessary messages to real clients during audits/migrations/tests.
 - Do not use genuine appointments for destructive testing.
 - Prefer read-only/non-mutating verification and narrowly scoped guarded repairs when a write is unavoidable.
+- Do not delete the Goldie account or historical data; it remains archival reference.
 - Do not redo production work already marked ✅ unless a new regression is discovered.
 
 ## Next action
 
-The Goldie data/reconciliation exit gate has passed. The only remaining P1 action is to **disable the public Goldie booking page from the authenticated Goldie account**, then verify that customers can no longer create Goldie bookings. After that verification, close P1 permanently unless a regression is discovered.
+**P0 and P1 are CLOSED. P2 is functionally complete.** The highest-priority genuinely unfinished production item is now **P3: configure an approved WhatsApp birthday template before enabling birthday outbound messaging**. Complete and verify that item before moving to treatment-aware aftercare/rebooking and loyalty redemption.
