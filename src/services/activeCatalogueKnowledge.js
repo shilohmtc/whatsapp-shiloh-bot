@@ -1,5 +1,49 @@
-const { pool } = require('../db/pool');const logger=require('../lib/logger');
-function formatPrice(row){if(row.display_price)return row.display_price;if(row.price==null)return'Price on request';const amount=Number(row.price);return Number.isFinite(amount)?`R${amount.toFixed(2).replace(/\.00$/,'')}`:'Price on request';}
-function formatDuration(row){const minutes=Number(row.duration_minutes||0)+Number(row.processing_time_minutes||0)+Number(row.extra_time_minutes||0);return minutes>0?`${minutes} min`:'Duration on request';}
-async function getActiveCatalogueKnowledge(){try{const result=await pool.query(`SELECT s.name,s.duration_minutes,s.processing_time_minutes,s.extra_time_minutes,s.price,s.display_price,(to_jsonb(s)->>'customer_description') AS customer_description,(to_jsonb(s)->>'booking_note') AS booking_note,sc.name AS category_name FROM services s LEFT JOIN service_categories sc ON sc.id=s.category_id WHERE s.status='active' ORDER BY sc.display_order NULLS LAST,s.display_order,s.name`);const content=result.rows.map(row=>{const parts=[row.category_name||'Services',row.name,formatDuration(row),formatPrice(row)];if(row.customer_description)parts.push(`Description: ${row.customer_description}`);if(row.booking_note)parts.push(`Booking note: ${row.booking_note}`);return parts.join(' | ');}).join('\n');return{title:'Current active Shiloh service catalogue',source:'Shiloh CRM active catalogue',content,similarity:1};}catch(error){logger.warn({err:error},'Could not load active CRM catalogue for AI context');return null;}}
-module.exports={getActiveCatalogueKnowledge,formatPrice,formatDuration};
+const { pool } = require("../db/pool");
+const logger = require("../lib/logger");
+
+function formatPrice(row) {
+  if (row.display_price) return row.display_price;
+  if (row.price == null) return "Price on request";
+  const amount = Number(row.price);
+  return Number.isFinite(amount) ? `R${amount.toFixed(2).replace(/\.00$/, "")}` : "Price on request";
+}
+
+function formatDuration(row) {
+  const minutes = Number(row.duration_minutes || 0) + Number(row.processing_time_minutes || 0) + Number(row.extra_time_minutes || 0);
+  return minutes > 0 ? `${minutes} min` : "Duration on request";
+}
+
+async function getActiveCatalogueKnowledge() {
+  try {
+    const result = await pool.query(`
+      SELECT s.name, s.duration_minutes, s.processing_time_minutes, s.extra_time_minutes,
+             s.price, s.display_price,
+             (to_jsonb(s) ->> 'customer_description') AS customer_description,
+             (to_jsonb(s) ->> 'booking_note') AS booking_note,
+             sc.name AS category_name
+        FROM services s
+        LEFT JOIN service_categories sc ON sc.id = s.category_id
+       WHERE s.status = 'active'
+       ORDER BY sc.display_order NULLS LAST, s.display_order, s.name
+    `);
+
+    const content = result.rows.map((row) => {
+      const parts = [row.category_name || "Services", row.name, formatDuration(row), formatPrice(row)];
+      if (row.customer_description) parts.push(`Description: ${row.customer_description}`);
+      if (row.booking_note) parts.push(`Booking note: ${row.booking_note}`);
+      return parts.join(" | ");
+    }).join("\n");
+
+    return {
+      title: "Current active Shiloh service catalogue",
+      source: "Shiloh CRM active catalogue",
+      content,
+      similarity: 1,
+    };
+  } catch (error) {
+    logger.warn({ err: error }, "Could not load active CRM catalogue for AI context");
+    return null;
+  }
+}
+
+module.exports = { getActiveCatalogueKnowledge, formatPrice, formatDuration };
