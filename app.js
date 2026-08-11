@@ -13,6 +13,7 @@ const auditReadRoutes = require("./src/routes/auditRead");
 const calendarRoutes = require("./src/routes/calendar");
 const walkinRoutes = require("./src/routes/walkin");
 const serviceRoutes = require("./src/routes/services");
+const internalBirthdayTemplateRoutes = require("./src/routes/internalBirthdayTemplate");
 const { checkDatabase } = require("./src/services/memory");
 const { startGoogleBusinessProfileSyncScheduler } = require("./src/services/googleBusinessProfileSync");
 const { startAppointmentLifecycleScheduler } = require("./src/services/appointmentLifecycle");
@@ -32,6 +33,7 @@ app.get("/health", async (req, res) => {
   return res.status(ok ? 200 : 503).json({ status: ok ? "ok" : "degraded", database: ok ? "ok" : "unavailable", timestamp: new Date().toISOString() });
 });
 app.use("/audit-read", auditReadRoutes);
+app.use("/admin/internal", internalBirthdayTemplateRoutes);
 app.use("/admin", adminRoutes);
 app.use("/calendar", calendarRoutes);
 app.use("/", serviceRoutes);
