@@ -84,7 +84,7 @@ jobs:
           async function getIntent(phone) {'''
 
           pattern = re.compile(r'async function hasLexicalKnowledgeMatch\(service\) \{.*?\nasync function getIntent\(phone\) \{', re.S)
-          s2, count = pattern.subn(replacement, s, count=1)
+          s2, count = pattern.subn(lambda _match: replacement, s, count=1)
           if count != 1:
             raise SystemExit(f'Expected one legacy service-verification block, replaced {count}')
 
