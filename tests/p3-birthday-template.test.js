@@ -1,5 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 
 const {
   TEMPLATE_NAME,
@@ -26,4 +28,17 @@ test('birthday template definition is stable and non-promotional in copy', () =>
   assert.deepEqual(body.example, { body_text: [['Christel']] });
   assert.match(footer.text, /BIRTHDAY OFF/);
   assert.doesNotMatch(body.text, /discount|sale|offer|book now/i);
+});
+
+test('birthday provider status endpoint is read-only, sanitized and brand-gated', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../src/routes/auditRead.js'), 'utf8');
+  assert.match(source, /\/birthday-template\/status/);
+  assert.match(source, /getBirthdayTemplateStatus/);
+  assert.match(source, /submittedCopyUsesCurrentBrand/);
+  assert.match(source, /safeToEnable/);
+  assert.match(source, /provider\.template\?\.status === "APPROVED" && submittedCopyUsesCurrentBrand/);
+  assert.doesNotMatch(source, /wabaId\s*:/);
+  assert.doesNotMatch(source, /templateId\s*:/);
+  assert.doesNotMatch(source, /WHATSAPP_TOKEN\s*:/);
+  assert.doesNotMatch(source, /sendWhatsApp/);
 });
