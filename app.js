@@ -12,6 +12,7 @@ const auditReadRoutes = require("./src/routes/auditRead");
 const calendarRoutes = require("./src/routes/calendar");
 const walkinRoutes = require("./src/routes/walkin");
 const serviceRoutes = require("./src/routes/services");
+const pexelsApprovedAssetRoutes = require("./src/routes/pexelsApprovedAssets");
 const { checkDatabase } = require("./src/services/memory");
 const { startGoogleBusinessProfileSyncScheduler } = require("./src/services/googleBusinessProfileSync");
 const { startAppointmentLifecycleScheduler } = require("./src/services/appointmentLifecycle");
@@ -29,6 +30,7 @@ app.get("/health", async (req, res) => {
 app.use("/audit-read", auditReadRoutes);
 app.use("/admin", adminRoutes);
 app.use("/calendar", calendarRoutes);
+app.use("/", pexelsApprovedAssetRoutes);
 app.use("/", serviceRoutes);
 app.use("/", walkinRoutes);
 app.use("/", webhookRoutes);
