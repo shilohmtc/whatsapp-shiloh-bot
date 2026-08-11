@@ -15,15 +15,17 @@
 - WhatsApp/CRM remains the booking source of truth; Google Calendar is a synchronized operational view.
 - Operational calendars visible to `shilohmtc@gmail.com`: `Shiloh — Bookings`, `Shiloh — Marietjie`, and `Shiloh — Abigail`.
 - Current role model remains: Christel owner/all-business; Jean-Pierre business admin/all-business; Marietjie `tenant_practitioner`; Abigail `employee_practitioner`.
-- Direct Render read-only Postgres auditing is currently blocked by a Render connector SSL/TLS negotiation error. This is not being treated as a production database outage: `/health` is healthy and database-backed rollout/smoke routines are completing in the live service.
+- Direct Render read-only Postgres auditing is currently blocked by a Render connector SSL/TLS negotiation error. This is not being treated as a production database outage: `/health` remains healthy.
 
 ## Fresh consolidated audit — P0 to P4
 
 ### P0 — Stabilize before adding commercial features
 
-- ✅ **Christel owner-access calendar verification.** Freshly verified on 11 Aug 2026 from Christel's genuine personal Google Calendar session against `Shiloh — Bookings`, using disposable test records only. Read/visibility passed; an existing disposable `TEST BLOCK - Marinda` was successfully edited and saved as `TEST BLOCK - Marinda — EDITED`, then deleted; a fresh `TEST — Christel Permission — CREATE` event was successfully created on `Shiloh — Bookings`. No genuine client appointment was modified or deleted. The fresh CREATE event should be removed after verification to leave no test residue.
-- ✅ **Automated regression tests + CI.** `npm test` and `.github/workflows/ci.yml` are live on `main`. The non-mutating suite covers calendar ID/presentation contracts, walk-in registration policy, staff-scope/menu guards, booking conflict guards, client cancellation safeguards and structural Goldie replay/duplicate protections. GitHub Actions run #2 completed successfully on commit `9b11474aa18f209ae2fee10d043dc253ea72b256`, and Render deployed that exact commit successfully with `/health` returning 200. The tests contain no production DB mutations, network calls or WhatsApp-send path.
-- 🟡 **Production observability / maintenance cleanup.** Render health checks and structured logs are live and deploy verification is working. One-time rollout/repair routines still exist in the application startup path behind guards and should be moved to explicit maintenance scripts; an operational rollback/runbook remains to be formalized.
+- ✅ **Christel owner-access calendar verification.** Freshly verified on 11 Aug 2026 from Christel's genuine personal Google Calendar session against `Shiloh — Bookings`, using disposable test records only. Read/visibility, edit/save, delete and fresh create all passed. The fresh test event was deleted afterwards; no test residue remains and no genuine client appointment was modified or deleted.
+- ✅ **Automated regression tests + CI.** `npm test` and `.github/workflows/ci.yml` are live on `main`. The non-mutating suite covers calendar ID/presentation contracts, walk-in registration policy, staff-scope/menu guards, booking conflict guards, client cancellation safeguards, structural Goldie replay/duplicate protections, clean startup boundaries and maintenance-command safety.
+- ✅ **Production observability / maintenance cleanup.** Normal `npm start` now starts only the HTTP service plus legitimate long-running schedulers. Migrations, identity/staff repairs, smoke tests, staff-calendar rollouts, catalogue polish, Goldie future import, Google Calendar reconciliation/access setup and calendar-presentation reconciliation have been removed from normal startup and moved behind explicit `npm run maintenance -- <command>` operator actions. Mutating commands require `--confirm`; the legacy WhatsApp-capable startup test additionally suppresses messaging unless `--allow-whatsapp` is explicitly provided. `docs/PRODUCTION-RUNBOOK.md` documents deploy verification, pre-write safeguards, rollback and data/Calendar recovery. GitHub Actions passed on `166d59c5f4d099ef20b0e09d1d744ddf7c639721`; Render deployed the exact commit live, `/health` returned 200, and fresh startup logs contained only the expected long-running scheduler starts with no one-time maintenance job execution.
+
+**P0 status: ✅ CLOSED / COMPLETE. Reopen only for a new regression.**
 
 ### P1 — Catalogue, data presentation and Goldie exit readiness
 
@@ -80,18 +82,18 @@
 
 Work **one item at a time** and verify GitHub + Render after each production change.
 
-1. **P0 — Move guarded one-time startup repairs/rollouts into explicit maintenance scripts + document rollback/runbook.**
-2. **P1 — Finish shared-calendar presentation normalization** using idempotent/tightly scoped reconciliation; no destructive testing on genuine appointments.
-3. **P1 — Final human catalogue/policy cross-surface review** and close remaining Goldie-vs-Shiloh public discrepancies.
-4. **P3 — Configure approved birthday template** before enabling birthday outbound messaging.
-5. **P3 — Treatment-aware aftercare/rebooking and loyalty redemption rules**; add reminder-confirmation state only if operationally desired.
-6. **Goldie exit gate — FINAL CUTOVER ONLY:** fresh export → compare future delta → import delta → reconcile CRM/calendar → prove zero unresolved → disable Goldie public booking.
-7. **P4 — Ozow/payment/voucher discovery and design**, only after operational cutover/stability work above is complete.
+1. **P1 — Finish shared-calendar presentation normalization** using idempotent/tightly scoped reconciliation; no destructive testing on genuine appointments.
+2. **P1 — Final human catalogue/policy cross-surface review** and close remaining Goldie-vs-Shiloh public discrepancies.
+3. **P3 — Configure approved birthday template** before enabling birthday outbound messaging.
+4. **P3 — Treatment-aware aftercare/rebooking and loyalty redemption rules**; add reminder-confirmation state only if operationally desired.
+5. **Goldie exit gate — FINAL CUTOVER ONLY:** fresh export → compare future delta → import delta → reconcile CRM/calendar → prove zero unresolved → disable Goldie public booking.
+6. **P4 — Ozow/payment/voucher discovery and design**, only after operational cutover/stability work above is complete.
 
 ### Completed during this chapter
 
-- ✅ **P0 — Automated regression tests + CI:** implemented and verified on GitHub Actions and Render (`9b11474aa18f209ae2fee10d043dc253ea72b256`).
-- ✅ **P0 — Christel personal-account calendar permission test:** verified 11 Aug 2026 from Christel's genuine personal Google Calendar session. `Shiloh — Bookings` visibility/read, edit/save, delete and fresh create all passed using disposable test events only.
+- ✅ P0 — Automated regression tests + CI.
+- ✅ P0 — Christel personal-account calendar permission test.
+- ✅ P0 — Startup/maintenance separation + production runbook + rollback safeguards (`166d59c5f4d099ef20b0e09d1d744ddf7c639721`).
 
 ## Safety rules retained
 
@@ -99,9 +101,10 @@ Work **one item at a time** and verify GitHub + Render after each production cha
 - Do not send unnecessary messages to real clients during audits/migrations/tests.
 - Do not use genuine appointments for destructive CRM/calendar testing.
 - Prefer read-only/non-mutating smoke checks and disposable synthetic records/events where a write test is unavoidable.
+- Mutating maintenance commands require explicit confirmation; WhatsApp-capable maintenance suppresses messaging by default.
 - Do not disconnect Goldie until the exit gate above is fully verified.
 - Do not redo production work already marked ✅ unless a new regression is discovered.
 
 ## Next action
 
-The highest-priority genuinely unfinished item is now **P0 production observability / maintenance cleanup: move guarded one-time startup repairs/rollouts into explicit maintenance scripts and document rollback/runbook procedures.** Complete and verify that item before moving to P1.
+**P0 is closed.** The highest-priority genuinely unfinished item is now **P1 shared `Shiloh — Bookings` calendar presentation normalization**. Audit first, then apply only idempotent/tightly scoped repairs to confirmed legacy presentation inconsistencies; do not destructively test genuine appointments.
