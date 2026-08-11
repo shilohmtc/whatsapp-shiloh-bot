@@ -15,6 +15,7 @@ const walkinRoutes = require("./src/routes/walkin");
 const bookRoutes = require("./src/routes/book");
 const serviceRoutes = require("./src/routes/services");
 const { checkDatabase } = require("./src/services/memory");
+const { applyPendingMigrations } = require("./src/services/migrations");
 const { startGoogleBusinessProfileSyncScheduler } = require("./src/services/googleBusinessProfileSync");
 const { startAppointmentLifecycleScheduler } = require("./src/services/appointmentLifecycle");
 const { startCustomerCareScheduler } = require("./src/services/customerCare");
@@ -49,6 +50,8 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || 3000;
 let server;
 async function start() {
+  const migrationResult = await applyPendingMigrations();
+  logger.info({ migrationResult }, "Guarded client demo migration pass completed");
   server = app.listen(PORT, () => {
     logger.info({ port: PORT }, "Shiloh started");
     startGoogleBusinessProfileSyncScheduler();
