@@ -12,13 +12,12 @@ This is the authoritative concise next-chat entry point. GitHub `main`, Render p
 
 ## 11 Aug final GitHub / Render audit
 
-- GitHub `main` and Render production were aligned before the audit at `ad6c5b1dcd3491921aaaadde92844b4167383499`; subsequent audit fixes were committed directly to `main` and auto-deployed.
+- GitHub `main` and Render production are authoritative; verify their current state before acting rather than relying on an older recorded SHA.
 - GitHub CI uses Node `24.14.1`, `npm ci`, and the non-mutating `npm test` regression suite.
-- Render service `shiloh-whatsapp-bot` is on `main`, auto-deploy is enabled, health path is `/health`, one Starter instance is running, and recent production health checks return HTTP 200.
-- No error-level logs were present after the then-current clean production deploy window.
+- Render service `shiloh-whatsapp-bot` is on `main`, auto-deploy is enabled, health path is `/health`, and production health checks are expected to return HTTP 200 before advancing changes.
 - Audit finding fixed: `englishLanguageGuard` used `max_output_tokens:8`, which current OpenAI Responses rejects because the minimum is 16. It was corrected to 16 and regression-locked.
-- Audit finding fixed: the temporary `BIRTHDAY_TEMPLATE_INSPECT_ONCE` startup hook/import was still present in `app.js`; it was removed and regression-locked so normal startup contains only long-running production schedulers.
-- Historical same-day startup/test errors seen in Render logs were from superseded deploys/one-time rollout work; do not reopen them unless they recur on the clean current deploy.
+- Audit finding fixed: the temporary `BIRTHDAY_TEMPLATE_INSPECT_ONCE` startup hook/import was removed and regression-locked so normal startup contains only long-running production schedulers.
+- Historical startup/test errors from superseded deploys/one-time rollout work must not be reopened unless they recur on the current clean production deploy.
 
 ## Recently completed and production-verified
 
@@ -36,33 +35,52 @@ This is the authoritative concise next-chat entry point. GitHub `main`, Render p
 - ✅ Public CRM-backed services catalogue, professional descriptions, WhatsApp deep links and Shiloh-hosted service imagery.
 - ✅ Versioned Booking Policy & explicit WhatsApp consent gate with safe synthetic production verification.
 - ✅ Staff-scoped WhatsApp `Today` operational reporting. Christel/Jean-Pierre receive business-wide summaries; Marietjie/Abigail receive practitioner-self summaries only. Production read-only self-test proved zero cross-staff/cross-service leakage and no practitioner revenue exposure.
-- ✅ Public Shiloh booking landing page `/book`, linked to the official WhatsApp assistant with a prefilled booking intent and no hidden auto-redirect. Public branding is now `Shiloh Massage Therapy and Aesthetic Clinic`; headline is `Your appointment starts with Shiloh, your AI assistant.`
+- ✅ Public Shiloh booking landing page `/book`, linked to the official WhatsApp assistant with a prefilled booking intent and no hidden auto-redirect. Public branding is `Shiloh Massage Therapy and Aesthetic Clinic`; headline is `Your appointment starts with Shiloh, your AI assistant.`
 - 🟡 Google Business Profile: Shiloh `/book` has been set as the PREFERRED booking link. Goldie provider-link removal was already requested; wait for provider/Google propagation rather than repeatedly editing the profile.
 - 🟡 Booking-page photography enhancement is optional polish and waits for original clinic image files; do not use screenshots containing obsolete Goldie copy.
 - ✅ Safe self-test-first engineering workflow is authoritative.
 
 ## P3 birthday template exact state
 
-- Template submitted to Meta: `shiloh_birthday_wish_v1`.
-- Meta template ID: `1537607374270230`.
+- Legacy template `shiloh_birthday_wish_v1` exists at Meta but contains retired brand copy (`Shiloh Medical & Training Centre`) and must never be enabled even if Meta approves it.
+- Brand-correct template submitted to Meta: `shiloh_birthday_wish_v2`.
+- Current public brand in v2: `Shiloh Massage Therapy and Aesthetic Clinic`.
 - WABA ID: `4002592316709920`.
-- Last verified provider state: `PENDING` / `MARKETING`.
-- Production remains intentionally fail-closed: Render logs show `birthdayTemplateConfigured:false`; `WHATSAPP_BIRTHDAY_TEMPLATE` must not be enabled until Meta approval is positively verified.
+- v2 submission succeeded on 11 Aug 2026; provider state immediately after submission: `PENDING` / `MARKETING`.
+- Production remains intentionally fail-closed: `WHATSAPP_BIRTHDAY_TEMPLATE` must remain unset until v2 approval is positively verified.
 - Customer-care code already enforces explicit birthday opt-in and once-per-client/per-birthday-year delivery tracking.
-- Important branding note for the next birthday-template pass: the already-submitted v1 body contains `Shiloh Medical & Training Centre`, while the current public brand is `Shiloh Massage Therapy and Aesthetic Clinic`. Before enabling an approved template, explicitly decide whether the Meta template copy must be replaced/versioned to the current public brand. Do not silently enable mismatched customer-facing copy.
+- A scheduled approval watch exists for `shiloh_birthday_wish_v2`; do not repeatedly mutate or resubmit while Meta review is pending.
+- Once v2 is positively verified `APPROVED`, configure `WHATSAPP_BIRTHDAY_TEMPLATE=shiloh_birthday_wish_v2`, deploy safely, and verify opt-in/idempotency without unintended real-client messages.
 
 ## Safe self-test-first rule
 
 For every new feature or production change, first attempt automated/CI tests, then synthetic/isolated/dry-run/read-only production verification. Use narrowly guarded temporary test hooks only when genuinely needed; remove them afterward and verify the clean final state. Do not send unnecessary real-client messages, alter genuine bookings/calendar events, impersonate staff, weaken authorization or expose cross-staff data merely to test. Ask Christel/Jean-Pierre to intervene only when a real external/personal-account/human-approval step genuinely cannot be performed safely through available tooling.
 
-## New prioritized checklist
+## Recommended next sequence / project checklist
 
-1. 🟡 **P3 — WhatsApp birthday template approval/configuration.** First verify current Meta status for `shiloh_birthday_wish_v1`. Keep outbound fail-closed while pending/rejected. Resolve the public-brand mismatch before enabling customer-facing delivery. If the final approved template is correct, configure `WHATSAPP_BIRTHDAY_TEMPLATE`, then safely verify opt-in/idempotency without unintended client messages.
-2. 🟡 **P3 — Treatment-aware aftercare and rebooking specialization.** Build service/category-aware aftercare and rebooking guidance on top of the existing customer-care scheduler, with fail-closed mapping for unknown services.
-3. 🟡 **P3 — Loyalty redemption automation.** Convert the existing loyalty foundation into a controlled redemption lifecycle with auditability, authorization, atomic state transitions and idempotency.
-4. 🟡 **P3 — Reporting expansion.** Reuse the verified scope engine in this order: Tomorrow → This Week → Services/Trends → Availability → optional scheduled weekly owner summary. Never introduce a separate authorization path.
-5. 🟡 **P3 optional — Dedicated reminder-confirmation response state.** Implement only if operationally useful after the higher-value P3 items above.
-6. ⬜ **P4 — Ozow/payment/voucher architecture.** Discovery/design first, then payment ledger + webhook signature/idempotency, then voucher lifecycle. Keep payment truth separate from appointment truth and never mark paid from a browser redirect alone.
+Use this checklist as the ordered roadmap. Before starting an item, verify its current authoritative state because work may have been completed since this handoff was written. Start with the highest-priority genuinely unfinished **actionable** item, not merely the first item listed.
+
+1. 🟡 **P3 — WhatsApp birthday template approval/configuration.** v2 has been submitted with the current brand and is externally blocked on Meta approval. Keep outbound fail-closed while pending/rejected. Once `shiloh_birthday_wish_v2` is positively verified `APPROVED`, configure it in Render and safely verify opt-in/idempotency without unintended client messages.
+2. 🟡 **P3 — Treatment-aware aftercare + rebooking.** Build service/category-aware aftercare and intelligent rebooking guidance on top of the existing customer-care scheduler, with fail-closed mapping for unknown services. This is likely the highest customer-experience gain while birthday approval is externally blocked.
+3. 🟡 **P3 — Loyalty redemption automation.** Convert the existing loyalty foundation into a controlled redemption lifecycle with atomic state transitions, audit history, authorization, idempotency and failure recovery. Do not implement redemption as simply subtracting a reward balance.
+4. 🟡 **P3 — Reporting expansion.** Reuse the verified authorization/scope engine in this order: **Tomorrow → This Week → Services/Trends → Availability → optional scheduled weekly owner summary.** Never introduce a separate authorization path.
+5. 🟡 **P3 optional — Dedicated reminder-confirmation state.** Add explicit reminder confirmation/status tracking only if operationally useful after the higher-value P3 items above.
+6. ⬜ **P4 — Ozow/payment/voucher architecture.** Treat this as a deliberate architecture phase: discovery/design first, then payment ledger + webhook signature/idempotency, then voucher lifecycle. Keep payment webhook truth separate from appointment truth and never mark paid from a browser redirect alone.
+
+## Execution rule
+
+Work through the checklist one genuinely unfinished priority at a time.
+
+After completing or safely advancing an item:
+
+1. Verify the result against the authoritative production systems.
+2. Update tests and documentation/handoff state where appropriate.
+3. State clearly whether the item is **complete, externally blocked, partially complete, or still unfinished**.
+4. Move automatically to the next genuinely actionable priority when it is safe to do so.
+5. Do not enable production behavior merely because implementation is complete; verify all required external approvals/configuration first.
+6. Do not redo an item that authoritative evidence shows is already complete.
+
+When an item is externally blocked but safely prepared — for example, waiting for Meta approval — preserve the safe production state and continue with the next roadmap item if doing so cannot interfere with the blocked work.
 
 ## Do not reopen unless a regression is found
 
@@ -76,6 +94,21 @@ For every new feature or production change, first attempt automated/CI tests, th
 
 ## Start here in the next chat
 
-Continue the Shiloh production project from `docs/HANDOFF-NEXT-CHAT-2026-08-11.md`.
+**Continue the Shiloh OS production project from `docs/HANDOFF-NEXT-CHAT-2026-08-11.md`.**
 
-Treat GitHub `main`, Render production, Shiloh CRM and Google Calendar as authoritative. Do not redo completed work. Apply the safe self-test-first engineering rule automatically. First verify GitHub/Render are clean on the handoff commit, then start the highest-priority genuinely unfinished item: **P3 WhatsApp birthday template approval/configuration**, including the current-brand copy check before enabling outbound birthday delivery.
+Treat **GitHub `main`, Render production, Shiloh CRM and Google Calendar as authoritative**.
+
+Do not redo completed work.
+
+Apply the **safe self-test-first engineering rule automatically**: test safely yourself first and only ask for my intervention when genuinely necessary.
+
+Start with the **highest-priority genuinely unfinished actionable item**. If an earlier item is safely prepared but externally blocked, preserve its fail-closed state and continue to the next actionable priority.
+
+### Recommended next sequence
+
+- 🟡 **Birthday template approval/configuration** — `shiloh_birthday_wish_v2` is submitted with the current brand; verify Meta status before enabling. Keep outbound disabled until positively `APPROVED`.
+- 🟡 **Treatment-aware aftercare + rebooking** — highest actionable customer-experience priority while birthday approval is externally blocked.
+- 🟡 **Loyalty redemption automation** — atomic redemption/audit/idempotency/authorization, not simple reward subtraction.
+- 🟡 **Reporting expansion** — Tomorrow → This Week → Services/Trends → Availability → optional weekly owner report, all through the existing verified authorization/scope engine.
+- 🟡 **Optional reminder-confirmation state** — useful, but below the four priorities above.
+- ⬜ **P4 Ozow/payment/voucher architecture** — deliberate architecture phase; keep payment webhook truth and booking truth separate.
