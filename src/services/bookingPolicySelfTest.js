@@ -2,6 +2,7 @@ const { pool } = require("../db/pool");
 const { processBookingMessage, clearIntent } = require("./bookingIntent");
 const {
   POLICY_VERSION,
+  ensurePolicySchema,
   processBookingPolicyMessage,
   sanitizeBookingReply,
 } = require("./bookingPolicy");
@@ -13,6 +14,7 @@ function assert(condition, message) {
 }
 
 async function cleanup() {
+  await ensurePolicySchema();
   await pool.query("DELETE FROM booking_policy_acceptances WHERE phone = $1", [SYNTHETIC_PHONE]);
   await clearIntent(SYNTHETIC_PHONE);
 }
