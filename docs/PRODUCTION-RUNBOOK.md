@@ -35,7 +35,13 @@ npm run maintenance -- goldie-future-import-commit --confirm
 npm run maintenance -- catalogue-polish --confirm
 ```
 
-Never run a write command merely to test that it works. Prefer a read-only/dry-run command and inspect the result first. Do not use genuine appointments for destructive testing and do not send unnecessary WhatsApp messages to real clients.
+The legacy `startup-test-command` is also treated as a write because it records a run in the database. Its WhatsApp reply is **suppressed by default**. Sending its test reply requires both acknowledgements:
+
+```bash
+npm run maintenance -- startup-test-command --confirm --allow-whatsapp
+```
+
+Do not use `--allow-whatsapp` during routine verification. Never run a write command merely to test that it works. Prefer a read-only/dry-run command and inspect the result first. Do not use genuine appointments for destructive testing and do not send unnecessary WhatsApp messages to real clients.
 
 ## Pre-write checklist
 
@@ -77,5 +83,6 @@ Goldie remains connected until the documented exit gate is fully cleared: fresh 
 - No unnecessary messages to real clients.
 - No destructive testing against genuine CRM/Calendar appointments.
 - Write maintenance commands require `--confirm`.
+- WhatsApp-capable maintenance commands suppress messaging unless `--allow-whatsapp` is explicitly supplied.
 - Prefer dry-run/read-only verification first.
 - Do not disconnect Goldie until the exit gate is fully verified.

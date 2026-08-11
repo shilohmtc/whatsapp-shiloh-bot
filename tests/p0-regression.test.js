@@ -113,9 +113,13 @@ test('normal application startup contains schedulers but no one-time maintenance
   assert.doesNotMatch(app, /runCataloguePolish|runStartupTestCommand/);
 });
 
-test('maintenance writes require explicit confirmation', () => {
+test('maintenance writes and outbound WhatsApp require explicit acknowledgements', () => {
   const maintenance = source('scripts/maintenance.js');
   assert.match(maintenance, /command\.mutates && !args\.includes\('--confirm'\)/);
+  assert.match(maintenance, /startup-test-command/);
+  assert.match(maintenance, /mutates: true,\n    mayMessage: true/);
+  assert.match(maintenance, /sendReplyToWhatsApp: allowWhatsApp === true/);
+  assert.match(maintenance, /args\.includes\('--allow-whatsapp'\)/);
   assert.match(maintenance, /goldie-future-import-dry-run/);
   assert.match(maintenance, /google-calendar-reconcile-dry-run/);
   assert.match(maintenance, /goldie-future-import-commit/);

@@ -62,9 +62,13 @@ const COMMANDS = {
     },
   },
   'startup-test-command': {
-    mutates: false,
-    description: 'Run the configured Shiloh startup test command explicitly.',
-    run: async () => require('../src/services/startupTestCommand').runStartupTestCommand(startupTestRequest),
+    mutates: true,
+    mayMessage: true,
+    description: 'Run the legacy admin availability test explicitly; WhatsApp is suppressed unless --allow-whatsapp is also supplied.',
+    run: async ({ allowWhatsApp }) => require('../src/services/startupTestCommand').runStartupTestCommand({
+      ...startupTestRequest,
+      sendReplyToWhatsApp: allowWhatsApp === true,
+    }),
   },
   'goldie-future-import-dry-run': {
     mutates: false,
@@ -102,14 +106,16 @@ const COMMANDS = {
 };
 
 function usage() {
-  console.log('Usage: npm run maintenance -- <command> [--confirm]');
+  console.log('Usage: npm run maintenance -- <command> [--confirm] [--allow-whatsapp]');
   console.log('');
   console.log('Commands:');
   for (const [name, command] of Object.entries(COMMANDS)) {
-    console.log(`  ${name.padEnd(38)} ${command.mutates ? '[WRITE]' : '[READ] '} ${command.description}`);
+    const kind = command.mayMessage ? '[WRITE/MESSAGE]' : command.mutates ? '[WRITE]' : '[READ] ';
+    console.log(`  ${name.padEnd(38)} ${kind} ${command.description}`);
   }
   console.log('');
   console.log('Mutating commands refuse to run unless --confirm is supplied.');
+  console.log('Commands capable of WhatsApp also suppress messaging unless --allow-whatsapp is supplied explicitly.');
 }
 
 async function main() {
@@ -128,9 +134,14 @@ async function main() {
     throw new Error(`Refusing mutating maintenance command "${commandName}" without --confirm.`);
   }
 
+  const allowWhatsApp = args.includes('--allow-whatsapp');
+  if (allowWhatsApp && !command.mayMessage) {
+    throw new Error(`--allow-whatsapp is not valid for maintenance command "${commandName}".`);
+  }
+
   validateEnv();
-  logger.info({ command: commandName, mutates: command.mutates }, 'Explicit maintenance command started');
-  const result = await command.run();
+  logger.info({ command: commandName, mutates: command.mutates, allowWhatsApp }, 'Explicit maintenance command started');
+  const result = await command.run({ allowWhatsApp });
   logger.info({ command: commandName, result }, 'Explicit maintenance command completed');
   if (result !== undefined) console.log(JSON.stringify(result, null, 2));
 }
