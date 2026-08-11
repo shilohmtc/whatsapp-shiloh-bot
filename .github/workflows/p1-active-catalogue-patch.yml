@@ -133,7 +133,9 @@ jobs:
           workflow = Path('.github/workflows/p1-active-catalogue-patch.yml')
           workflow.unlink()
           PY
-      - name: Verify targeted tests
+      - name: Install dependencies
+        run: npm ci
+      - name: Verify full test suite
         run: npm test
       - name: Commit guarded production change
         run: |
