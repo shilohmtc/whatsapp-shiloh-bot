@@ -26,7 +26,7 @@
 ### P0 — Stabilize before adding commercial features
 
 - 🟡 **Christel owner-access calendar verification.** Christel can see the shared calendar according to the prior baseline and the calendars are healthy under the Shiloh account, but the final disposable-event create/edit/delete test from Christel's personal Google account has not been freshly re-verified in this audit. Never use a genuine client appointment for this test.
-- ⬜ **Automated regression tests + CI.** `package.json` still has no `test` script and there is no `.github/workflows` directory. Guarded production smoke tests exist, but they are not a repeatable automated test suite.
+- ✅ **Automated regression tests + CI.** `npm test` and `.github/workflows/ci.yml` are live on `main`. The non-mutating suite covers calendar ID/presentation contracts, walk-in registration policy, staff-scope/menu guards, booking conflict guards, client cancellation safeguards and structural Goldie replay/duplicate protections. GitHub Actions run #2 completed successfully on commit `9b11474aa18f209ae2fee10d043dc253ea72b256`, and Render deployed that exact commit successfully with `/health` returning 200. The tests contain no production DB mutations, network calls or WhatsApp-send path.
 - 🟡 **Production observability / maintenance cleanup.** Render health checks and structured logs are live and deploy verification is working. One-time rollout/repair routines still exist in the application startup path behind guards and should be moved to explicit maintenance scripts; an operational rollback/runbook remains to be formalized.
 
 ### P1 — Catalogue, data presentation and Goldie exit readiness
@@ -89,15 +89,18 @@ The 10 Aug Goldie ZIP/manifest is a historical cross-reference, **not** the fina
 
 Work **one item at a time** and verify GitHub + Render after each production change.
 
-1. **P0 — Automated regression tests + CI** — highest-priority actionable engineering gap. Add `npm test` and a safe CI workflow without mutating production or messaging clients.
-2. **P0 — Christel personal-account calendar permission test** — still required, but must be performed using a disposable event from Christel's actual personal Google session; never impersonate another practitioner and never edit a client booking.
-3. **P0 — Move guarded one-time startup repairs/rollouts into explicit maintenance scripts + document rollback/runbook.**
-4. **P1 — Finish shared-calendar presentation normalization** using idempotent/tightly scoped reconciliation; no destructive testing on genuine appointments.
-5. **P1 — Final human catalogue/policy cross-surface review** and close remaining Goldie-vs-Shiloh public discrepancies.
-6. **P3 — Configure approved birthday template** before enabling birthday outbound messaging.
-7. **P3 — Treatment-aware aftercare/rebooking and loyalty redemption rules**; add reminder-confirmation state only if operationally desired.
-8. **Goldie exit gate — FINAL CUTOVER ONLY:** fresh export → compare future delta → import delta → reconcile CRM/calendar → prove zero unresolved → disable Goldie public booking.
-9. **P4 — Ozow/payment/voucher discovery and design**, only after the operational cutover/stability work above is complete.
+1. **P0 — Christel personal-account calendar permission test** — highest-priority remaining verification. It must be performed using a disposable event from Christel's actual personal Google session; never impersonate another practitioner and never edit a client booking.
+2. **P0 — Move guarded one-time startup repairs/rollouts into explicit maintenance scripts + document rollback/runbook.**
+3. **P1 — Finish shared-calendar presentation normalization** using idempotent/tightly scoped reconciliation; no destructive testing on genuine appointments.
+4. **P1 — Final human catalogue/policy cross-surface review** and close remaining Goldie-vs-Shiloh public discrepancies.
+5. **P3 — Configure approved birthday template** before enabling birthday outbound messaging.
+6. **P3 — Treatment-aware aftercare/rebooking and loyalty redemption rules**; add reminder-confirmation state only if operationally desired.
+7. **Goldie exit gate — FINAL CUTOVER ONLY:** fresh export → compare future delta → import delta → reconcile CRM/calendar → prove zero unresolved → disable Goldie public booking.
+8. **P4 — Ozow/payment/voucher discovery and design**, only after the operational cutover/stability work above is complete.
+
+### Completed during this chapter
+
+- ✅ **P0 — Automated regression tests + CI:** implemented and verified on GitHub Actions and Render (`9b11474aa18f209ae2fee10d043dc253ea72b256`).
 
 ## Safety rules retained
 
@@ -110,4 +113,4 @@ Work **one item at a time** and verify GitHub + Render after each production cha
 
 ## Next action
 
-Start with prioritized item **#1: P0 automated regression tests + CI**. The owner-personal calendar permission test remains important but requires Christel's genuine personal Google session; it must not be simulated by impersonation or by editing real client appointments.
+The highest-priority remaining item is **#1: Christel personal-account calendar permission verification**. It cannot be truthfully completed through the Shiloh service-account/shared-account connector alone: the test must originate from Christel's genuine personal Google Calendar session and use a disposable event only. Until that is done, keep it 🟡 rather than simulating or overclaiming the permission test.
