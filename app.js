@@ -12,6 +12,7 @@ const adminRoutes = require("./src/routes/admin");
 const auditReadRoutes = require("./src/routes/auditRead");
 const calendarRoutes = require("./src/routes/calendar");
 const walkinRoutes = require("./src/routes/walkin");
+const bookRoutes = require("./src/routes/book");
 const serviceRoutes = require("./src/routes/services");
 const { checkDatabase } = require("./src/services/memory");
 const { startGoogleBusinessProfileSyncScheduler } = require("./src/services/googleBusinessProfileSync");
@@ -36,6 +37,7 @@ app.use("/admin", adminRoutes);
 app.use("/calendar", calendarRoutes);
 app.use("/", serviceRoutes);
 app.use("/", walkinRoutes);
+app.use("/", bookRoutes);
 app.use("/", webhookRoutes);
 app.use((err, req, res, next) => {
   const log = req.log || logger;
