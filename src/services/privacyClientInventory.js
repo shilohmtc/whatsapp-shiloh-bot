@@ -1,4 +1,5 @@
 const { pool } = require('../db/pool');
+const { buildRetentionDecisionPlan } = require('./privacyRetentionPolicy');
 
 const RETENTION_CLASSIFICATIONS = Object.freeze({
   appointments: 'retain_pending_policy',
@@ -42,24 +43,17 @@ function classifyDirectReference(tableName) {
 }
 
 async function getClientPrivacyInventory(clientId, db = pool) {
-  if (!validClientId(clientId)) {
-    return { status: 'invalid_client' };
-  }
+  if (!validClientId(clientId)) return { status: 'invalid_client' };
 
   const clientResult = await db.query(
-    `SELECT id, status, source, created_at, updated_at
-       FROM clients
-      WHERE id = $1`,
+    `SELECT id, status, source, created_at, updated_at FROM clients WHERE id = $1`,
     [clientId]
   );
   const client = clientResult.rows[0];
   if (!client) return { status: 'not_found' };
 
   const fkResult = await db.query(`
-    SELECT DISTINCT
-           kcu.table_schema,
-           kcu.table_name,
-           kcu.column_name
+    SELECT DISTINCT kcu.table_schema, kcu.table_name, kcu.column_name
       FROM information_schema.table_constraints tc
       JOIN information_schema.key_column_usage kcu
         ON kcu.constraint_name = tc.constraint_name
@@ -79,10 +73,7 @@ async function getClientPrivacyInventory(clientId, db = pool) {
   for (const reference of fkResult.rows) {
     const table = quoteIdentifier(reference.table_name);
     const column = quoteIdentifier(reference.column_name);
-    const countResult = await db.query(
-      `SELECT COUNT(*)::int AS count FROM ${table} WHERE ${column} = $1`,
-      [clientId]
-    );
+    const countResult = await db.query(`SELECT COUNT(*)::int AS count FROM ${table} WHERE ${column} = $1`, [clientId]);
     directReferences.push({
       table: reference.table_name,
       column: reference.column_name,
@@ -115,10 +106,7 @@ async function getClientPrivacyInventory(clientId, db = pool) {
 
   const auditEventCount = (await tableExists(db, 'crm_audit_events'))
     ? Number((await db.query(
-        `SELECT COUNT(*)::int AS count
-           FROM crm_audit_events
-          WHERE entity_type = 'client'
-            AND entity_id = $1`,
+        `SELECT COUNT(*)::int AS count FROM crm_audit_events WHERE entity_type = 'client' AND entity_id = $1`,
         [clientId]
       )).rows[0]?.count || 0)
     : 0;
@@ -126,7 +114,7 @@ async function getClientPrivacyInventory(clientId, db = pool) {
   const appointmentReference = directReferences.find((item) => item.table === 'appointments');
   const hasAppointmentHistory = Number(appointmentReference?.count || 0) > 0;
 
-  return {
+  const inventory = {
     status: 'ok',
     client: {
       id: Number(client.id),
@@ -152,6 +140,9 @@ async function getClientPrivacyInventory(clientId, db = pool) {
       : 'erase_or_deidentify_after_identity_and_legal_review',
     destructiveActionAllowed: false,
   };
+
+  inventory.retentionDecisionPlan = buildRetentionDecisionPlan(inventory);
+  return inventory;
 }
 
 module.exports = {
