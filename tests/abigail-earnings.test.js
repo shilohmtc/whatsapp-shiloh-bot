@@ -12,6 +12,20 @@ test('Abigail commission is fixed at 20 percent and only completed appointments 
   assert.match(source, /completedValue\*ABIGAIL_COMMISSION_RATE/);
 });
 
+test('Abigail has a fixed R5000 monthly salary in addition to commission', () => {
+  assert.match(source, /ABIGAIL_MONTHLY_SALARY = 5000/);
+  assert.match(source, /period==='month'\?ABIGAIL_MONTHLY_SALARY:0/);
+  assert.match(source, /salary\+commission/);
+  assert.match(source, /Fixed monthly salary/);
+  assert.match(source, /Total gross compensation/);
+  assert.match(source, /fixed R5,000 salary \+ 20% commission/);
+});
+
+test('salary is monthly only and is not prorated into today or week reports', () => {
+  assert.match(source, /Salary is monthly and is not prorated into today\/week earnings/);
+  assert.match(source, /monthlySalary:earnings\.period==='month'\?ABIGAIL_MONTHLY_SALARY:null/);
+});
+
 test('joint-practitioner and unpriced appointments fail closed', () => {
   assert.match(source, /COUNT\(DISTINCT ast\.staff_id\)::int AS staff_count/);
   assert.match(source, /Number\(r\.staff_count\)===1&&r\.total_price!==null/);
@@ -33,4 +47,5 @@ test('earnings support today week and month and remain audited', () => {
   assert.match(source, /date_trunc\('month'/);
   assert.match(source, /abigail_earnings_\$\{earnings\.period\}/);
   assert.match(source, /jointExcluded:data\.joint\.length/);
+  assert.match(source, /totalCompensation:data\.totalCompensation/);
 });
