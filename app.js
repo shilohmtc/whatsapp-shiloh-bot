@@ -17,52 +17,39 @@ const { checkDatabase } = require("./src/services/memory");
 const { startGoogleBusinessProfileSyncScheduler } = require("./src/services/googleBusinessProfileSync");
 const { startAppointmentLifecycleScheduler } = require("./src/services/appointmentLifecycle");
 const { startCustomerCareScheduler } = require("./src/services/customerCare");
+const { getBirthdayTemplateStatus } = require("./src/services/birthdayTemplateProvisioning");
 
 const app = express();
 app.disable("x-powered-by");
 app.use(express.json({ limit: "2mb" }));
 app.use(requestContext);
-app.use("/assets/service-images", express.static(path.join(__dirname, "public", "service-images"), {
-  maxAge: "30d",
-  immutable: true,
-}));
+app.use("/assets/service-images", express.static(path.join(__dirname, "public", "service-images"), { maxAge: "30d", immutable: true }));
 app.get("/", (req, res) => res.status(200).json({ service: "shiloh-whatsapp-bot", status: "running" }));
-app.get("/health", async (req, res) => {
-  const ok = await checkDatabase();
-  return res.status(ok ? 200 : 503).json({ status: ok ? "ok" : "degraded", database: ok ? "ok" : "unavailable", timestamp: new Date().toISOString() });
-});
+app.get("/health", async (req, res) => { const ok = await checkDatabase(); return res.status(ok ? 200 : 503).json({ status: ok ? "ok" : "degraded", database: ok ? "ok" : "unavailable", timestamp: new Date().toISOString() }); });
 app.use("/audit-read", auditReadRoutes);
 app.use("/admin", adminRoutes);
 app.use("/calendar", calendarRoutes);
 app.use("/", serviceRoutes);
 app.use("/", walkinRoutes);
 app.use("/", webhookRoutes);
-app.use((err, req, res, next) => {
-  const log = req.log || logger;
-  log.error({ err }, "Unhandled Express error");
-  if (res.headersSent) return next(err);
-  return res.status(500).json({ error: "Internal server error", requestId: req.id });
-});
+app.use((err, req, res, next) => { const log = req.log || logger; log.error({ err }, "Unhandled Express error"); if (res.headersSent) return next(err); return res.status(500).json({ error: "Internal server error", requestId: req.id }); });
 
 const PORT = process.env.PORT || 3000;
 let server;
 async function start() {
-  // Normal production boot intentionally contains no migrations, one-time repairs,
-  // rollout jobs, imports, reconciliations or smoke tests. Goldie live knowledge
-  // sync was retired after the verified P1 cutover reconciliation on 11 Aug 2026.
   server = app.listen(PORT, () => {
     logger.info({ port: PORT }, "Shiloh started");
     startGoogleBusinessProfileSyncScheduler();
     startAppointmentLifecycleScheduler();
     startCustomerCareScheduler();
+    if (process.env.BIRTHDAY_TEMPLATE_INSPECT_ONCE === "1") {
+      getBirthdayTemplateStatus()
+        .then((result) => logger.info({ ok: result.ok, wabaId: result.wabaId || null, templateName: result.templateName, configuredTemplateName: result.configuredTemplateName || null, template: result.template ? { id: result.template.id, name: result.template.name, status: result.template.status, category: result.template.category, language: result.template.language } : null }, "Birthday template WABA inspection completed"))
+        .catch((error) => logger.error({ err: error }, "Birthday template WABA inspection failed"));
+    }
   });
 }
 start().catch((error) => { logger.fatal({ err: error }, "Shiloh failed during startup"); process.exit(1); });
-function shutdown(signal) {
-  logger.info({ signal }, "Shutting down Shiloh");
-  if (!server) return process.exit(0);
-  server.close(() => { logger.info("HTTP server closed"); process.exit(0); });
-  setTimeout(() => { logger.error("Forced shutdown after timeout"); process.exit(1); }, 10000).unref();
-}
+function shutdown(signal) { logger.info({ signal }, "Shutting down Shiloh"); if (!server) return process.exit(0); server.close(() => { logger.info("HTTP server closed"); process.exit(0); }); setTimeout(() => { logger.error("Forced shutdown after timeout"); process.exit(1); }, 10000).unref(); }
 process.on("SIGTERM", () => shutdown("SIGTERM"));
 process.on("SIGINT", () => shutdown("SIGINT"));
