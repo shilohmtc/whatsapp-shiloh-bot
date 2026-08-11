@@ -33,7 +33,7 @@
 - ✅ **Professional catalogue cross-surface review and authority hardening.** Live production audit verified 49 active services across 14 active categories, with zero known legacy-name findings, no missing price presentation and no missing duration. `ba7f5940993fc7408fba2fecdc58ece90f4294b2` changed booking verification to fail closed against the active Shiloh CRM catalogue rather than Goldie knowledge. `bfe690836eef6e6ea854fa2c8b559ec05a56c805` made the active CRM catalogue authoritative over Goldie legacy knowledge for free-form AI service names, prices and durations. Full regression CI passed and Render deployed the exact hardening commit live. Detailed findings: `docs/P1-CATALOGUE-POLICY-AUDIT-2026-08-11.md`.
 - ✅ **Google Calendar presentation cleanup.** Fresh read-only audit on 11 Aug covered all 28 future events on shared `Shiloh — Bookings`. Only two confirmed shared-calendar presentation defects were repaired: appointment #354 removed the legacy `Client -` prefix while preserving the CRM-backed canonical `Janita Hatting (Marietjie Pienaar)` display; appointment #552 restored the missing closing parenthesis in `Gwendie T (Willemien Lezar, Skoonsussie)`. Appointment #365 (`Helenay Swanepoel - Healing`) and other unusual-looking client labels were deliberately left unchanged because the CRM-backed dedicated practitioner calendar preserved the same production values, so there was no evidence they were defects. A fresh post-write scan confirmed the two fixes and no broad reconciliation was run.
 - 🟡 **Goldie-vs-Shiloh public discrepancies.** Current Goldie remains stale relative to Shiloh: legacy spellings and Goldie-only/retired offerings still exist publicly. These are now contained because Shiloh active CRM catalogue is authoritative, but the public Goldie surface remains until final cutover.
-- 🟡 **Business-policy parity — owner confirmation only.** Address, hours, high-level cancellation terms and Google review destination are aligned. Current Goldie Facebook/Instagram destinations have been captured. Remaining owner decision: replace Goldie's unsafe blanket statement that *all treatments* support couples/group/spa-day bookings with the recommended canonical wording: **“Couples and group/spa-day bookings are available for selected treatments. Please contact Shiloh to arrange the most suitable option.”** Also confirm retaining the currently published Goldie Facebook and Instagram accounts as Shiloh's official social links after Goldie retirement.
+- ✅ **Business-policy parity — OWNER APPROVED 11 Aug 2026.** Canonical wording is: **“Couples and group/spa-day bookings are available for selected treatments. Please contact Shiloh to arrange the most suitable option.”** The currently published Goldie Facebook and Instagram accounts are retained as Shiloh's official social links after Goldie retirement. Address, hours, high-level cancellation terms and Google review destination are aligned.
 - ✅ **Non-PII Goldie archive manifest.** `docs/GOLDIE-EXPORT-MANIFEST-2026-08-10.md` records the historical 10 Aug export checksum/inventory; raw PII remains outside Git history.
 - ⬜ **Final Goldie booking delta / cutover snapshot.** A new final export, future-appointment comparison, delta import and zero-unresolved reconciliation are required immediately before disconnect.
 
@@ -74,7 +74,7 @@
 - 🟡 Re-prove every future appointment against the final export.
 - ✅ Shiloh staff routing/service ownership is authoritative and P2-scoped.
 - ✅ Active Shiloh catalogue authority is protected from stale/retired Goldie offerings.
-- 🟡 Business-policy parity awaits the single owner decision recorded above.
+- ✅ Business-policy parity owner-approved.
 - ✅ Client entry has Shiloh WhatsApp and walk-in QR paths.
 - ⬜ Zero unresolved future bookings formally proven at cutover.
 - ⬜ Disable Goldie public booking only after all checks pass.
@@ -84,11 +84,10 @@
 
 Work **one item at a time** and verify GitHub + Render after each production change.
 
-1. **P1 — Owner policy confirmation:** approve selected-treatment couples/group/spa-day wording and retention of the current Facebook/Instagram accounts.
-2. **P1 / Goldie exit gate — FINAL CUTOVER ONLY:** fresh export → compare future delta → import/reconcile delta → verify CRM/calendars/staff routing → prove zero unresolved → disable Goldie public booking → retire Goldie legacy knowledge/sync dependencies.
-3. **P3 — Configure approved birthday template** before enabling birthday outbound messaging.
-4. **P3 — Treatment-aware aftercare/rebooking and loyalty redemption rules**; add reminder-confirmation state only if operationally desired.
-5. **P4 — Ozow/payment/voucher discovery and design**, only after operational cutover/stability work above is complete.
+1. **P1 / Goldie exit gate — FINAL CUTOVER ONLY:** fresh export → compare future delta → import/reconcile delta → verify CRM/calendars/staff routing → prove zero unresolved → disable Goldie public booking → retire Goldie legacy knowledge/sync dependencies.
+2. **P3 — Configure approved birthday template** before enabling birthday outbound messaging.
+3. **P3 — Treatment-aware aftercare/rebooking and loyalty redemption rules**; add reminder-confirmation state only if operationally desired.
+4. **P4 — Ozow/payment/voucher discovery and design**, only after operational cutover/stability work above is complete.
 
 ### Completed during this chapter
 
@@ -99,6 +98,7 @@ Work **one item at a time** and verify GitHub + Render after each production cha
 - ✅ P1 — Live production catalogue audit: 49 active services / 14 active categories; legacy-name, price and duration checks all PASS.
 - ✅ P1 — Booking flow validates current services against active CRM catalogue (`ba7f5940993fc7408fba2fecdc58ece90f4294b2`).
 - ✅ P1 — Free-form AI prioritizes active CRM catalogue over Goldie legacy service knowledge (`bfe690836eef6e6ea854fa2c8b559ec05a56c805`).
+- ✅ P1 — Owner approved selected-treatment couples/group/spa-day wording and retention of current Facebook/Instagram destinations as official Shiloh social links.
 
 ## Safety rules retained
 
@@ -112,4 +112,4 @@ Work **one item at a time** and verify GitHub + Render after each production cha
 
 ## Next action
 
-The highest-priority genuinely unfinished P1 item is now a **single owner policy confirmation**. Recommended decision: approve **“Couples and group/spa-day bookings are available for selected treatments. Please contact Shiloh to arrange the most suitable option.”** and retain the currently published Facebook/Instagram destinations as Shiloh's official social accounts after Goldie retirement. Once confirmed, proceed immediately to the final Goldie export/delta/cutover gate.
+**P1 business-policy parity is CLOSED / APPROVED.** Proceed directly to the final Goldie exit gate: obtain a fresh Goldie export immediately before cutover, compare all future appointments against Shiloh CRM/calendars, import/reconcile any delta, prove zero unresolved future bookings, then disable Goldie public booking and retire remaining Goldie legacy knowledge/sync dependencies.
