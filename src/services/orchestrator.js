@@ -17,11 +17,10 @@ function buildProfileContext(profile) {
     lines.push(`Tags: ${profile.tags.join(", ")}`);
   }
 
-  for (const [key, value] of Object.entries(profile.custom_attributes || {})) {
-    if (value !== undefined && value !== null && String(value).trim()) {
-      lines.push(`Attribute - ${key}: ${value}`);
-    }
-  }
+  // Privacy boundary: custom_attributes is intentionally opaque and may hold
+  // operational or sensitive data. Never add it wholesale to general LLM
+  // context. Any future attribute that genuinely needs AI access must be
+  // explicitly classified and allowlisted instead.
 
   return lines.length ? `USER PROFILE:\n${lines.join("\n")}` : "";
 }
