@@ -62,12 +62,14 @@
 - ✅ Birthday and loyalty foundations.
 - ✅ **CRM-backed customer service catalogue + WhatsApp booking UX — VERIFIED 11 Aug 2026.** The 49 active CRM services now have customer-facing professional descriptions. `/services` and `/services/:id` render current active treatments grouped by the canonical CRM categories with authoritative duration/price presentation and service-specific **Book via WhatsApp** links that prefill the selected treatment. Shiloh's AI consumes the same CRM customer descriptions and booking notes, preventing website/WhatsApp content divergence. Migrations 038/039 were applied once through a guarded one-shot path, verified idempotent, and all temporary migration plumbing was removed afterward.
 - ✅ **Service imagery — VERIFIED 11 Aug 2026.** Owner approved curated third-party Pexels imagery as an interim solution. Twelve approved/licensed source images were ingested through a temporary API bridge, converted to optimized Shiloh-controlled WebP assets under `public/service-images`, and the temporary bridge/importer was retired afterward. All 49 currently seeded active services resolve to an approved image; unknown future services fail closed with no automatic misleading image. Sensitive services such as Areola Reconstruction, Pelvic Floor Strengthening and intimate HIFU use neutral consultation/clinic imagery. Production smoke verification confirmed `/services` renders Shiloh-hosted image URLs plus WhatsApp booking controls and a representative WebP asset is served successfully.
+- ✅ **Booking Policy & explicit client consent gate — VERIFIED 11 Aug 2026.** Shiloh now presents a versioned clinic Booking Policy & Terms before a WhatsApp booking request may proceed. Policy version `2026-08-11-v1` covers professional/non-sexual conduct, arrival/late-treatment handling, 24-hour cancellation/rescheduling notice, relevant health disclosure, treatment suitability/results, respect/safety and belongings. A generic `YES` is insufficient at the policy step; the client must explicitly reply `I AGREE` (or equivalent explicit acceptance). Acceptance is recorded with policy version, timestamp, channel and booking-request snapshot. Declining clears the booking request. Policy acceptance alone never marks an appointment confirmed. A production-safe synthetic self-test ran against the live CRM/database, sent no WhatsApp message, created no real appointment or Calendar event, cleaned its synthetic rows afterward, and passed all assertions: summary produced, no Goldie wording, policy displayed, generic yes rejected, explicit agreement accepted, acceptance audit recorded, no false appointment confirmation.
+- ✅ Legacy Goldie booking handoff wording in the WhatsApp intent flow is suppressed from the active client-facing path; Goldie is not presented as the booking destination.
 - 🟡 Birthday outbound messaging remains fail-closed until an approved WhatsApp birthday template is configured.
 - 🟡 Treatment-aware aftercare/rebooking specialization remains.
 - 🟡 Loyalty redemption automation remains.
 - 🟡 Dedicated reminder-confirmation response state remains optional/unimplemented.
 
-**P3 status: 🟡 CORE EXPERIENCE COMPLETE; catalogue descriptions, WhatsApp booking UX and service imagery are live. Remaining work is customer-care automation specialization.**
+**P3 status: 🟡 CORE EXPERIENCE COMPLETE; catalogue, imagery and booking-policy consent are live. Remaining work is customer-care automation specialization.**
 
 ### P4 — Payments and vouchers
 
@@ -126,6 +128,9 @@ Work one item at a time and verify GitHub + Render after production changes.
 - ✅ P3 — Twelve licensed interim service images ingested as Shiloh-controlled WebP assets.
 - ✅ P3 — Effective image mapping verified for all 49 current active services; unknown future services fail closed.
 - ✅ P3 — Production catalogue/asset/WhatsApp imagery smoke test passed; temporary Pexels bridge removed and importer/smoke workflows archived.
+- ✅ P3 — Versioned Booking Policy & Terms implemented with explicit WhatsApp acceptance and auditable consent record.
+- ✅ P3 — Safe synthetic production booking-policy self-test added behind admin authentication; no WhatsApp send or real booking mutation required.
+- ✅ P3 — Live synthetic policy acceptance test passed and cleaned up after itself.
 
 ## Safety rules retained
 
@@ -138,7 +143,8 @@ Work one item at a time and verify GitHub + Render after production changes.
 - Use only Shiloh-owned/licensed or explicitly approved imagery for customer-facing service cards; do not hotlink arbitrary third-party images.
 - `PEXELS_API_KEY` may remain in Render for future approved image acquisition, but current production catalogue rendering must not depend on Pexels availability.
 - Do not bulk-replace Render environment variables without a verified inventory of all currently required production keys.
+- Production self-tests must use synthetic identities, must not send messages to real clients, must not create genuine appointments or Calendar events, and must clean synthetic state afterward.
 
 ## Next action
 
-**P0 and P1 are CLOSED. P2 is functionally complete. P3 service catalogue imagery and Render environment cleanup are COMPLETE.** Proceed one item at a time with the highest-priority genuinely unfinished production item: **configure and approve the WhatsApp birthday template before enabling birthday outbound messaging**.
+**P0 and P1 are CLOSED. P2 is functionally complete. P3 service catalogue imagery, Render environment cleanup and Booking Policy consent gate are COMPLETE.** Proceed one item at a time with the highest-priority genuinely unfinished production item: **configure and approve the WhatsApp birthday template before enabling birthday outbound messaging**.
