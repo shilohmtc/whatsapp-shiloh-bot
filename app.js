@@ -18,7 +18,6 @@ const { checkDatabase } = require("./src/services/memory");
 const { startGoogleBusinessProfileSyncScheduler } = require("./src/services/googleBusinessProfileSync");
 const { startAppointmentLifecycleScheduler } = require("./src/services/appointmentLifecycle");
 const { startCustomerCareScheduler } = require("./src/services/customerCare");
-const { executeAugustGoldieRecovery, EXEC_CONFIRMATION } = require("./src/services/augustGoldieRecovery");
 
 const app = express();
 app.disable("x-powered-by");
@@ -50,7 +49,6 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || 3000;
 let server;
 async function start() {
-  await executeAugustGoldieRecovery({ confirmation: EXEC_CONFIRMATION });
   server = app.listen(PORT, () => {
     logger.info({ port: PORT }, "Shiloh started");
     startGoogleBusinessProfileSyncScheduler();
