@@ -130,12 +130,21 @@ function practitionerName(text) {
 
 function exactTime(value) {
   const v = clean(value).toLowerCase();
+  let hour;
+  let minute;
+  let meridiem = null;
   let m = v.match(/^(\d{1,2}):(\d{2})\s*(am|pm)?$/);
-  if (!m) m = v.match(/^(\d{1,2})\s*(am|pm)$/);
-  if (!m) return null;
-  let hour = Number(m[1]);
-  const minute = Number(m[2] || 0);
-  const meridiem = m[3] || (m.length === 3 ? m[2] : null);
+  if (m) {
+    hour = Number(m[1]);
+    minute = Number(m[2]);
+    meridiem = m[3] || null;
+  } else {
+    m = v.match(/^(\d{1,2})\s*(am|pm)$/);
+    if (!m) return null;
+    hour = Number(m[1]);
+    minute = 0;
+    meridiem = m[2];
+  }
   if (minute > 59) return null;
   if (meridiem) {
     if (hour < 1 || hour > 12) return null;
