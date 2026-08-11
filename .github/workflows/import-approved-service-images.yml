@@ -1,0 +1,69 @@
+name: Import approved service images
+
+on:
+  push:
+    paths:
+      - '.github/workflows/import-approved-service-images.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  import-images:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install image optimizer
+        run: pip install pillow
+      - name: Download approved assets from Shiloh bridge
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/shiloh-images public/service-images
+          keys=(massage-general hot-stone foot-care facial-general facial-premium microneedling permanent-makeup advanced-aesthetics consultation wellness-heat facial-technology facial-device)
+          for key in "${keys[@]}"; do
+            curl --fail --silent --show-error --location \
+              "https://shiloh-whatsapp-bot.onrender.com/internal/approved-pexels/${key}" \
+              --output "/tmp/shiloh-images/${key}.jpg"
+          done
+      - name: Optimize to Shiloh-controlled WebP assets
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from PIL import Image, ImageOps
+          src = Path('/tmp/shiloh-images')
+          dst = Path('public/service-images')
+          for path in sorted(src.glob('*.jpg')):
+              with Image.open(path) as image:
+                  image = ImageOps.exif_transpose(image).convert('RGB')
+                  max_width = 1400
+                  if image.width > max_width:
+                      height = round(image.height * max_width / image.width)
+                      image = image.resize((max_width, height), Image.Resampling.LANCZOS)
+                  out = dst / f'{path.stem}.webp'
+                  image.save(out, 'WEBP', quality=80, method=6)
+                  if out.stat().st_size > 700_000:
+                      raise SystemExit(f'{out} exceeds 700 KB guard')
+                  print(out, image.size, out.stat().st_size)
+          if len(list(dst.glob('*.webp'))) != 12:
+              raise SystemExit('Expected exactly 12 optimized assets')
+          PY
+      - name: Commit imported assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'shilohmtc'
+          git config user.email 'shilohmtc@gmail.com'
+          git add public/service-images/*.webp
+          if git diff --cached --quiet; then
+            echo 'Approved assets already current.'
+            exit 0
+          fi
+          git commit -m 'assets: import approved Shiloh service imagery'
+          git push origin HEAD:main
