@@ -17,6 +17,7 @@ const { checkDatabase } = require("./src/services/memory");
 const { startGoogleBusinessProfileSyncScheduler } = require("./src/services/googleBusinessProfileSync");
 const { startAppointmentLifecycleScheduler } = require("./src/services/appointmentLifecycle");
 const { startCustomerCareScheduler } = require("./src/services/customerCare");
+const { runAdminReportsSelfTest } = require("./src/services/adminReportsSelfTest");
 
 const app = express();
 app.disable("x-powered-by");
@@ -47,14 +48,21 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || 3000;
 let server;
 async function start() {
-  // Normal production boot intentionally contains no migrations, one-time repairs,
-  // rollout jobs, imports, reconciliations or smoke tests. Goldie live knowledge
-  // sync was retired after the verified P1 cutover reconciliation on 11 Aug 2026.
   server = app.listen(PORT, () => {
     logger.info({ port: PORT }, "Shiloh started");
     startGoogleBusinessProfileSyncScheduler();
     startAppointmentLifecycleScheduler();
     startCustomerCareScheduler();
+    if (String(process.env.RUN_ADMIN_REPORTS_SELF_TEST_ON_STARTUP || "").toLowerCase() === "true") {
+      setTimeout(async () => {
+        try {
+          const result = await runAdminReportsSelfTest();
+          logger.info({ assertions: result.assertions, counts: result.counts }, "ADMIN_REPORTS_SELF_TEST_PASS");
+        } catch (error) {
+          logger.error({ err: error }, "ADMIN_REPORTS_SELF_TEST_FAIL");
+        }
+      }, 3000).unref();
+    }
   });
 }
 start().catch((error) => { logger.fatal({ err: error }, "Shiloh failed during startup"); process.exit(1); });
