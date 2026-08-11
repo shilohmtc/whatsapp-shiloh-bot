@@ -16,6 +16,22 @@
 - Operational calendars: `Shiloh — Bookings`, `Shiloh — Marietjie`, `Shiloh — Abigail`.
 - Roles: Christel owner/all-business; Jean-Pierre business admin/all-business; Marietjie `tenant_practitioner`; Abigail `employee_practitioner`.
 
+## Engineering verification rule — DEFAULT
+
+For every new Shiloh feature, repair or production change, use a **safe self-test-first** workflow before asking the owner/admin to intervene.
+
+1. Build the change with an explicit verification plan.
+2. First prefer automated unit/integration/regression tests and GitHub CI.
+3. Where CI cannot prove live behavior, prefer synthetic, isolated, dry-run or read-only production verification using existing protected admin/test infrastructure.
+4. A temporary production test hook is allowed only when it is narrowly scoped, authenticated/guarded, auditable, reversible and incapable of affecting genuine client data beyond the specifically approved test boundary. Remove the temporary trigger/hook after verification unless it is intentionally retained as a reusable protected self-test.
+5. Never send messages to real clients, create or alter genuine appointments, create/delete genuine Calendar events, impersonate staff, weaken authorization, expose cross-staff data, or bypass business safety controls merely to make a test pass.
+6. After a temporary verifier is removed/disabled, re-check the clean final production state: GitHub/CI + Render deployment + the relevant runtime behavior.
+7. Mark work **✅ COMPLETE** only after the strongest safe automated/synthetic verification available has passed. Where a genuine human/external acceptance step remains necessary, label that separately rather than treating technical verification as human approval.
+8. Ask Christel/Jean-Pierre for intervention only when the required action genuinely cannot be performed safely through available tooling—for example Meta/provider approval, personal-account/session action, payment authorization, a required real-human acceptance judgment, or another external control unavailable to Shiloh's test harness.
+9. “I cannot click it directly” is not sufficient reason to hand a test back to the owner/admin; first determine whether the same requirement can be proven safely another way.
+
+This rule is part of the authoritative engineering handoff and applies to future phases unless an explicit safety constraint requires a stricter approach.
+
 ## Fresh consolidated audit — P0 to P4
 
 ### P0 — Stabilize before adding commercial features
@@ -97,7 +113,7 @@
 
 ## Prioritized checklist
 
-Work one item at a time and verify GitHub + Render after production changes.
+Work one item at a time and apply the safe self-test-first engineering rule above after every production change.
 
 1. **P3 — Configure an approved WhatsApp birthday template** before enabling birthday outbound messaging.
 2. **P3 — Treatment-aware aftercare/rebooking specialization.**
@@ -114,6 +130,7 @@ Work one item at a time and verify GitHub + Render after production changes.
 - ✅ P3 versioned Booking Policy & explicit WhatsApp consent gate with safe live synthetic verification.
 - ✅ P3 first Shiloh-native WhatsApp operational report: role-aware Today summary with business-wide owner/admin view and practitioner-self Marietjie/Abigail views.
 - ✅ P3 live read-only authorization verification proving zero practitioner cross-staff and cross-service leakage and no practitioner revenue exposure.
+- ✅ Safe self-test-first workflow codified as the default engineering verification rule for future Shiloh work.
 
 ## Safety rules retained
 
@@ -131,4 +148,4 @@ Work one item at a time and verify GitHub + Render after production changes.
 
 ## Next action
 
-**P0 and P1 are CLOSED. P2 is functionally complete. P3 catalogue, imagery, booking-policy consent and the staff-scoped Today operational report are COMPLETE.** Proceed one item at a time with the highest-priority genuinely unfinished production item: **configure and approve the WhatsApp birthday template before enabling birthday outbound messaging**.
+**P0 and P1 are CLOSED. P2 is functionally complete. P3 catalogue, imagery, booking-policy consent and the staff-scoped Today operational report are COMPLETE. The safe self-test-first workflow is now an authoritative engineering rule.** Proceed one item at a time with the highest-priority genuinely unfinished production item: **configure and approve the WhatsApp birthday template before enabling birthday outbound messaging**.
