@@ -1,10 +1,11 @@
 const axios = require('axios');
 
 const GRAPH_VERSION = 'v23.0';
-const TEMPLATE_NAME = 'shiloh_birthday_wish_v1';
+const LEGACY_TEMPLATE_NAME = 'shiloh_birthday_wish_v1';
+const TEMPLATE_NAME = 'shiloh_birthday_wish_v2';
 const TEMPLATE_LANGUAGE = 'en';
 const TEMPLATE_CATEGORY = 'MARKETING';
-const TEMPLATE_BODY = 'Happy birthday, {{1}}! 🎂 Wishing you a beautiful day from all of us at Shiloh Medical & Training Centre. Thank you for being part of our community. 🌿';
+const TEMPLATE_BODY = 'Happy birthday, {{1}}! 🎂 Wishing you a beautiful day from all of us at Shiloh Massage Therapy and Aesthetic Clinic. Thank you for being part of our community. 🌿';
 const TEMPLATE_FOOTER = 'Reply BIRTHDAY OFF any time to stop birthday wishes.';
 
 function graphUrl(path) {
@@ -108,6 +109,18 @@ async function listTemplates(wabaId) {
   });
 }
 
+function sanitizeTemplate(template) {
+  if (!template) return null;
+  return {
+    id: template.id || null,
+    name: template.name,
+    status: template.status || null,
+    category: template.category || null,
+    language: template.language || null,
+    components: template.components || [],
+  };
+}
+
 async function getBirthdayTemplateStatus() {
   const wabaId = await discoverWabaId();
   if (!wabaId) {
@@ -115,24 +128,21 @@ async function getBirthdayTemplateStatus() {
       ok: false,
       reason: 'waba_not_discovered',
       templateName: TEMPLATE_NAME,
+      legacyTemplateName: LEGACY_TEMPLATE_NAME,
       configuredTemplateName: process.env.WHATSAPP_BIRTHDAY_TEMPLATE || null,
     };
   }
   const templates = await listTemplates(wabaId);
-  const template = (templates?.data || []).find((item) => item?.name === TEMPLATE_NAME) || null;
+  const target = (templates?.data || []).find((item) => item?.name === TEMPLATE_NAME) || null;
+  const legacy = (templates?.data || []).find((item) => item?.name === LEGACY_TEMPLATE_NAME) || null;
   return {
     ok: true,
     wabaId,
     templateName: TEMPLATE_NAME,
+    legacyTemplateName: LEGACY_TEMPLATE_NAME,
     configuredTemplateName: process.env.WHATSAPP_BIRTHDAY_TEMPLATE || null,
-    template: template ? {
-      id: template.id || null,
-      name: template.name,
-      status: template.status || null,
-      category: template.category || null,
-      language: template.language || null,
-      components: template.components || [],
-    } : null,
+    template: sanitizeTemplate(target),
+    legacyTemplate: sanitizeTemplate(legacy),
     definition: buildBirthdayTemplateDefinition(),
   };
 }
@@ -160,6 +170,7 @@ async function submitBirthdayTemplate() {
 }
 
 module.exports = {
+  LEGACY_TEMPLATE_NAME,
   TEMPLATE_NAME,
   TEMPLATE_LANGUAGE,
   TEMPLATE_CATEGORY,

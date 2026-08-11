@@ -56,6 +56,8 @@ router.get("/birthday-template/status", async (req, res) => {
         exists: Boolean(provider.template),
         submittedCopyUsesCurrentBrand,
         safeToEnable: provider.template?.status === "APPROVED" && submittedCopyUsesCurrentBrand,
+        legacyTemplateName: provider.legacyTemplateName || null,
+        legacyProviderStatus: provider.legacyTemplate?.status || null,
       },
       requestId: req.id,
     });

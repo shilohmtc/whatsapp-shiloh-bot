@@ -4,15 +4,17 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const {
+  LEGACY_TEMPLATE_NAME,
   TEMPLATE_NAME,
   TEMPLATE_LANGUAGE,
   TEMPLATE_CATEGORY,
   buildBirthdayTemplateDefinition,
 } = require('../src/services/birthdayTemplateProvisioning');
 
-test('birthday template definition is stable and non-promotional in copy', () => {
+test('birthday template v2 is brand-correct, stable and non-promotional', () => {
   const definition = buildBirthdayTemplateDefinition();
-  assert.equal(TEMPLATE_NAME, 'shiloh_birthday_wish_v1');
+  assert.equal(LEGACY_TEMPLATE_NAME, 'shiloh_birthday_wish_v1');
+  assert.equal(TEMPLATE_NAME, 'shiloh_birthday_wish_v2');
   assert.equal(TEMPLATE_LANGUAGE, 'en');
   assert.equal(TEMPLATE_CATEGORY, 'MARKETING');
   assert.equal(definition.name, TEMPLATE_NAME);
@@ -25,6 +27,8 @@ test('birthday template definition is stable and non-promotional in copy', () =>
   assert.ok(body);
   assert.ok(footer);
   assert.match(body.text, /Happy birthday, \{\{1\}\}!/);
+  assert.match(body.text, /Shiloh Massage Therapy and Aesthetic Clinic/);
+  assert.doesNotMatch(body.text, /Shiloh Medical & Training Centre/);
   assert.deepEqual(body.example, { body_text: [['Christel']] });
   assert.match(footer.text, /BIRTHDAY OFF/);
   assert.doesNotMatch(body.text, /discount|sale|offer|book now/i);
@@ -37,8 +41,18 @@ test('birthday provider status endpoint is read-only, sanitized and brand-gated'
   assert.match(source, /submittedCopyUsesCurrentBrand/);
   assert.match(source, /safeToEnable/);
   assert.match(source, /provider\.template\?\.status === "APPROVED" && submittedCopyUsesCurrentBrand/);
+  assert.match(source, /legacyProviderStatus/);
   assert.doesNotMatch(source, /wabaId\s*:/);
   assert.doesNotMatch(source, /templateId\s*:/);
   assert.doesNotMatch(source, /WHATSAPP_TOKEN\s*:/);
   assert.doesNotMatch(source, /sendWhatsApp/);
+});
+
+test('birthday template submission is an explicit guarded maintenance write', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../scripts/maintenance.js'), 'utf8');
+  assert.match(source, /'birthday-template-status'/);
+  assert.match(source, /'birthday-template-submit'/);
+  assert.match(source, /'birthday-template-submit':\s*\{\s*mutates:\s*true/);
+  assert.match(source, /Refusing mutating maintenance command/);
+  assert.doesNotMatch(source, /birthday-template-submit[\s\S]{0,500}mayMessage:\s*true/);
 });
