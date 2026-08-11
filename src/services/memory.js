@@ -1,7 +1,25 @@
 const { pool } = require("../db/pool");
 const logger = require("../lib/logger");
 
+const DEFAULT_SESSION_TTL_HOURS = 24;
+const MIN_SESSION_TTL_HOURS = 1;
+const MAX_SESSION_TTL_HOURS = 168;
+const SESSION_CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
+
 let initialized = false;
+let cleanupTimer = null;
+
+function normalizeSessionTtlHours(value = process.env.CONVERSATION_SESSION_TTL_HOURS) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return DEFAULT_SESSION_TTL_HOURS;
+  return Math.max(MIN_SESSION_TTL_HOURS, Math.min(MAX_SESSION_TTL_HOURS, Math.floor(parsed)));
+}
+
+function isSessionFresh(updatedAt, nowMs = Date.now(), ttlHours = normalizeSessionTtlHours()) {
+  const updatedMs = new Date(updatedAt).getTime();
+  if (!Number.isFinite(updatedMs)) return false;
+  return updatedMs >= nowMs - ttlHours * 60 * 60 * 1000;
+}
 
 async function ensureTable() {
   if (initialized) return;
@@ -22,11 +40,19 @@ async function getSession(phone) {
     await ensureTable();
 
     const result = await pool.query(
-      "SELECT response_id FROM conversation_sessions WHERE phone = $1",
+      "SELECT response_id, updated_at FROM conversation_sessions WHERE phone = $1",
       [phone]
     );
 
-    return result.rows[0]?.response_id;
+    const session = result.rows[0];
+    if (!session) return undefined;
+
+    if (!isSessionFresh(session.updated_at)) {
+      await pool.query("DELETE FROM conversation_sessions WHERE phone = $1", [phone]);
+      return undefined;
+    }
+
+    return session.response_id;
   } catch (error) {
     logger.error({ err: error }, "failed to read conversation session");
     return undefined;
@@ -72,6 +98,34 @@ async function clearSession(phone) {
   }
 }
 
+async function cleanupExpiredSessions() {
+  try {
+    await ensureTable();
+    const ttlHours = normalizeSessionTtlHours();
+    const result = await pool.query(
+      `DELETE FROM conversation_sessions
+        WHERE updated_at < NOW() - make_interval(hours => $1::int)`,
+      [ttlHours]
+    );
+    if (result.rowCount > 0) {
+      logger.info({ expiredSessionCount: result.rowCount, ttlHours }, "Expired stale conversation sessions");
+    }
+    return result.rowCount;
+  } catch (error) {
+    logger.error({ err: error }, "failed to expire stale conversation sessions");
+    return 0;
+  }
+}
+
+function startConversationSessionCleanupScheduler() {
+  if (cleanupTimer) return cleanupTimer;
+
+  cleanupExpiredSessions();
+  cleanupTimer = setInterval(cleanupExpiredSessions, SESSION_CLEANUP_INTERVAL_MS);
+  cleanupTimer.unref?.();
+  return cleanupTimer;
+}
+
 async function checkDatabase() {
   try {
     await pool.query("SELECT 1");
@@ -86,5 +140,11 @@ module.exports = {
   getSession,
   saveSession,
   clearSession,
+  cleanupExpiredSessions,
+  startConversationSessionCleanupScheduler,
+  normalizeSessionTtlHours,
+  isSessionFresh,
   checkDatabase,
+  DEFAULT_SESSION_TTL_HOURS,
+  MAX_SESSION_TTL_HOURS,
 };
