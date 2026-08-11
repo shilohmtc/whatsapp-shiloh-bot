@@ -15,6 +15,7 @@ const walkinRoutes = require("./src/routes/walkin");
 const bookRoutes = require("./src/routes/book");
 const serviceRoutes = require("./src/routes/services");
 const { checkDatabase, startConversationSessionCleanupScheduler } = require("./src/services/memory");
+const { startTemporarySessionCleanupScheduler } = require("./src/services/temporarySessionRetention");
 const { startGoogleBusinessProfileSyncScheduler } = require("./src/services/googleBusinessProfileSync");
 const { startAppointmentLifecycleScheduler } = require("./src/services/appointmentLifecycle");
 const { startCustomerCareScheduler } = require("./src/services/customerCare");
@@ -52,6 +53,7 @@ async function start() {
   server = app.listen(PORT, () => {
     logger.info({ port: PORT }, "Shiloh started");
     startConversationSessionCleanupScheduler();
+    startTemporarySessionCleanupScheduler();
     startGoogleBusinessProfileSyncScheduler();
     startAppointmentLifecycleScheduler();
     startCustomerCareScheduler();
