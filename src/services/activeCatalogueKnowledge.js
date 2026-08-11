@@ -17,29 +17,20 @@ async function getActiveCatalogueKnowledge() {
   try {
     const result = await pool.query(`
       SELECT s.name, s.duration_minutes, s.processing_time_minutes, s.extra_time_minutes,
-             s.price, s.display_price,
-             (to_jsonb(s) ->> 'customer_description') AS customer_description,
-             (to_jsonb(s) ->> 'booking_note') AS booking_note,
+             s.price, s.display_price, s.customer_description, s.booking_note,
              sc.name AS category_name
         FROM services s
         LEFT JOIN service_categories sc ON sc.id = s.category_id
        WHERE s.status = 'active'
        ORDER BY sc.display_order NULLS LAST, s.display_order, s.name
     `);
-
     const content = result.rows.map((row) => {
-      const parts = [row.category_name || "Services", row.name, formatDuration(row), formatPrice(row)];
-      if (row.customer_description) parts.push(`Description: ${row.customer_description}`);
-      if (row.booking_note) parts.push(`Booking note: ${row.booking_note}`);
-      return parts.join(" | ");
+      const base = `${row.category_name || "Services"} | ${row.name} | ${formatDuration(row)} | ${formatPrice(row)}`;
+      const description = row.customer_description ? ` | Description: ${row.customer_description}` : '';
+      const note = row.booking_note ? ` | Booking note: ${row.booking_note}` : '';
+      return `${base}${description}${note}`;
     }).join("\n");
-
-    return {
-      title: "Current active Shiloh service catalogue",
-      source: "Shiloh CRM active catalogue",
-      content,
-      similarity: 1,
-    };
+    return { title: "Current active Shiloh service catalogue", source: "Shiloh CRM active catalogue", content, similarity: 1 };
   } catch (error) {
     logger.warn({ err: error }, "Could not load active CRM catalogue for AI context");
     return null;

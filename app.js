@@ -24,11 +24,7 @@ app.use(requestContext);
 app.get("/", (req, res) => res.status(200).json({ service: "shiloh-whatsapp-bot", status: "running" }));
 app.get("/health", async (req, res) => {
   const ok = await checkDatabase();
-  return res.status(ok ? 200 : 503).json({
-    status: ok ? "ok" : "degraded",
-    database: ok ? "ok" : "unavailable",
-    timestamp: new Date().toISOString(),
-  });
+  return res.status(ok ? 200 : 503).json({ status: ok ? "ok" : "degraded", database: ok ? "ok" : "unavailable", timestamp: new Date().toISOString() });
 });
 app.use("/audit-read", auditReadRoutes);
 app.use("/admin", adminRoutes);
@@ -45,10 +41,10 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 3000;
 let server;
-
 async function start() {
   // Normal production boot intentionally contains no migrations, one-time repairs,
-  // rollout jobs, imports, reconciliations or smoke tests.
+  // rollout jobs, imports, reconciliations or smoke tests. Goldie live knowledge
+  // sync was retired after the verified P1 cutover reconciliation on 11 Aug 2026.
   server = app.listen(PORT, () => {
     logger.info({ port: PORT }, "Shiloh started");
     startGoogleBusinessProfileSyncScheduler();
@@ -56,24 +52,12 @@ async function start() {
     startCustomerCareScheduler();
   });
 }
-
-start().catch((error) => {
-  logger.fatal({ err: error }, "Shiloh failed during startup");
-  process.exit(1);
-});
-
+start().catch((error) => { logger.fatal({ err: error }, "Shiloh failed during startup"); process.exit(1); });
 function shutdown(signal) {
   logger.info({ signal }, "Shutting down Shiloh");
   if (!server) return process.exit(0);
-  server.close(() => {
-    logger.info("HTTP server closed");
-    process.exit(0);
-  });
-  setTimeout(() => {
-    logger.error("Forced shutdown after timeout");
-    process.exit(1);
-  }, 10000).unref();
+  server.close(() => { logger.info("HTTP server closed"); process.exit(0); });
+  setTimeout(() => { logger.error("Forced shutdown after timeout"); process.exit(1); }, 10000).unref();
 }
-
 process.on("SIGTERM", () => shutdown("SIGTERM"));
 process.on("SIGINT", () => shutdown("SIGINT"));
