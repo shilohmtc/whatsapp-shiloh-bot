@@ -42,6 +42,6 @@ router.post("/reconciliation/clients/canonicalize", canonicalizeReconciliationCl
 router.get("/reconciliation/clients", getReconciliationCases); router.get("/reconciliation/clients/:id", getReconciliationCase);
 router.get("/appointments", getLifecycleAppointments); router.post("/appointments", createLifecycleAppointment); router.patch("/appointments/:id", patchLifecycleAppointment); router.post("/appointments/scan", runLifecycleScan); router.post("/appointments/test-lifecycle", runControlledLifecycleTest);
 router.post("/whatsapp/templates/test", sendTemplateTest);
-router.get("/feedback", getFeedback); router.patch("/feedback/:id/resolve", resolveCustomerFeedback); router.get("/reviews", getReviewRequests); router.get("/customer-satisfaction", getCustomerSatisfaction);
+router.get("/feedback", getFeedback); router.patch("/feedback/:id/resolve", resolveCustomerFeedback); router.get("/reviews", getReviews); router.get("/customer-satisfaction", getCustomerSatisfaction);
 router.get("/database/status", getDatabaseStatus); router.get("/database/tables", getDatabaseTables); router.get("/database/schema", getDatabaseSchema); router.get("/database/overview", getDatabaseOverview); router.get("/database/migrations", getDatabaseMigrations); router.post("/database/migrations/apply", applyDatabaseMigrations);
 module.exports = router;
