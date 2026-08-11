@@ -1,5 +1,6 @@
 const { pool } = require("../db/pool");
 const logger = require("../lib/logger");
+const { buildGuidance } = require("./treatmentAftercare");
 
 const GOOGLE_REVIEW_URL =
   process.env.SHILOH_GOOGLE_REVIEW_URL ||
@@ -137,8 +138,10 @@ async function processCustomerExperienceMessage(phone, text) {
           [experience.id, rating]
         );
 
+        const guidance = buildGuidance(experience.service_text, { includeRebooking: true });
         const reply = [
           "Thank you so much! We're delighted that you had a good experience at Shiloh Massage Therapy & Aesthetic Clinic.",
+          guidance,
           reviewInvite(alreadyRequested),
           "",
           "Thank you for supporting Shiloh.",
@@ -158,8 +161,10 @@ async function processCustomerExperienceMessage(phone, text) {
         [experience.id, rating]
       );
 
+      const guidance = buildGuidance(experience.service_text, { includeRebooking: false });
       const reply = [
         "Thank you for telling us. I'm sorry your visit wasn't what you hoped for.",
+        guidance,
         "Would you mind telling us what we could have done better? Your feedback will be kept for the clinic team to follow up.",
         reviewInvite(alreadyRequested),
       ].filter(Boolean).join("\n\n");
