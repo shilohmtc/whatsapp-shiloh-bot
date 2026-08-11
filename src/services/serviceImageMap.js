@@ -46,8 +46,20 @@ const premiumFacials = new Set([
   'Firm & Lift',
 ]);
 
-const deviceFacials = new Set([
-  'Derma Fusion Clarity Facial',
+const deviceFacials = new Set(['Derma Fusion Clarity Facial']);
+
+const generalFacials = new Set([
+  'Hydrate & Plump Facial',
+  'Formulage Brightening Peel',
+  'Dermaplane Facial',
+  'Derma Peel Brightening',
+  'Calm & Clear Facial',
+  'Brightening Facial (Pigmentation)',
+  'Acne Detox Facial',
+  'Basic Facial - Acne / Congested / Hormonal Breakout',
+  'Basic Facial - Hydration / Pigmentation Targeted',
+  'Clarity Facial (Blackheads, Whiteheads & Acne)',
+  'Facial Lymphatic Drainage Massage',
 ]);
 
 function resolveImageKey(serviceName) {
@@ -55,13 +67,13 @@ function resolveImageKey(serviceName) {
   if (massageNames.has(serviceName)) return 'massage-general';
   if (premiumFacials.has(serviceName)) return 'facial-premium';
   if (deviceFacials.has(serviceName)) return 'facial-device';
-  if (serviceName === 'Facial Lymphatic Drainage Massage') return 'facial-general';
-  // All remaining active names in the current catalogue are facial/skincare services.
-  return 'facial-general';
+  if (generalFacials.has(serviceName)) return 'facial-general';
+  return null;
 }
 
 function resolveServiceImageUrl(serviceName) {
-  return `${IMAGE_BASE}/${resolveImageKey(serviceName)}.webp`;
+  const key = resolveImageKey(serviceName);
+  return key ? `${IMAGE_BASE}/${key}.webp` : null;
 }
 
 module.exports = { resolveImageKey, resolveServiceImageUrl };
