@@ -1,47 +1,51 @@
 # Shiloh Production Audit & Next-Chapter Handoff — current state 11 Aug 2026
 
-> This file retains its original `2026-08-10` filename for continuity, but the status below was freshly reconciled on **11 Aug 2026**. GitHub `main`, Render production, Shiloh CRM-backed rollout evidence and Google Calendar are authoritative over older checklist wording.
+> This file retains its original `2026-08-10` filename for continuity. GitHub `main`, Render production, Shiloh CRM-backed production state and Google Calendar are authoritative over older checklist wording.
 
 ## Classification key
 
 - ✅ Complete — verified against current production evidence.
-- 🟡 Partially complete / verification still required — production capability exists or most work is complete, but a defined verification or follow-up remains.
-- ⬜ Outstanding — genuinely not yet implemented/completed.
+- 🟡 Partially complete / verification still required.
+- ⬜ Outstanding.
 
 ## Current production baseline
 
 - Repository: `shilohmtc/whatsapp-shiloh-bot`, branch `main`.
 - Render service: `shiloh-whatsapp-bot`, auto-deploy from `main`, Node 24.14.1, Starter plan, Oregon, 1 instance, `npm ci` / `npm start`, `/health` health check.
-- WhatsApp/CRM remains the booking source of truth; Google Calendar is a synchronized operational view.
-- Operational calendars visible to `shilohmtc@gmail.com`: `Shiloh — Bookings`, `Shiloh — Marietjie`, and `Shiloh — Abigail`.
-- Current role model remains: Christel owner/all-business; Jean-Pierre business admin/all-business; Marietjie `tenant_practitioner`; Abigail `employee_practitioner`.
-- Direct Render read-only Postgres auditing remains blocked by a Render connector SSL/TLS negotiation error. This is not being treated as a production database outage: `/health` remains healthy. A sanitized public-business catalogue audit endpoint now provides read-only production catalogue verification without client/staff/appointment PII.
+- WhatsApp/CRM is the booking source of truth; Google Calendar is a synchronized operational view.
+- Operational calendars: `Shiloh — Bookings`, `Shiloh — Marietjie`, `Shiloh — Abigail`.
+- Roles: Christel owner/all-business; Jean-Pierre business admin/all-business; Marietjie `tenant_practitioner`; Abigail `employee_practitioner`.
 
 ## Fresh consolidated audit — P0 to P4
 
 ### P0 — Stabilize before adding commercial features
 
-- ✅ **Christel owner-access calendar verification.** Freshly verified on 11 Aug 2026 from Christel's genuine personal Google Calendar session against `Shiloh — Bookings`, using disposable test records only. Read/visibility, edit/save, delete and fresh create all passed. The fresh test event was deleted afterwards; no test residue remains and no genuine client appointment was modified or deleted.
-- ✅ **Automated regression tests + CI.** `npm test` and `.github/workflows/ci.yml` are live on `main`. The non-mutating suite covers calendar ID/presentation contracts, walk-in registration policy, staff-scope/menu guards, booking conflict guards, client cancellation safeguards, structural Goldie replay/duplicate protections, clean startup boundaries and maintenance-command safety.
-- ✅ **Production observability / maintenance cleanup.** Normal `npm start` now starts only the HTTP service plus legitimate long-running schedulers. Migrations, identity/staff repairs, smoke tests, staff-calendar rollouts, catalogue polish, Goldie future import, Google Calendar reconciliation/access setup and calendar-presentation reconciliation have been removed from normal startup and moved behind explicit `npm run maintenance -- <command>` operator actions. Mutating commands require `--confirm`; the legacy WhatsApp-capable startup test additionally suppresses messaging unless `--allow-whatsapp` is explicitly provided. `docs/PRODUCTION-RUNBOOK.md` documents deploy verification, pre-write safeguards, rollback and data/Calendar recovery.
+- ✅ Christel personal-account Google Calendar read/create/edit/delete permission verification.
+- ✅ Automated regression tests + CI.
+- ✅ Production observability / maintenance cleanup. Normal `npm start` contains no migrations, one-time repairs, imports, rollout jobs, reconciliations or smoke tests. Explicit maintenance commands and rollback/runbook safeguards are documented.
 
 **P0 status: ✅ CLOSED / COMPLETE. Reopen only for a new regression.**
 
 ### P1 — Catalogue, data presentation and Goldie exit readiness
 
-- ✅ **Targeted legacy service/catalogue and imported-client text cleanup.** Production rollout completed successfully on 11 Aug with guarded cleanup of known legacy Goldie spelling/name presentation problems.
-- ✅ **Professional catalogue cross-surface review and authority hardening.** Live production audit verified 49 active services across 14 active categories, with zero known legacy-name findings, no missing price presentation and no missing duration. `ba7f5940993fc7408fba2fecdc58ece90f4294b2` changed booking verification to fail closed against the active Shiloh CRM catalogue rather than Goldie knowledge. `bfe690836eef6e6ea854fa2c8b559ec05a56c805` made the active CRM catalogue authoritative over Goldie legacy knowledge for free-form AI service names, prices and durations. Full regression CI passed and Render deployed the exact hardening commit live. Detailed findings: `docs/P1-CATALOGUE-POLICY-AUDIT-2026-08-11.md`.
-- ✅ **Google Calendar presentation cleanup.** Fresh read-only audit on 11 Aug covered all 28 future events on shared `Shiloh — Bookings`. Only two confirmed shared-calendar presentation defects were repaired: appointment #354 removed the legacy `Client -` prefix while preserving the CRM-backed canonical `Janita Hatting (Marietjie Pienaar)` display; appointment #552 restored the missing closing parenthesis in `Gwendie T (Willemien Lezar, Skoonsussie)`. Appointment #365 (`Helenay Swanepoel - Healing`) and other unusual-looking client labels were deliberately left unchanged because the CRM-backed dedicated practitioner calendar preserved the same production values, so there was no evidence they were defects. A fresh post-write scan confirmed the two fixes and no broad reconciliation was run.
-- 🟡 **Goldie-vs-Shiloh public discrepancies.** Current Goldie remains stale relative to Shiloh: legacy spellings and Goldie-only/retired offerings still exist publicly. These are now contained because Shiloh active CRM catalogue is authoritative, but the public Goldie surface remains until final cutover.
-- ✅ **Business-policy parity — OWNER APPROVED 11 Aug 2026.** Canonical wording is: **“Couples and group/spa-day bookings are available for selected treatments. Please contact Shiloh to arrange the most suitable option.”** The currently published Goldie Facebook and Instagram accounts are retained as Shiloh's official social links after Goldie retirement. Address, hours, high-level cancellation terms and Google review destination are aligned.
-- ✅ **Non-PII Goldie archive manifest.** `docs/GOLDIE-EXPORT-MANIFEST-2026-08-10.md` records the historical 10 Aug export checksum/inventory; raw PII remains outside Git history.
-- ⬜ **Final Goldie booking delta / cutover snapshot.** A new final export, future-appointment comparison, delta import and zero-unresolved reconciliation are required immediately before disconnect.
+- ✅ Targeted legacy service/catalogue and imported-client text cleanup.
+- ✅ Professional catalogue cross-surface review and authority hardening. Live production audit verified 49 active services across 14 active categories with no known legacy-name findings, missing price presentation or missing duration. Booking verification fails closed against the active CRM catalogue; free-form AI treats active CRM catalogue values as authoritative over legacy Goldie knowledge.
+- ✅ Google Calendar presentation cleanup. All future shared-calendar events were audited; only confirmed presentation defects were repaired.
+- ✅ Business-policy parity — OWNER APPROVED 11 Aug 2026. Couples/group/spa-day wording: **“Couples and group/spa-day bookings are available for selected treatments. Please contact Shiloh to arrange the most suitable option.”** Existing Facebook and Instagram destinations remain the official Shiloh social links.
+- ✅ Non-PII Goldie archive manifest retained in Git; raw Goldie PII remains outside Git history.
+- ✅ **Final Goldie future-booking reconciliation — VERIFIED 11 Aug 2026.** The archived exact `export-2026-08-10.zip` was recovered from the Shiloh library. Owner/admin attested that no Goldie bookings were created, changed, cancelled or rescheduled after that export, so a ceremonial second export was not required. The baseline contained **38 future rows = 27 appointments + 11 non-booking blocks**. The original guarded import created 3 appointments, matched 23 existing appointments, created all 11 blocks and initially held one `SHILOH MTC` practitioner row. Final reconciliation proved that held row exists as CRM appointment **#369**, correctly routed to Christel. The final shared `Shiloh — Bookings` scan contains **27 future appointment events**, one-for-one with the 27 Goldie future appointment rows.
+- ✅ **Goldie duplicate #360 repaired.** Final reconciliation identified one import duplicate for the 15 Aug 09:00 Full Body Swedish booking. Owner confirmed `Maurusye Pedi` and `Maurusye Venter` are the same client. Production repair preserved canonical/import-resolved appointment **#551**, silently cancelled duplicate **#360**, deleted only #360's mapped Google Calendar event, and sent **0 WhatsApp messages**. Post-repair Calendar verification shows #551 remains and #360 is absent.
+- ✅ **Zero unresolved future Goldie bookings proven.** No missing future appointment remains and no duplicate Goldie future appointment remains after #360 repair.
+- ✅ **Shiloh-side Goldie live sync retired.** After reconciliation passed, the Goldie live knowledge-sync scheduler was removed from normal production startup. Shiloh no longer requires the public Goldie page to refresh current service/business knowledge.
+- 🟡 **Goldie public booking page disable still required in the Goldie account UI.** This is the only remaining Goldie exit action not executable through the currently connected production tooling. After the owner disables public booking in Goldie, verify the public booking surface is no longer bookable and then mark P1 fully closed.
+
+**P1 status: 🟡 CUTOVER RECONCILIATION PASSED; awaiting Goldie-account public-booking disable + verification only.**
 
 ### P2 — Staff-scoped CRM authorization and calendars
 
 - ✅ Role-specific WhatsApp admin menus and staff-scoped authorization.
-- ✅ Marietjie tenant/practitioner permissions and dedicated `Shiloh — Marietjie` calendar.
-- ✅ Abigail employee-practitioner permissions and dedicated `Shiloh — Abigail` calendar.
+- ✅ Marietjie tenant/practitioner permissions + `Shiloh — Marietjie` calendar.
+- ✅ Abigail employee-practitioner permissions + `Shiloh — Abigail` calendar.
 - ✅ Existing future appointments populated into staff calendars.
 - 🟡 Optional real-practitioner acceptance testing remains; never impersonate Marietjie or Abigail.
 
@@ -66,50 +70,53 @@
 
 ## Goldie disconnect gate — current status
 
-**Overall: 🟡 NOT CLEARED — Goldie must remain connected/public until the final gate is fully verified.**
+**Overall: 🟡 TECHNICAL RECONCILIATION CLEARED; public Goldie booking disable pending owner UI action.**
 
-- ⬜ New final Goldie export immediately before cutover.
-- ⬜ Future appointment delta comparison.
-- ⬜ Final booking delta import/reconciliation.
-- 🟡 Re-prove every future appointment against the final export.
-- ✅ Shiloh staff routing/service ownership is authoritative and P2-scoped.
-- ✅ Active Shiloh catalogue authority is protected from stale/retired Goldie offerings.
+- ✅ Goldie delta since archived 10 Aug export: **ZERO**, owner/admin attested.
+- ✅ Exact archived 10 Aug export recovered and validated as cutover baseline.
+- ✅ Baseline future inventory: 27 appointments + 11 blocks.
+- ✅ Original import/reconciliation evidence accounted for all 38 rows.
+- ✅ Previously held `SHILOH MTC` future appointment proven in Shiloh as #369 / Christel.
+- ✅ Duplicate #360 safely cancelled; #551 retained; no client message sent.
+- ✅ Final shared Calendar future appointment count: **27**, matching Goldie baseline appointments one-for-one.
+- ✅ Zero missing / zero duplicate / zero unresolved future Goldie bookings.
+- ✅ Active Shiloh catalogue authority protected from stale/retired Goldie offerings.
 - ✅ Business-policy parity owner-approved.
 - ✅ Client entry has Shiloh WhatsApp and walk-in QR paths.
-- ⬜ Zero unresolved future bookings formally proven at cutover.
-- ⬜ Disable Goldie public booking only after all checks pass.
-- ⬜ After Goldie public booking is disabled, retire Goldie legacy knowledge/sync dependencies from Shiloh.
+- ✅ Shiloh live Goldie knowledge-sync dependency retired.
+- ⬜ Disable Goldie public booking in the authenticated Goldie account UI.
+- ⬜ Verify the former Goldie public booking surface can no longer accept bookings.
 
-## Prioritized checklist from this audit
+## Prioritized checklist
 
-Work **one item at a time** and verify GitHub + Render after each production change.
+Work one item at a time and verify GitHub + Render after production changes.
 
-1. **P1 / Goldie exit gate — FINAL CUTOVER ONLY:** fresh export → compare future delta → import/reconcile delta → verify CRM/calendars/staff routing → prove zero unresolved → disable Goldie public booking → retire Goldie legacy knowledge/sync dependencies.
+1. **P1 FINAL UI CUTOVER — disable Goldie public booking in Goldie, then verify it is no longer bookable.** Once verified: mark **P1 ✅ CLOSED / COMPLETE**.
 2. **P3 — Configure approved birthday template** before enabling birthday outbound messaging.
 3. **P3 — Treatment-aware aftercare/rebooking and loyalty redemption rules**; add reminder-confirmation state only if operationally desired.
-4. **P4 — Ozow/payment/voucher discovery and design**, only after operational cutover/stability work above is complete.
+4. **P4 — Ozow/payment/voucher discovery and design** after operational cutover/stability work.
 
-### Completed during this chapter
+## Completed during this chapter
 
 - ✅ P0 — Automated regression tests + CI.
-- ✅ P0 — Christel personal-account calendar permission test.
-- ✅ P0 — Startup/maintenance separation + production runbook + rollback safeguards (`166d59c5f4d099ef20b0e09d1d744ddf7c639721`).
-- ✅ P1 — Shared `Shiloh — Bookings` calendar presentation audit and tightly scoped normalization of confirmed defects only.
-- ✅ P1 — Live production catalogue audit: 49 active services / 14 active categories; legacy-name, price and duration checks all PASS.
-- ✅ P1 — Booking flow validates current services against active CRM catalogue (`ba7f5940993fc7408fba2fecdc58ece90f4294b2`).
-- ✅ P1 — Free-form AI prioritizes active CRM catalogue over Goldie legacy service knowledge (`bfe690836eef6e6ea854fa2c8b559ec05a56c805`).
-- ✅ P1 — Owner approved selected-treatment couples/group/spa-day wording and retention of current Facebook/Instagram destinations as official Shiloh social links.
+- ✅ P0 — Christel personal-account Calendar permission test.
+- ✅ P0 — Startup/maintenance separation + production runbook + rollback safeguards.
+- ✅ P1 — Shared Calendar presentation audit and scoped normalization.
+- ✅ P1 — Live production catalogue audit + CRM-authority hardening.
+- ✅ P1 — Owner policy parity approval.
+- ✅ P1 — Archived Goldie cutover baseline reconciliation.
+- ✅ P1 — Duplicate #360 silent repair; canonical #551 retained.
+- ✅ P1 — 27/27 future Goldie appointments proven in current Shiloh shared Calendar, with zero unresolved future bookings.
+- ✅ P1 — Shiloh Goldie live knowledge-sync scheduler retired.
 
 ## Safety rules retained
 
 - Do not impersonate Marietjie or Abigail.
 - Do not send unnecessary messages to real clients during audits/migrations/tests.
-- Do not use genuine appointments for destructive CRM/calendar testing.
-- Prefer read-only/non-mutating smoke checks and disposable synthetic records/events where a write test is unavoidable.
-- Mutating maintenance commands require explicit confirmation; WhatsApp-capable maintenance suppresses messaging by default.
-- Do not disconnect Goldie until the exit gate above is fully verified.
+- Do not use genuine appointments for destructive testing.
+- Prefer read-only/non-mutating verification and narrowly scoped guarded repairs when a write is unavoidable.
 - Do not redo production work already marked ✅ unless a new regression is discovered.
 
 ## Next action
 
-**P1 business-policy parity is CLOSED / APPROVED.** Proceed directly to the final Goldie exit gate: obtain a fresh Goldie export immediately before cutover, compare all future appointments against Shiloh CRM/calendars, import/reconcile any delta, prove zero unresolved future bookings, then disable Goldie public booking and retire remaining Goldie legacy knowledge/sync dependencies.
+The Goldie data/reconciliation exit gate has passed. The only remaining P1 action is to **disable the public Goldie booking page from the authenticated Goldie account**, then verify that customers can no longer create Goldie bookings. After that verification, close P1 permanently unless a regression is discovered.
