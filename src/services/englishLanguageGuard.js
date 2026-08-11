@@ -27,7 +27,7 @@ async function guardEnglishOnly(text) {
         'If the substantive sentence is Afrikaans or any other non-English language, return OTHER.'
       ].join(' '),
       reasoning:{effort:'low'},
-      max_output_tokens:8,
+      max_output_tokens:16,
       store:false,
     });
     const verdict=String(response.output_text||'').trim().toUpperCase();
