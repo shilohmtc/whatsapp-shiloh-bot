@@ -32,11 +32,7 @@ test('calendar event IDs are deterministic and appointment-specific', () => {
 
 test('calendar presentation uses canonical treatment/client/practitioner ordering', () => {
   assert.equal(
-    bookingSummary({
-      clientName: 'Christel Botha',
-      serviceName: 'Full Body Swedish',
-      staffName: 'Abigail',
-    }),
+    bookingSummary({ clientName: 'Christel Botha', serviceName: 'Full Body Swedish', staffName: 'Abigail' }),
     '💆 Full Body Swedish — Christel Botha — Abigail',
   );
   assert.equal(serviceIcon('Permanent Makeup'), '✨');
@@ -49,11 +45,7 @@ test('calendar presentation uses canonical treatment/client/practitioner orderin
 test('walk-in registration remains minimal and separate from contact verification', () => {
   assert.deepEqual(
     registrationStatus({ fullName: 'Test Client', mobileNumber: '0820000000', dateOfBirth: '1990-01-01' }),
-    {
-      complete: true,
-      missing: [],
-      required: ['full_name', 'mobile_number', 'date_of_birth'],
-    },
+    { complete: true, missing: [], required: ['full_name', 'mobile_number', 'date_of_birth'] },
   );
   assert.throws(
     () => assertRegistrationComplete({ fullName: 'Test Client', mobileNumber: '', dateOfBirth: null }),
@@ -107,6 +99,27 @@ test('Goldie future import retains structural replay and duplicate safeguards', 
   assert.match(goldie, /ON CONFLICT\(source,entity_type,external_id\)/);
   assert.match(goldie, /no customer confirmation sent/i);
   assert.doesNotMatch(goldie, /sendWhatsAppMessage\s*\(/);
+});
+
+test('normal application startup contains schedulers but no one-time maintenance jobs', () => {
+  const app = source('app.js');
+  assert.match(app, /startGoldieSyncScheduler/);
+  assert.match(app, /startAppointmentLifecycleScheduler/);
+  assert.match(app, /startCustomerCareScheduler/);
+  assert.doesNotMatch(app, /RUN_[A-Z0-9_]+/);
+  assert.doesNotMatch(app, /repairJeanPierreIdentity|repairNatashaStaffAssignment/);
+  assert.doesNotMatch(app, /runGoldieFutureImport|runGoogleCalendarReconciliation/);
+  assert.doesNotMatch(app, /runMarietjieCalendarRollout|runAbigailCalendarRollout/);
+  assert.doesNotMatch(app, /runCataloguePolish|runStartupTestCommand/);
+});
+
+test('maintenance writes require explicit confirmation', () => {
+  const maintenance = source('scripts/maintenance.js');
+  assert.match(maintenance, /command\.mutates && !args\.includes\('--confirm'\)/);
+  assert.match(maintenance, /goldie-future-import-dry-run/);
+  assert.match(maintenance, /google-calendar-reconcile-dry-run/);
+  assert.match(maintenance, /goldie-future-import-commit/);
+  assert.match(maintenance, /google-calendar-reconcile-commit/);
 });
 
 test('CI regression suite contains no production mutation or outbound-message code', () => {
