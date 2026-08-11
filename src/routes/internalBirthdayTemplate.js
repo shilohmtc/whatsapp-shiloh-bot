@@ -6,15 +6,8 @@ const {
 
 const router = express.Router();
 
-function authorized(req) {
-  const expected = process.env.BIRTHDAY_TEMPLATE_ADMIN_TOKEN;
-  const supplied = req.get('x-shiloh-internal-token');
-  return Boolean(expected && supplied && supplied === expected);
-}
-
 router.use((req, res, next) => {
-  if (!process.env.BIRTHDAY_TEMPLATE_ADMIN_TOKEN) return res.sendStatus(404);
-  if (!authorized(req)) return res.sendStatus(403);
+  if (process.env.BIRTHDAY_TEMPLATE_PROVISIONING_ENABLED !== 'true') return res.sendStatus(404);
   return next();
 });
 
