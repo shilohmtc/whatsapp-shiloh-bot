@@ -25,3 +25,5 @@ jobs:
         run: npm ci
       - name: Run non-mutating regression tests
         run: npm test
+      - name: Probe production birthday template status
+        run: curl --fail --silent --show-error https://shiloh-whatsapp-bot.onrender.com/audit-read/birthday-template/status
