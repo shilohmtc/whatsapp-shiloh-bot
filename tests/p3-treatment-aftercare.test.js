@@ -5,7 +5,7 @@ const { getTreatmentAftercare, buildGuidance } = require('../src/services/treatm
 test('maps known treatment families deterministically', () => {
   assert.equal(getTreatmentAftercare('Full Body Swedish').key, 'massage');
   assert.equal(getTreatmentAftercare('Dermaplane Facial').key, 'facial');
-  assert.equal(getTreatmentAftercare('Medi-Heel Pedicure (With Gel Toes) & Foot Massage').key, 'massage');
+  assert.equal(getTreatmentAftercare('Medi-Heel Pedicure (With Gel Toes) & Foot Massage').key, 'foot-care');
   assert.equal(getTreatmentAftercare('Permanent Makeup - Brows').key, 'permanent-makeup');
   assert.equal(getTreatmentAftercare('GF Needling with Growth Factors under Local Anesthetic').key, 'needling');
   assert.equal(getTreatmentAftercare('HIFU (High-Intensity Focused Ultrasound)').key, 'advanced-aesthetics');
