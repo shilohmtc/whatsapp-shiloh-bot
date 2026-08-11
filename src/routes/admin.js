@@ -5,7 +5,7 @@ const { documentUpload } = require("../middleware/documentUpload");
 const { csvUpload } = require("../middleware/csvUpload");
 const crmRoutes = require("./crm");
 const { createDocument, uploadDocument, getDocuments, removeDocument, getProfiles, getProfileByPhone, patchProfileByPhone, sendTemplateTest } = require("../controllers/adminController");
-const { runTestCommand } = require("../controllers/testCommandController");
+const { runTestCommand, runBookingPolicyTest } = require("../controllers/testCommandController");
 const { syncGoldie, getGoldieSyncStatus } = require("../controllers/goldieController");
 const { stageClients: stageGoldieClients, stageAppointments: stageGoldieAppointments } = require("../controllers/goldieImportController");
 const { getSummary: getReconciliationSummary, getRecommendations: getReconciliationRecommendations, getAppointmentIdentityEvidence, getSecondPassReconciliation, getManualQueue, decideManualCase, getChantelDuplicatePlan, executeChantelDuplicate, getSeparateIdentityPlan, executeSeparateIdentity, getCanonicalizationAudit, canonicalizeClients: canonicalizeReconciliationClients, getCases: getReconciliationCases, getCase: getReconciliationCase } = require("../controllers/reconciliationController");
@@ -17,6 +17,7 @@ const router = express.Router();
 router.post("/test-command", testCommandAuth, runTestCommand);
 
 router.use(adminAuth);
+router.post("/tests/booking-policy", runBookingPolicyTest);
 router.use("/crm", crmRoutes);
 router.get("/documents", getDocuments); router.post("/documents", createDocument); router.post("/documents/upload", documentUpload, uploadDocument); router.delete("/documents/:id", removeDocument);
 router.get("/profiles", getProfiles); router.get("/profiles/:phone", getProfileByPhone); router.patch("/profiles/:phone", patchProfileByPhone);
