@@ -4,6 +4,12 @@ function normalize(value = "") {
 
 const GROUPS = [
   {
+    key: "foot-care",
+    matches: ["pedicure", "foot massage"],
+    aftercare: "Keep your feet comfortable and clean, moisturise as advised, and avoid picking at treated skin. If you were given product or home-care instructions, follow those first.",
+    rebook: "For ongoing foot-care maintenance, many clients plan their next visit in roughly 4–6 weeks, depending on nail growth, skin condition and personal preference.",
+  },
+  {
     key: "massage",
     matches: ["massage", "cupping", "back & neck", "back, neck", "jaw release", "psoas release", "lymphatic drainage"],
     aftercare: "For the rest of today, keep things gentle, hydrate normally, and follow any therapist-specific advice you were given. Mild temporary tenderness can happen after focused bodywork; if anything feels unusual or concerning, please contact the clinic.",
@@ -14,12 +20,6 @@ const GROUPS = [
     matches: ["facial", "dermaplane", "peel", "lip plump", "sculpt deluxe", "firm & lift", "contour lift"],
     aftercare: "Keep your skincare gentle after today’s treatment, avoid adding new strong actives immediately, use daily sun protection, and follow the practitioner-specific aftercare you received. If your skin reacts more strongly than expected, contact the clinic before adding products or treatments.",
     rebook: "For routine facial maintenance, a follow-up around 4–6 weeks is often a practical planning point. Peels and advanced facial protocols may need a different interval, so Shiloh can confirm timing from your treatment plan.",
-  },
-  {
-    key: "foot-care",
-    matches: ["pedicure", "foot massage"],
-    aftercare: "Keep your feet comfortable and clean, moisturise as advised, and avoid picking at treated skin. If you were given product or home-care instructions, follow those first.",
-    rebook: "For ongoing foot-care maintenance, many clients plan their next visit in roughly 4–6 weeks, depending on nail growth, skin condition and personal preference.",
   },
   {
     key: "permanent-makeup",
