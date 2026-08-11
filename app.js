@@ -12,7 +12,6 @@ const auditReadRoutes = require("./src/routes/auditRead");
 const calendarRoutes = require("./src/routes/calendar");
 const walkinRoutes = require("./src/routes/walkin");
 const { checkDatabase } = require("./src/services/memory");
-const { startGoldieSyncScheduler } = require("./src/services/goldieSync");
 const { startGoogleBusinessProfileSyncScheduler } = require("./src/services/googleBusinessProfileSync");
 const { startAppointmentLifecycleScheduler } = require("./src/services/appointmentLifecycle");
 const { startCustomerCareScheduler } = require("./src/services/customerCare");
@@ -47,11 +46,10 @@ let server;
 
 async function start() {
   // Normal production boot intentionally contains no migrations, one-time repairs,
-  // rollout jobs, imports, reconciliations or smoke tests. Those are explicit
-  // operator actions via scripts/maintenance.js and docs/PRODUCTION-RUNBOOK.md.
+  // rollout jobs, imports, reconciliations or smoke tests. Goldie live knowledge
+  // sync was retired after the verified P1 cutover reconciliation on 11 Aug 2026.
   server = app.listen(PORT, () => {
     logger.info({ port: PORT }, "Shiloh started");
-    startGoldieSyncScheduler();
     startGoogleBusinessProfileSyncScheduler();
     startAppointmentLifecycleScheduler();
     startCustomerCareScheduler();
