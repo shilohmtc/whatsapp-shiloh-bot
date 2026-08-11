@@ -1,11 +1,13 @@
 const express = require("express");
 const adminAuth = require("../middleware/adminAuth");
 const testCommandAuth = require("../middleware/testCommandAuth");
+const catalogueMigrationAuth = require("../middleware/catalogueMigrationAuth");
 const { documentUpload } = require("../middleware/documentUpload");
 const { csvUpload } = require("../middleware/csvUpload");
 const crmRoutes = require("./crm");
 const { createDocument, uploadDocument, getDocuments, removeDocument, getProfiles, getProfileByPhone, patchProfileByPhone, sendTemplateTest } = require("../controllers/adminController");
 const { runTestCommand } = require("../controllers/testCommandController");
+const { applyCatalogueMigrations } = require("../controllers/catalogueMigrationController");
 const { syncGoldie, getGoldieSyncStatus } = require("../controllers/goldieController");
 const { stageClients: stageGoldieClients, stageAppointments: stageGoldieAppointments } = require("../controllers/goldieImportController");
 const { getSummary: getReconciliationSummary, getRecommendations: getReconciliationRecommendations, getAppointmentIdentityEvidence, getSecondPassReconciliation, getManualQueue, decideManualCase, getChantelDuplicatePlan, executeChantelDuplicate, getSeparateIdentityPlan, executeSeparateIdentity, getCanonicalizationAudit, canonicalizeClients: canonicalizeReconciliationClients, getCases: getReconciliationCases, getCase: getReconciliationCase } = require("../controllers/reconciliationController");
@@ -14,18 +16,13 @@ const { getFeedback, getReviews, getCustomerSatisfaction, resolveCustomerFeedbac
 const { getStatus: getDatabaseStatus, getTables: getDatabaseTables, getSchema: getDatabaseSchema, getOverview: getDatabaseOverview, getMigrations: getDatabaseMigrations, applyMigrations: applyDatabaseMigrations } = require("../controllers/databaseController");
 const router = express.Router();
 
-// Protected internal test harness. It is intentionally authenticated with its
-// own dedicated key and remains disabled unless explicitly enabled in Render.
-// The controller only accepts authoritative availability commands and always
-// uses the fixed test-admin WhatsApp identity configured server-side.
 router.post("/test-command", testCommandAuth, runTestCommand);
+// Temporary one-time P3 catalogue migration route. It has a dedicated key,
+// applies only migrations 038/039, and is removed immediately after execution.
+router.post("/catalogue-migrations/apply", catalogueMigrationAuth, applyCatalogueMigrations);
 
 router.use(adminAuth);
-
-// Production CRM canonical API. This surface reads canonical CRM tables only and
-// intentionally remains separate from legacy profiles and Goldie reconciliation.
 router.use("/crm", crmRoutes);
-
 router.get("/documents", getDocuments); router.post("/documents", createDocument); router.post("/documents/upload", documentUpload, uploadDocument); router.delete("/documents/:id", removeDocument);
 router.get("/profiles", getProfiles); router.get("/profiles/:phone", getProfileByPhone); router.patch("/profiles/:phone", patchProfileByPhone);
 router.get("/sync/goldie", getGoldieSyncStatus); router.post("/sync/goldie", syncGoldie);
