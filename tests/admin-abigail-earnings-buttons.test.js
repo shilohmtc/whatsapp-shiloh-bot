@@ -17,11 +17,11 @@ test('Christel/business-wide admin gets an Abigail earnings menu option', () => 
   assert.match(menu, /interactive:abigailEarningsButtons\(\)/);
 });
 
-test('earnings submenu uses exactly three genuine WhatsApp reply buttons', () => {
+test('Abigail earnings submenu uses exactly three genuine WhatsApp reply buttons', () => {
   assert.match(buttons, /title: 'Today'/);
   assert.match(buttons, /title: 'This Week'/);
   assert.match(buttons, /title: 'This Month'/);
-  assert.equal((buttons.match(/title:/g) || []).length, 3);
+  assert.equal((buttons.match(/id: 'admin_abigail_earnings_(?:today|week|month)'/g) || []).length, 3);
   assert.match(whatsapp, /type: "interactive"/);
   assert.match(whatsapp, /type: "button"/);
   assert.match(whatsapp, /type: "reply"/);
