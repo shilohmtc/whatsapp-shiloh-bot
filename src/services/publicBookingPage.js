@@ -27,8 +27,8 @@ function renderBookingPage(number) {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="robots" content="index,follow">
-  <meta name="description" content="Book an appointment with Shiloh Medical & Training Centre through Shiloh, our WhatsApp booking assistant.">
-  <title>Book with Shiloh | Shiloh Medical & Training Centre</title>
+  <meta name="description" content="Book an appointment with Shiloh Massage Therapy and Aesthetic Clinic through Shiloh, our WhatsApp booking assistant.">
+  <title>Book with Shiloh | Shiloh Massage Therapy and Aesthetic Clinic</title>
   <style>
     :root{--ink:#183028;--muted:#5c6f68;--cream:#f7f4ed;--paper:#fff;--sage:#dfe9df;--deep:#23483b;--line:#d9dfdb;--shadow:0 24px 70px rgba(24,48,40,.14)}
     *{box-sizing:border-box}html{background:var(--cream)}body{margin:0;color:var(--ink);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;line-height:1.55}
@@ -45,7 +45,7 @@ function renderBookingPage(number) {
   <main>
     <section class="card" aria-labelledby="booking-title">
       <div class="hero">
-        <div class="brand">Shiloh Medical &amp; Training Centre</div>
+        <div class="brand">Shiloh Massage Therapy and Aesthetic Clinic</div>
         <h1 id="booking-title">Your appointment starts with Shiloh.</h1>
         <p class="lead">Chat with our WhatsApp assistant to find the right treatment, check real clinic availability and book your appointment.</p>
       </div>
