@@ -33,7 +33,6 @@ async function getSession(adminId) {
 }
 
 function newVirtualPhone(adminId) {
-  // Deliberately non-SA, numeric-only reserved demo identity. It is never used as an outbound destination.
   return `99999999${Date.now()}${String(adminId).padStart(4, '0')}`.slice(0, 31);
 }
 
@@ -229,21 +228,18 @@ async function prepareDemoBooking(admin, session, requestedStaff) {
 
 async function confirmDemoBooking(admin, session) {
   const intent = await getIntent(session.virtual_phone);
-  const result = await confirmAdminBooking(admin);
+  const result = await confirmAdminBooking(admin, { source: 'shiloh_demo_whatsapp' });
   if (result.status !== 'created') return { handled: true, reply: result.reply };
 
   const tagged = await pool.query(
     `UPDATE appointments
-        SET source='shiloh_demo_whatsapp',
-            notes=COALESCE(notes || E'\n','') || 'Controlled Christel WhatsApp client demonstration',
+        SET notes=COALESCE(notes || E'\n','') || 'Controlled Christel WhatsApp client demonstration',
             updated_at=NOW()
-      WHERE id=$1 AND client_id=$2 AND source='shiloh_admin_whatsapp'
+      WHERE id=$1 AND client_id=$2 AND source='shiloh_demo_whatsapp'
       RETURNING id`,
     [result.appointmentId, session.demo_client_id]
   );
-  if (!tagged.rowCount) {
-    throw new Error('Demo booking could not be tagged safely after creation');
-  }
+  if (!tagged.rowCount) throw new Error('Demo booking source verification failed after canonical creation');
 
   await pool.query(
     `UPDATE admin_client_demo_sessions
@@ -449,7 +445,7 @@ async function processAdminClientDemoMessage(sender, text) {
   }
   if (wantsStart) return { ...(await startDemo(admin, sender)), admin };
 
-  let session = await getSession(admin.id);
+  const session = await getSession(admin.id);
   if (wantsDelete) return { ...(await prepareDelete(admin, session)), admin };
   if (wantsDeleteConfirm) return { ...(await purgeDemoBooking(admin, session)), admin };
   if (!session?.active) return { handled: false };
