@@ -1,5 +1,5 @@
 const { pool } = require('../db/pool');
-const { reportData } = require('./adminReports');
+const { reportData, render } = require('./adminReports');
 
 function assert(condition,message){ if(!condition) throw new Error(message); }
 
@@ -10,9 +10,18 @@ async function loadAdmin(role){
 
 async function verifyPractitionerScope(admin,data){
   const ids=data.appointments.map(a=>Number(a.id)).filter(Number.isFinite);
-  if(!ids.length) return {appointmentCount:0,crossStaffLeakCount:0};
-  const r=await pool.query(`SELECT COUNT(*)::int leak_count FROM appointments a WHERE a.id=ANY($1::bigint[]) AND NOT EXISTS (SELECT 1 FROM appointment_staff ast WHERE ast.appointment_id=a.id AND ast.staff_id=$2)`,[ids,admin.staff_id]);
-  return {appointmentCount:ids.length,crossStaffLeakCount:r.rows[0]?.leak_count||0};
+  let crossStaffLeakCount=0;
+  if(ids.length){
+    const r=await pool.query(`SELECT COUNT(*)::int leak_count FROM appointments a WHERE a.id=ANY($1::bigint[]) AND NOT EXISTS (SELECT 1 FROM appointment_staff ast WHERE ast.appointment_id=a.id AND ast.staff_id=$2)`,[ids,admin.staff_id]);
+    crossStaffLeakCount=r.rows[0]?.leak_count||0;
+  }
+  const names=data.services.map(s=>String(s.service||'')).filter(Boolean);
+  let crossServiceLeakCount=0;
+  if(names.length){
+    const r=await pool.query(`SELECT COUNT(*)::int leak_count FROM unnest($1::text[]) AS requested(name) WHERE NOT EXISTS (SELECT 1 FROM services s JOIN staff_services ss ON ss.service_id=s.id AND ss.staff_id=$2 WHERE s.name=requested.name)`,[names,admin.staff_id]);
+    crossServiceLeakCount=r.rows[0]?.leak_count||0;
+  }
+  return {appointmentCount:ids.length,crossStaffLeakCount,crossServiceLeakCount};
 }
 
 async function runAdminReportsSelfTest(){
@@ -37,12 +46,17 @@ async function runAdminReportsSelfTest(){
   const employeeScope=await verifyPractitionerScope(employee,employeeData);
   assert(tenantScope.crossStaffLeakCount===0,'Tenant report leaked appointments not assigned to tenant staff_id');
   assert(employeeScope.crossStaffLeakCount===0,'Employee report leaked appointments not assigned to employee staff_id');
+  assert(tenantScope.crossServiceLeakCount===0,'Tenant report leaked services outside tenant staff service scope');
+  assert(employeeScope.crossServiceLeakCount===0,'Employee report leaked services outside employee staff service scope');
   assert(Array.isArray(ownerData.staff),'Owner report missing clinic staff breakdown');
   assert(Array.isArray(businessData.staff),'Business-admin report missing clinic staff breakdown');
   assert(tenantData.staff.length===0,'Tenant report exposed all-staff breakdown');
   assert(employeeData.staff.length===0,'Employee report exposed all-staff breakdown');
+  assert(/Clinic booked value:/i.test(render(owner,ownerData)) || ownerData.appointments.length===0,'Owner report does not expose clinic booked value when data exists');
+  assert(!/booked value:/i.test(render(tenant,tenantData)),'Tenant report exposed revenue/value');
+  assert(!/booked value:/i.test(render(employee,employeeData)),'Employee report exposed revenue/value');
 
-  return {ok:true,readOnly:true,assertions:{ownerBusinessWide:true,businessAdminBusinessWide:true,tenantSelfScoped:true,employeeSelfScoped:true,noTenantCrossStaffLeak:true,noEmployeeCrossStaffLeak:true,noPractitionerStaffBreakdown:true},counts:{ownerAppointments:ownerData.appointments.length,businessAdminAppointments:businessData.appointments.length,tenantAppointments:tenantData.appointments.length,employeeAppointments:employeeData.appointments.length}};
+  return {ok:true,readOnly:true,assertions:{ownerBusinessWide:true,businessAdminBusinessWide:true,tenantSelfScoped:true,employeeSelfScoped:true,noTenantCrossStaffLeak:true,noEmployeeCrossStaffLeak:true,noTenantCrossServiceLeak:true,noEmployeeCrossServiceLeak:true,noPractitionerStaffBreakdown:true,noPractitionerRevenueExposure:true},counts:{ownerAppointments:ownerData.appointments.length,businessAdminAppointments:businessData.appointments.length,tenantAppointments:tenantData.appointments.length,employeeAppointments:employeeData.appointments.length}};
 }
 
 module.exports={runAdminReportsSelfTest};
