@@ -46,7 +46,7 @@ function renderBookingPage(number) {
     <section class="card" aria-labelledby="booking-title">
       <div class="hero">
         <div class="brand">Shiloh Massage Therapy and Aesthetic Clinic</div>
-        <h1 id="booking-title">Your appointment starts with Shiloh.</h1>
+        <h1 id="booking-title">Your appointment starts with Shiloh, your AI assistant.</h1>
         <p class="lead">Chat with our WhatsApp assistant to find the right treatment, check real clinic availability and book your appointment.</p>
       </div>
       <div class="content">
