@@ -5,13 +5,13 @@ function normalize(value = "") {
 const GROUPS = [
   {
     key: "foot-care",
-    matches: ["pedicure", "foot massage"],
+    matches: ["pedicure"],
     aftercare: "Keep your feet comfortable and clean, moisturise as advised, and avoid picking at treated skin. If you were given product or home-care instructions, follow those first.",
     rebook: "For ongoing foot-care maintenance, many clients plan their next visit in roughly 4–6 weeks, depending on nail growth, skin condition and personal preference.",
   },
   {
     key: "massage",
-    matches: ["massage", "cupping", "back & neck", "back, neck", "jaw release", "psoas release", "lymphatic drainage"],
+    matches: ["massage", "swedish", "cupping", "back & neck", "back, neck", "jaw release", "psoas release", "lymphatic drainage"],
     aftercare: "For the rest of today, keep things gentle, hydrate normally, and follow any therapist-specific advice you were given. Mild temporary tenderness can happen after focused bodywork; if anything feels unusual or concerning, please contact the clinic.",
     rebook: "For ongoing massage goals, many clients prefer a regular rhythm rather than waiting for tension to build up again. A follow-up in about 2–4 weeks can be a useful starting point, adjusted to how you feel and your therapist’s recommendation.",
   },
