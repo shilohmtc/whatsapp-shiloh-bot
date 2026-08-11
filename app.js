@@ -18,6 +18,7 @@ const { checkDatabase } = require("./src/services/memory");
 const { startGoogleBusinessProfileSyncScheduler } = require("./src/services/googleBusinessProfileSync");
 const { startAppointmentLifecycleScheduler } = require("./src/services/appointmentLifecycle");
 const { startCustomerCareScheduler } = require("./src/services/customerCare");
+const { getBirthdayTemplateStatus } = require("./src/services/birthdayTemplateProvisioning");
 
 const app = express();
 app.disable("x-powered-by");
@@ -49,14 +50,16 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || 3000;
 let server;
 async function start() {
-  // Normal production boot intentionally contains no migrations, one-time repairs,
-  // rollout jobs, imports, reconciliations or smoke tests. Goldie live knowledge
-  // sync was retired after the verified P1 cutover reconciliation on 11 Aug 2026.
   server = app.listen(PORT, () => {
     logger.info({ port: PORT }, "Shiloh started");
     startGoogleBusinessProfileSyncScheduler();
     startAppointmentLifecycleScheduler();
     startCustomerCareScheduler();
+    if (process.env.BIRTHDAY_TEMPLATE_INSPECT_ONCE === "1") {
+      getBirthdayTemplateStatus()
+        .then((result) => logger.info({ ok: result.ok, wabaId: result.wabaId || null, templateName: result.templateName, configuredTemplateName: result.configuredTemplateName || null, template: result.template ? { id: result.template.id, name: result.template.name, status: result.template.status, category: result.template.category, language: result.template.language } : null }, "Birthday template approval inspection completed"))
+        .catch((error) => logger.error({ err: error }, "Birthday template approval inspection failed"));
+    }
   });
 }
 start().catch((error) => { logger.fatal({ err: error }, "Shiloh failed during startup"); process.exit(1); });
