@@ -122,7 +122,8 @@ async function cancelPendingBooking(adminId) {
   return result.rowCount > 0;
 }
 
-async function confirmAdminBooking(admin) {
+async function confirmAdminBooking(admin, options = {}) {
+  const bookingSource = options.source || "shiloh_admin_whatsapp";
   const db = await pool.connect();
   let googleEventCreatedByThisAttempt = null;
   try {
@@ -209,9 +210,9 @@ async function confirmAdminBooking(admin) {
     const appointmentResult = await db.query(
       `INSERT INTO appointments
          (client_id, location_id, starts_at, ends_at, status, title, total_price, currency, source)
-       VALUES ($1, $2, $3, $4, 'scheduled', $5, $6, 'ZAR', 'shiloh_admin_whatsapp')
+       VALUES ($1, $2, $3, $4, 'scheduled', $5, $6, 'ZAR', $7)
        RETURNING id, starts_at, ends_at, status`,
-      [session.client_id, session.location_id, session.starts_at, session.ends_at, session.service_name, totalPrice]
+      [session.client_id, session.location_id, session.starts_at, session.ends_at, session.service_name, totalPrice, bookingSource]
     );
     const appointment = appointmentResult.rows[0];
 
@@ -237,7 +238,7 @@ async function confirmAdminBooking(admin) {
       locationName: session.location_name,
       startsAt: session.starts_at,
       endsAt: session.ends_at,
-      source: "shiloh_admin_whatsapp",
+      source: bookingSource,
     });
 
     if (googleCalendarResult.enabled && googleCalendarResult.event) {
@@ -274,6 +275,7 @@ async function confirmAdminBooking(admin) {
         locationId: session.location_id,
         startsAt: session.starts_at,
         endsAt: session.ends_at,
+        source: bookingSource,
         authoritativeClinicHoursChecked: true,
         authoritativeScheduleChecked: true,
         sharedGoogleCalendarChecked: externalCalendar.enabled,

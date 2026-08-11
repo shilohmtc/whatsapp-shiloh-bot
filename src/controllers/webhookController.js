@@ -23,6 +23,7 @@ const { processAdminLegacyOrphanAuditMessage } = require("../services/adminLegac
 const { processAdminAvailableSlotsMessage } = require("../services/adminAvailableSlots");
 const { processAdminStaffServicesMessage } = require("../services/adminStaffServices");
 const { processAdminLoyaltyRedemptionMessage } = require("../services/adminLoyaltyRedemption");
+const { processAdminClientDemoMessage } = require("../services/adminClientDemo");
 const { processAdminAssistantMessage } = require("../services/adminAssistant");
 const { forceMatchedClientNameConfirmation, guardActiveNameConfirmation } = require("../services/identityOnboardingGuard");
 const logger = require("../lib/logger");
@@ -31,6 +32,7 @@ function isGreetingOnly(text = "") { return /^(hi|hello|hey|good morning|good af
 exports.verifyWebhook = (req,res)=>{const mode=req.query["hub.mode"],token=req.query["hub.verify_token"],challenge=req.query["hub.challenge"];if(mode==="subscribe"&&token===process.env.VERIFY_TOKEN){(req.log||logger).info("WhatsApp webhook verified");return res.status(200).send(challenge);}(req.log||logger).warn("WhatsApp webhook verification rejected");return res.sendStatus(403);};
 exports.receiveWebhook=async(req,res)=>{const log=req.log||logger;try{const value=req.body.entry?.[0]?.changes?.[0]?.value;if(!value?.messages)return res.sendStatus(200);const message=value.messages[0];if(message.type!=="text"){log.info({messageType:message.type},"Ignoring unsupported WhatsApp message");return res.sendStatus(200);}const from=message.from,text=message.text?.body?.trim();if(!from||!text){log.warn("Received malformed WhatsApp text message");return res.sendStatus(200);}log.info({from:maskPhone(from)},"Processing incoming WhatsApp message");try{
 const language=await guardEnglishOnly(text);if(!language.allowed){log.info({from:maskPhone(from)},"Rejected non-English WhatsApp message");await sendWhatsAppMessage(from,language.reply);return res.sendStatus(200);}
+const adminClientDemo=await processAdminClientDemoMessage(from,text);if(adminClientDemo.handled){log.info({from:maskPhone(from),admin:adminClientDemo.admin?.display_name},"Handled controlled client demo message");await sendWhatsAppMessage(from,adminClientDemo.reply);return res.sendStatus(200);}
 const adminSlots=await processAdminAvailableSlotsMessage(from,text);if(adminSlots.handled){log.info({from:maskPhone(from),admin:adminSlots.admin?.display_name},"Handled authoritative available-slots request");await sendWhatsAppMessage(from,adminSlots.reply);return res.sendStatus(200);}
 const staffServices=await processAdminStaffServicesMessage(from,text);if(staffServices.handled){await sendWhatsAppMessage(from,staffServices.reply);return res.sendStatus(200);}
 const activeMobileBooking=await processAdminMobileBookingFlowMessage(from,text);if(activeMobileBooking.handled){await sendWhatsAppMessage(from,activeMobileBooking.reply);return res.sendStatus(200);}
