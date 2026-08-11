@@ -1,0 +1,18 @@
+name: P3 catalogue migration one-shot
+on:
+  push:
+    paths:
+      - '.github/workflows/p3-catalogue-migrate-once.yml'
+permissions:
+  contents: read
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Apply only migrations 038 and 039
+        run: |
+          set -euo pipefail
+          body="$(curl --fail --silent --show-error --max-time 30 'https://shiloh-whatsapp-bot.onrender.com/admin/catalogue-migrations/one-shot-7f8a2d91c4e64b9a')"
+          echo "$body"
+          echo "$body" | grep -q '"status":"complete"'
