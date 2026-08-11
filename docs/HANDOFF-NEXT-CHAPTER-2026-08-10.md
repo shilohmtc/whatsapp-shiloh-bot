@@ -15,7 +15,7 @@
 - WhatsApp/CRM remains the booking source of truth; Google Calendar is a synchronized operational view.
 - Operational calendars visible to `shilohmtc@gmail.com`: `Shiloh — Bookings`, `Shiloh — Marietjie`, and `Shiloh — Abigail`.
 - Current role model remains: Christel owner/all-business; Jean-Pierre business admin/all-business; Marietjie `tenant_practitioner`; Abigail `employee_practitioner`.
-- Direct Render read-only Postgres auditing is currently blocked by a Render connector SSL/TLS negotiation error. This is not being treated as a production database outage: `/health` remains healthy.
+- Direct Render read-only Postgres auditing remains blocked by a Render connector SSL/TLS negotiation error. This is not being treated as a production database outage: `/health` remains healthy.
 
 ## Fresh consolidated audit — P0 to P4
 
@@ -23,7 +23,7 @@
 
 - ✅ **Christel owner-access calendar verification.** Freshly verified on 11 Aug 2026 from Christel's genuine personal Google Calendar session against `Shiloh — Bookings`, using disposable test records only. Read/visibility, edit/save, delete and fresh create all passed. The fresh test event was deleted afterwards; no test residue remains and no genuine client appointment was modified or deleted.
 - ✅ **Automated regression tests + CI.** `npm test` and `.github/workflows/ci.yml` are live on `main`. The non-mutating suite covers calendar ID/presentation contracts, walk-in registration policy, staff-scope/menu guards, booking conflict guards, client cancellation safeguards, structural Goldie replay/duplicate protections, clean startup boundaries and maintenance-command safety.
-- ✅ **Production observability / maintenance cleanup.** Normal `npm start` now starts only the HTTP service plus legitimate long-running schedulers. Migrations, identity/staff repairs, smoke tests, staff-calendar rollouts, catalogue polish, Goldie future import, Google Calendar reconciliation/access setup and calendar-presentation reconciliation have been removed from normal startup and moved behind explicit `npm run maintenance -- <command>` operator actions. Mutating commands require `--confirm`; the legacy WhatsApp-capable startup test additionally suppresses messaging unless `--allow-whatsapp` is explicitly provided. `docs/PRODUCTION-RUNBOOK.md` documents deploy verification, pre-write safeguards, rollback and data/Calendar recovery. GitHub Actions passed on `166d59c5f4d099ef20b0e09d1d744ddf7c639721`; Render deployed the exact commit live, `/health` returned 200, and fresh startup logs contained only the expected long-running scheduler starts with no one-time maintenance job execution.
+- ✅ **Production observability / maintenance cleanup.** Normal `npm start` now starts only the HTTP service plus legitimate long-running schedulers. Migrations, identity/staff repairs, smoke tests, staff-calendar rollouts, catalogue polish, Goldie future import, Google Calendar reconciliation/access setup and calendar-presentation reconciliation have been removed from normal startup and moved behind explicit `npm run maintenance -- <command>` operator actions. Mutating commands require `--confirm`; the legacy WhatsApp-capable startup test additionally suppresses messaging unless `--allow-whatsapp` is explicitly provided. `docs/PRODUCTION-RUNBOOK.md` documents deploy verification, pre-write safeguards, rollback and data/Calendar recovery.
 
 **P0 status: ✅ CLOSED / COMPLETE. Reopen only for a new regression.**
 
@@ -31,7 +31,7 @@
 
 - ✅ **Targeted legacy service/catalogue and imported-client text cleanup.** Production rollout completed successfully on 11 Aug with guarded cleanup of known legacy Goldie spelling/name presentation problems.
 - 🟡 **Full professional catalogue cross-surface review.** Final human review of every active service name, description, duration, category and price presentation across CRM/WhatsApp/client-facing surfaces is still required.
-- 🟡 **Google Calendar presentation cleanup.** Dedicated Marietjie and Abigail calendars are normalized and populated. Shared `Shiloh — Bookings` still has isolated legacy presentation inconsistencies; use idempotent/tightly scoped repairs only.
+- ✅ **Google Calendar presentation cleanup.** Fresh read-only audit on 11 Aug covered all 28 future events on shared `Shiloh — Bookings`. Only two confirmed shared-calendar presentation defects were repaired: appointment #354 removed the legacy `Client -` prefix while preserving the CRM-backed canonical `Janita Hatting (Marietjie Pienaar)` display; appointment #552 restored the missing closing parenthesis in `Gwendie T (Willemien Lezar, Skoonsussie)`. Appointment #365 (`Helenay Swanepoel - Healing`) and other unusual-looking client labels were deliberately left unchanged because the CRM-backed dedicated practitioner calendar preserved the same production values, so there was no evidence they were defects. A fresh post-write scan confirmed the two fixes and no broad reconciliation was run.
 - 🟡 **Goldie-vs-Shiloh discrepancies.** Final equivalence must be checked immediately before disconnect.
 - 🟡 **Business-policy parity.** Final confirmation remains for public contact/social/review links and desired couples/group-spa-day wording before Goldie is disabled.
 - ✅ **Non-PII Goldie archive manifest.** `docs/GOLDIE-EXPORT-MANIFEST-2026-08-10.md` records the historical 10 Aug export checksum/inventory; raw PII remains outside Git history.
@@ -82,18 +82,18 @@
 
 Work **one item at a time** and verify GitHub + Render after each production change.
 
-1. **P1 — Finish shared-calendar presentation normalization** using idempotent/tightly scoped reconciliation; no destructive testing on genuine appointments.
-2. **P1 — Final human catalogue/policy cross-surface review** and close remaining Goldie-vs-Shiloh public discrepancies.
-3. **P3 — Configure approved birthday template** before enabling birthday outbound messaging.
-4. **P3 — Treatment-aware aftercare/rebooking and loyalty redemption rules**; add reminder-confirmation state only if operationally desired.
-5. **Goldie exit gate — FINAL CUTOVER ONLY:** fresh export → compare future delta → import delta → reconcile CRM/calendar → prove zero unresolved → disable Goldie public booking.
-6. **P4 — Ozow/payment/voucher discovery and design**, only after operational cutover/stability work above is complete.
+1. **P1 — Final human catalogue/policy cross-surface review** and close remaining Goldie-vs-Shiloh public discrepancies.
+2. **P3 — Configure approved birthday template** before enabling birthday outbound messaging.
+3. **P3 — Treatment-aware aftercare/rebooking and loyalty redemption rules**; add reminder-confirmation state only if operationally desired.
+4. **Goldie exit gate — FINAL CUTOVER ONLY:** fresh export → compare future delta → import delta → reconcile CRM/calendar → prove zero unresolved → disable Goldie public booking.
+5. **P4 — Ozow/payment/voucher discovery and design**, only after operational cutover/stability work above is complete.
 
 ### Completed during this chapter
 
 - ✅ P0 — Automated regression tests + CI.
 - ✅ P0 — Christel personal-account calendar permission test.
 - ✅ P0 — Startup/maintenance separation + production runbook + rollback safeguards (`166d59c5f4d099ef20b0e09d1d744ddf7c639721`).
+- ✅ P1 — Shared `Shiloh — Bookings` calendar presentation audit and tightly scoped normalization of confirmed defects only.
 
 ## Safety rules retained
 
@@ -107,4 +107,4 @@ Work **one item at a time** and verify GitHub + Render after each production cha
 
 ## Next action
 
-**P0 is closed.** The highest-priority genuinely unfinished item is now **P1 shared `Shiloh — Bookings` calendar presentation normalization**. Audit first, then apply only idempotent/tightly scoped repairs to confirmed legacy presentation inconsistencies; do not destructively test genuine appointments.
+**P0 is closed and P1 shared-calendar presentation cleanup is complete.** The highest-priority genuinely unfinished item is now **P1 final professional catalogue/policy cross-surface review**, including remaining Goldie-vs-Shiloh public discrepancies. Audit first; do not disconnect Goldie until the final exit gate passes.
