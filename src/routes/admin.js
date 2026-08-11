@@ -1,13 +1,11 @@
 const express = require("express");
 const adminAuth = require("../middleware/adminAuth");
 const testCommandAuth = require("../middleware/testCommandAuth");
-const catalogueMigrationAuth = require("../middleware/catalogueMigrationAuth");
 const { documentUpload } = require("../middleware/documentUpload");
 const { csvUpload } = require("../middleware/csvUpload");
 const crmRoutes = require("./crm");
 const { createDocument, uploadDocument, getDocuments, removeDocument, getProfiles, getProfileByPhone, patchProfileByPhone, sendTemplateTest } = require("../controllers/adminController");
 const { runTestCommand } = require("../controllers/testCommandController");
-const { applyCatalogueMigrations } = require("../controllers/catalogueMigrationController");
 const { syncGoldie, getGoldieSyncStatus } = require("../controllers/goldieController");
 const { stageClients: stageGoldieClients, stageAppointments: stageGoldieAppointments } = require("../controllers/goldieImportController");
 const { getSummary: getReconciliationSummary, getRecommendations: getReconciliationRecommendations, getAppointmentIdentityEvidence, getSecondPassReconciliation, getManualQueue, decideManualCase, getChantelDuplicatePlan, executeChantelDuplicate, getSeparateIdentityPlan, executeSeparateIdentity, getCanonicalizationAudit, canonicalizeClients: canonicalizeReconciliationClients, getCases: getReconciliationCases, getCase: getReconciliationCase } = require("../controllers/reconciliationController");
@@ -17,9 +15,6 @@ const { getStatus: getDatabaseStatus, getTables: getDatabaseTables, getSchema: g
 const router = express.Router();
 
 router.post("/test-command", testCommandAuth, runTestCommand);
-// Temporary one-time P3 catalogue migration surfaces. Both are removed immediately after execution.
-router.post("/catalogue-migrations/apply", catalogueMigrationAuth, applyCatalogueMigrations);
-router.get("/catalogue-migrations/one-shot-7f8a2d91c4e64b9a", applyCatalogueMigrations);
 
 router.use(adminAuth);
 router.use("/crm", crmRoutes);
