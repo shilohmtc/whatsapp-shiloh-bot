@@ -3,6 +3,7 @@ const { normalizePhone } = require('./clientIdentityOnboarding');
 const { isBusinessWide } = require('./staffAdminScope');
 
 const ABIGAIL_COMMISSION_RATE = 0.20;
+const ABIGAIL_MONTHLY_SALARY = 5000;
 
 function senderKey(sender){ return normalizePhone(sender); }
 function has(admin,p){ return admin?.permissions?.[p] === true; }
@@ -108,7 +109,9 @@ async function abigailEarningsData(period='today'){
   const unpriced=rows.filter(r=>Number(r.staff_count)===1&&r.total_price===null);
   const completedValue=commissionable.reduce((sum,r)=>sum+Number(r.total_price||0),0);
   const commission=completedValue*ABIGAIL_COMMISSION_RATE;
-  return {abigail,rows,commissionable,joint,unpriced,completedValue,commission,rate:ABIGAIL_COMMISSION_RATE};
+  const salary=period==='month'?ABIGAIL_MONTHLY_SALARY:0;
+  const totalCompensation=period==='month'?salary+commission:null;
+  return {abigail,rows,commissionable,joint,unpriced,completedValue,commission,rate:ABIGAIL_COMMISSION_RATE,salary,totalCompensation};
 }
 function renderAbigailEarnings(data,period='today',viewerOwn=false){
   const label=period==='month'?monthLabel():period==='week'?weekLabel():todayLabel();
@@ -117,9 +120,14 @@ function renderAbigailEarnings(data,period='today',viewerOwn=false){
   lines.push(`Completed solo appointments: *${data.commissionable.length}*`);
   lines.push(`Completed treatment value: *${money(data.completedValue)}*`);
   lines.push(`Abigail's 20%: *${money(data.commission)}*`);
+  if(period==='month'){
+    lines.push('',`Fixed monthly salary: *${money(data.salary)}*`);
+    lines.push(`Total gross compensation: *${money(data.totalCompensation)}*`);
+  }
   if(data.joint.length) lines.push('',`Joint-practitioner appointments excluded: *${data.joint.length}*`, 'They are not included until service-level attribution is explicit.');
   if(data.unpriced.length) lines.push('',`Completed appointments without a CRM price excluded: *${data.unpriced.length}*`);
-  lines.push('','Only completed, solely-Abigail appointments with a recorded CRM value are commissionable.');
+  lines.push('',period==='month'?'Monthly compensation = fixed R5,000 salary + 20% commission on qualifying completed treatments.':'Salary is monthly and is not prorated into today/week earnings.');
+  lines.push('Only completed, solely-Abigail appointments with a recorded CRM value are commissionable.');
   return lines.join('\n');
 }
 function parseEarningsCommand(raw){
@@ -147,11 +155,11 @@ async function processAdminReportsMessage(sender,text){
     if(earnings.own&&!viewerOwn) return {handled:true,admin,reply:'The 20% earnings report is configured for Abigail only.'};
     if(!earnings.own&&!isBusinessWide(admin)) return {handled:true,admin,reply:'Only a business-wide admin can view another practitioner’s earnings report.'};
     const data=await abigailEarningsData(earnings.period);
-    await audit(admin,`abigail_earnings_${earnings.period}`,{scope:viewerOwn?'abigail_self':'business_admin',rate:ABIGAIL_COMMISSION_RATE,commissionableAppointments:data.commissionable.length,jointExcluded:data.joint.length,unpricedExcluded:data.unpriced.length,completedValue:data.completedValue,commission:data.commission});
+    await audit(admin,`abigail_earnings_${earnings.period}`,{scope:viewerOwn?'abigail_self':'business_admin',rate:ABIGAIL_COMMISSION_RATE,monthlySalary:earnings.period==='month'?ABIGAIL_MONTHLY_SALARY:null,commissionableAppointments:data.commissionable.length,jointExcluded:data.joint.length,unpricedExcluded:data.unpriced.length,completedValue:data.completedValue,commission:data.commission,totalCompensation:data.totalCompensation});
     return {handled:true,admin,reply:renderAbigailEarnings(data,earnings.period,viewerOwn)};
   }
 
   const period=month?'month':week?'week':'today';
   const data=await reportData(admin,period);await audit(admin,period,{scope:isBusinessWide(admin)?'all_business':'practitioner_self',appointmentCount:data.appointments.length});return {handled:true,admin,reply:render(admin,data,period)};
 }
-module.exports={processAdminReportsMessage,reportData,render,clinicBounds,abigailEarningsData,renderAbigailEarnings,parseEarningsCommand,ABIGAIL_COMMISSION_RATE};
+module.exports={processAdminReportsMessage,reportData,render,clinicBounds,abigailEarningsData,renderAbigailEarnings,parseEarningsCommand,ABIGAIL_COMMISSION_RATE,ABIGAIL_MONTHLY_SALARY};
