@@ -1,0 +1,28 @@
+name: P3 service imagery production smoke
+
+on:
+  push:
+    paths:
+      - '.github/workflows/p3-service-imagery-smoke.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify public catalogue and imagery
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://shiloh-whatsapp-bot.onrender.com'
+          curl --fail --silent --show-error --location "$base/services" -o /tmp/services.html
+          grep -q '/assets/service-images/' /tmp/services.html
+          grep -q 'Book via WhatsApp' /tmp/services.html
+          grep -q 'wa.me/' /tmp/services.html
+          curl --fail --silent --show-error --location "$base/assets/service-images/massage-general.webp" -o /tmp/massage.webp
+          test "$(stat -c%s /tmp/massage.webp)" -gt 10000
+          file /tmp/massage.webp | grep -qi 'Web/P image'
+          echo 'P3 service imagery production smoke PASS'
