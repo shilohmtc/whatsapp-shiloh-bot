@@ -14,18 +14,28 @@ async function getAdmin(sender){
 async function audit(admin,metadata){
   await pool.query(`INSERT INTO crm_audit_events (actor_admin_id,action,entity_type,entity_id,metadata) VALUES ($1,'admin.report.today','admin_report',NULL,$2::jsonb)`,[admin.id,JSON.stringify(metadata)]);
 }
+function clinicBounds(){
+  return `a.starts_at >= (((NOW() AT TIME ZONE 'Africa/Johannesburg')::date)::timestamp AT TIME ZONE 'Africa/Johannesburg')
+      AND a.starts_at < ((((NOW() AT TIME ZONE 'Africa/Johannesburg')::date + 1)::timestamp) AT TIME ZONE 'Africa/Johannesburg')`;
+}
 function scopeSql(admin,paramOffset=1){
   if(isBusinessWide(admin)) return {sql:'TRUE',params:[]};
   return {sql:`EXISTS (SELECT 1 FROM appointment_staff report_scope WHERE report_scope.appointment_id=a.id AND report_scope.staff_id=$${paramOffset})`,params:[admin.staff_id]};
 }
 async function reportData(admin){
-  if(!isBusinessWide(admin)&&!admin.staff_id) return {appointments:[],services:[],staff:[]};
+  const wide=isBusinessWide(admin);
+  if(!wide&&!admin.staff_id) return {appointments:[],services:[],staff:[]};
   const scope=scopeSql(admin,1);
   const params=scope.params;
-  const bounds=`a.starts_at >= (CURRENT_DATE::timestamp AT TIME ZONE 'Africa/Johannesburg') AND a.starts_at < ((CURRENT_DATE + 1)::timestamp AT TIME ZONE 'Africa/Johannesburg')`;
-  const appointments=(await pool.query(`SELECT a.id,a.status,a.starts_at,a.total_price,COALESCE(c.display_name,a.source_client_name,'Unknown client') client_name,COALESCE(string_agg(DISTINCT aps.service_name_snapshot,', ') FILTER (WHERE aps.service_name_snapshot IS NOT NULL),'') services FROM appointments a LEFT JOIN clients c ON c.id=a.client_id LEFT JOIN appointment_services aps ON aps.appointment_id=a.id WHERE ${bounds} AND a.status<>'cancelled' AND ${scope.sql} GROUP BY a.id,c.display_name,a.source_client_name ORDER BY a.starts_at,a.id`,params)).rows;
-  const services=(await pool.query(`SELECT aps.service_name_snapshot service,COUNT(DISTINCT a.id)::int appointments FROM appointments a JOIN appointment_services aps ON aps.appointment_id=a.id WHERE ${bounds} AND a.status<>'cancelled' AND ${scope.sql} GROUP BY aps.service_name_snapshot ORDER BY appointments DESC,aps.service_name_snapshot`,params)).rows;
-  const staff=isBusinessWide(admin)?(await pool.query(`SELECT ast.staff_name_snapshot staff,COUNT(DISTINCT a.id)::int appointments FROM appointments a JOIN appointment_staff ast ON ast.appointment_id=a.id WHERE ${bounds} AND a.status<>'cancelled' GROUP BY ast.staff_name_snapshot ORDER BY appointments DESC,ast.staff_name_snapshot`)).rows:[];
+  const bounds=clinicBounds();
+  const serviceJoin=wide
+    ? `LEFT JOIN appointment_services aps ON aps.appointment_id=a.id`
+    : `LEFT JOIN appointment_services aps ON aps.appointment_id=a.id AND EXISTS (SELECT 1 FROM staff_services report_ss WHERE report_ss.staff_id=$1 AND report_ss.service_id=aps.service_id)`;
+  const appointments=(await pool.query(`SELECT a.id,a.status,a.starts_at,a.total_price,COALESCE(c.display_name,a.source_client_name,'Unknown client') client_name,COALESCE(string_agg(DISTINCT aps.service_name_snapshot,', ') FILTER (WHERE aps.service_name_snapshot IS NOT NULL),'') services FROM appointments a LEFT JOIN clients c ON c.id=a.client_id ${serviceJoin} WHERE ${bounds} AND a.status<>'cancelled' AND ${scope.sql} GROUP BY a.id,c.display_name,a.source_client_name ORDER BY a.starts_at,a.id`,params)).rows;
+  const services=wide
+    ? (await pool.query(`SELECT aps.service_name_snapshot service,COUNT(DISTINCT a.id)::int appointments FROM appointments a JOIN appointment_services aps ON aps.appointment_id=a.id WHERE ${bounds} AND a.status<>'cancelled' GROUP BY aps.service_name_snapshot ORDER BY appointments DESC,aps.service_name_snapshot`)).rows
+    : (await pool.query(`SELECT aps.service_name_snapshot service,COUNT(DISTINCT a.id)::int appointments FROM appointments a JOIN appointment_services aps ON aps.appointment_id=a.id JOIN staff_services ss ON ss.staff_id=$1 AND ss.service_id=aps.service_id WHERE ${bounds} AND a.status<>'cancelled' AND ${scope.sql} GROUP BY aps.service_name_snapshot ORDER BY appointments DESC,aps.service_name_snapshot`,params)).rows;
+  const staff=wide?(await pool.query(`SELECT ast.staff_name_snapshot staff,COUNT(DISTINCT a.id)::int appointments FROM appointments a JOIN appointment_staff ast ON ast.appointment_id=a.id WHERE ${bounds} AND a.status<>'cancelled' GROUP BY ast.staff_name_snapshot ORDER BY appointments DESC,ast.staff_name_snapshot`)).rows:[];
   return {appointments,services,staff};
 }
 function render(admin,data){
@@ -40,7 +50,7 @@ function render(admin,data){
   const pieces=[];if(status.completed)pieces.push(`${status.completed} completed`);if(status.upcoming)pieces.push(`${status.upcoming} upcoming`);if(status.no_show)pieces.push(`${status.no_show} no-show${status.no_show===1?'':'s'}`);if(status.other)pieces.push(`${status.other} in progress / awaiting status`);if(pieces.length)lines.push(pieces.join(' · '));
   if(data.services.length){lines.push('','*Services booked*');for(const s of data.services.slice(0,8))lines.push(`${s.appointments} × ${s.service}`);}
   if(!own&&data.staff.length){lines.push('','*Staff*');for(const s of data.staff)lines.push(`${s.staff} — ${s.appointments}`);}
-  if(total>0)lines.push('',`${own?'Your':'Clinic'} booked value: *${money(total)}*`);
+  if(!own&&total>0)lines.push('',`Clinic booked value: *${money(total)}*`);
   if(own&&active.length){const next=active.find(a=>new Date(a.starts_at).getTime()>=now);if(next){const time=new Intl.DateTimeFormat('en-ZA',{timeZone:'Africa/Johannesburg',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(next.starts_at));lines.push('','*Next appointment*',`${time} — ${next.client_name}${next.services?` — ${next.services}`:''}`);}}
   lines.push('','Figures come from Shiloh CRM and respect your authorized staff scope.');return lines.join('\n');
 }
