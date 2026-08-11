@@ -1,0 +1,115 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+
+const {
+  deterministicEventId,
+  bookingSummary,
+  serviceIcon,
+} = require('../src/services/googleBookingCalendar');
+const {
+  registrationStatus,
+  assertRegistrationComplete,
+  identityVerificationStatus,
+} = require('../src/services/clientRegistrationPolicy');
+const { isBusinessWide } = require('../src/services/staffAdminScope');
+const { closePool } = require('../src/db/pool');
+
+const ROOT = path.resolve(__dirname, '..');
+const source = (relativePath) => fs.readFileSync(path.join(ROOT, relativePath), 'utf8');
+
+test.after(async () => {
+  await closePool();
+});
+
+test('calendar event IDs are deterministic and appointment-specific', () => {
+  const first = deterministicEventId('shiloh-appointment:354');
+  assert.equal(first, deterministicEventId('shiloh-appointment:354'));
+  assert.notEqual(first, deterministicEventId('shiloh-appointment:355'));
+  assert.match(first, /^[a-f0-9]{40}$/);
+});
+
+test('calendar presentation uses canonical treatment/client/practitioner ordering', () => {
+  assert.equal(
+    bookingSummary({
+      clientName: 'Christel Botha',
+      serviceName: 'Full Body Swedish',
+      staffName: 'Abigail',
+    }),
+    '💆 Full Body Swedish — Christel Botha — Abigail',
+  );
+  assert.equal(serviceIcon('Permanent Makeup'), '✨');
+  assert.doesNotMatch(
+    bookingSummary({ clientName: 'Janita Hatting', serviceName: 'Facial', staffName: 'Marietjie' }),
+    /Client\s*-/i,
+  );
+});
+
+test('walk-in registration remains minimal and separate from contact verification', () => {
+  assert.deepEqual(
+    registrationStatus({ fullName: 'Test Client', mobileNumber: '0820000000', dateOfBirth: '1990-01-01' }),
+    {
+      complete: true,
+      missing: [],
+      required: ['full_name', 'mobile_number', 'date_of_birth'],
+    },
+  );
+  assert.throws(
+    () => assertRegistrationComplete({ fullName: 'Test Client', mobileNumber: '', dateOfBirth: null }),
+    (error) => error.code === 'CLIENT_REGISTRATION_INCOMPLETE' && error.missing.includes('mobile_number'),
+  );
+  assert.deepEqual(identityVerificationStatus({ contactVerified: false }), { verified: false });
+});
+
+test('business-wide scope cannot be inferred for scoped practitioners', () => {
+  assert.equal(isBusinessWide({ business_role: 'owner' }), true);
+  assert.equal(isBusinessWide({ business_role: 'business_admin' }), true);
+  assert.equal(isBusinessWide({ business_role: 'tenant_practitioner', service_scope: 'own_services', calendar_scope: 'own_services' }), false);
+  assert.equal(isBusinessWide({ business_role: 'employee_practitioner', service_scope: 'own_services', calendar_scope: 'own_appointments' }), false);
+});
+
+test('role-specific admin menu contracts remain permission-gated', () => {
+  const menu = source('src/services/adminMobileMenu.js');
+  assert.match(menu, /tenant_practitioner/);
+  assert.match(menu, /employee_practitioner/);
+  assert.match(menu, /My clients today/);
+  assert.match(menu, /My services & pricing/);
+  assert.match(menu, /Practitioner access — your diary and assigned client work only/);
+  assert.match(menu, /has\(admin,'service:pricing'\)/);
+  assert.match(menu, /has\(admin,'schedule:manage'\)/);
+});
+
+test('booking updates retain clinic, staff, CRM and Google Calendar conflict guards', () => {
+  const bookingUpdate = source('src/services/adminBookingUpdate.js');
+  assert.match(bookingUpdate, /checkClinicHours/);
+  assert.match(bookingUpdate, /checkAuthoritativeSchedule/);
+  assert.match(bookingUpdate, /a\.starts_at<\$4 AND a\.ends_at>\$3/);
+  assert.match(bookingUpdate, /checkCalendarAvailability/);
+  assert.match(bookingUpdate, /ROLLBACK/);
+  assert.match(bookingUpdate, /multi-service booking/i);
+});
+
+test('client cancellation remains explicit, scoped and calendar-synchronized', () => {
+  const change = source('src/services/appointmentChange.js');
+  assert.match(change, /cancel/i);
+  assert.match(change, /confirmation|confirm/i);
+  assert.match(change, /normalized_whatsapp|normalizePhone/i);
+  assert.match(change, /cancelBookingEvent|Google Calendar/i);
+  assert.match(change, /crm_audit_events|audit/i);
+});
+
+test('Goldie future import retains idempotency safeguards', () => {
+  const goldie = source('src/services/goldieFutureImport.js');
+  assert.match(goldie, /idempot/i);
+  assert.match(goldie, /source/i);
+  assert.match(goldie, /appointment/i);
+  assert.doesNotMatch(goldie, /sendWhatsAppMessage\s*\(/);
+});
+
+test('CI regression suite contains no production mutation or outbound-message code', () => {
+  const self = source('tests/p0-regression.test.js');
+  assert.doesNotMatch(self, /pool\.query\s*\(/);
+  assert.doesNotMatch(self, /fetch\s*\(/);
+  assert.doesNotMatch(self, /sendWhatsAppMessage\s*\(/);
+});
