@@ -1,0 +1,27 @@
+name: Live Goldie exit audit
+
+on:
+  push:
+    paths:
+      - '.github/workflows/live-goldie-exit-audit.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Fetch sanitized Goldie exit status
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --retry 6 --retry-delay 5 \
+            https://shiloh-whatsapp-bot.onrender.com/audit-read/goldie-exit/status \
+            -o goldie-exit.json
+          python - <<'PY'
+          import json
+          with open('goldie-exit.json', encoding='utf-8') as f:
+              payload = json.load(f)
+          print(json.dumps(payload['report'], indent=2, ensure_ascii=False))
+          PY
