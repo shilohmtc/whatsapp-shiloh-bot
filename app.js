@@ -26,6 +26,7 @@ const { ensureJeanPierreAdminCapabilities } = require("./src/services/jeanPierre
 const { startMandatoryDemoCleanupScheduler } = require("./src/services/demoMandatoryCleanup");
 const { startAttendanceFinalizationReminderScheduler } = require("./src/services/attendanceFinalizationReminders");
 const { submitStaffFinalizationTemplate } = require("./src/services/staffFinalizationTemplateProvisioning");
+const { applyHistoricalAttendanceCorrectionAug2026 } = require("./src/services/historicalAttendanceCorrectionAug2026");
 
 const app = express();
 app.disable("x-powered-by");
@@ -71,6 +72,15 @@ async function provisionStaffFinalizationTemplateSafely() {
   }
 }
 
+async function applyHistoricalAttendanceCorrectionSafely() {
+  try {
+    const result = await applyHistoricalAttendanceCorrectionAug2026();
+    logger.info(result, "Historical Christel/Abigail attendance correction checked");
+  } catch (error) {
+    logger.error({ err: error }, "Historical Christel/Abigail attendance correction failed closed; no partial batch committed");
+  }
+}
+
 const PORT = process.env.PORT || 3000;
 let server;
 async function start() {
@@ -80,6 +90,7 @@ async function start() {
   if (!jeanPierreAccess) throw new Error('Jean-Pierre business admin capability clone could not be initialized');
   logger.info({ configured: true, businessRole: jeanPierreAccess.business_role }, "Jean-Pierre business admin access verified");
   await provisionStaffFinalizationTemplateSafely();
+  await applyHistoricalAttendanceCorrectionSafely();
   server = app.listen(PORT, () => {
     logger.info({ port: PORT }, "Shiloh started");
     startConversationSessionCleanupScheduler();
