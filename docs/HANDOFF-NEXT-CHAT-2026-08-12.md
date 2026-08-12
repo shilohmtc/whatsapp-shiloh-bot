@@ -2,11 +2,18 @@
 
 This is the authoritative next-chat entry point as of the end of the current working session. Treat GitHub `main`, Render production, Shiloh CRM and Google Calendar as authoritative over older notes or chat history.
 
+## Supporting ChatGPT conversation references
+
+Preserve these two user-supplied shared ChatGPT conversations as supporting project context for the next session:
+
+- https://chatgpt.com/share/6a7c7e6a-2a50-83ea-8e1b-3a93da3b9cde
+- https://chatgpt.com/share/6a7c7ecf-4470-83ea-aa09-89aed2d94493
+
+These links are supporting context, not production truth. If their contents conflict with GitHub `main`, Render production, Shiloh CRM, Google Calendar, or this handoff's explicit current-state rules, the authoritative production sources win. The links could not be fetched from the current tool environment when this handoff was updated, so do not infer or invent their contents; open/read them in the next session if accessible before relying on specific claims from them.
+
 ## Authoritative current production state
 
-- GitHub `main`: `e19c94b82ebc7feeacab46fda4729c76e2c67512` after PR #148.
-- Render production deploy: `dep-d9u7p167bikc739nsn70`, live on the exact commit above.
-- Production health checks are returning HTTP 200.
+- Application-code baseline: `e19c94b82ebc7feeacab46fda4729c76e2c67512` after PR #148. PR #149 and the subsequent handoff-reference update are documentation-only changes on top of that functional baseline.
 - Render service remains `shiloh-whatsapp-bot`, branch `main`, auto-deploy enabled.
 - CRM remains authoritative for appointment identity/status, clients, services, practitioner mappings, reporting and earnings truth.
 - Google Calendar remains authoritative diary/conflict/mirror infrastructure, but a calendar event alone never proves attendance/completion.
@@ -122,10 +129,6 @@ PR #148 made Marietjie's self-view live.
 
 Reports -> Abigail earnings / Christel earnings / Marietjie earnings uses an explicit period picker. Do not interpret a Today report as an August/monthly report.
 
-### Repository housekeeping note
-
-During branch setup for PR #148, two accidental placeholder files were briefly committed to `main` and immediately removed. Current `main` contains neither placeholder. The authoritative production tree is the PR #148 merge commit stated above.
-
 ## Current human-truth backlog
 
 At the last user-visible August reports there were **6 unresolved attendance records** affecting earnings:
@@ -161,7 +164,7 @@ Legend: **🟡 = waiting on external/human truth or safely blocked**; **⬜ = ge
 
 3. 🟡 **Activate proactive staff finalization reminders only after Meta approval.** Re-check `shiloh_staff_finalization_v1`. If still `PENDING`, preserve disabled state and continue to the next actionable item. If `APPROVED`, verify the scheduler activates through the managed-template path and perform a safe non-client production check before relying on it operationally.
 
-4. ⬜ **Run the remaining Admin/client route acceptance audit against current PR #148 production.** Do not redo route coverage already regression-locked. Concentrate only on genuinely unfinished real-WhatsApp paths surfaced by production use: Admin section -> action -> guarded owner -> back/menu escape, including role-specific visibility for Christel, Abigail, Marietjie and Jean-Pierre. Fix shared routing defects at the shared layer.
+4. ⬜ **Run the remaining Admin/client route acceptance audit against current production.** Do not redo route coverage already regression-locked. Concentrate only on genuinely unfinished real-WhatsApp paths surfaced by production use: Admin section -> action -> guarded owner -> back/menu escape, including role-specific visibility for Christel, Abigail, Marietjie and Jean-Pierre. Fix shared routing defects at the shared layer.
 
 5. 🟡 **Birthday automation approval.** Re-check Meta provider state for `shiloh_birthday_wish_v2`; keep sending disabled while `PENDING`.
 
@@ -194,5 +197,7 @@ Paste:
 Continue the Shiloh OS production project from `docs/HANDOFF-NEXT-CHAT-2026-08-12.md`.
 
 Treat GitHub `main`, Render production, Shiloh CRM and Google Calendar as authoritative. Do not redo completed work. Apply the safe self-test-first engineering rule automatically.
+
+Also review the two **Supporting ChatGPT conversation references** near the top of the handoff if accessible; treat them as supporting context only, never as higher authority than current production truth.
 
 Read the **New prioritized checklist — remaining work only**. Start with the highest-priority genuinely actionable **⬜** item. If an earlier **🟡** item is externally/human blocked, preserve its fail-closed state and continue automatically. Before changes, briefly state the authoritative current state, the checklist item being started, and why it is next; then proceed.
