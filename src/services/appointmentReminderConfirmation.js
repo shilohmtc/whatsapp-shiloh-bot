@@ -26,23 +26,34 @@ function parseConfirmationCommand(text = '') {
   return { appointmentId: match[1] ? Number(match[1]) : null, explicitId: Boolean(match[1]) };
 }
 
+const uniqueClientCte = `
+  matched_clients AS (
+    SELECT DISTINCT c.id
+      FROM clients c
+      JOIN client_contacts cc ON cc.client_id=c.id
+     WHERE cc.normalized_value=$1
+       AND cc.contact_type IN ('whatsapp','mobile','phone')
+       AND c.status='active'
+  ),
+  unique_client AS (
+    SELECT MIN(id) AS id FROM matched_clients HAVING COUNT(*)=1
+  )`;
+
 async function reminderAppointmentsForPhone(phone) {
   const result = await pool.query(
-    `SELECT DISTINCT a.id,a.starts_at,a.ends_at,a.status,
+    `WITH ${uniqueClientCte}
+     SELECT a.id,a.starts_at,a.ends_at,a.status,
             al.status AS lifecycle_status,
             COALESCE(c.display_name,a.source_client_name,'Client') AS client_name,
             COALESCE((SELECT string_agg(service_name_snapshot,' + ' ORDER BY position)
                         FROM appointment_services WHERE appointment_id=a.id),a.title,'Appointment') AS service_name,
             COALESCE((SELECT string_agg(staff_name_snapshot,' + ' ORDER BY position)
                         FROM appointment_staff WHERE appointment_id=a.id),'Shiloh practitioner') AS staff_name
-       FROM appointments a
+       FROM unique_client uc
+       JOIN clients c ON c.id=uc.id
+       JOIN appointments a ON a.client_id=c.id
        JOIN appointment_lifecycle al ON al.appointment_id=a.id
-       JOIN clients c ON c.id=a.client_id
-       JOIN client_contacts cc ON cc.client_id=c.id
-      WHERE cc.normalized_value=$1
-        AND cc.contact_type IN ('whatsapp','mobile','phone')
-        AND c.status='active'
-        AND al.reminder_sent_at IS NOT NULL
+      WHERE al.reminder_sent_at IS NOT NULL
         AND al.appointment_at>NOW()
         AND a.ends_at>NOW()
         AND a.status IN ('scheduled','confirmed')
@@ -70,18 +81,13 @@ async function confirmReminderAppointment(phone, appointmentId) {
   try {
     await db.query('BEGIN');
     const locked = await db.query(
-      `SELECT a.id,a.status,a.starts_at,a.ends_at,al.status AS lifecycle_status
-         FROM appointments a
+      `WITH ${uniqueClientCte}
+       SELECT a.id,a.status,a.starts_at,a.ends_at,al.status AS lifecycle_status
+         FROM unique_client uc
+         JOIN clients c ON c.id=uc.id
+         JOIN appointments a ON a.client_id=c.id
          JOIN appointment_lifecycle al ON al.appointment_id=a.id
-         JOIN clients c ON c.id=a.client_id
         WHERE a.id=$2
-          AND c.status='active'
-          AND EXISTS (
-            SELECT 1 FROM client_contacts cc
-             WHERE cc.client_id=c.id
-               AND cc.normalized_value=$1
-               AND cc.contact_type IN ('whatsapp','mobile','phone')
-          )
           AND al.reminder_sent_at IS NOT NULL
           AND al.appointment_at>NOW()
           AND a.ends_at>NOW()
@@ -138,7 +144,7 @@ async function processAppointmentReminderConfirmationMessage(phone, text) {
   if (!rows.length) {
     return {
       handled: true,
-      reply: 'I can’t find a reminder-eligible upcoming Shiloh appointment linked to this WhatsApp number. Your booking has not been changed.',
+      reply: 'I can’t safely find one reminder-eligible upcoming Shiloh appointment linked to this WhatsApp number. Your booking has not been changed.',
     };
   }
 
@@ -164,7 +170,7 @@ async function processAppointmentReminderConfirmationMessage(phone, text) {
   if (result.status !== 'confirmed') {
     return {
       handled: true,
-      reply: 'That appointment changed while I was checking it, so I did not update anything. Please check your upcoming booking again.',
+      reply: 'That appointment changed or the client identity is no longer unambiguous, so I did not update anything. Please check your upcoming booking again.',
     };
   }
   return {
