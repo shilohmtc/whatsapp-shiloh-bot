@@ -8,6 +8,10 @@ function clean(value = '') {
   return String(value || '').trim().replace(/\s+/g, ' ');
 }
 
+function lowerName(value = '') {
+  return clean(value).toLowerCase();
+}
+
 async function ensureClientTestModeSchema(db = pool) {
   await db.query(`
     CREATE TABLE IF NOT EXISTS admin_client_test_sessions (
@@ -29,7 +33,7 @@ async function ensureJeanPierreAdminCapabilities(db = pool) {
            business_role = 'business_admin',
            calendar_scope = 'all_business',
            service_scope = 'all_services',
-           permissions = COALESCE(c.permissions, '{}'::jsonb) || '{"client:test_mode":true}'::jsonb,
+           permissions = (COALESCE(c.permissions, '{}'::jsonb) - 'demo:client') || '{"client:test_mode":true}'::jsonb,
            active = TRUE,
            updated_at = NOW()
       FROM staff_admin_accounts c
@@ -103,7 +107,7 @@ async function audit(adminId, action, metadata = {}) {
 }
 
 async function startClientTest(admin, sender) {
-  if (!admin?.active || admin?.permissions?.['client:test_mode'] !== true || LOWER_NAME(admin.display_name) !== 'jean-pierre') {
+  if (!admin?.active || admin?.permissions?.['client:test_mode'] !== true || lowerName(admin.display_name) !== 'jean-pierre') {
     return { handled: false, active: false };
   }
 
@@ -145,10 +149,6 @@ async function startClientTest(admin, sender) {
     admin,
     reply: '*Client Test Mode active 🧪*\n\nYour Admin authorization is still intact, but Admin routing is temporarily suppressed for this WhatsApp conversation. Your next message will be processed exactly through Shiloh’s normal client journey using this real number.\n\nFor a first-time-client test, send *Hello* or *Book now*.\n\nWhen the booking is complete, send *ADMIN MODE* to restore Admin routing. The CRM appointment and Google Calendar entries will remain in place for verification until we deliberately clean them up.',
   };
-}
-
-function LOWER_NAME(value) {
-  return clean(value).toLowerCase();
 }
 
 async function exitClientTest(session) {
