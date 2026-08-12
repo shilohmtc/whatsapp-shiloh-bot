@@ -7,6 +7,10 @@ const BUTTON_COMMANDS = Object.freeze({
   admin_christel_earnings_week: 'Christel earnings this week',
   admin_christel_earnings_last_week: 'Christel earnings last week',
   admin_christel_earnings_month: 'Christel earnings this month',
+  admin_marietjie_earnings_today: 'Marietjie earnings today',
+  admin_marietjie_earnings_week: 'Marietjie earnings this week',
+  admin_marietjie_earnings_last_week: 'Marietjie earnings last week',
+  admin_marietjie_earnings_month: 'Marietjie earnings this month',
   admin_calendar_integrity_scan: 'Calendar integrity scan',
   admin_calendar_integrity_issues: 'Calendar integrity issues',
   admin_booking_confirm: 'Confirm booking',
@@ -18,12 +22,13 @@ const BUTTON_COMMANDS = Object.freeze({
   admin_appointment_last_week: 'Appointments last week',
   admin_appointment_availability: 'Find an available time',
   admin_appointment_booking: 'Make a booking',
-  admin_appointment_manage: 'Manage booking',
+  admin_appointment_manage: 'Manage a booking',
   admin_appointment_finalize: 'Finalize past appointments',
 });
 
 function earningsPeriodList(kind) {
-  const name = kind === 'christel' ? 'Christel' : 'Abigail';
+  const names = { christel: 'Christel', abigail: 'Abigail', marietjie: 'Marietjie' };
+  const name = names[kind] || kind;
   return {
     type: 'list',
     body: `*${name} earnings*\nChoose the period you want to view.`,
@@ -42,6 +47,7 @@ function earningsPeriodList(kind) {
 
 function abigailEarningsButtons() { return earningsPeriodList('abigail'); }
 function christelEarningsButtons() { return earningsPeriodList('christel'); }
+function marietjieEarningsButtons() { return earningsPeriodList('marietjie'); }
 
 function calendarIntegrityButtons() {
   return {
@@ -60,6 +66,7 @@ function commandForAdminButton(buttonId = '') {
 module.exports = {
   abigailEarningsButtons,
   christelEarningsButtons,
+  marietjieEarningsButtons,
   calendarIntegrityButtons,
   commandForAdminButton,
   BUTTON_COMMANDS,
