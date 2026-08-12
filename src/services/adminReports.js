@@ -1,6 +1,7 @@
 const { pool } = require('../db/pool');
 const { normalizePhone } = require('./clientIdentityOnboarding');
 const { isBusinessWide } = require('./staffAdminScope');
+const { earningsIntegrity, integrityLines } = require('./adminReportingIntegrity');
 
 const ABIGAIL_COMMISSION_RATE = 0.20;
 const ABIGAIL_MONTHLY_SALARY = 5000;
@@ -111,18 +112,20 @@ async function abigailEarningsData(period='today'){
   const commission=completedValue*ABIGAIL_COMMISSION_RATE;
   const salary=period==='month'?ABIGAIL_MONTHLY_SALARY:0;
   const totalCompensation=period==='month'?salary+commission:null;
-  return {abigail,rows,commissionable,joint,unpriced,completedValue,commission,rate:ABIGAIL_COMMISSION_RATE,salary,totalCompensation};
+  const integrity=await earningsIntegrity({staffId:abigail.id,staffName:abigail.display_name,period});
+  return {abigail,rows,commissionable,joint,unpriced,completedValue,commission,rate:ABIGAIL_COMMISSION_RATE,salary,totalCompensation,integrity};
 }
 function renderAbigailEarnings(data,period='today',viewerOwn=false){
   const label=period==='month'?monthLabel():period==='week'?weekLabel():todayLabel();
   const title=viewerOwn?'*YOUR EARNINGS — ABIGAIL*':'*ABIGAIL — 20% EARNINGS*';
   const lines=[title,label,''];
+  const warnings=integrityLines(data.integrity);if(warnings.length)lines.push(...warnings,'');
   lines.push(`Completed solo appointments: *${data.commissionable.length}*`);
   lines.push(`Completed treatment value: *${money(data.completedValue)}*`);
-  lines.push(`Abigail's 20%: *${money(data.commission)}*`);
+  lines.push(`Abigail's 20%: *${money(data.commission)}*${data.integrity?.clean?'':' — provisional'}`);
   if(period==='month'){
     lines.push('',`Fixed monthly salary: *${money(data.salary)}*`);
-    lines.push(`Total gross compensation: *${money(data.totalCompensation)}*`);
+    lines.push(`Total gross compensation: *${money(data.totalCompensation)}*${data.integrity?.clean?'':' — provisional'}`);
   }
   if(data.joint.length) lines.push('',`Joint-practitioner appointments excluded: *${data.joint.length}*`, 'They are not included until service-level attribution is explicit.');
   if(data.unpriced.length) lines.push('',`Completed appointments without a CRM price excluded: *${data.unpriced.length}*`);
@@ -155,7 +158,7 @@ async function processAdminReportsMessage(sender,text){
     if(earnings.own&&!viewerOwn) return {handled:true,admin,reply:'The 20% earnings report is configured for Abigail only.'};
     if(!earnings.own&&!isBusinessWide(admin)) return {handled:true,admin,reply:'Only a business-wide admin can view another practitioner’s earnings report.'};
     const data=await abigailEarningsData(earnings.period);
-    await audit(admin,`abigail_earnings_${earnings.period}`,{scope:viewerOwn?'abigail_self':'business_admin',rate:ABIGAIL_COMMISSION_RATE,monthlySalary:earnings.period==='month'?ABIGAIL_MONTHLY_SALARY:null,commissionableAppointments:data.commissionable.length,jointExcluded:data.joint.length,unpricedExcluded:data.unpriced.length,completedValue:data.completedValue,commission:data.commission,totalCompensation:data.totalCompensation});
+    await audit(admin,`abigail_earnings_${earnings.period}`,{scope:viewerOwn?'abigail_self':'business_admin',rate:ABIGAIL_COMMISSION_RATE,monthlySalary:earnings.period==='month'?ABIGAIL_MONTHLY_SALARY:null,commissionableAppointments:data.commissionable.length,jointExcluded:data.joint.length,unpricedExcluded:data.unpriced.length,completedValue:data.completedValue,commission:data.commission,totalCompensation:data.totalCompensation,integrityClean:data.integrity.clean,pendingCanonicalStatus:data.integrity.pendingStatus.length,unresolvedGoldie:data.integrity.unresolvedGoldie.length,unresolvedGoldieValue:data.integrity.unresolvedGoldieValue});
     return {handled:true,admin,reply:renderAbigailEarnings(data,earnings.period,viewerOwn)};
   }
 
