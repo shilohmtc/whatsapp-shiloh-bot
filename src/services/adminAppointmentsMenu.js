@@ -10,59 +10,52 @@ function appointmentsInteractive(admin) {
   const rows = [];
   if (has(admin, 'appointment:view')) {
     rows.push({
-      id: 'today',
+      id: 'admin_appointment_today',
       title: isBusinessWide(admin) ? "Today's clients" : 'My clients today',
       description: 'View today’s appointments',
     });
     rows.push({
-      id: 'tomorrow',
+      id: 'admin_appointment_tomorrow',
       title: isBusinessWide(admin) ? "Tomorrow's clients" : 'My clients tomorrow',
       description: 'View tomorrow’s appointments',
     });
     rows.push({
-      id: 'last week',
+      id: 'admin_appointment_last_week',
       title: isBusinessWide(admin) ? "Last week's clients" : 'My clients last week',
       description: 'View the previous Monday–Sunday',
     });
   }
   if (has(admin, 'appointment:create')) {
     rows.push({
-      id: 'find an available time',
+      id: 'admin_appointment_availability',
       title: 'Find an available time',
       description: 'Check the authoritative diary',
     });
   }
   if (has(admin, 'appointment:create') && has(admin, 'appointment:view')) {
     rows.push({
-      id: 'make a booking',
+      id: 'admin_appointment_booking',
       title: 'Make a booking',
       description: 'Book from your authorized services',
     });
   }
   if (has(admin, 'booking:update') && has(admin, 'appointment:view')) {
     rows.push({
-      id: 'manage booking',
+      id: 'admin_appointment_manage',
       title: 'Manage a booking',
       description: 'Change an existing appointment',
     });
     rows.push({
-      id: 'finalize past appointments',
+      id: 'admin_appointment_finalize',
       title: 'Finalize past visits',
       description: 'Mark Completed or No-show explicitly',
-    });
-  }
-  if (has(admin, 'demo:client')) {
-    rows.push({
-      id: 'demo client',
-      title: '🧪 Demo Client',
-      description: 'Practise the controlled client journey',
     });
   }
   rows.push({ id: 'menu', title: '← Back to Admin', description: 'Return to the main menu' });
 
   return {
     type: 'list',
-    body: '*Appointments*\nChoose what you want to do. Demo Client is isolated training data and follows your real service/practitioner scope.',
+    body: '*Appointments*\nChoose what you want to do.',
     buttonText: 'Appointments',
     rows,
     sectionTitle: 'Appointments',
