@@ -1,4 +1,8 @@
 const { pool } = require("../db/pool");
+const {
+  commitAcceptedClientBooking,
+  processAcceptedClientBookingMessage,
+} = require("./clientBookingCommit");
 const logger = require("../lib/logger");
 
 const POLICY_VERSION = "2026-08-11-v1";
@@ -162,24 +166,27 @@ async function declinePolicy(phone) {
   await pool.query("DELETE FROM booking_intents WHERE phone = $1", [phone]);
 }
 
-function buildAcceptedReply(intent) {
-  return [
-    "Thank you — your acceptance of Shiloh's Booking Policy & Terms has been recorded.",
-    "",
-    "Your booking request can now proceed to availability confirmation:",
-    `• Service: ${intent.service_text}`,
-    `• Date: ${intent.preferred_date}`,
-    `• Time: ${intent.preferred_time}`,
-    `• Therapist: ${intent.therapist_text || "Any available therapist"}`,
-    "",
-    "Your appointment is not confirmed until Shiloh confirms the requested availability. We will never treat policy acceptance alone as an appointment confirmation.",
-  ].join("\n");
+async function finalizeAcceptedBooking(phone) {
+  try {
+    return await commitAcceptedClientBooking(phone);
+  } catch (error) {
+    logger.error({ err: error }, "Canonical client booking commit failed after policy acceptance");
+    return {
+      handled: true,
+      status: "commit_failed",
+      reply: "Your Booking Policy acceptance was recorded, but I couldn’t safely complete the final appointment write. I have not claimed a booking. Reply *RETRY BOOKING* to run the final availability and calendar checks again, or *CANCEL BOOKING* to stop.",
+    };
+  }
 }
 
 async function processBookingPolicyMessage(phone, text) {
   try {
     const intent = await getBookingIntent(phone);
     if (!intent) return { handled: false };
+
+    if (intent.status === "policy_accepted") {
+      return processAcceptedClientBookingMessage(phone, text);
+    }
 
     if (intent.status === "awaiting_confirmation") {
       // Before policy acceptance begins, cancellation still belongs to the booking-intent
@@ -227,12 +234,12 @@ async function processBookingPolicyMessage(phone, text) {
     }
 
     logger.info({ policyVersion: POLICY_VERSION }, "Booking policy accepted via WhatsApp");
-    return { handled: true, reply: buildAcceptedReply(accepted), intent: accepted };
+    return finalizeAcceptedBooking(phone);
   } catch (error) {
     logger.error({ err: error }, "Booking policy processing failed");
     return {
       handled: true,
-      reply: "I couldn't record the booking-policy step safely, so no appointment has been confirmed. Please try again in a moment.",
+      reply: "I couldn't complete the booking-policy step safely, so I have not claimed an appointment. Please try again in a moment.",
     };
   }
 }
