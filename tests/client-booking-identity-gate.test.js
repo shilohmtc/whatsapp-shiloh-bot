@@ -32,6 +32,17 @@ test('identity gate never clears or rewrites the staged booking intent', () => {
   assert.match(gate, /const intent = await getIntent\(phone\)/);
 });
 
+test('slot selection onboards incomplete clients before sending the first confirmation UI', () => {
+  const availability = webhook.indexOf('processClientAvailabilityMessage(from,text)');
+  const ensure = webhook.indexOf('ensureBookingIdentity(from)');
+  const availabilitySend = webhook.indexOf('await sendAdminResult(from,clientAvailability)');
+  assert.ok(availability >= 0 && ensure >= 0 && availabilitySend >= 0);
+  assert.ok(availability < ensure);
+  assert.ok(ensure < availabilitySend);
+  assert.match(webhook, /clientAvailability\.intent\?\.status==="awaiting_confirmation"/);
+  assert.match(webhook, /if\(!availabilityIdentity\.ready\).*sendWhatsAppMessage\(from,availabilityIdentity\.reply\)/s);
+});
+
 test('policy confirmation is gated after appointment-change handling and before booking policy', () => {
   const appointmentChange = webhook.indexOf('processAppointmentChangeMessage(from,text)');
   const identityGate = webhook.indexOf('guardBookingConfirmationIdentity(from,text)');
