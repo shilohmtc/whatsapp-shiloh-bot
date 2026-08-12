@@ -1,5 +1,8 @@
 const { processAdminMobileMenuMessage } = require('./adminMobileMenu');
 const { processAdminAppointmentFinalizationMessage } = require('./adminAppointmentFinalization');
+const { processAdminAppointmentsByDateMessage } = require('./adminAppointmentsByDate');
+const { processAdminHelpMessage } = require('./adminHelp');
+const { processAdminWalkinMessage } = require('./adminWalkin');
 const { processJeanPierreControlPlaneMessage } = require('./jeanPierreAdminControlPlane');
 
 const SECTION_ORDER = ['Appointments', 'Reports', 'Clients', 'Services', 'Schedule', 'More'];
@@ -83,6 +86,17 @@ async function getRoleScopedMenu(sender) {
   if (!result?.handled || !result?.interactive?.body) return result;
   return enrichJeanPierreMenu(result);
 }
+async function dispatchStableAction(sender, action) {
+  if (action.key === 'today' || action.key === 'tomorrow') {
+    return processAdminAppointmentsByDateMessage(sender, action.command);
+  }
+  if (action.key === 'walkin') return processAdminWalkinMessage(sender, action.command);
+  if (action.key === 'help') return processAdminHelpMessage(sender, action.command);
+
+  const privileged = await processJeanPierreControlPlaneMessage(sender, action.command);
+  if (privileged.handled) return privileged;
+  return processAdminMobileMenuMessage(sender, action.command);
+}
 async function processAdminInteractiveMenuMessage(sender, text) {
   const finalization = await processAdminAppointmentFinalizationMessage(sender, text);
   if (finalization.handled) return finalization;
@@ -99,15 +113,11 @@ async function processAdminInteractiveMenuMessage(sender, text) {
     return { handled: true, admin: menuResult.admin, interactive };
   }
   const action = actionForId(raw);
-  if (action) {
-    const privileged = await processJeanPierreControlPlaneMessage(sender, action.command);
-    if (privileged.handled) return privileged;
-    return processAdminMobileMenuMessage(sender, action.command);
-  }
+  if (action) return dispatchStableAction(sender, action);
   if (/^admin_action_/i.test(raw)) return { handled: true, reply: 'That admin action is no longer available. Send *Menu* to refresh your options.' };
   const result = enrichJeanPierreMenu(await processAdminMobileMenuMessage(sender, text));
   if (result?.handled && result?.interactive?.type === 'button' && /^\*Shiloh Admin 🌿\*/.test(result.interactive.body || '')) return { ...result, interactive: topLevelInteractive(result.interactive.body) };
   return result;
 }
 
-module.exports = { ACTIONS, actionForId, actionForLabel, compactMenuBody, enrichJeanPierreMenu, parseVisibleMenu, processAdminInteractiveMenuMessage, sectionInteractive, topLevelInteractive };
+module.exports = { ACTIONS, actionForId, actionForLabel, compactMenuBody, dispatchStableAction, enrichJeanPierreMenu, parseVisibleMenu, processAdminInteractiveMenuMessage, sectionInteractive, topLevelInteractive };
