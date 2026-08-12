@@ -22,6 +22,7 @@ const { startAppointmentLifecycleScheduler } = require("./src/services/appointme
 const { startCustomerCareScheduler } = require("./src/services/customerCare");
 const { startBookingIntegrityScheduler } = require("./src/services/bookingIntegrityMonitor");
 const { ensureDemoClientPermissions } = require("./src/services/demoClientAccessBootstrap");
+const { ensureJeanPierreAdminCapabilities } = require("./src/services/adminClientTestMode");
 const { startMandatoryDemoCleanupScheduler } = require("./src/services/demoMandatoryCleanup");
 
 const app = express();
@@ -57,6 +58,8 @@ let server;
 async function start() {
   const demoAccess = await ensureDemoClientPermissions();
   logger.info(demoAccess, "Controlled demo client access verified");
+  const jeanPierreAccess = await ensureJeanPierreAdminCapabilities();
+  logger.info({ configured: Boolean(jeanPierreAccess), businessRole: jeanPierreAccess?.business_role || null }, "Jean-Pierre business admin/client test access verified");
   server = app.listen(PORT, () => {
     logger.info({ port: PORT }, "Shiloh started");
     startConversationSessionCleanupScheduler();
