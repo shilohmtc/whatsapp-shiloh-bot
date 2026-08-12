@@ -81,11 +81,15 @@ function isJeanPierreBusinessAdmin(admin) {
 function isChristelOwnerAdmin(admin) {
   return normalizedAdminName(admin) === 'christel' && ['owner', 'business_admin'].includes(admin?.business_role) && admin?.calendar_scope === 'all_business';
 }
+function isMarietjieAdmin(admin) {
+  return normalizedAdminName(admin) === 'marietjie' && Boolean(admin?.staff_id);
+}
 function enrichPrivilegedReportsMenu(result) {
   if (!result?.handled || !result?.interactive?.body) return result;
   const jeanPierre = isJeanPierreBusinessAdmin(result.admin);
   const christel = isChristelOwnerAdmin(result.admin);
-  if (!jeanPierre && !christel) return result;
+  const marietjie = isMarietjieAdmin(result.admin);
+  if (!jeanPierre && !christel && !marietjie) return result;
   let body = String(result.interactive.body);
   if (jeanPierre && !/Christel earnings/i.test(body)) body += '\n\n*Reports*\n98️⃣ 💰 Christel earnings';
   if (!/Marietjie earnings/i.test(body)) body += '\n\n*Reports*\n99️⃣ 💰 Marietjie earnings';
