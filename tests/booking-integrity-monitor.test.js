@@ -24,11 +24,17 @@ test('manual calendar events never auto-create CRM appointments or authorize out
   assert.match(monitor, /Shiloh never auto-imports them/);
 });
 
+test('integrity review ledger self-initializes safely before scanning', () => {
+  assert.match(monitor, /CREATE TABLE IF NOT EXISTS booking_integrity_exceptions/);
+  assert.match(monitor, /CREATE INDEX IF NOT EXISTS idx_booking_integrity_open/);
+  assert.match(monitor, /await ensureIntegrityTable\(\)/);
+  assert.match(migration, /UNIQUE \(calendar_id, event_id\)/);
+});
+
 test('CRM-linked events resolve exceptions while booking-like unlinked events remain open', () => {
   assert.match(monitor, /shilohAppointmentId/);
   assert.match(monitor, /classification === 'booking_like' \? 'open' : 'observed'/);
   assert.match(monitor, /status='resolved'/);
-  assert.match(migration, /UNIQUE \(calendar_id, event_id\)/);
 });
 
 test('integrity scan runs automatically on a bounded interval', () => {
