@@ -6,27 +6,22 @@ const { ensureDemoClientPermissions } = require('../src/services/demoClientAcces
 
 const appSource = fs.readFileSync(path.join(__dirname,'..','app.js'),'utf8');
 
-test('bootstrap grants only the three exact named role combinations and revokes stray permission copies',async()=>{
+test('production bootstrap revokes Demo Client permission from all active admin accounts',async()=>{
   const sql=[];
-  const fakeDb={
-    async query(text){sql.push(text);return{rowCount:sql.length===1?3:0};}
-  };
+  const fakeDb={ async query(text){sql.push(text);return{rowCount:3};} };
   const result=await ensureDemoClientPermissions(fakeDb);
-  assert.deepEqual(result,{granted:3,revoked:0});
-  assert.equal(sql.length,2);
-  for(const name of ['christel','abigail','marietjie']) assert.match(sql[0],new RegExp(`LOWER\\(display_name\\) = '${name}'`));
-  assert.match(sql[0],/business_role = 'owner'/);
-  assert.match(sql[0],/business_role = 'employee_practitioner'/);
-  assert.match(sql[0],/business_role = 'tenant_practitioner'/);
-  assert.doesNotMatch(sql[0],/jean-pierre/);
-  assert.match(sql[1],/permissions \? 'demo:client'/);
-  assert.match(sql[1],/- 'demo:client'/);
+  assert.deepEqual(result,{granted:0,revoked:3,productionUiEnabled:false});
+  assert.equal(sql.length,1);
+  assert.match(sql[0],/permissions \? 'demo:client'/);
+  assert.match(sql[0],/- 'demo:client'/);
+  assert.doesNotMatch(sql[0],/\|\| '\{"demo:client":true\}'/);
 });
 
-test('new production instance verifies demo access before opening the HTTP listener',()=>{
+test('new production instance disables Demo Client UI before opening the HTTP listener',()=>{
   const bootstrap=appSource.indexOf('await ensureDemoClientPermissions()');
   const listen=appSource.indexOf('server = app.listen');
   assert.ok(bootstrap>=0 && listen>=0 && bootstrap<listen);
-  assert.match(appSource,/Controlled demo client access verified/);
+  assert.match(appSource,/Controlled demo client production UI disabled/);
+  assert.match(appSource,/startMandatoryDemoCleanupScheduler\(\)/);
   assert.match(appSource,/Shiloh failed during startup/);
 });
