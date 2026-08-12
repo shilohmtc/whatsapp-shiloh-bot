@@ -5,6 +5,7 @@ const { CLINIC_REDIRECT, evaluateClinicScope } = require("../services/scopeGuard
 const { processBookingMessage } = require("../services/bookingIntent");
 const { processBookingPolicyMessage, sanitizeBookingReply } = require("../services/bookingPolicy");
 const { commandForClientBookingButton, decorateClientBookingResult } = require("../services/clientBookingInteractive");
+const { processClientAvailabilityMessage } = require("../services/clientBookingAvailability");
 const { guardClientFreelancerBooking } = require("../services/clientBookingStaffGuard");
 const { guardEnglishOnly } = require("../services/englishLanguageGuard");
 const { processAppointmentChangeMessage } = require("../services/appointmentChange");
@@ -76,6 +77,7 @@ const nameGuard=await guardActiveNameConfirmation(from,text);if(nameGuard.handle
 const identity=await processClientIdentityMessage(from,text);if(identity.handled){let reply=identity.reply;if(identity.identityStatus==="matched_incomplete"&&identity.client?.id){const forced=await forceMatchedClientNameConfirmation(from,identity.client.id);if(forced)reply=`Welcome back, ${identity.client.display_name}. Before I can continue with the booking, please confirm your full name.`;}if(identity.onboardingComplete&&identity.resumeBooking){const booking=await processBookingMessage(from,"I want to book an appointment");if(booking.handled&&booking.reply)reply=`${reply}\n\n${sanitizeBookingReply(booking.reply)}`;}await sendWhatsAppMessage(from,reply);return res.sendStatus(200);}
 if(identity.identityStatus==="matched_incomplete"&&identity.client?.display_name&&isGreetingOnly(text)){await sendWhatsAppMessage(from,`Welcome back, ${identity.client.display_name} 👋 How can I help you today?`);return res.sendStatus(200);}
 const clientDiscovery=await processClientDiscoveryMessage(from,text);if(clientDiscovery.handled){await sendAdminResult(from,clientDiscovery);return res.sendStatus(200);}
+const clientAvailability=await processClientAvailabilityMessage(from,text);if(clientAvailability.handled){await sendAdminResult(from,clientAvailability);return res.sendStatus(200);}
 const scope=evaluateClinicScope(text);if(!scope.allowed){await sendWhatsAppMessage(from,CLINIC_REDIRECT);return res.sendStatus(200);}
 const freelancerGuard=await guardClientFreelancerBooking(text);if(freelancerGuard.blocked){log.info({from:maskPhone(from),staff:freelancerGuard.staff?.display_name||null},"Blocked client freelancer booking request");await sendWhatsAppMessage(from,freelancerGuard.reply);return res.sendStatus(200);}
 const appointmentChange=await processAppointmentChangeMessage(from,text);if(appointmentChange.handled){await sendWhatsAppMessage(from,appointmentChange.reply);return res.sendStatus(200);}
