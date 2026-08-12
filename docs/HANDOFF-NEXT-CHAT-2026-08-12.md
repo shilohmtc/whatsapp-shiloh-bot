@@ -4,17 +4,17 @@ This is the authoritative next-chat entry point. GitHub `main`, Render productio
 
 ## Audited current production state
 
-- GitHub `main` and Render production are aligned at `260eab64b5c8ac1231c3c395afb19813e88654b9` after PR #129.
+- GitHub `main` and Render production are aligned at `f65dac00e8a6afcefa4b7cc0dfb3fdb178cece25` after PR #131.
 - Render service `shiloh-whatsapp-bot` remains on `main` with auto-deploy enabled and health path `/health`.
-- Post-release verification for the current release showed clean startup and no application warning/error/fatal logs in the checked window.
+- Post-release verification for the current release showed clean startup, repeated HTTP 200 health checks, and a booking-integrity scan with zero unlinked booking-like events.
 - CRM remains authoritative for appointments, services, staff eligibility, client identity, reporting and attendance state. Google Calendar remains availability/diary/mirror infrastructure rather than appointment truth.
 - Client-bookable practitioners remain Christel, Abigail and Marietjie only. Savanna/Pieter remain internal overflow freelancers and are excluded from direct client discovery and routing.
 
 ## Completed checklist
 
 1. ✅ **Admin Menu reliability + real WhatsApp UI.** Top-level Admin uses genuine WhatsApp interactive controls with stable action IDs; route coverage is regression-locked for Christel, Abigail and Marietjie; scoped authorization, hard Menu/Home escape and no advertised-action generic fallback are preserved.
-2. ✅ **Client booking UX + service/practitioner discovery.** CRM-backed WhatsApp-native category/service/practitioner/availability journey, including Any available, identity/onboarding preservation and guarded confirmation. Internal freelancers are excluded.
-3. ✅ **Authoritative practitioner profiles + AI knowledge.** Active practitioner/service mappings are authoritative in AI context. Christel and Abigail use approved public title “Massage practitioner”. Marietjie public title/bio/specialties remain intentionally unpublished until explicitly approved wording is supplied; mapped services remain answerable without inferred qualifications.
+2. ✅ **Client booking UX + service/practitioner discovery.** CRM-backed WhatsApp-native category/service/practitioner/availability journey, including explicit Any available, identity/onboarding preservation and guarded confirmation. Clients can start with a treatment and see only currently eligible practitioners, or start with a practitioner and see only their active mapped services. A missing practitioner preference no longer silently defaults to Any available; the client must explicitly choose a named practitioner or the explicit Any available option before date/time/confirmation UI proceeds. Internal freelancers are excluded.
+3. ✅ **Authoritative practitioner profiles + AI knowledge.** Active practitioner/service mappings are authoritative in AI context. Approved public titles are now Christel — “Massage practitioner”, Abigail — “Massage practitioner”, and Marietjie — “Esthetician”. Internal owner/employee/tenant classifications are not exposed as client-facing booking roles. No bio, qualification, specialty, credential or experience claim may be inferred; such descriptive fields remain approval-gated and fail-closed unless explicitly supplied.
 4. ✅ **Booking-path end-to-end production audit.** Explicit policy acceptance leads to final locked revalidation and canonical CRM write; stale slots fail closed, transient failures are retryable, shared/practitioner calendar mirroring is synchronized and partial calendar writes are compensated.
 5. ✅ **Admin reporting/earnings production audit.** Earnings are completed-only and fail closed/provisional when final attendance truth is missing. Production audit found zero unresolved Goldie exceptions. Today was clean for Christel and Abigail. Historical provisional totals were caused only by canonical past appointments awaiting explicit final status. A guarded WhatsApp-native “Finalize past visits” workflow is live: authorized admins explicitly choose Completed or No-show; the appointment is revalidated/row-locked and canonical status, status history, lifecycle state and CRM audit are updated transactionally. Attendance is never inferred from elapsed time.
 7. ✅ **Remaining P3 customer-care engineering.** Treatment-aware aftercare/rebooking is live and suppresses rebooking pressure for recovery cases. Loyalty visits/rewards are completed-appointment-backed, idempotent and have explicit guarded redemption. PR #127 added explicit reminder confirmation: only after a reminder has actually been sent, the WhatsApp number must resolve to exactly one active CRM client; ambiguous appointments require a booking number; final confirmation is row-locked/transactional and moves canonical `scheduled` -> `confirmed` only when needed plus lifecycle -> `confirmed_by_client`. It never marks attendance/completion/no-show/cancellation or payment truth.
@@ -50,6 +50,8 @@ Current next P4 gate: determine the actual Ozow merchant integration/account con
 ## Booking/client-care truth boundaries
 
 - Policy acceptance is not itself a booking claim; canonical booking occurs only after final identity, service/practitioner eligibility, clinic/schedule, CRM conflict and both Google Calendar checks.
+- Public practitioner titles are presentation metadata only. `staff_services`, active/client-bookable state and authoritative availability decide who may actually perform/book a service.
+- “Any available” is an explicit client preference, not the meaning of a missing practitioner field.
 - Reminder confirmation means only “the client confirmed the upcoming booking”; it is not attendance/completion/payment evidence.
 - Cancellation/rescheduling remain on their existing canonical paths with calendar synchronization.
 - Loyalty qualification uses completed appointments only. Loyalty redemption never asserts payment truth.
@@ -59,8 +61,8 @@ Current next P4 gate: determine the actual Ozow merchant integration/account con
 ## Prioritized checklist — current state
 
 1. ✅ Admin Menu reliability + real WhatsApp UI.
-2. ✅ Client booking UX + service/practitioner discovery.
-3. ✅ Authoritative practitioner profiles + AI knowledge; Marietjie descriptive metadata remains approval-blocked.
+2. ✅ Client booking UX + service/practitioner discovery, including explicit practitioner preference semantics.
+3. ✅ Authoritative practitioner profiles + AI knowledge; approved titles are Christel/Abigail “Massage practitioner” and Marietjie “Esthetician”; unapproved descriptive claims remain fail-closed.
 4. ✅ Booking-path end-to-end production audit.
 5. ✅ Admin reporting/earnings engineering and production audit; historical truth-review backlog remains operational and explicit.
 6. 🟡 Birthday template approval/configuration — externally blocked on Meta `PENDING`, safely disabled.
