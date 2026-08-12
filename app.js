@@ -23,6 +23,7 @@ const { startCustomerCareScheduler } = require("./src/services/customerCare");
 const { startBookingIntegrityScheduler } = require("./src/services/bookingIntegrityMonitor");
 const { ensureDemoClientPermissions } = require("./src/services/demoClientAccessBootstrap");
 const { startMandatoryDemoCleanupScheduler } = require("./src/services/demoMandatoryCleanup");
+// TEMPORARY_READ_ONLY_BIRTHDAY_AUDIT_PROBE — remove immediately after provider status is captured.
 const { getBirthdayTemplateStatus, TEMPLATE_BODY } = require("./src/services/birthdayTemplateProvisioning");
 
 const app = express();
