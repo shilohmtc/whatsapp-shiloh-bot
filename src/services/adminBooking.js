@@ -6,6 +6,11 @@ const {
   createBookingEvent,
   cancelBookingEvent,
 } = require("./googleBookingCalendar");
+const {
+  checkPractitionerCalendarAvailability,
+  createPractitionerBookingEvent,
+  cancelPractitionerBookingEvent,
+} = require("./practitionerGoogleCalendar");
 
 function formatLocalDateTime(value) {
   return new Intl.DateTimeFormat("en-ZA", {
@@ -73,6 +78,19 @@ async function prepareAdminBooking({ adminId, clientId, staffName, serviceName, 
     };
   }
 
+  const practitionerCalendar = await checkPractitionerCalendarAvailability({
+    staffName: availability.staff.display_name,
+    startsAt: availability.startsAt,
+    endsAt: availability.endsAt,
+  });
+  if (practitionerCalendar.enabled && practitionerCalendar.configured && !practitionerCalendar.available) {
+    return {
+      status: "practitioner_calendar_conflict",
+      reply: `${availability.staff.display_name}'s Google Calendar has another event at that time. Please choose another time.`,
+      practitionerCalendar,
+    };
+  }
+
   await pool.query(
     `INSERT INTO admin_booking_sessions
        (admin_id, client_id, staff_id, service_id, location_id, starts_at, ends_at, state, updated_at)
@@ -112,8 +130,9 @@ async function prepareAdminBooking({ adminId, clientId, staffName, serviceName, 
       "",
       "No production appointment has been created yet.",
       externalCalendar.enabled ? "The shared Google booking calendar is clear for this practitioner and slot." : "Google Calendar enforcement is not enabled yet; CRM scheduling rules are currently authoritative.",
+      practitionerCalendar.enabled && practitionerCalendar.configured ? `${availability.staff.display_name}'s Google Calendar is also clear.` : null,
       "Reply exactly CONFIRM BOOKING to create it, or CANCEL BOOKING to discard it.",
-    ].join("\n"),
+    ].filter(Boolean).join("\n"),
   };
 }
 
@@ -126,6 +145,8 @@ async function confirmAdminBooking(admin, options = {}) {
   const bookingSource = options.source || "shiloh_admin_whatsapp";
   const db = await pool.connect();
   let googleEventCreatedByThisAttempt = null;
+  let practitionerEventCreatedByThisAttempt = false;
+  let practitionerEventStaffName = null;
   try {
     await db.query("BEGIN");
 
@@ -206,6 +227,17 @@ async function confirmAdminBooking(admin, options = {}) {
       return { status: "external_calendar_conflict", reply: "The shared Shiloh booking calendar changed before confirmation and this practitioner is no longer free. Nothing was written; please choose another time." };
     }
 
+    const practitionerCalendar = await checkPractitionerCalendarAvailability({
+      staffName: session.staff_name,
+      startsAt: session.starts_at,
+      endsAt: session.ends_at,
+    });
+    if (practitionerCalendar.enabled && practitionerCalendar.configured && !practitionerCalendar.available) {
+      await db.query(`DELETE FROM admin_booking_sessions WHERE admin_id = $1`, [admin.id]);
+      await db.query("COMMIT");
+      return { status: "practitioner_calendar_conflict", reply: `${session.staff_name}'s Google Calendar changed before confirmation and is no longer free. Nothing was written; please choose another time.` };
+    }
+
     const totalPrice = session.variable_price ? null : session.price;
     const appointmentResult = await db.query(
       `INSERT INTO appointments
@@ -230,7 +262,7 @@ async function confirmAdminBooking(admin, options = {}) {
       [appointment.id, session.staff_id, session.staff_name]
     );
 
-    const googleCalendarResult = await createBookingEvent({
+    const eventData = {
       appointmentId: appointment.id,
       clientName: session.client_name,
       serviceName: session.service_name,
@@ -239,8 +271,9 @@ async function confirmAdminBooking(admin, options = {}) {
       startsAt: session.starts_at,
       endsAt: session.ends_at,
       source: bookingSource,
-    });
+    };
 
+    const googleCalendarResult = await createBookingEvent(eventData);
     if (googleCalendarResult.enabled && googleCalendarResult.event) {
       if (!googleCalendarResult.idempotentReplay) googleEventCreatedByThisAttempt = googleCalendarResult.event.id;
       await db.query(
@@ -255,6 +288,12 @@ async function confirmAdminBooking(admin, options = {}) {
            updated_at = NOW()`,
         [appointment.id, process.env.GOOGLE_BOOKING_CALENDAR_ID, googleCalendarResult.event.id]
       );
+    }
+
+    const practitionerCalendarResult = await createPractitionerBookingEvent(eventData);
+    if (practitionerCalendarResult.enabled && practitionerCalendarResult.configured && practitionerCalendarResult.event && !practitionerCalendarResult.idempotentReplay) {
+      practitionerEventCreatedByThisAttempt = true;
+      practitionerEventStaffName = session.staff_name;
     }
 
     await db.query(
@@ -279,7 +318,9 @@ async function confirmAdminBooking(admin, options = {}) {
         authoritativeClinicHoursChecked: true,
         authoritativeScheduleChecked: true,
         sharedGoogleCalendarChecked: externalCalendar.enabled,
+        practitionerGoogleCalendarChecked: practitionerCalendar.enabled && practitionerCalendar.configured,
         googleCalendarEventId: googleCalendarResult.event?.id || null,
+        practitionerCalendarId: practitionerCalendarResult.calendarId || null,
       })]
     );
 
@@ -290,6 +331,7 @@ async function confirmAdminBooking(admin, options = {}) {
       status: "created",
       appointmentId: appointment.id,
       googleCalendarEventId: googleCalendarResult.event?.id || null,
+      practitionerCalendarId: practitionerCalendarResult.calendarId || null,
       reply: [
         `Booking created successfully — appointment #${appointment.id}.`,
         `• Client: ${session.client_name} — CRM #${session.client_id}`,
@@ -297,13 +339,17 @@ async function confirmAdminBooking(admin, options = {}) {
         `• Staff: ${session.staff_name}`,
         `• Time: ${formatLocalDateTime(session.starts_at)}`,
         `• Location: ${session.location_name}`,
-        googleCalendarResult.enabled ? "• Shared Google Calendar: synced" : "• Shared Google Calendar: not enabled yet",
+        googleCalendarResult.enabled ? "• Shiloh — Bookings: synced" : "• Shiloh — Bookings: not enabled yet",
+        practitionerCalendarResult.enabled && practitionerCalendarResult.configured ? `• ${session.staff_name} Google Calendar: synced` : null,
         "",
-        "The production write occurred only after explicit CONFIRM BOOKING plus final clinic-hours, staff-schedule, CRM-conflict and shared-calendar checks.",
-      ].join("\n"),
+        "The production write occurred only after explicit CONFIRM BOOKING plus final clinic-hours, staff-schedule, CRM-conflict and Google Calendar checks.",
+      ].filter(Boolean).join("\n"),
     };
   } catch (error) {
     try { await db.query("ROLLBACK"); } catch (_) {}
+    if (practitionerEventCreatedByThisAttempt && practitionerEventStaffName) {
+      try { await cancelPractitionerBookingEvent({ appointmentId: null, staffName: practitionerEventStaffName }); } catch (_) {}
+    }
     if (googleEventCreatedByThisAttempt) {
       try { await cancelBookingEvent(googleEventCreatedByThisAttempt); } catch (cleanupError) {
         console.error("CRM-3 Google Calendar compensation failed", { eventId: googleEventCreatedByThisAttempt, error: cleanupError.message });
