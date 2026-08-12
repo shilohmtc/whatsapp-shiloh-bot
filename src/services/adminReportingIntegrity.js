@@ -36,7 +36,11 @@ async function pendingCanonicalStatuses(staffId, period = 'today') {
 }
 
 async function unresolvedGoldieAppointments(staffName, period = 'today') {
-  const dateExpr = `to_date(er.source_payload->>'Date','DD/MM/YY')`;
+  const dateExpr = `(CASE
+    WHEN COALESCE(er.source_payload->>'Date','') ~ '^\\d{2}/\\d{2}/\\d{2}$'
+    THEN to_date(er.source_payload->>'Date','DD/MM/YY')
+    ELSE NULL
+  END)`;
   const result = await pool.query(`
     WITH latest_staged_appointments AS (
       SELECT id
@@ -59,7 +63,7 @@ async function unresolvedGoldieAppointments(staffName, period = 'today') {
      WHERE er.source='goldie'
        AND er.entity_type='appointment'
        AND er.reconciliation_status NOT IN ('matched','ignored')
-       AND COALESCE(er.source_payload->>'Date','') ~ '^\\d{2}/\\d{2}/\\d{2}$'
+       AND ${dateExpr} IS NOT NULL
        AND ${periodDateSql(period, dateExpr)}
        AND ${dateExpr} <= (NOW() AT TIME ZONE 'Africa/Johannesburg')::date
        AND LOWER(COALESCE(er.source_payload->>'Staff','')) LIKE '%' || LOWER($1) || '%'
