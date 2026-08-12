@@ -101,19 +101,14 @@ test('Goldie future import retains structural replay and duplicate safeguards', 
   assert.doesNotMatch(goldie, /sendWhatsAppMessage\s*\(/);
 });
 
-test('normal post-cutover startup contains only current long-running schedulers and no unmarked one-time maintenance hooks', () => {
+test('normal post-cutover startup contains only current long-running schedulers and no one-time maintenance hooks', () => {
   const app = source('app.js');
   assert.match(app, /startGoogleBusinessProfileSyncScheduler/);
   assert.match(app, /startAppointmentLifecycleScheduler/);
   assert.match(app, /startCustomerCareScheduler/);
   assert.doesNotMatch(app, /startGoldieSyncScheduler|goldieSync/);
   assert.doesNotMatch(app, /RUN_[A-Z0-9_]+/);
-  if (/getBirthdayTemplateStatus/.test(app)) {
-    assert.match(app, /TEMPORARY_READ_ONLY_BIRTHDAY_AUDIT_PROBE/);
-    assert.doesNotMatch(app, /submitBirthdayTemplate|sendWhatsAppMessage|sendWhatsAppTemplate/);
-  } else {
-    assert.doesNotMatch(app, /BIRTHDAY_TEMPLATE_INSPECT_ONCE/);
-  }
+  assert.doesNotMatch(app, /BIRTHDAY_TEMPLATE_INSPECT_ONCE|getBirthdayTemplateStatus/);
   assert.doesNotMatch(app, /repairJeanPierreIdentity|repairNatashaStaffAssignment/);
   assert.doesNotMatch(app, /runGoldieFutureImport|runGoogleCalendarReconciliation/);
   assert.doesNotMatch(app, /runMarietjieCalendarRollout|runAbigailCalendarRollout/);
