@@ -1,6 +1,6 @@
 const { pool } = require('../db/pool');
 const { normalizePhone } = require('./clientIdentityOnboarding');
-const { canCertifyAppointment, authorityDescription } = require('./attendanceFinalizationAuthority');
+const { canCertifyAppointment, certificationStaffIds, authorityDescription } = require('./attendanceFinalizationAuthority');
 
 const PAGE_SIZE = 9;
 const FINAL_STATUSES = new Set(['completed', 'no_show']);
@@ -12,7 +12,7 @@ function isBusinessWide(admin) {
 }
 function formatDateTime(value) {
   return new Intl.DateTimeFormat('en-ZA', {
-    timeZone: 'Africa/Johannesburg', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false,
+    timeZone: 'Africa/Johannesburg', weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false,
   }).format(new Date(value));
 }
 
@@ -44,6 +44,8 @@ function scopeSql(alias = 'a') {
 async function pendingPastAppointments(admin, page = 1) {
   const safePage = Math.max(Number(page) || 1, 1);
   const offset = (safePage - 1) * PAGE_SIZE;
+  const certifiableStaff = await certificationStaffIds(admin);
+  const certifiableOnly = certifiableStaff.length > 0;
   const result = await pool.query(
     `SELECT a.id, a.starts_at, a.ends_at, a.status,
             COALESCE(c.display_name, a.source_client_name, 'Unknown client') AS client_name,
@@ -56,10 +58,19 @@ async function pendingPastAppointments(admin, page = 1) {
       WHERE a.ends_at < NOW()
         AND a.status NOT IN ('completed','cancelled','no_show')
         AND ${scopeSql('a')}
+        AND ($5::boolean = FALSE OR (
+          EXISTS (SELECT 1 FROM appointment_staff ast_any WHERE ast_any.appointment_id=a.id AND ast_any.staff_id IS NOT NULL)
+          AND NOT EXISTS (
+            SELECT 1 FROM appointment_staff ast_forbidden
+             WHERE ast_forbidden.appointment_id=a.id
+               AND ast_forbidden.staff_id IS NOT NULL
+               AND NOT (ast_forbidden.staff_id = ANY($6::bigint[]))
+          )
+        ))
       GROUP BY a.id,a.starts_at,a.ends_at,a.status,c.display_name,a.source_client_name
       ORDER BY a.starts_at DESC,a.id DESC
       LIMIT $3 OFFSET $4`,
-    [isBusinessWide(admin), admin.staff_id, PAGE_SIZE + 1, offset]
+    [isBusinessWide(admin), admin.staff_id, PAGE_SIZE + 1, offset, certifiableOnly, certifiableStaff]
   );
   return { rows: result.rows.slice(0, PAGE_SIZE), page: safePage, hasNext: result.rows.length > PAGE_SIZE };
 }
@@ -76,9 +87,9 @@ function pendingListInteractive(data, admin = null) {
   return {
     type: 'list',
     body: data.rows.length
-      ? `*Finalize past appointments*\nChoose a past appointment awaiting an explicit attendance status.${authority ? `\nCertification authority: ${authority}.` : ''}`
-      : '*Finalize past appointments*\nThere are no past appointments awaiting final status in your authorized scope.',
-    buttonText: 'Past appointments', rows, sectionTitle: 'Awaiting final status',
+      ? `*Visits awaiting finalization — ${data.rows.length}${data.hasNext ? '+' : ''}*\nChoose a visit and record what actually happened.${authority ? `\nYou can certify: ${authority}.` : ''}`
+      : '*Visits awaiting finalization*\nThere are no past visits awaiting final status in your authorized certification scope.',
+    buttonText: 'Review visits', rows, sectionTitle: 'Awaiting finalization',
   };
 }
 
@@ -111,7 +122,7 @@ function appointmentDetails(appointment) {
 function decisionInteractive(appointment) {
   return {
     type: 'button',
-    body: `${appointmentDetails(appointment)}\n\nChoose the actual attendance outcome. This changes canonical reporting and cannot be inferred from elapsed time.`,
+    body: `${appointmentDetails(appointment)}\n\nWhat actually happened? Attendance cannot be inferred from elapsed time.`,
     buttons: [
       { id: `finalize_completed_${appointment.id}`, title: 'Completed' },
       { id: `finalize_no_show_${appointment.id}`, title: 'No-show' },
