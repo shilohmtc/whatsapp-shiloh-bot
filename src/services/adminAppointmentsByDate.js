@@ -24,6 +24,23 @@ function parseDate(v){
   return `${y}-${String(mo).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
 }
 
+function clinicDate(offsetDays=0){
+  const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Africa/Johannesburg',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());
+  const p=Object.fromEntries(parts.map(x=>[x.type,x.value]));
+  const base=new Date(`${p.year}-${p.month}-${p.day}T12:00:00+02:00`);
+  base.setUTCDate(base.getUTCDate()+offsetDays);
+  return base.toISOString().slice(0,10);
+}
+
+function lastWeekBounds(){
+  const today=new Date(`${clinicDate()}T12:00:00+02:00`);
+  const localDay=today.getUTCDay()===0?7:today.getUTCDay();
+  const mondayOffset=1-localDay-7;
+  const start=clinicDate(mondayOffset);
+  const end=clinicDate(mondayOffset+7);
+  return {start,end};
+}
+
 function fmtDate(v){
   return new Intl.DateTimeFormat('en-ZA',{timeZone:'Africa/Johannesburg',weekday:'short',day:'2-digit',month:'short',year:'numeric'}).format(new Date(v));
 }
@@ -33,30 +50,30 @@ function fmtTime(v){
 
 function scopeClause(){
   return `(
-    $2::text = 'all_services'
+    $3::text = 'all_services'
     OR (
-      $3::bigint IS NOT NULL
+      $4::bigint IS NOT NULL
       AND EXISTS (
         SELECT 1 FROM appointment_staff ast_scope
-         WHERE ast_scope.appointment_id = a.id AND ast_scope.staff_id = $3
+         WHERE ast_scope.appointment_id = a.id AND ast_scope.staff_id = $4
       )
       AND EXISTS (
         SELECT 1
           FROM appointment_services aps_scope
           JOIN staff_services ss_scope
             ON ss_scope.service_id = aps_scope.service_id
-           AND ss_scope.staff_id = $3
+           AND ss_scope.staff_id = $4
          WHERE aps_scope.appointment_id = a.id
       )
     )
   )`;
 }
 
-async function rowsForDate(date, admin){
+async function rowsForRange(startDate,endDate,admin){
   const r = await pool.query(`
     WITH bounds AS (
       SELECT ($1::date::timestamp AT TIME ZONE 'Africa/Johannesburg') AS start_utc,
-             (($1::date + 1)::timestamp AT TIME ZONE 'Africa/Johannesburg') AS end_utc
+             ($2::date::timestamp AT TIME ZONE 'Africa/Johannesburg') AS end_utc
     )
     SELECT a.id, a.starts_at, a.ends_at, a.status,
            COALESCE(c.display_name, a.source_client_name, 'Unknown client') AS client_name,
@@ -72,9 +89,12 @@ async function rowsForDate(date, admin){
        AND a.status <> 'cancelled'
        AND ${scopeClause()}
      GROUP BY a.id,a.starts_at,a.ends_at,a.status,c.display_name,a.source_client_name
-     ORDER BY a.starts_at,a.id`, [date, admin.service_scope, admin.staff_id]);
+     ORDER BY a.starts_at,a.id`, [startDate,endDate,admin.service_scope,admin.staff_id]);
   return r.rows;
 }
+
+async function rowsForDate(date,admin){ return rowsForRange(date,clinicDateFrom(date,1),admin); }
+function clinicDateFrom(date,offset){ const d=new Date(`${date}T12:00:00+02:00`);d.setUTCDate(d.getUTCDate()+offset);return d.toISOString().slice(0,10); }
 
 async function upcomingRows(admin){
   const r = await pool.query(`
@@ -115,16 +135,38 @@ function renderRows(title, rows){
   return lines.join('\n');
 }
 
+function relativeCommand(raw){
+  const v=clean(raw).toLowerCase();
+  if(['1','today',"today's clients",'todays clients','my clients today'].includes(v)) return 'today';
+  if(['2','tomorrow',"tomorrow's clients",'tomorrows clients','my clients tomorrow'].includes(v)) return 'tomorrow';
+  if(['last week',"last week's clients",'last weeks clients','my clients last week'].includes(v)) return 'last_week';
+  return null;
+}
+
 async function processAdminAppointmentsByDateMessage(sender,text){
   const raw=clean(text);
+  const relative=relativeCommand(raw);
   const dated=raw.match(/^appointments?\s+(.+)$/i);
   const upcoming=/^upcoming\s+appointments?$/i.test(raw);
-  if(!dated && !upcoming) return {handled:false};
+  if(!relative && !dated && !upcoming) return {handled:false};
 
   const admin=await getAdmin(sender);
   if(!admin) return {handled:false};
   if(!has(admin,'appointment:view')) return {handled:true,admin,reply:'Your admin account does not currently have permission to view appointments.'};
 
+  if(relative==='today'||relative==='tomorrow'){
+    const date=clinicDate(relative==='tomorrow'?1:0);
+    const rows=await rowsForDate(date,admin);
+    const label=new Intl.DateTimeFormat('en-ZA',{timeZone:'Africa/Johannesburg',weekday:'long',day:'2-digit',month:'long',year:'numeric'}).format(new Date(`${date}T12:00:00+02:00`));
+    return {handled:true,admin,reply:renderRows(label,rows)};
+  }
+  if(relative==='last_week'){
+    const {start,end}=lastWeekBounds();
+    const rows=await rowsForRange(start,end,admin);
+    const f=new Intl.DateTimeFormat('en-ZA',{timeZone:'Africa/Johannesburg',day:'2-digit',month:'short',year:'numeric'});
+    const endInclusive=clinicDateFrom(end,-1);
+    return {handled:true,admin,reply:renderRows(`Last week · ${f.format(new Date(`${start}T12:00:00+02:00`))}–${f.format(new Date(`${endInclusive}T12:00:00+02:00`))}`,rows)};
+  }
   if(upcoming){
     const rows=await upcomingRows(admin);
     return {handled:true,admin,reply:renderRows('Upcoming appointments',rows)};
@@ -137,4 +179,4 @@ async function processAdminAppointmentsByDateMessage(sender,text){
   return {handled:true,admin,reply:renderRows(label,rows)};
 }
 
-module.exports={processAdminAppointmentsByDateMessage};
+module.exports={processAdminAppointmentsByDateMessage,relativeCommand,lastWeekBounds,rowsForRange};
