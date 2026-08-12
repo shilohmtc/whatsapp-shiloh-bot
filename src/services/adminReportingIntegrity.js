@@ -33,11 +33,23 @@ async function earningsIntegrity({ staffId, staffName, period = 'today' }) {
 }
 
 function integrityLines(integrity) {
-  if (!integrity || integrity.clean) return [];
-  const lines = ['⚠️ *REPORTING INTEGRITY — PROVISIONAL*','This earnings total may be understated. Shiloh will not silently count uncertain appointments.'];
-  if (integrity.pendingStatus.length) lines.push(`Past CRM appointments awaiting final completion status: *${integrity.pendingStatus.length}*`);
-  if (integrity.unresolvedGoldie.length) { lines.push(`Unresolved Goldie appointments in this period: *${integrity.unresolvedGoldie.length}*`); if (integrity.unresolvedGoldieValue > 0) { const money = new Intl.NumberFormat('en-ZA', { style:'currency', currency:'ZAR', maximumFractionDigits:0 }).format(integrity.unresolvedGoldieValue); lines.push(`Source value still under reconciliation: *${money}*`); } }
-  lines.push('Resolve the underlying CRM/Goldie evidence before treating this figure as final.');
+  if (!integrity) return [];
+  const pending = integrity.pendingStatus?.length || 0;
+  const lines = [`Pending finalization: *${pending}*`];
+  if (integrity.clean) {
+    lines.push('Earnings status: *FINAL*');
+    return lines;
+  }
+  lines.push('⚠️ *REPORTING INTEGRITY — PROVISIONAL*', 'This earnings total may be understated. Shiloh will not silently count uncertain appointments.');
+  if (pending) lines.push('Those visits are excluded from finalized earnings until Completed or No-show is explicitly recorded.');
+  if (integrity.unresolvedGoldie.length) {
+    lines.push(`Unresolved Goldie appointments in this period: *${integrity.unresolvedGoldie.length}*`);
+    if (integrity.unresolvedGoldieValue > 0) {
+      const money = new Intl.NumberFormat('en-ZA', { style:'currency', currency:'ZAR', maximumFractionDigits:0 }).format(integrity.unresolvedGoldieValue);
+      lines.push(`Source value still under reconciliation: *${money}*`);
+    }
+  }
+  lines.push('Earnings status: *PROVISIONAL*', 'Resolve the underlying attendance/CRM evidence before treating this figure as final.');
   return lines;
 }
 module.exports = { periodDateSql, canonicalBounds, pendingCanonicalStatuses, unresolvedGoldieAppointments, earningsIntegrity, integrityLines };
