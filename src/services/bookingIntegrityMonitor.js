@@ -13,12 +13,36 @@ const SCAN_LOOKBACK_MS = 24 * 60 * 60 * 1000;
 const SCAN_LOOKAHEAD_MS = 90 * 24 * 60 * 60 * 1000;
 let running = false;
 let timer = null;
+let tableReady = false;
 
 function clean(value = '') { return String(value || '').trim().replace(/\s+/g, ' '); }
 function normalize(value = '') { return clean(value).toLowerCase(); }
 function eventStart(event) { return event?.start?.dateTime || event?.start?.date || null; }
 function eventEnd(event) { return event?.end?.dateTime || event?.end?.date || null; }
 function isLinked(event) { return Boolean(clean(event?.extendedProperties?.private?.shilohAppointmentId)); }
+
+async function ensureIntegrityTable() {
+  if (tableReady) return;
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS booking_integrity_exceptions (
+      id BIGSERIAL PRIMARY KEY,
+      calendar_id TEXT NOT NULL,
+      event_id TEXT NOT NULL,
+      practitioner TEXT NOT NULL,
+      summary TEXT,
+      starts_at TIMESTAMPTZ,
+      ends_at TIMESTAMPTZ,
+      classification TEXT NOT NULL CHECK (classification IN ('booking_like','calendar_block')),
+      status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open','observed','resolved')),
+      first_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      resolved_at TIMESTAMPTZ,
+      metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+      UNIQUE (calendar_id, event_id)
+    )`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_booking_integrity_open ON booking_integrity_exceptions(status, starts_at) WHERE status='open'`);
+  tableReady = true;
+}
 
 async function activeServiceNames() {
   const result = await pool.query(`SELECT name FROM services WHERE status='active' ORDER BY id`);
@@ -70,6 +94,7 @@ async function scanBookingIntegrity() {
   if (running) return { enabled: true, skipped: 'already_running' };
   running = true;
   try {
+    await ensureIntegrityTable();
     const from = new Date(Date.now() - SCAN_LOOKBACK_MS);
     const to = new Date(Date.now() + SCAN_LOOKAHEAD_MS);
     const serviceNames = await activeServiceNames();
@@ -158,4 +183,4 @@ function startBookingIntegrityScheduler() {
   return timer;
 }
 
-module.exports = { scanBookingIntegrity, processAdminCalendarIntegrityMessage, startBookingIntegrityScheduler, classifyEvent, renderIntegrity };
+module.exports = { scanBookingIntegrity, processAdminCalendarIntegrityMessage, startBookingIntegrityScheduler, classifyEvent, renderIntegrity, ensureIntegrityTable };
