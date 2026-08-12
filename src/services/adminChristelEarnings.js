@@ -1,6 +1,7 @@
 const { pool } = require('../db/pool');
 const { normalizePhone } = require('./clientIdentityOnboarding');
 const { isBusinessWide } = require('./staffAdminScope');
+const { earningsIntegrity, integrityLines } = require('./adminReportingIntegrity');
 
 function senderKey(sender) { return normalizePhone(sender); }
 function money(value) {
@@ -101,14 +102,17 @@ async function christelEarningsData(period = 'today') {
   const joint = rows.filter((row) => Number(row.staff_count) > 1);
   const unpriced = rows.filter((row) => Number(row.staff_count) === 1 && row.total_price === null);
   const completedValue = qualifying.reduce((sum, row) => sum + Number(row.total_price || 0), 0);
-  return { christel, rows, qualifying, joint, unpriced, completedValue };
+  const integrity = await earningsIntegrity({ staffId:christel.id, staffName:christel.display_name, period });
+  return { christel, rows, qualifying, joint, unpriced, completedValue, integrity };
 }
 
 function renderChristelEarnings(data, period = 'today') {
   const lines = ['*CHRISTEL — TREATMENT EARNINGS*', periodLabel(period), ''];
+  const warnings=integrityLines(data.integrity);
+  if(warnings.length) lines.push(...warnings,'');
   lines.push(`Completed solo appointments: *${data.qualifying.length}*`);
   lines.push(`Completed treatment value: *${money(data.completedValue)}*`);
-  lines.push(`Christel earnings (100%): *${money(data.completedValue)}*`);
+  lines.push(`Christel earnings (100%): *${money(data.completedValue)}*${data.integrity?.clean?'':' — provisional'}`);
   if (data.joint.length) {
     lines.push('', `Joint-practitioner appointments excluded: *${data.joint.length}*`,
       'They are not included until service-level attribution is explicit.');
@@ -133,6 +137,10 @@ async function audit(admin, period, data) {
       jointExcluded: data.joint.length,
       unpricedExcluded: data.unpriced.length,
       completedValue: data.completedValue,
+      integrityClean: data.integrity.clean,
+      pendingCanonicalStatus: data.integrity.pendingStatus.length,
+      unresolvedGoldie: data.integrity.unresolvedGoldie.length,
+      unresolvedGoldieValue: data.integrity.unresolvedGoldieValue,
     })]
   );
 }
