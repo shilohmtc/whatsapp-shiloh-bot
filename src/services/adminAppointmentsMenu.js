@@ -19,6 +19,11 @@ function appointmentsInteractive(admin) {
       title: isBusinessWide(admin) ? "Tomorrow's clients" : 'My clients tomorrow',
       description: 'View tomorrow’s appointments',
     });
+    rows.push({
+      id: 'last week',
+      title: isBusinessWide(admin) ? "Last week's clients" : 'My clients last week',
+      description: 'View the previous Monday–Sunday',
+    });
   }
   if (has(admin, 'appointment:create')) {
     rows.push({
