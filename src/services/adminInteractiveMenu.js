@@ -52,6 +52,13 @@ function parseVisibleMenu(body = '') {
   }
   return sections;
 }
+function isActionVisibleInMenu(action, body = '') {
+  if (!action?.key) return false;
+  for (const entries of parseVisibleMenu(body).values()) {
+    if (entries.some((entry) => entry.action.key === action.key)) return true;
+  }
+  return false;
+}
 function compactMenuBody(body = '') {
   const compact = []; let insertedPrompt = false;
   for (const line of String(body).split('\n')) {
@@ -132,11 +139,16 @@ async function processAdminInteractiveMenuMessage(sender, text) {
     return { handled: true, admin: menuResult.admin, interactive };
   }
   const action = actionForId(raw);
-  if (action) return dispatchStableAction(sender, action);
+  if (action) {
+    const menuResult = await getRoleScopedMenu(sender);
+    if (!menuResult?.handled) return menuResult || { handled: false };
+    if (!isActionVisibleInMenu(action, menuResult.interactive.body)) return { handled: true, admin: menuResult.admin, reply: 'That admin action is not available for your account. Send *Menu* to refresh your options.' };
+    return dispatchStableAction(sender, action);
+  }
   if (/^admin_action_/i.test(raw)) return { handled: true, reply: 'That admin action is no longer available. Send *Menu* to refresh your options.' };
   const result = enrichPrivilegedReportsMenu(await processAdminMobileMenuMessage(sender, text));
   if (result?.handled && result?.interactive?.type === 'button' && /^\*Shiloh Admin 🌿\*/.test(result.interactive.body || '')) return { ...result, interactive: topLevelInteractive(result.interactive.body) };
   return result;
 }
 
-module.exports = { ACTIONS, actionForId, actionForLabel, compactMenuBody, dispatchStableAction, enrichJeanPierreMenu, enrichPrivilegedReportsMenu, parseVisibleMenu, processAdminInteractiveMenuMessage, sectionInteractive, topLevelInteractive };
+module.exports = { ACTIONS, actionForId, actionForLabel, compactMenuBody, dispatchStableAction, enrichJeanPierreMenu, enrichPrivilegedReportsMenu, isActionVisibleInMenu, parseVisibleMenu, processAdminInteractiveMenuMessage, sectionInteractive, topLevelInteractive };
