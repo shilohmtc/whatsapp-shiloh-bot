@@ -122,7 +122,7 @@ function appointmentDetails(appointment) {
 function decisionInteractive(appointment) {
   return {
     type: 'button',
-    body: `${appointmentDetails(appointment)}\n\nWhat actually happened?`,
+    body: `${appointmentDetails(appointment)}\n\nWhat actually happened? Attendance cannot be inferred from elapsed time.`,
     buttons: [
       { id: `finalize_completed_${appointment.id}`, title: 'Completed' },
       { id: `finalize_no_show_${appointment.id}`, title: 'No-show' },
