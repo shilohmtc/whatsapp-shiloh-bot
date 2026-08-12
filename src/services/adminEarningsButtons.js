@@ -5,6 +5,8 @@ const BUTTON_COMMANDS = Object.freeze({
   admin_christel_earnings_today: 'Christel earnings today',
   admin_christel_earnings_week: 'Christel earnings this week',
   admin_christel_earnings_month: 'Christel earnings this month',
+  admin_calendar_integrity_scan: 'Calendar integrity scan',
+  admin_calendar_integrity_issues: 'Calendar integrity issues',
 });
 
 function abigailEarningsButtons() {
@@ -29,6 +31,16 @@ function christelEarningsButtons() {
   };
 }
 
+function calendarIntegrityButtons() {
+  return {
+    body: '*Calendar integrity*\nShiloh never auto-imports manual Google Calendar events as CRM bookings. Choose an integrity check.',
+    buttons: [
+      { id: 'admin_calendar_integrity_scan', title: 'Scan Now' },
+      { id: 'admin_calendar_integrity_issues', title: 'Open Issues' },
+    ],
+  };
+}
+
 function commandForAdminButton(buttonId = '') {
   return BUTTON_COMMANDS[String(buttonId).trim()] || null;
 }
@@ -36,6 +48,7 @@ function commandForAdminButton(buttonId = '') {
 module.exports = {
   abigailEarningsButtons,
   christelEarningsButtons,
+  calendarIntegrityButtons,
   commandForAdminButton,
   BUTTON_COMMANDS,
 };
