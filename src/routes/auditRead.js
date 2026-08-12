@@ -3,6 +3,7 @@ const auditReadAuth = require("../middleware/auditReadAuth");
 const { getPostCanonicalizationAudit } = require("../services/canonicalizationAudit");
 const { getCatalogueParityAudit } = require("../services/catalogueParityAudit");
 const { getGoldieExitAudit } = require("../services/goldieExitAudit");
+const { getReportingIntegrityAudit } = require("../services/reportingIntegrityAudit");
 const { getBirthdayTemplateStatus, TEMPLATE_BODY } = require("../services/birthdayTemplateProvisioning");
 
 const router = express.Router();
@@ -36,6 +37,18 @@ router.get("/goldie-exit/status", async (req, res) => {
   } catch (error) {
     (req.log || console).error?.({ err: error }, "Failed to build Goldie exit audit");
     return res.status(500).json({ error: "Could not build Goldie exit audit", requestId: req.id });
+  }
+});
+
+// Sanitized, read-only reporting integrity. Returns only clean/dirty and counts;
+// never client identity, appointment detail, legacy source value or earnings amounts.
+router.get("/reporting-integrity/status", async (req, res) => {
+  try {
+    const report = await getReportingIntegrityAudit();
+    return res.status(200).json({ report, requestId: req.id });
+  } catch (error) {
+    (req.log || console).error?.({ err: error }, "Failed to build sanitized reporting integrity audit");
+    return res.status(500).json({ error: "Could not build reporting integrity audit", requestId: req.id });
   }
 });
 
