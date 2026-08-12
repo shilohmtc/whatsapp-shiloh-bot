@@ -5,6 +5,7 @@ const { processBookingMessage, getIntent } = require('./bookingIntent');
 const { decorateClientBookingResult } = require('./clientBookingInteractive');
 
 const SERVICE_PAGE_SIZE = 9;
+const CATEGORY_PAGE_SIZE = 9;
 
 function clean(value = '') {
   return String(value || '').trim().replace(/\s+/g, ' ');
@@ -31,10 +32,31 @@ function clientHomeInteractive() {
   };
 }
 
+async function listClientBookableCategories() {
+  const result = await pool.query(`
+    SELECT COALESCE(sc.id, 0) AS id,
+           COALESCE(sc.name, 'Services') AS name,
+           sc.display_order,
+           COUNT(DISTINCT s.id)::int AS service_count
+      FROM services s
+      JOIN staff_services ss ON ss.service_id = s.id
+      JOIN staff st ON st.id = ss.staff_id
+      LEFT JOIN service_categories sc ON sc.id = s.category_id
+     WHERE s.status = 'active'
+       AND st.status = 'active'
+       AND st.resource_type = 'practitioner'
+       AND st.client_bookable = TRUE
+     GROUP BY COALESCE(sc.id, 0), COALESCE(sc.name, 'Services'), sc.display_order
+     ORDER BY sc.display_order NULLS LAST, COALESCE(sc.name, 'Services')
+  `);
+  return result.rows;
+}
+
 async function listClientBookableServices() {
   const result = await pool.query(`
     SELECT DISTINCT s.id, s.name, s.duration_minutes, s.processing_time_minutes,
            s.extra_time_minutes, s.price, s.display_price,
+           COALESCE(sc.id, 0) AS category_id,
            COALESCE(sc.name, 'Services') AS category_name,
            sc.display_order AS category_order, s.display_order
       FROM services s
@@ -47,6 +69,27 @@ async function listClientBookableServices() {
        AND st.client_bookable = TRUE
      ORDER BY category_order NULLS LAST, s.display_order NULLS LAST, s.name, s.id
   `);
+  return result.rows;
+}
+
+async function listServicesForCategory(categoryId) {
+  const result = await pool.query(`
+    SELECT DISTINCT s.id, s.name, s.duration_minutes, s.processing_time_minutes,
+           s.extra_time_minutes, s.price, s.display_price,
+           COALESCE(sc.id, 0) AS category_id,
+           COALESCE(sc.name, 'Services') AS category_name,
+           sc.display_order AS category_order, s.display_order
+      FROM services s
+      JOIN staff_services ss ON ss.service_id = s.id
+      JOIN staff st ON st.id = ss.staff_id
+      LEFT JOIN service_categories sc ON sc.id = s.category_id
+     WHERE COALESCE(sc.id, 0) = $1
+       AND s.status = 'active'
+       AND st.status = 'active'
+       AND st.resource_type = 'practitioner'
+       AND st.client_bookable = TRUE
+     ORDER BY s.display_order NULLS LAST, s.name, s.id
+  `, [Number(categoryId)]);
   return result.rows;
 }
 
@@ -102,7 +145,40 @@ function serviceTitle(name = '') {
   return value.length <= 24 ? value : `${value.slice(0, 21)}…`;
 }
 
-function servicePageInteractive(rows = [], page = 1) {
+function categoryPageInteractive(rows = [], page = 1) {
+  const totalPages = Math.max(1, Math.ceil(rows.length / CATEGORY_PAGE_SIZE));
+  const safePage = Math.min(Math.max(Number(page) || 1, 1), totalPages);
+  const start = (safePage - 1) * CATEGORY_PAGE_SIZE;
+  const pageRows = rows.slice(start, start + CATEGORY_PAGE_SIZE).map((row) => ({
+    id: `client_category_${row.id}`,
+    title: serviceTitle(row.name),
+    description: `${Number(row.service_count) || 0} active service${Number(row.service_count) === 1 ? '' : 's'}`,
+  }));
+
+  if (safePage < totalPages) {
+    pageRows.push({
+      id: `client_categories_page_${safePage + 1}`,
+      title: 'More categories →',
+      description: `Page ${safePage + 1} of ${totalPages}`,
+    });
+  } else if (safePage > 1) {
+    pageRows.push({
+      id: 'client_categories_page_1',
+      title: '← First page',
+      description: `Page 1 of ${totalPages}`,
+    });
+  }
+
+  return {
+    type: 'list',
+    body: `*Browse Shiloh services*\nChoose a category first. Showing page ${safePage} of ${totalPages}.`,
+    buttonText: 'Categories',
+    rows: pageRows,
+    sectionTitle: 'Service categories',
+  };
+}
+
+function servicePageInteractive(rows = [], page = 1, options = {}) {
   const totalPages = Math.max(1, Math.ceil(rows.length / SERVICE_PAGE_SIZE));
   const safePage = Math.min(Math.max(Number(page) || 1, 1), totalPages);
   const start = (safePage - 1) * SERVICE_PAGE_SIZE;
@@ -112,26 +188,28 @@ function servicePageInteractive(rows = [], page = 1) {
     description: serviceDescription(row),
   }));
 
+  const categoryId = options.categoryId == null ? null : Number(options.categoryId);
   if (safePage < totalPages) {
     pageRows.push({
-      id: `client_services_page_${safePage + 1}`,
+      id: categoryId == null ? `client_services_page_${safePage + 1}` : `client_category_${categoryId}_page_${safePage + 1}`,
       title: 'More services →',
       description: `Page ${safePage + 1} of ${totalPages}`,
     });
   } else if (safePage > 1) {
     pageRows.push({
-      id: 'client_services_page_1',
+      id: categoryId == null ? 'client_services_page_1' : `client_category_${categoryId}_page_1`,
       title: '← First page',
       description: `Page 1 of ${totalPages}`,
     });
   }
 
+  const heading = options.categoryName ? `*${options.categoryName}*` : '*Browse Shiloh services*';
   return {
     type: 'list',
-    body: `*Browse Shiloh services*\nChoose a treatment to start a booking. Showing page ${safePage} of ${totalPages}.`,
+    body: `${heading}\nChoose a treatment to start a booking. Showing page ${safePage} of ${totalPages}.`,
     buttonText: 'View services',
     rows: pageRows,
-    sectionTitle: 'Client-bookable services',
+    sectionTitle: options.categoryName ? serviceTitle(options.categoryName) : 'Client-bookable services',
   };
 }
 
@@ -278,11 +356,46 @@ async function processClientDiscoveryMessage(sender, text) {
   if (isHomeCommand(raw)) return { handled: true, interactive: clientHomeInteractive() };
 
   if (['client_browse_services', 'browse services', 'services'].includes(value)) {
-    const services = await listClientBookableServices();
-    if (!services.length) {
-      return { handled: true, reply: 'I can’t safely load Shiloh’s client-bookable services right now. Please try again shortly.' };
+    const categories = await listClientBookableCategories();
+    if (!categories.length) {
+      return { handled: true, reply: 'I can’t safely load Shiloh’s client-bookable service categories right now. Please try again shortly.' };
     }
-    return { handled: true, interactive: servicePageInteractive(services, 1) };
+    return { handled: true, interactive: categoryPageInteractive(categories, 1) };
+  }
+
+  const categoryPageMatch = value.match(/^client_categories_page_(\d+)$/);
+  if (categoryPageMatch) {
+    const categories = await listClientBookableCategories();
+    if (!categories.length) return { handled: true, reply: 'No client-bookable service categories are available to display right now.' };
+    return { handled: true, interactive: categoryPageInteractive(categories, Number(categoryPageMatch[1])) };
+  }
+
+  const categoryServicePageMatch = value.match(/^client_category_(\d+)_page_(\d+)$/);
+  if (categoryServicePageMatch) {
+    const categoryId = Number(categoryServicePageMatch[1]);
+    const services = await listServicesForCategory(categoryId);
+    if (!services.length) return { handled: true, reply: 'That category no longer has active client-bookable services. Send *Services* to refresh.' };
+    return {
+      handled: true,
+      interactive: servicePageInteractive(services, Number(categoryServicePageMatch[2]), {
+        categoryId,
+        categoryName: services[0].category_name,
+      }),
+    };
+  }
+
+  const categoryMatch = value.match(/^client_category_(\d+)$/);
+  if (categoryMatch) {
+    const categoryId = Number(categoryMatch[1]);
+    const services = await listServicesForCategory(categoryId);
+    if (!services.length) return { handled: true, reply: 'That category no longer has active client-bookable services. Send *Services* to refresh.' };
+    return {
+      handled: true,
+      interactive: servicePageInteractive(services, 1, {
+        categoryId,
+        categoryName: services[0].category_name,
+      }),
+    };
   }
 
   const pageMatch = value.match(/^client_services_page_(\d+)$/);
@@ -346,9 +459,9 @@ async function processClientDiscoveryMessage(sender, text) {
     const existing = await getIntent(sender);
     if (!existing?.service_text) {
       const staged = await processBookingMessage(sender, 'booking with any therapist');
-      const services = await listClientBookableServices();
-      if (!services.length) return decorateClientBookingResult(staged);
-      return { handled: true, intent: staged.intent, interactive: servicePageInteractive(services, 1) };
+      const categories = await listClientBookableCategories();
+      if (!categories.length) return decorateClientBookingResult(staged);
+      return { handled: true, intent: staged.intent, interactive: categoryPageInteractive(categories, 1) };
     }
     return decorateClientBookingResult(await processBookingMessage(sender, 'booking with any therapist'));
   }
@@ -384,12 +497,16 @@ async function processClientDiscoveryMessage(sender, text) {
 }
 
 module.exports = {
+  CATEGORY_PAGE_SIZE,
   SERVICE_PAGE_SIZE,
+  categoryPageInteractive,
   clientHomeInteractive,
   eligiblePractitionersInteractive,
   isHomeCommand,
+  listClientBookableCategories,
   listClientBookableServices,
   listEligiblePractitionersForService,
+  listServicesForCategory,
   listServicesForPractitioner,
   practitionerServicePageInteractive,
   practitionersInteractive,
