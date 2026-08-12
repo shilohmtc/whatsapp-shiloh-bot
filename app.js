@@ -21,6 +21,7 @@ const { startGoogleBusinessProfileSyncScheduler } = require("./src/services/goog
 const { startAppointmentLifecycleScheduler } = require("./src/services/appointmentLifecycle");
 const { startCustomerCareScheduler } = require("./src/services/customerCare");
 const { startBookingIntegrityScheduler } = require("./src/services/bookingIntegrityMonitor");
+const { ensureDemoClientPermissions } = require("./src/services/demoClientAccessBootstrap");
 
 const app = express();
 app.disable("x-powered-by");
@@ -53,6 +54,8 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || 3000;
 let server;
 async function start() {
+  const demoAccess = await ensureDemoClientPermissions();
+  logger.info(demoAccess, "Controlled demo client access verified");
   server = app.listen(PORT, () => {
     logger.info({ port: PORT }, "Shiloh started");
     startConversationSessionCleanupScheduler();
