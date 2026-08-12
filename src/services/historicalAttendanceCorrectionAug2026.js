@@ -37,12 +37,15 @@ async function applyHistoricalAttendanceCorrectionAug2026() {
 
     const rows = await db.query(
       `SELECT a.id,a.status,a.starts_at,
-              array_agg(DISTINCT lower(trim(s.display_name)) ORDER BY lower(trim(s.display_name))) AS staff_names
+              ARRAY(
+                SELECT DISTINCT lower(trim(s.display_name))
+                  FROM appointment_staff ast
+                  JOIN staff s ON s.id=ast.staff_id
+                 WHERE ast.appointment_id=a.id
+                 ORDER BY lower(trim(s.display_name))
+              ) AS staff_names
          FROM appointments a
-         JOIN appointment_staff ast ON ast.appointment_id=a.id
-         JOIN staff s ON s.id=ast.staff_id
         WHERE a.id = ANY($1::bigint[])
-        GROUP BY a.id,a.status,a.starts_at
         ORDER BY a.id
         FOR UPDATE OF a`,
       [CANDIDATE_IDS]
