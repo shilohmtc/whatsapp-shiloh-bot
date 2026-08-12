@@ -137,16 +137,16 @@ function renderRows(title, rows){
 
 function relativeCommand(raw){
   const v=clean(raw).toLowerCase();
-  if(['1','today',"today's clients",'todays clients','my clients today'].includes(v)) return 'today';
-  if(['2','tomorrow',"tomorrow's clients",'tomorrows clients','my clients tomorrow'].includes(v)) return 'tomorrow';
-  if(['last week',"last week's clients",'last weeks clients','my clients last week'].includes(v)) return 'last_week';
+  if(['1','today',"today's clients",'todays clients','my clients today','appointments today'].includes(v)) return 'today';
+  if(['2','tomorrow',"tomorrow's clients",'tomorrows clients','my clients tomorrow','appointments tomorrow'].includes(v)) return 'tomorrow';
+  if(['last week',"last week's clients",'last weeks clients','my clients last week','appointments last week'].includes(v)) return 'last_week';
   return null;
 }
 
 async function processAdminAppointmentsByDateMessage(sender,text){
   const raw=clean(text);
   const relative=relativeCommand(raw);
-  const dated=raw.match(/^appointments?\s+(.+)$/i);
+  const dated=relative ? null : raw.match(/^appointments?\s+(.+)$/i);
   const upcoming=/^upcoming\s+appointments?$/i.test(raw);
   if(!relative && !dated && !upcoming) return {handled:false};
 
