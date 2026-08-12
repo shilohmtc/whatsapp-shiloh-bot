@@ -7,10 +7,11 @@ function source(relativePath) {
   return fs.readFileSync(path.join(__dirname, "..", relativePath), "utf8");
 }
 
-test("AI receives the active CRM catalogue ahead of retrieved legacy knowledge", () => {
+test("AI receives authoritative CRM catalogue and practitioner mapping ahead of retrieved legacy knowledge", () => {
   const ai = source("src/services/ai.js");
   assert.match(ai, /getActiveCatalogueKnowledge/);
-  assert.match(ai, /\[activeCatalogue, \.\.\.knowledge\]/);
+  assert.match(ai, /getPractitionerKnowledge/);
+  assert.match(ai, /\[activeCatalogue, practitionerKnowledge, \.\.\.knowledge\]\.filter\(Boolean\)/);
 });
 
 test("active catalogue knowledge is read-only and active-only", () => {

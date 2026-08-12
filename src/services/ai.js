@@ -3,6 +3,7 @@ const { getSession, saveSession } = require("./memory");
 const { retrieveKnowledge } = require("./knowledge");
 const { getProfile } = require("./profile");
 const { getActiveCatalogueKnowledge } = require("./activeCatalogueKnowledge");
+const { getPractitionerKnowledge } = require("./practitionerKnowledge");
 const { buildInstructions } = require("./orchestrator");
 const logger = require("../lib/logger");
 
@@ -39,14 +40,15 @@ function logUsage(response, workload) {
 }
 
 async function generateReply(phone, message) {
-  const [previousResponseId, knowledge, profile, activeCatalogue] = await Promise.all([
+  const [previousResponseId, knowledge, profile, activeCatalogue, practitionerKnowledge] = await Promise.all([
     getSession(phone),
     retrieveKnowledge(message, 5),
     getProfile(phone),
     getActiveCatalogueKnowledge(),
+    getPractitionerKnowledge(),
   ]);
 
-  const authoritativeKnowledge = activeCatalogue ? [activeCatalogue, ...knowledge] : knowledge;
+  const authoritativeKnowledge = [activeCatalogue, practitionerKnowledge, ...knowledge].filter(Boolean);
   const workload = "conversation";
   const request = {
     model: getModelForWorkload(workload),
