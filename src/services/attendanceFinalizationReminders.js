@@ -1,16 +1,19 @@
 const { pool } = require('../db/pool');
 const { sendWhatsAppTemplate } = require('./whatsapp');
+const { TEMPLATE_NAME, getStaffFinalizationTemplateStatus } = require('./staffFinalizationTemplateProvisioning');
 const logger = require('../lib/logger');
 
 const SCAN_MINUTES = Math.max(Number(process.env.ATTENDANCE_FINALIZATION_SCAN_MINUTES || 15), 5);
 const END_OF_DAY_HOUR = Math.min(Math.max(Number(process.env.ATTENDANCE_FINALIZATION_EOD_HOUR || 19), 0), 23);
 const NEXT_MORNING_HOUR = Math.min(Math.max(Number(process.env.ATTENDANCE_FINALIZATION_MORNING_HOUR || 8), 0), 23);
-const TEMPLATE = process.env.WHATSAPP_STAFF_FINALIZATION_TEMPLATE || '';
+const TEMPLATE_OVERRIDE = process.env.WHATSAPP_STAFF_FINALIZATION_TEMPLATE || '';
 const LANGUAGE_CODE = process.env.WHATSAPP_TEMPLATE_LANGUAGE || 'en';
+const TEMPLATE_STATUS_CACHE_MS = Math.max(Number(process.env.STAFF_FINALIZATION_TEMPLATE_STATUS_CACHE_MINUTES || 30), 5) * 60 * 1000;
 
 let timer = null;
 let running = false;
 let initialized = false;
+let templateStatusCache = { checkedAt: 0, templateName: null, providerStatus: null };
 
 async function ensureReminderTable() {
   if (initialized) return;
@@ -28,6 +31,24 @@ async function ensureReminderTable() {
   `);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_attendance_finalization_reminders_date ON attendance_finalization_reminders (clinic_date, reminder_kind)`);
   initialized = true;
+}
+
+async function resolveApprovedTemplateName(nowMs = Date.now()) {
+  if (TEMPLATE_OVERRIDE) return { templateName: TEMPLATE_OVERRIDE, providerStatus: 'explicit_override' };
+  if (templateStatusCache.checkedAt && nowMs - templateStatusCache.checkedAt < TEMPLATE_STATUS_CACHE_MS) return templateStatusCache;
+  try {
+    const status = await getStaffFinalizationTemplateStatus();
+    const providerStatus = String(status?.template?.status || '').toUpperCase() || null;
+    templateStatusCache = {
+      checkedAt: nowMs,
+      templateName: providerStatus === 'APPROVED' ? TEMPLATE_NAME : null,
+      providerStatus: providerStatus || status?.reason || 'not_found',
+    };
+  } catch (error) {
+    logger.warn({ err: error }, 'Staff finalization template status check failed; reminders remain disabled');
+    templateStatusCache = { checkedAt: nowMs, templateName: null, providerStatus: 'status_check_failed' };
+  }
+  return templateStatusCache;
 }
 
 function johannesburgParts(now = new Date()) {
@@ -81,7 +102,8 @@ async function undoClaim(id) { if (id) await pool.query(`DELETE FROM attendance_
 function reminderLabel(kind) { return kind === 'next_morning' ? 'still need finalization from the previous clinic day' : 'need finalization from today'; }
 
 async function processAttendanceFinalizationReminders(now = new Date()) {
-  if (!TEMPLATE) return { enabled: false, sent: 0, reason: 'template_not_configured' };
+  const template = await resolveApprovedTemplateName();
+  if (!template.templateName) return { enabled: false, sent: 0, reason: 'template_not_approved', providerStatus: template.providerStatus };
   await ensureReminderTable();
   const window = reminderWindow(now);
   if (!window) return { enabled: true, sent: 0, reason: 'outside_window' };
@@ -93,7 +115,7 @@ async function processAttendanceFinalizationReminders(now = new Date()) {
     const claimId = await claimReminder(admin.admin_id, window.clinicDate, window.kind, pendingCount);
     if (!claimId) continue;
     try {
-      await sendWhatsAppTemplate(admin.normalized_whatsapp, TEMPLATE, [admin.display_name, String(pendingCount), window.clinicDate, reminderLabel(window.kind)], LANGUAGE_CODE);
+      await sendWhatsAppTemplate(admin.normalized_whatsapp, template.templateName, [admin.display_name, String(pendingCount), window.clinicDate, reminderLabel(window.kind)], LANGUAGE_CODE);
       sent += 1;
       logger.info({ adminId: admin.admin_id, clinicDate: window.clinicDate, kind: window.kind, pendingCount }, 'Attendance finalization reminder sent');
     } catch (error) {
@@ -107,8 +129,8 @@ async function processAttendanceFinalizationReminders(now = new Date()) {
 async function runScan() { if (running) return; running=true; try { await processAttendanceFinalizationReminders(); } catch (error) { logger.error({ err:error }, 'Attendance finalization reminder scan failed'); } finally { running=false; } }
 function startAttendanceFinalizationReminderScheduler() {
   if (timer) return;
-  logger.info({ enabled:Boolean(TEMPLATE), scanMinutes:SCAN_MINUTES, endOfDayHour:END_OF_DAY_HOUR, nextMorningHour:NEXT_MORNING_HOUR }, 'Attendance finalization reminder scheduler started');
+  logger.info({ templateOverrideConfigured:Boolean(TEMPLATE_OVERRIDE), scanMinutes:SCAN_MINUTES, endOfDayHour:END_OF_DAY_HOUR, nextMorningHour:NEXT_MORNING_HOUR }, 'Attendance finalization reminder scheduler started');
   setTimeout(runScan,7000).unref(); timer=setInterval(runScan,SCAN_MINUTES*60*1000); timer.unref();
 }
 
-module.exports = { ensureReminderTable, johannesburgParts, offsetClinicDate, reminderWindow, pendingCountForAuthority, processAttendanceFinalizationReminders, startAttendanceFinalizationReminderScheduler };
+module.exports = { ensureReminderTable, resolveApprovedTemplateName, johannesburgParts, offsetClinicDate, reminderWindow, pendingCountForAuthority, processAttendanceFinalizationReminders, startAttendanceFinalizationReminderScheduler };
