@@ -5,9 +5,8 @@ const {
   verifyWebhook,
   receiveWebhook,
 } = require("../controllers/webhookController");
-const { clientTestModeWebhook } = require("../controllers/clientTestWebhookController");
 
 router.get("/webhook", verifyWebhook);
-router.post("/webhook", clientTestModeWebhook, receiveWebhook);
+router.post("/webhook", receiveWebhook);
 
 module.exports = router;
