@@ -22,6 +22,7 @@ const { startAppointmentLifecycleScheduler } = require("./src/services/appointme
 const { startCustomerCareScheduler } = require("./src/services/customerCare");
 const { startBookingIntegrityScheduler } = require("./src/services/bookingIntegrityMonitor");
 const { ensureDemoClientPermissions } = require("./src/services/demoClientAccessBootstrap");
+const { startMandatoryDemoCleanupScheduler } = require("./src/services/demoMandatoryCleanup");
 
 const app = express();
 app.disable("x-powered-by");
@@ -64,6 +65,7 @@ async function start() {
     startAppointmentLifecycleScheduler();
     startCustomerCareScheduler();
     startBookingIntegrityScheduler();
+    startMandatoryDemoCleanupScheduler();
   });
 }
 start().catch((error) => { logger.fatal({ err: error }, "Shiloh failed during startup"); process.exit(1); });
