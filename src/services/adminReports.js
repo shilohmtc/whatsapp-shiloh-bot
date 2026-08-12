@@ -2,167 +2,18 @@ const { pool } = require('../db/pool');
 const { normalizePhone } = require('./clientIdentityOnboarding');
 const { isBusinessWide } = require('./staffAdminScope');
 const { earningsIntegrity, integrityLines } = require('./adminReportingIntegrity');
-
-const ABIGAIL_COMMISSION_RATE = 0.20;
-const ABIGAIL_MONTHLY_SALARY = 5000;
-
-function senderKey(sender){ return normalizePhone(sender); }
-function has(admin,p){ return admin?.permissions?.[p] === true; }
-function money(v){ return new Intl.NumberFormat('en-ZA',{style:'currency',currency:'ZAR',maximumFractionDigits:0}).format(Number(v||0)); }
-function clinicDate(offsetDays=0){
-  const now=new Date();
-  const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Africa/Johannesburg',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(now);
-  const p=Object.fromEntries(parts.map(x=>[x.type,x.value]));
-  const base=new Date(`${p.year}-${p.month}-${p.day}T12:00:00+02:00`);
-  base.setUTCDate(base.getUTCDate()+offsetDays);
-  return base;
-}
-function todayLabel(){ return new Intl.DateTimeFormat('en-ZA',{timeZone:'Africa/Johannesburg',weekday:'long',day:'2-digit',month:'long'}).format(new Date()); }
-function weekLabel(){
-  const now=clinicDate();
-  const localDay=now.getUTCDay();
-  const day=localDay===0?7:localDay;
-  const start=clinicDate(1-day);
-  const end=clinicDate(7-day);
-  const f=new Intl.DateTimeFormat('en-ZA',{timeZone:'Africa/Johannesburg',day:'2-digit',month:'short'});
-  return `${f.format(start)}–${f.format(end)}`;
-}
-function monthLabel(){ return new Intl.DateTimeFormat('en-ZA',{timeZone:'Africa/Johannesburg',month:'long',year:'numeric'}).format(new Date()); }
-
-async function getAdmin(sender){
-  const r=await pool.query(`SELECT id,staff_id,display_name,role,permissions,service_scope,business_role,calendar_scope FROM staff_admin_accounts WHERE normalized_whatsapp=$1 AND active=TRUE`,[senderKey(sender)]);
-  return r.rows[0]||null;
-}
-async function audit(admin,period,metadata){
-  await pool.query(`INSERT INTO crm_audit_events (actor_admin_id,action,entity_type,entity_id,metadata) VALUES ($1,$2,'admin_report',NULL,$3::jsonb)`,[admin.id,`admin.report.${period}`,JSON.stringify(metadata)]);
-}
-function clinicBounds(period='today'){
-  if(period==='month') return `a.starts_at >= (date_trunc('month', NOW() AT TIME ZONE 'Africa/Johannesburg') AT TIME ZONE 'Africa/Johannesburg')
-      AND a.starts_at < ((date_trunc('month', NOW() AT TIME ZONE 'Africa/Johannesburg') + INTERVAL '1 month') AT TIME ZONE 'Africa/Johannesburg')`;
-  if(period==='week') return `a.starts_at >= (date_trunc('week', NOW() AT TIME ZONE 'Africa/Johannesburg') AT TIME ZONE 'Africa/Johannesburg')
-      AND a.starts_at < ((date_trunc('week', NOW() AT TIME ZONE 'Africa/Johannesburg') + INTERVAL '7 days') AT TIME ZONE 'Africa/Johannesburg')`;
-  return `a.starts_at >= (((NOW() AT TIME ZONE 'Africa/Johannesburg')::date)::timestamp AT TIME ZONE 'Africa/Johannesburg')
-      AND a.starts_at < ((((NOW() AT TIME ZONE 'Africa/Johannesburg')::date + 1)::timestamp) AT TIME ZONE 'Africa/Johannesburg')`;
-}
-function scopeSql(admin,paramOffset=1){
-  if(isBusinessWide(admin)) return {sql:'TRUE',params:[]};
-  return {sql:`EXISTS (SELECT 1 FROM appointment_staff report_scope WHERE report_scope.appointment_id=a.id AND report_scope.staff_id=$${paramOffset})`,params:[admin.staff_id]};
-}
-async function reportData(admin,period='today'){
-  const wide=isBusinessWide(admin);
-  if(!wide&&!admin.staff_id) return {appointments:[],services:[],staff:[]};
-  const scope=scopeSql(admin,1);
-  const params=scope.params;
-  const bounds=clinicBounds(period);
-  const serviceJoin=wide
-    ? `LEFT JOIN appointment_services aps ON aps.appointment_id=a.id`
-    : `LEFT JOIN appointment_services aps ON aps.appointment_id=a.id AND EXISTS (SELECT 1 FROM staff_services report_ss WHERE report_ss.staff_id=$1 AND report_ss.service_id=aps.service_id)`;
-  const appointments=(await pool.query(`SELECT a.id,a.status,a.starts_at,a.total_price,COALESCE(c.display_name,a.source_client_name,'Unknown client') client_name,COALESCE(string_agg(DISTINCT aps.service_name_snapshot,', ') FILTER (WHERE aps.service_name_snapshot IS NOT NULL),'') services FROM appointments a LEFT JOIN clients c ON c.id=a.client_id ${serviceJoin} WHERE ${bounds} AND a.status<>'cancelled' AND ${scope.sql} GROUP BY a.id,c.display_name,a.source_client_name ORDER BY a.starts_at,a.id`,params)).rows;
-  const services=wide
-    ? (await pool.query(`SELECT aps.service_name_snapshot service,COUNT(DISTINCT a.id)::int appointments FROM appointments a JOIN appointment_services aps ON aps.appointment_id=a.id WHERE ${bounds} AND a.status<>'cancelled' GROUP BY aps.service_name_snapshot ORDER BY appointments DESC,aps.service_name_snapshot`)).rows
-    : (await pool.query(`SELECT aps.service_name_snapshot service,COUNT(DISTINCT a.id)::int appointments FROM appointments a JOIN appointment_services aps ON aps.appointment_id=a.id JOIN staff_services ss ON ss.staff_id=$1 AND ss.service_id=aps.service_id WHERE ${bounds} AND a.status<>'cancelled' AND ${scope.sql} GROUP BY aps.service_name_snapshot ORDER BY appointments DESC,aps.service_name_snapshot`,params)).rows;
-  const staff=wide?(await pool.query(`SELECT ast.staff_name_snapshot staff,COUNT(DISTINCT a.id)::int appointments FROM appointments a JOIN appointment_staff ast ON ast.appointment_id=a.id WHERE ${bounds} AND a.status<>'cancelled' GROUP BY ast.staff_name_snapshot ORDER BY appointments DESC,ast.staff_name_snapshot`)).rows:[];
-  return {appointments,services,staff};
-}
-function render(admin,data,period='today'){
-  const own=!isBusinessWide(admin);
-  const active=data.appointments;
-  const status={completed:0,upcoming:0,no_show:0,other:0};
-  const now=Date.now();
-  for(const a of active){ if(a.status==='completed') status.completed++; else if(a.status==='no_show') status.no_show++; else if(new Date(a.starts_at).getTime()>=now) status.upcoming++; else status.other++; }
-  const total=active.reduce((s,a)=>s+Number(a.total_price||0),0);
-  const periodTitle=period==='month'?'THIS MONTH':period==='week'?'THIS WEEK':'TODAY';
-  const title=own?`*YOUR ${periodTitle} — ${admin.display_name.toUpperCase()}*`:`*SHILOH — ${periodTitle}*`;
-  const label=period==='month'?monthLabel():period==='week'?weekLabel():todayLabel();
-  const lines=[title,label,''];
-  lines.push(`*${active.length} appointment${active.length===1?'':'s'}*`);
-  const pieces=[];if(status.completed)pieces.push(`${status.completed} completed`);if(status.upcoming)pieces.push(`${status.upcoming} upcoming`);if(status.no_show)pieces.push(`${status.no_show} no-show${status.no_show===1?'':'s'}`);if(status.other)pieces.push(`${status.other} in progress / awaiting status`);if(pieces.length)lines.push(pieces.join(' · '));
-  if(data.services.length){lines.push('','*Services booked*');for(const s of data.services.slice(0,8))lines.push(`${s.appointments} × ${s.service}`);}
-  if(!own&&data.staff.length){lines.push('','*Staff*');for(const s of data.staff)lines.push(`${s.staff} — ${s.appointments}`);}
-  if(!own&&total>0)lines.push('',`Clinic booked value: *${money(total)}*`);
-  if(own&&active.length&&period!=='month'){const next=active.find(a=>new Date(a.starts_at).getTime()>=now);if(next){const time=new Intl.DateTimeFormat('en-ZA',{timeZone:'Africa/Johannesburg',weekday:period==='week'?'short':undefined,hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(next.starts_at));lines.push('','*Next appointment*',`${time} — ${next.client_name}${next.services?` — ${next.services}`:''}`);}}
-  lines.push('','Figures come from Shiloh CRM and respect your authorized staff scope.');return lines.join('\n');
-}
-
-async function resolveAbigailStaff(){
-  const r=await pool.query(`SELECT id,display_name FROM staff WHERE status='active' AND lower(trim(display_name))='abigail' ORDER BY id`);
-  if(r.rowCount!==1) throw new Error(`Expected exactly one active Abigail staff record; found ${r.rowCount}`);
-  return r.rows[0];
-}
-async function abigailEarningsData(period='today'){
-  const abigail=await resolveAbigailStaff();
-  const bounds=clinicBounds(period);
-  const rows=(await pool.query(`
-    SELECT a.id,a.starts_at,a.total_price,COALESCE(c.display_name,a.source_client_name,'Unknown client') AS client_name,
-           COUNT(DISTINCT ast.staff_id)::int AS staff_count,
-           COALESCE(string_agg(DISTINCT aps.service_name_snapshot,', ') FILTER (WHERE aps.service_name_snapshot IS NOT NULL),'') AS services
-      FROM appointments a
-      JOIN appointment_staff ast_abigail ON ast_abigail.appointment_id=a.id AND ast_abigail.staff_id=$1
-      JOIN appointment_staff ast ON ast.appointment_id=a.id
-      LEFT JOIN appointment_services aps ON aps.appointment_id=a.id
-      LEFT JOIN clients c ON c.id=a.client_id
-     WHERE ${bounds}
-       AND a.status='completed'
-     GROUP BY a.id,c.display_name,a.source_client_name
-     ORDER BY a.starts_at,a.id`,[abigail.id])).rows;
-  const commissionable=rows.filter(r=>Number(r.staff_count)===1&&r.total_price!==null);
-  const joint=rows.filter(r=>Number(r.staff_count)>1);
-  const unpriced=rows.filter(r=>Number(r.staff_count)===1&&r.total_price===null);
-  const completedValue=commissionable.reduce((sum,r)=>sum+Number(r.total_price||0),0);
-  const commission=completedValue*ABIGAIL_COMMISSION_RATE;
-  const salary=period==='month'?ABIGAIL_MONTHLY_SALARY:0;
-  const totalCompensation=period==='month'?salary+commission:null;
-  const integrity=await earningsIntegrity({staffId:abigail.id,staffName:abigail.display_name,period});
-  return {abigail,rows,commissionable,joint,unpriced,completedValue,commission,rate:ABIGAIL_COMMISSION_RATE,salary,totalCompensation,integrity};
-}
-function renderAbigailEarnings(data,period='today',viewerOwn=false){
-  const label=period==='month'?monthLabel():period==='week'?weekLabel():todayLabel();
-  const title=viewerOwn?'*YOUR EARNINGS — ABIGAIL*':'*ABIGAIL — 20% EARNINGS*';
-  const lines=[title,label,''];
-  const warnings=integrityLines(data.integrity);if(warnings.length)lines.push(...warnings,'');
-  lines.push(`Completed solo appointments: *${data.commissionable.length}*`);
-  lines.push(`Completed treatment value: *${money(data.completedValue)}*`);
-  lines.push(`Abigail's 20%: *${money(data.commission)}*${data.integrity?.clean?'':' — provisional'}`);
-  if(period==='month'){
-    lines.push('',`Fixed monthly salary: *${money(data.salary)}*`);
-    lines.push(`Total gross compensation: *${money(data.totalCompensation)}*${data.integrity?.clean?'':' — provisional'}`);
-  }
-  if(data.joint.length) lines.push('',`Joint-practitioner appointments excluded: *${data.joint.length}*`, 'They are not included until service-level attribution is explicit.');
-  if(data.unpriced.length) lines.push('',`Completed appointments without a CRM price excluded: *${data.unpriced.length}*`);
-  lines.push('',period==='month'?'Monthly compensation = fixed R5,000 salary + 20% commission on qualifying completed treatments.':'Salary is monthly and is not prorated into today/week earnings.');
-  lines.push('Only completed, solely-Abigail appointments with a recorded CRM value are commissionable.');
-  return lines.join('\n');
-}
-function parseEarningsCommand(raw){
-  const own=/^my earnings(?: (today|this week|week|this month|month))?$/.exec(raw);
-  const named=/^abigail(?:'s)? earnings(?: (today|this week|week|this month|month))?$/.exec(raw);
-  const match=own||named;
-  if(!match) return null;
-  const token=match[1]||'today';
-  const period=token.includes('month')?'month':token.includes('week')?'week':'today';
-  return {period,own:Boolean(own)};
-}
-async function processAdminReportsMessage(sender,text){
-  const raw=String(text||'').trim().toLowerCase().replace(/\s+/g,' ');
-  const earnings=parseEarningsCommand(raw);
-  const today=['today report',"today's report",'todays report','daily report','my report today','my today report'].includes(raw);
-  const week=['this week','this week report',"this week's report",'weekly report','my week','my week report'].includes(raw);
-  const month=['this month','this month report',"this month's report",'monthly report','my month','my month report'].includes(raw);
-  if(!earnings&&!today&&!week&&!month) return {handled:false};
-  const admin=await getAdmin(sender);if(!admin)return {handled:false};
-  if(!has(admin,'appointment:view'))return {handled:true,admin,reply:'Your admin account does not currently have permission to view appointment reports.'};
-
-  if(earnings){
-    const abigail=await resolveAbigailStaff();
-    const viewerOwn=String(admin.staff_id||'')===String(abigail.id);
-    if(earnings.own&&!viewerOwn) return {handled:true,admin,reply:'The 20% earnings report is configured for Abigail only.'};
-    if(!earnings.own&&!isBusinessWide(admin)) return {handled:true,admin,reply:'Only a business-wide admin can view another practitioner’s earnings report.'};
-    const data=await abigailEarningsData(earnings.period);
-    await audit(admin,`abigail_earnings_${earnings.period}`,{scope:viewerOwn?'abigail_self':'business_admin',rate:ABIGAIL_COMMISSION_RATE,monthlySalary:earnings.period==='month'?ABIGAIL_MONTHLY_SALARY:null,commissionableAppointments:data.commissionable.length,jointExcluded:data.joint.length,unpricedExcluded:data.unpriced.length,completedValue:data.completedValue,commission:data.commission,totalCompensation:data.totalCompensation,integrityClean:data.integrity.clean,pendingCanonicalStatus:data.integrity.pendingStatus.length,unresolvedGoldie:data.integrity.unresolvedGoldie.length,unresolvedGoldieValue:data.integrity.unresolvedGoldieValue});
-    return {handled:true,admin,reply:renderAbigailEarnings(data,earnings.period,viewerOwn)};
-  }
-
-  const period=month?'month':week?'week':'today';
-  const data=await reportData(admin,period);await audit(admin,period,{scope:isBusinessWide(admin)?'all_business':'practitioner_self',appointmentCount:data.appointments.length});return {handled:true,admin,reply:render(admin,data,period)};
-}
+const ABIGAIL_COMMISSION_RATE=0.20,ABIGAIL_MONTHLY_SALARY=5000;
+function senderKey(s){return normalizePhone(s);}function has(a,p){return a?.permissions?.[p]===true;}function money(v){return new Intl.NumberFormat('en-ZA',{style:'currency',currency:'ZAR',maximumFractionDigits:0}).format(Number(v||0));}
+function clinicDate(offsetDays=0){const now=new Date();const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Africa/Johannesburg',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(now);const p=Object.fromEntries(parts.map(x=>[x.type,x.value]));const base=new Date(`${p.year}-${p.month}-${p.day}T12:00:00+02:00`);base.setUTCDate(base.getUTCDate()+offsetDays);return base;}
+function todayLabel(){return new Intl.DateTimeFormat('en-ZA',{timeZone:'Africa/Johannesburg',weekday:'long',day:'2-digit',month:'long'}).format(new Date());}function weekLabel(last=false){const now=clinicDate();const day=now.getUTCDay()===0?7:now.getUTCDay();const start=clinicDate(1-day-(last?7:0));const end=clinicDate(7-day-(last?7:0));const f=new Intl.DateTimeFormat('en-ZA',{timeZone:'Africa/Johannesburg',day:'2-digit',month:'short'});return `${f.format(start)}–${f.format(end)}`;}function monthLabel(){return new Intl.DateTimeFormat('en-ZA',{timeZone:'Africa/Johannesburg',month:'long',year:'numeric'}).format(new Date());}
+async function getAdmin(sender){const r=await pool.query(`SELECT id,staff_id,display_name,role,permissions,service_scope,business_role,calendar_scope FROM staff_admin_accounts WHERE normalized_whatsapp=$1 AND active=TRUE`,[senderKey(sender)]);return r.rows[0]||null;}async function audit(admin,period,metadata){await pool.query(`INSERT INTO crm_audit_events (actor_admin_id,action,entity_type,entity_id,metadata) VALUES ($1,$2,'admin_report',NULL,$3::jsonb)`,[admin.id,`admin.report.${period}`,JSON.stringify(metadata)]);}
+function clinicBounds(period='today'){if(period==='month')return `a.starts_at >= (date_trunc('month', NOW() AT TIME ZONE 'Africa/Johannesburg') AT TIME ZONE 'Africa/Johannesburg') AND a.starts_at < ((date_trunc('month', NOW() AT TIME ZONE 'Africa/Johannesburg') + INTERVAL '1 month') AT TIME ZONE 'Africa/Johannesburg')`;if(period==='last_week')return `a.starts_at >= ((date_trunc('week', NOW() AT TIME ZONE 'Africa/Johannesburg') - INTERVAL '7 days') AT TIME ZONE 'Africa/Johannesburg') AND a.starts_at < (date_trunc('week', NOW() AT TIME ZONE 'Africa/Johannesburg') AT TIME ZONE 'Africa/Johannesburg')`;if(period==='week')return `a.starts_at >= (date_trunc('week', NOW() AT TIME ZONE 'Africa/Johannesburg') AT TIME ZONE 'Africa/Johannesburg') AND a.starts_at < ((date_trunc('week', NOW() AT TIME ZONE 'Africa/Johannesburg') + INTERVAL '7 days') AT TIME ZONE 'Africa/Johannesburg')`;return `a.starts_at >= (((NOW() AT TIME ZONE 'Africa/Johannesburg')::date)::timestamp AT TIME ZONE 'Africa/Johannesburg') AND a.starts_at < ((((NOW() AT TIME ZONE 'Africa/Johannesburg')::date + 1)::timestamp) AT TIME ZONE 'Africa/Johannesburg')`;}
+function scopeSql(admin,paramOffset=1){if(isBusinessWide(admin))return{sql:'TRUE',params:[]};return{sql:`EXISTS (SELECT 1 FROM appointment_staff report_scope WHERE report_scope.appointment_id=a.id AND report_scope.staff_id=$${paramOffset})`,params:[admin.staff_id]};}
+async function reportData(admin,period='today'){const wide=isBusinessWide(admin);if(!wide&&!admin.staff_id)return{appointments:[],services:[],staff:[]};const scope=scopeSql(admin,1),params=scope.params,bounds=clinicBounds(period);const serviceJoin=wide?`LEFT JOIN appointment_services aps ON aps.appointment_id=a.id`:`LEFT JOIN appointment_services aps ON aps.appointment_id=a.id AND EXISTS (SELECT 1 FROM staff_services report_ss WHERE report_ss.staff_id=$1 AND report_ss.service_id=aps.service_id)`;const appointments=(await pool.query(`SELECT a.id,a.status,a.starts_at,a.total_price,COALESCE(c.display_name,a.source_client_name,'Unknown client') client_name,COALESCE(string_agg(DISTINCT aps.service_name_snapshot,', ') FILTER (WHERE aps.service_name_snapshot IS NOT NULL),'') services FROM appointments a LEFT JOIN clients c ON c.id=a.client_id ${serviceJoin} WHERE ${bounds} AND a.status<>'cancelled' AND ${scope.sql} GROUP BY a.id,c.display_name,a.source_client_name ORDER BY a.starts_at,a.id`,params)).rows;const services=wide?(await pool.query(`SELECT aps.service_name_snapshot service,COUNT(DISTINCT a.id)::int appointments FROM appointments a JOIN appointment_services aps ON aps.appointment_id=a.id WHERE ${bounds} AND a.status<>'cancelled' GROUP BY aps.service_name_snapshot ORDER BY appointments DESC,aps.service_name_snapshot`)).rows:(await pool.query(`SELECT aps.service_name_snapshot service,COUNT(DISTINCT a.id)::int appointments FROM appointments a JOIN appointment_services aps ON aps.appointment_id=a.id JOIN staff_services ss ON ss.staff_id=$1 AND ss.service_id=aps.service_id WHERE ${bounds} AND a.status<>'cancelled' AND ${scope.sql} GROUP BY aps.service_name_snapshot ORDER BY appointments DESC,aps.service_name_snapshot`,params)).rows;const staff=wide?(await pool.query(`SELECT ast.staff_name_snapshot staff,COUNT(DISTINCT a.id)::int appointments FROM appointments a JOIN appointment_staff ast ON ast.appointment_id=a.id WHERE ${bounds} AND a.status<>'cancelled' GROUP BY ast.staff_name_snapshot ORDER BY appointments DESC,ast.staff_name_snapshot`)).rows:[];return{appointments,services,staff};}
+function render(admin,data,period='today'){const own=!isBusinessWide(admin),active=data.appointments,status={completed:0,upcoming:0,no_show:0,other:0},now=Date.now();for(const a of active){if(a.status==='completed')status.completed++;else if(a.status==='no_show')status.no_show++;else if(new Date(a.starts_at).getTime()>=now)status.upcoming++;else status.other++;}const total=active.reduce((s,a)=>s+Number(a.total_price||0),0);const periodTitle=period==='month'?'THIS MONTH':period==='last_week'?'LAST WEEK':period==='week'?'THIS WEEK':'TODAY';const title=own?`*YOUR ${periodTitle} — ${admin.display_name.toUpperCase()}*`:`*SHILOH — ${periodTitle}*`;const label=period==='month'?monthLabel():period==='last_week'?weekLabel(true):period==='week'?weekLabel():todayLabel();const lines=[title,label,'',`*${active.length} appointment${active.length===1?'':'s'}*`];const pieces=[];if(status.completed)pieces.push(`${status.completed} completed`);if(status.upcoming)pieces.push(`${status.upcoming} upcoming`);if(status.no_show)pieces.push(`${status.no_show} no-show${status.no_show===1?'':'s'}`);if(status.other)pieces.push(`${status.other} in progress / awaiting status`);if(pieces.length)lines.push(pieces.join(' · '));if(data.services.length){lines.push('','*Services booked*');for(const s of data.services.slice(0,8))lines.push(`${s.appointments} × ${s.service}`);}if(!own&&data.staff.length){lines.push('','*Staff*');for(const s of data.staff)lines.push(`${s.staff} — ${s.appointments}`);}if(!own&&total>0)lines.push('',`Clinic booked value: *${money(total)}*`);lines.push('','Figures come from Shiloh CRM and respect your authorized staff scope.');return lines.join('\n');}
+async function resolveAbigailStaff(){const r=await pool.query(`SELECT id,display_name FROM staff WHERE status='active' AND lower(trim(display_name))='abigail' ORDER BY id`);if(r.rowCount!==1)throw new Error(`Expected exactly one active Abigail staff record; found ${r.rowCount}`);return r.rows[0];}
+async function abigailEarningsData(period='today'){const abigail=await resolveAbigailStaff(),bounds=clinicBounds(period);const rows=(await pool.query(`SELECT a.id,a.starts_at,a.total_price,COALESCE(c.display_name,a.source_client_name,'Unknown client') AS client_name,COUNT(DISTINCT ast.staff_id)::int AS staff_count,COALESCE(string_agg(DISTINCT aps.service_name_snapshot,', ') FILTER (WHERE aps.service_name_snapshot IS NOT NULL),'') AS services FROM appointments a JOIN appointment_staff ast_abigail ON ast_abigail.appointment_id=a.id AND ast_abigail.staff_id=$1 JOIN appointment_staff ast ON ast.appointment_id=a.id LEFT JOIN appointment_services aps ON aps.appointment_id=a.id LEFT JOIN clients c ON c.id=a.client_id WHERE ${bounds} AND a.status='completed' GROUP BY a.id,c.display_name,a.source_client_name ORDER BY a.starts_at,a.id`,[abigail.id])).rows;const commissionable=rows.filter(r=>Number(r.staff_count)===1&&r.total_price!==null),joint=rows.filter(r=>Number(r.staff_count)>1),unpriced=rows.filter(r=>Number(r.staff_count)===1&&r.total_price===null),completedValue=commissionable.reduce((s,r)=>s+Number(r.total_price||0),0),commission=completedValue*ABIGAIL_COMMISSION_RATE,salary=period==='month'?ABIGAIL_MONTHLY_SALARY:0,totalCompensation=period==='month'?salary+commission:null,integrity=await earningsIntegrity({staffId:abigail.id,staffName:abigail.display_name,period});return{abigail,rows,commissionable,joint,unpriced,completedValue,commission,rate:ABIGAIL_COMMISSION_RATE,salary,totalCompensation,integrity};}
+function renderAbigailEarnings(data,period='today',viewerOwn=false){const label=period==='month'?monthLabel():period==='last_week'?weekLabel(true):period==='week'?weekLabel():todayLabel(),title=viewerOwn?'*YOUR EARNINGS — ABIGAIL*':'*ABIGAIL — 20% EARNINGS*',lines=[title,label,''];const warnings=integrityLines(data.integrity);if(warnings.length)lines.push(...warnings,'');lines.push(`Completed solo appointments: *${data.commissionable.length}*`,`Completed treatment value: *${money(data.completedValue)}*`,`Abigail's 20%: *${money(data.commission)}*${data.integrity?.clean?'':' — provisional'}`);if(period==='month')lines.push('',`Fixed monthly salary: *${money(data.salary)}*`,`Total gross compensation: *${money(data.totalCompensation)}*${data.integrity?.clean?'':' — provisional'}`);if(data.joint.length)lines.push('',`Joint-practitioner appointments excluded: *${data.joint.length}*`,'They are not included until service-level attribution is explicit.');if(data.unpriced.length)lines.push('',`Completed appointments without a CRM price excluded: *${data.unpriced.length}*`);lines.push('',period==='month'?'Monthly compensation = fixed R5,000 salary + 20% commission on qualifying completed treatments.':'Salary is monthly and is not prorated into today/week earnings.','Only completed, solely-Abigail appointments with a recorded CRM value are commissionable.');return lines.join('\n');}
+function parseEarningsCommand(raw){const own=/^my earnings(?: (today|this week|week|last week|this month|month))?$/.exec(raw),named=/^abigail(?:'s)? earnings(?: (today|this week|week|last week|this month|month))?$/.exec(raw),match=own||named;if(!match)return null;const token=match[1]||'today';return{period:token==='last week'?'last_week':token.includes('month')?'month':token.includes('week')?'week':'today',own:Boolean(own)};}
+async function processAdminReportsMessage(sender,text){const raw=String(text||'').trim().toLowerCase().replace(/\s+/g,' '),earnings=parseEarningsCommand(raw),today=['today report',"today's report",'todays report','daily report','my report today','my today report'].includes(raw),week=['this week','this week report',"this week's report",'weekly report','my week','my week report'].includes(raw),lastWeek=['last week','last week report',"last week's report",'my last week','my last week report'].includes(raw),month=['this month','this month report',"this month's report",'monthly report','my month','my month report'].includes(raw);if(!earnings&&!today&&!week&&!lastWeek&&!month)return{handled:false};const admin=await getAdmin(sender);if(!admin)return{handled:false};if(!has(admin,'appointment:view'))return{handled:true,admin,reply:'Your admin account does not currently have permission to view appointment reports.'};if(earnings){const abigail=await resolveAbigailStaff(),viewerOwn=String(admin.staff_id||'')===String(abigail.id);if(earnings.own&&!viewerOwn)return{handled:true,admin,reply:'The 20% earnings report is configured for Abigail only.'};if(!earnings.own&&!isBusinessWide(admin))return{handled:true,admin,reply:'Only a business-wide admin can view another practitioner’s earnings report.'};const data=await abigailEarningsData(earnings.period);await audit(admin,`abigail_earnings_${earnings.period}`,{scope:viewerOwn?'abigail_self':'business_admin',rate:ABIGAIL_COMMISSION_RATE,monthlySalary:earnings.period==='month'?ABIGAIL_MONTHLY_SALARY:null,commissionableAppointments:data.commissionable.length,jointExcluded:data.joint.length,unpricedExcluded:data.unpriced.length,completedValue:data.completedValue,commission:data.commission,totalCompensation:data.totalCompensation,integrityClean:data.integrity.clean,pendingCanonicalStatus:data.integrity.pendingStatus.length,unresolvedGoldie:data.integrity.unresolvedGoldie.length,unresolvedGoldieValue:data.integrity.unresolvedGoldieValue});return{handled:true,admin,reply:renderAbigailEarnings(data,earnings.period,viewerOwn)};}const period=month?'month':lastWeek?'last_week':week?'week':'today',data=await reportData(admin,period);await audit(admin,period,{scope:isBusinessWide(admin)?'all_business':'practitioner_self',appointmentCount:data.appointments.length});return{handled:true,admin,reply:render(admin,data,period)};}
 module.exports={processAdminReportsMessage,reportData,render,clinicBounds,abigailEarningsData,renderAbigailEarnings,parseEarningsCommand,ABIGAIL_COMMISSION_RATE,ABIGAIL_MONTHLY_SALARY};
