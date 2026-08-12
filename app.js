@@ -24,6 +24,7 @@ const { startBookingIntegrityScheduler } = require("./src/services/bookingIntegr
 const { ensureDemoClientPermissions } = require("./src/services/demoClientAccessBootstrap");
 const { ensureJeanPierreAdminCapabilities } = require("./src/services/jeanPierreAdminAccessBootstrap");
 const { startMandatoryDemoCleanupScheduler } = require("./src/services/demoMandatoryCleanup");
+const { startAttendanceFinalizationReminderScheduler } = require("./src/services/attendanceFinalizationReminders");
 
 const app = express();
 app.disable("x-powered-by");
@@ -70,6 +71,7 @@ async function start() {
     startCustomerCareScheduler();
     startBookingIntegrityScheduler();
     startMandatoryDemoCleanupScheduler();
+    startAttendanceFinalizationReminderScheduler();
   });
 }
 start().catch((error) => { logger.fatal({ err: error }, "Shiloh failed during startup"); process.exit(1); });
