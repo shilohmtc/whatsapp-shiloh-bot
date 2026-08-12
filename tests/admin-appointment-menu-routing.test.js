@@ -11,7 +11,7 @@ const menu=fs.readFileSync(menuPath,'utf8');
 const webhook=fs.readFileSync(webhookPath,'utf8');
 const { relativeCommand,lastWeekBounds }=require(byDatePath);
 
-test('numbered menu choices 1 and 2 map deterministically to today and tomorrow',()=>{
+test('top-level numbered choices 1 and 2 can resolve deterministically to today and tomorrow',()=>{
   assert.equal(relativeCommand('1'),'today');
   assert.equal(relativeCommand('2'),'tomorrow');
   assert.equal(relativeCommand("Today's clients"),'today');
@@ -28,12 +28,12 @@ test('last week is a real Appointments list option and means a completed seven-d
   assert.equal(days,7);
 });
 
-test('appointment date router runs before generic mobile/admin assistant fallthrough',()=>{
+test('mobile menu gets first chance at numbers so nested menus keep their own 1/2 meanings',()=>{
   const appointments=webhook.indexOf('processAdminAppointmentsByDateMessage(from,text)');
   const mobile=webhook.indexOf('processAdminMobileMenuMessage(from,text)');
   const assistant=webhook.indexOf('processAdminAssistantMessage(from,text)');
   assert.ok(appointments>=0 && mobile>=0 && assistant>=0);
-  assert.ok(appointments < mobile);
+  assert.ok(mobile < appointments);
   assert.ok(appointments < assistant);
 });
 
