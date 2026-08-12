@@ -88,7 +88,7 @@ function enrichPrivilegedReportsMenu(result) {
   if (!jeanPierre && !christel) return result;
   let body = String(result.interactive.body);
   if (jeanPierre && !/Christel earnings/i.test(body)) body += '\n\n*Reports*\n98️⃣ 💰 Christel earnings';
-  if (!/Marietjie earnings/i.test(body)) body += /\*Reports\*/i.test(body) ? '\n99️⃣ 💰 Marietjie earnings' : '\n\n*Reports*\n99️⃣ 💰 Marietjie earnings';
+  if (!/Marietjie earnings/i.test(body)) body += '\n\n*Reports*\n99️⃣ 💰 Marietjie earnings';
   if (jeanPierre && !/Calendar integrity/i.test(body)) body += '\n\n*More*\n97️⃣ 🛡️ Calendar integrity';
   return { ...result, interactive: { ...result.interactive, body } };
 }
