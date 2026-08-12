@@ -28,12 +28,12 @@ test('last week is a real Appointments list option and means a completed seven-d
   assert.equal(days,7);
 });
 
-test('mobile menu gets first chance at numbers so nested menus keep their own 1/2 meanings',()=>{
+test('interactive admin adapter gets first chance so nested menus keep their own routing contract',()=>{
+  const adapter=webhook.indexOf('processAdminInteractiveMenuMessage(from,text)');
   const appointments=webhook.indexOf('processAdminAppointmentsByDateMessage(from,text)');
-  const mobile=webhook.indexOf('processAdminMobileMenuMessage(from,text)');
   const assistant=webhook.indexOf('processAdminAssistantMessage(from,text)');
-  assert.ok(appointments>=0 && mobile>=0 && assistant>=0);
-  assert.ok(mobile < appointments);
+  assert.ok(adapter>=0 && appointments>=0 && assistant>=0);
+  assert.ok(adapter < appointments);
   assert.ok(appointments < assistant);
 });
 
