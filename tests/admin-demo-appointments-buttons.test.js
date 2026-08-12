@@ -14,43 +14,39 @@ const commonPermissions = {
   'demo:client': true,
 };
 
-test('Appointments and Demo Client route through genuine WhatsApp reply buttons',()=>{
+test('legacy Demo Client control remains normalized for regression infrastructure only',()=>{
   assert.equal(commandForAdminButton('admin_menu_appointments'),'Appointments');
   assert.equal(commandForAdminButton('admin_demo_client_start'),'Demo Client');
-  assert.match(menuSource,/const buttons=\[\{id:'admin_menu_appointments',title:'Appointments'\}\]/);
-  assert.match(menuSource,/if\(has\(admin,'demo:client'\)\)buttons\.push\(\{id:'admin_demo_client_start',title:'🧪 Demo Client'\}\)/);
-  assert.match(menuSource,/interactive:\{type:'button',body,buttons\}/);
-  assert.match(menuSource,/if\(v==='appointments'\)/);
-  assert.match(menuSource,/appointmentsInteractive\(admin\)/);
+  assert.match(menuSource,/if\(has\(admin,'demo:client'\)\)buttons\.push/);
 });
 
-test('Abigail and Marietjie appointment panels contain a real Demo Client list row',()=>{
+test('production Appointments panels do not expose Demo Client even if a stale permission copy exists',()=>{
   for (const admin of [
     { display_name:'Abigail', business_role:'employee_practitioner', calendar_scope:'own_appointments', permissions:commonPermissions },
     { display_name:'Marietjie', business_role:'tenant_practitioner', calendar_scope:'own_services', permissions:commonPermissions },
+    { display_name:'Christel', business_role:'owner', calendar_scope:'all_business', permissions:commonPermissions },
   ]) {
     const panel = appointmentsInteractive(admin);
     assert.equal(panel.type,'list');
     assert.equal(panel.sectionTitle,'Appointments');
-    assert.ok(panel.rows.some(row=>row.id==='demo client' && row.title==='🧪 Demo Client'));
-    assert.ok(panel.rows.some(row=>row.id==='make a booking'));
-    assert.ok(panel.rows.some(row=>row.id==='find an available time'));
+    assert.equal(panel.rows.some(row=>/demo/i.test(row.id)||/Demo Client/i.test(row.title)),false);
+    assert.ok(panel.rows.some(row=>row.id==='admin_appointment_booking'));
+    assert.ok(panel.rows.some(row=>row.id==='admin_appointment_availability'));
     assert.ok(panel.rows.length <= 10);
   }
 });
 
-test('Demo Client is not exposed through the appointments panel without explicit permission',()=>{
+test('Jean-Pierre production Appointments panel also excludes Demo Client',()=>{
   const panel = appointmentsInteractive({
     display_name:'Jean-Pierre',
     business_role:'business_admin',
     calendar_scope:'all_business',
     permissions:{'appointment:view':true,'appointment:create':true,'booking:update':true},
   });
-  assert.equal(panel.rows.some(row=>row.id==='demo client'),false);
-  assert.match(menuSource,/if\(has\(admin,'demo:client'\)\)buttons\.push/);
+  assert.equal(panel.rows.some(row=>/demo/i.test(row.id)||/Demo Client/i.test(row.title)),false);
 });
 
-test('flat-menu fallback also places Demo Client in the Appointments section only when permitted',()=>{
+test('flat-menu Demo Client fallback remains permission-gated but production bootstrap revokes that permission',()=>{
   assert.match(menuSource,/key:'demo_client',label:'🧪 Demo Client',section:'Appointments'/);
   assert.match(menuSource,/if\(has\(admin,'demo:client'\)\)options\.push/);
   assert.match(menuSource,/selected\.key==='demo_client'/);

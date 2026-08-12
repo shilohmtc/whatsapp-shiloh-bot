@@ -13,6 +13,13 @@ const BUTTON_COMMANDS = Object.freeze({
   admin_booking_cancel: 'Cancel booking',
   admin_menu_appointments: 'Appointments',
   admin_demo_client_start: 'Demo Client',
+  admin_appointment_today: 'Appointments today',
+  admin_appointment_tomorrow: 'Appointments tomorrow',
+  admin_appointment_last_week: 'Appointments last week',
+  admin_appointment_availability: 'Find an available time',
+  admin_appointment_booking: 'Make a booking',
+  admin_appointment_manage: 'Manage booking',
+  admin_appointment_finalize: 'Finalize past appointments',
 });
 
 function earningsPeriodList(kind) {

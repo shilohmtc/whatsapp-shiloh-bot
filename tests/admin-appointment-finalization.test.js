@@ -11,7 +11,8 @@ const interactiveMenu = source('src/services/adminInteractiveMenu.js');
 
 test('past finalization is visible only behind appointment view plus booking update permission', () => {
   assert.match(appointmentsMenu, /has\(admin, 'booking:update'\) && has\(admin, 'appointment:view'\)/);
-  assert.match(appointmentsMenu, /finalize past appointments/);
+  assert.match(appointmentsMenu, /admin_appointment_finalize/);
+  assert.match(appointmentsMenu, /Finalize past visits/);
   assert.match(finalization, /!has\(admin, 'appointment:view'\) \|\| !has\(admin, 'booking:update'\)/);
 });
 
