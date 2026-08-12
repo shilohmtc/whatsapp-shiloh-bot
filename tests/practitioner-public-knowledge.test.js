@@ -7,10 +7,12 @@ const practitionerPath = path.join(__dirname, '..', 'src', 'services', 'practiti
 const aiPath = path.join(__dirname, '..', 'src', 'services', 'ai.js');
 const orchestratorPath = path.join(__dirname, '..', 'src', 'services', 'orchestrator.js');
 const migrationPath = path.join(__dirname, '..', 'migrations', '044_practitioner_customer_profiles.sql');
+const titleMigrationPath = path.join(__dirname, '..', 'migrations', '045_approved_practitioner_titles.sql');
 const source = fs.readFileSync(practitionerPath, 'utf8');
 const ai = fs.readFileSync(aiPath, 'utf8');
 const orchestrator = fs.readFileSync(orchestratorPath, 'utf8');
 const migration = fs.readFileSync(migrationPath, 'utf8');
+const titleMigration = fs.readFileSync(titleMigrationPath, 'utf8');
 const { formatPractitioner } = require(practitionerPath);
 
 test('public practitioner metadata is stored in a separate approval-gated CRM table', () => {
@@ -22,13 +24,15 @@ test('public practitioner metadata is stored in a separate approval-gated CRM ta
   assert.match(source, /CREATE TABLE IF NOT EXISTS staff_customer_profiles/);
 });
 
-test('only the already-approved Christel and Abigail public title is seeded; Marietjie remains unpublished', () => {
-  assert.match(migration, /LOWER\(display_name\) IN \('christel', 'abigail'\)/);
-  assert.match(migration, /'Massage practitioner'/);
-  assert.match(migration, /business_direction_2026-08-12/);
-  assert.match(migration, /LOWER\(display_name\) = 'marietjie'/);
-  assert.match(migration, /SELECT id, NULL, NULL, '\[\]'::jsonb, FALSE/);
-  assert.doesNotMatch(migration, /Marietjie[^\n]*(Massage practitioner|therapist|aesthetician|beautician)/i);
+test('approved client-facing titles cover the three treatment practitioners and update existing Marietjie metadata', () => {
+  assert.match(titleMigration, /LOWER\(display_name\) IN \('christel', 'abigail', 'marietjie'\)/);
+  assert.match(titleMigration, /WHEN 'marietjie' THEN 'Esthetician'/);
+  assert.match(titleMigration, /ELSE 'Massage practitioner'/);
+  assert.match(titleMigration, /ON CONFLICT \(staff_id\) DO UPDATE SET/);
+  assert.match(titleMigration, /is_approved = TRUE/);
+  assert.match(source, /WHEN 'marietjie' THEN 'Esthetician'/);
+  assert.match(source, /ELSE 'Massage practitioner'/);
+  assert.match(source, /business_direction_2026-08-12_practitioner_titles/);
 });
 
 test('AI practitioner knowledge is restricted to active client-bookable practitioners and active services', () => {
@@ -41,21 +45,21 @@ test('AI practitioner knowledge is restricted to active client-bookable practiti
 
 test('unapproved profile values are never exposed or inferred while mapped services remain visible', () => {
   const rendered = formatPractitioner({
-    display_name: 'Marietjie',
+    display_name: 'Unapproved practitioner',
     public_title: 'Invented title',
     short_bio: 'Invented bio',
     approved_specialties: ['Invented specialty'],
     profile_approved: false,
     active_services: [{ id: 1, name: 'Mapped Service' }],
   });
-  assert.match(rendered, /Practitioner: Marietjie/);
+  assert.match(rendered, /Practitioner: Unapproved practitioner/);
   assert.match(rendered, /Public profile status: not approved/);
   assert.match(rendered, /Active CRM-mapped services: Mapped Service/);
   assert.doesNotMatch(rendered, /Invented title|Invented bio|Invented specialty/);
 });
 
 test('approved profile fields are exposed exactly without deriving extra credentials', () => {
-  const rendered = formatPractitioner({
+  const christel = formatPractitioner({
     display_name: 'Christel',
     public_title: 'Massage practitioner',
     short_bio: null,
@@ -63,9 +67,19 @@ test('approved profile fields are exposed exactly without deriving extra credent
     profile_approved: true,
     active_services: [{ id: 2, name: 'Swedish Massage' }],
   });
-  assert.match(rendered, /Approved public title: Massage practitioner/);
-  assert.match(rendered, /Active CRM-mapped services: Swedish Massage/);
-  assert.doesNotMatch(rendered, /qualified|certified|years|expert/i);
+  const marietjie = formatPractitioner({
+    display_name: 'Marietjie',
+    public_title: 'Esthetician',
+    short_bio: null,
+    approved_specialties: [],
+    profile_approved: true,
+    active_services: [{ id: 3, name: 'Mapped Aesthetic Service' }],
+  });
+  assert.match(christel, /Approved public title: Massage practitioner/);
+  assert.match(christel, /Active CRM-mapped services: Swedish Massage/);
+  assert.match(marietjie, /Approved public title: Esthetician/);
+  assert.match(marietjie, /Active CRM-mapped services: Mapped Aesthetic Service/);
+  assert.doesNotMatch(`${christel}\n${marietjie}`, /qualified|certified|years|expert/i);
 });
 
 test('practitioner CRM knowledge is injected ahead of legacy retrieval alongside active catalogue', () => {

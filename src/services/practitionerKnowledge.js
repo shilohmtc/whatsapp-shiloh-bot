@@ -28,24 +28,27 @@ async function ensurePractitionerProfileSchema() {
   await pool.query(`
     INSERT INTO staff_customer_profiles
       (staff_id, public_title, short_bio, approved_specialties, is_approved, approval_source, approved_at, updated_at)
-    SELECT id, 'Massage practitioner', NULL, '[]'::jsonb, TRUE,
-           'business_direction_2026-08-12', TIMESTAMPTZ '2026-08-12 00:00:00+02', NOW()
+    SELECT id,
+           CASE LOWER(display_name)
+             WHEN 'marietjie' THEN 'Esthetician'
+             ELSE 'Massage practitioner'
+           END,
+           NULL,
+           '[]'::jsonb,
+           TRUE,
+           'business_direction_2026-08-12_practitioner_titles',
+           TIMESTAMPTZ '2026-08-12 11:33:00+02',
+           NOW()
       FROM staff
-     WHERE LOWER(display_name) IN ('christel', 'abigail')
+     WHERE LOWER(display_name) IN ('christel', 'abigail', 'marietjie')
        AND status = 'active'
        AND resource_type = 'practitioner'
-    ON CONFLICT (staff_id) DO NOTHING
-  `);
-
-  await pool.query(`
-    INSERT INTO staff_customer_profiles
-      (staff_id, public_title, short_bio, approved_specialties, is_approved, approval_source, approved_at, updated_at)
-    SELECT id, NULL, NULL, '[]'::jsonb, FALSE, NULL, NULL, NOW()
-      FROM staff
-     WHERE LOWER(display_name) = 'marietjie'
-       AND status = 'active'
-       AND resource_type = 'practitioner'
-    ON CONFLICT (staff_id) DO NOTHING
+    ON CONFLICT (staff_id) DO UPDATE SET
+      public_title = EXCLUDED.public_title,
+      is_approved = TRUE,
+      approval_source = EXCLUDED.approval_source,
+      approved_at = EXCLUDED.approved_at,
+      updated_at = NOW()
   `);
 
   initialized = true;

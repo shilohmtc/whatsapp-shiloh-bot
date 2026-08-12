@@ -1,0 +1,97 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+
+const interactivePath = path.join(__dirname, '..', 'src', 'services', 'clientBookingInteractive.js');
+const discoveryPath = path.join(__dirname, '..', 'src', 'services', 'clientDiscoveryMenu.js');
+const staffGuardPath = path.join(__dirname, '..', 'src', 'services', 'clientBookingStaffGuard.js');
+const source = fs.readFileSync(interactivePath, 'utf8');
+const discovery = fs.readFileSync(discoveryPath, 'utf8');
+const {
+  bookingDiscoveryInteractive,
+  confirmationInteractive,
+  decorateClientBookingResult,
+  practitionerRequiredInteractive,
+} = require(interactivePath);
+const { clientFacingPractitionerLabel } = require(staffGuardPath);
+
+const serviceIntent = {
+  service_text: 'Swedish Massage',
+  service_verified: true,
+  therapist_text: null,
+  preferred_date: null,
+  preferred_time: null,
+  status: 'collecting',
+};
+
+test('booking entry explains the three-person client-facing treatment team', () => {
+  const view = bookingDiscoveryInteractive();
+  assert.equal(view.type, 'button');
+  assert.match(view.body, /Christel — Massage practitioner/);
+  assert.match(view.body, /Abigail — Massage practitioner/);
+  assert.match(view.body, /Marietjie — Esthetician/);
+  assert.deepEqual(view.buttons.map((button) => button.id), ['client_browse_services', 'client_practitioners']);
+});
+
+test('Our practitioners chooser labels the three client-facing roles without exposing owner or employee status', () => {
+  assert.equal(clientFacingPractitionerLabel('Christel'), 'Christel · Massage');
+  assert.equal(clientFacingPractitionerLabel('Abigail'), 'Abigail · Massage');
+  assert.equal(clientFacingPractitionerLabel('Marietjie'), 'Marietjie · Esthetician');
+  const labels = [
+    clientFacingPractitionerLabel('Christel'),
+    clientFacingPractitionerLabel('Abigail'),
+    clientFacingPractitionerLabel('Marietjie'),
+  ].join(' ');
+  assert.doesNotMatch(labels, /owner|employee/i);
+});
+
+test('missing practitioner preference blocks date collection and redirects to CRM-backed discovery', () => {
+  const decorated = decorateClientBookingResult({ handled: true, intent: serviceIntent });
+  assert.equal(decorated.interactive.type, 'button');
+  assert.match(decorated.interactive.body, /choose your practitioner preference before choosing a date/i);
+  assert.match(decorated.interactive.body, /only the practitioners currently eligible/i);
+  assert.deepEqual(decorated.interactive.buttons.map((button) => button.id), ['client_browse_services', 'client_practitioners']);
+});
+
+test('missing practitioner can never silently become Any available at final confirmation', () => {
+  const awaiting = decorateClientBookingResult({
+    handled: true,
+    intent: { ...serviceIntent, preferred_date: '2026-08-13', preferred_time: '14:00', status: 'awaiting_confirmation' },
+  });
+  assert.match(awaiting.interactive.body, /Shiloh will not silently treat a missing practitioner choice as “Any available”/);
+  assert.doesNotMatch(source, /therapist_text\s*\|\|\s*['"]Any available practitioner['"]/);
+
+  const explicit = confirmationInteractive({
+    ...serviceIntent,
+    therapist_text: 'Any available therapist',
+    preferred_date: '2026-08-13',
+    preferred_time: '14:00',
+    status: 'awaiting_confirmation',
+  });
+  assert.match(explicit.body, /Practitioner: Any available therapist/);
+});
+
+test('standard discovery keeps Any available explicit and service-scoped', () => {
+  assert.match(discovery, /id: 'client_practitioner_any'/);
+  assert.match(discovery, /Use any eligible practitioner for this service/);
+  assert.match(discovery, /listEligiblePractitionersForService/);
+  assert.match(discovery, /practitionerEligibleForService/);
+  assert.match(discovery, /serviceEligibleForPractitioner/);
+  assert.match(discovery, /st\.client_bookable = TRUE/);
+});
+
+test('typed booking entry is redirected into treatment-or-practitioner discovery when service is missing', () => {
+  const decorated = decorateClientBookingResult({
+    handled: true,
+    intent: { ...serviceIntent, service_text: null, service_verified: null },
+  });
+  assert.equal(decorated.interactive.type, 'button');
+  assert.deepEqual(decorated.interactive.buttons.map((button) => button.id), ['client_browse_services', 'client_practitioners']);
+});
+
+test('practitioner requirement copy never labels the treatment team as employees', () => {
+  const view = practitionerRequiredInteractive(serviceIntent);
+  assert.doesNotMatch(`${bookingDiscoveryInteractive().body}\n${view.body}`, /employees?/i);
+  assert.match(view.body, /client-facing treatment team/i);
+});
