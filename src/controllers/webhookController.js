@@ -4,6 +4,7 @@ const { updateProfileFromMessage } = require("../services/profileExtractor");
 const { CLINIC_REDIRECT, evaluateClinicScope } = require("../services/scopeGuard");
 const { processBookingMessage } = require("../services/bookingIntent");
 const { processBookingPolicyMessage, sanitizeBookingReply } = require("../services/bookingPolicy");
+const { commandForClientBookingButton, decorateClientBookingResult } = require("../services/clientBookingInteractive");
 const { guardClientFreelancerBooking } = require("../services/clientBookingStaffGuard");
 const { guardEnglishOnly } = require("../services/englishLanguageGuard");
 const { processAppointmentChangeMessage } = require("../services/appointmentChange");
@@ -36,7 +37,7 @@ function inboundText(message){
   if(message?.type==="text") return message.text?.body?.trim()||null;
   if(message?.type==="interactive"&&message.interactive?.type==="button_reply") {
     const id=message.interactive.button_reply?.id?.trim()||'';
-    return commandForAdminButton(id)||id||null;
+    return commandForAdminButton(id)||commandForClientBookingButton(id)||id||null;
   }
   if(message?.type==="interactive"&&message.interactive?.type==="list_reply") {
     const id=message.interactive.list_reply?.id?.trim()||'';
@@ -79,6 +80,6 @@ const scope=evaluateClinicScope(text);if(!scope.allowed){await sendWhatsAppMessa
 const freelancerGuard=await guardClientFreelancerBooking(text);if(freelancerGuard.blocked){log.info({from:maskPhone(from),staff:freelancerGuard.staff?.display_name||null},"Blocked client freelancer booking request");await sendWhatsAppMessage(from,freelancerGuard.reply);return res.sendStatus(200);}
 const appointmentChange=await processAppointmentChangeMessage(from,text);if(appointmentChange.handled){await sendWhatsAppMessage(from,appointmentChange.reply);return res.sendStatus(200);}
 const bookingPolicy=await processBookingPolicyMessage(from,text);if(bookingPolicy.handled){await sendWhatsAppMessage(from,bookingPolicy.reply);return res.sendStatus(200);}
-const booking=await processBookingMessage(from,text);if(booking.handled){await sendWhatsAppMessage(from,sanitizeBookingReply(booking.reply));return res.sendStatus(200);}
+const booking=decorateClientBookingResult(await processBookingMessage(from,text));if(booking.handled){await sendAdminResult(from,booking.interactive?booking:{...booking,reply:sanitizeBookingReply(booking.reply)});return res.sendStatus(200);}
 await updateProfileFromMessage(from,text);const reply=await generateReply(from,text);await sendWhatsAppMessage(from,reply);
 }catch(error){log.error({err:error,from:maskPhone(from)},"Failed to process WhatsApp message");try{await sendWhatsAppMessage(from,"Sorry, I'm having trouble responding right now. Please try again in a moment.");}catch(fallbackError){log.error({err:fallbackError},"Failed to send WhatsApp fallback message");return res.sendStatus(500);}}return res.sendStatus(200);}catch(error){log.error({err:error},"Unhandled WhatsApp webhook error");return res.sendStatus(500);}};

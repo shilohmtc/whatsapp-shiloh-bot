@@ -2,6 +2,7 @@ const { pool } = require('../db/pool');
 const { formatPrice, formatDuration } = require('./serviceCatalogue');
 const { listClientBookableStaff } = require('./clientBookingStaffGuard');
 const { processBookingMessage } = require('./bookingIntent');
+const { decorateClientBookingResult } = require('./clientBookingInteractive');
 
 const SERVICE_PAGE_SIZE = 9;
 
@@ -164,7 +165,7 @@ async function processClientDiscoveryMessage(sender, text) {
   }
 
   if (['client_book_now', 'book now'].includes(value)) {
-    return processBookingMessage(sender, 'booking');
+    return decorateClientBookingResult(await processBookingMessage(sender, 'booking'));
   }
 
   const serviceMatch = value.match(/^client_service_(\d+)$/);
@@ -173,7 +174,7 @@ async function processClientDiscoveryMessage(sender, text) {
     if (!service) {
       return { handled: true, reply: 'That service is no longer available for direct client booking. Send *Services* to refresh the current list.' };
     }
-    return processBookingMessage(sender, `Book ${service.name}`);
+    return decorateClientBookingResult(await processBookingMessage(sender, `Book ${service.name}`));
   }
 
   const practitionerMatch = value.match(/^client_practitioner_(\d+)$/);
@@ -182,7 +183,7 @@ async function processClientDiscoveryMessage(sender, text) {
     if (!practitioner) {
       return { handled: true, reply: 'That practitioner is no longer available for direct client booking. Send *Our practitioners* to refresh the current list.' };
     }
-    return processBookingMessage(sender, `booking with ${practitioner.display_name}`);
+    return decorateClientBookingResult(await processBookingMessage(sender, `booking with ${practitioner.display_name}`));
   }
 
   return { handled: false };

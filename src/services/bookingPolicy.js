@@ -182,6 +182,9 @@ async function processBookingPolicyMessage(phone, text) {
     if (!intent) return { handled: false };
 
     if (intent.status === "awaiting_confirmation") {
+      // Before policy acceptance begins, cancellation still belongs to the booking-intent
+      // state machine so it can clear the pending request without touching any appointment.
+      if (isDecline(text)) return { handled: false };
       if (isEditRequest(text)) return { handled: false };
 
       if (!isSummaryConfirmation(text)) {
