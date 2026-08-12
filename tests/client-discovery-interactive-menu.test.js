@@ -26,8 +26,9 @@ test('client service browsing is CRM-backed and restricted to client-bookable pr
   assert.match(source, /s\.status = 'active'/);
   assert.match(source, /st\.status = 'active'/);
   assert.match(source, /st\.resource_type = 'practitioner'/);
-  const bookableChecks = source.match(/st\.client_bookable = TRUE/g) || [];
-  assert.ok(bookableChecks.length >= 3);
+  const scopedBookableChecks = source.match(/st\.client_bookable = TRUE/g) || [];
+  assert.ok(scopedBookableChecks.length >= 2);
+  assert.match(source, /AND client_bookable = TRUE/);
 });
 
 test('service list pagination never exceeds Meta list row bounds', () => {
