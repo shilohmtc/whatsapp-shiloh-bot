@@ -4,47 +4,36 @@ This is the authoritative next-chat entry point. GitHub `main`, Render productio
 
 ## Audited current production state
 
-- GitHub `main` application release audited at `0bbb74761eda883fce561c3904426f57edce8213` before this documentation update.
-- Render `shiloh-whatsapp-bot` is live on that same application release; auto-deploy remains enabled.
-- Recent WhatsApp production evidence confirms Christel remains recognized as Admin. Recent failures were routing/session-contract defects, not authorization loss.
-- Admin fixes now live include: hard escape from unfinished Demo Client with Menu/Admin Menu/Home; deterministic Today/Tomorrow routing; Last week's clients; earnings integrity/provisional warnings; Last Week earnings; guided Find Client state; Demo Client for Christel/Abigail/Marietjie; mandatory demo cleanup.
-- Booking/calendar integrity remains: CRM is authoritative; Google Calendar is availability/diary/mirror only; `Shiloh — Bookings` is human read-only; practitioner calendars are checked for busy conflicts; unlinked booking-like calendar events are monitored fail-closed.
+- GitHub `main` and Render production are aligned through client canonical booking release `fb1c64b9a86dbac97d15b028dbb119030727b22d` before this documentation-only audit update.
+- Render service `shiloh-whatsapp-bot` remains on `main` with auto-deploy enabled and health path `/health`.
+- Post-release read-only production verification showed clean startup, repeated HTTP 200 health checks, no application warning/error logs in the checked post-release window, and a booking-integrity scan with zero unlinked booking-like events.
+- CRM remains authoritative for appointments, services, staff eligibility and client identity. Google Calendar remains availability/diary/mirror infrastructure rather than appointment truth.
+- Client-bookable practitioners are Christel, Abigail and Marietjie only. Savanna/Pieter remain internal overflow freelancers and are excluded from direct client discovery and routing.
 
-## Audit findings — Admin Mode
+## Completed since the original 12 Aug audit
 
-1. The main Admin Menu is still primarily rendered as a long dynamically numbered text menu. Only a small subset of top-level actions use genuine WhatsApp controls.
-2. This design has repeatedly allowed display/routing drift (for example numbered Today/Tomorrow and guided Find Client). Although those specific defects are fixed, the interface contract remains fragile.
-3. Recommended architecture: make the main Admin Menu a genuine WhatsApp interactive list using stable action IDs. Use reply buttons only for short decisions with at most three choices. Numbers may remain as optional aliases, never as the primary routing contract.
-4. Every visible Admin action must have an automated route test proving: displayed action ID -> intended guarded handler -> correct role/scope -> no generic-assistant fallthrough.
-5. Reporting is business-critical. Earnings remain completed-only and fail closed/provisional when CRM final-status gaps or unresolved Goldie evidence could understate a figure.
+1. ✅ **Admin Menu reliability + real WhatsApp UI.** Top-level Admin uses genuine WhatsApp interactive controls with stable action IDs; route coverage is regression-locked for Christel, Abigail and Marietjie; scoped authorization, hard Menu/Home escape and no advertised-action generic fallback are preserved.
+2. ✅ **Client booking UX + service/practitioner discovery.** The client journey is CRM-backed and WhatsApp-native: category-first service browsing, service -> eligible practitioner(s), practitioner -> mapped services, Any available, authoritative slot selection, identity/onboarding preservation and guarded confirmation. Internal freelancers are excluded.
+3. ✅ **Authoritative practitioner profiles + AI knowledge.** Active practitioner/service mappings are injected into authoritative AI business knowledge. Public practitioner metadata is approval-gated and fail-closed. Christel and Abigail use the approved public title “Massage practitioner”. Marietjie remains intentionally unpublished for title/bio/specialty fields until explicitly approved business copy is supplied; her live mapped services remain answerable without inferred qualifications.
+4. ✅ **Booking-path end-to-end production audit.** The handoff acceptance set is covered by non-mutating regression contracts plus read-only production verification: new/returning client identity, service/practitioner questions, practitioner-specific and Any available booking, unavailable/stale slot behavior, explicit policy acceptance, canonical appointment creation, shared/practitioner Google Calendar mirroring, fail-closed final conflict checks, cancellation and rescheduling. Explicit `I AGREE` now leads to one final locked revalidation and canonical CRM write; stale slots return to time selection, transient failures remain explicitly retryable, and partial calendar writes are compensated.
 
-## Audit findings — Client booking / service discovery
+## Booking integrity details now authoritative
 
-1. Shiloh's general AI receives the authoritative active CRM service catalogue (service names, category, duration, price, customer description and booking note).
-2. The authoritative `staff_services` mapping is enforced by booking/availability logic, but that practitioner↔service mapping is NOT currently included in the general AI knowledge context.
-3. Therefore, Shiloh must not yet be considered fully authoritative for conversational questions such as “Which services does Marietjie offer?” or “Who can do this treatment?” outside the guarded booking path.
-4. The client booking experience is still substantially conversational/text-driven. It should be upgraded to a WhatsApp-native browse-and-book journey that can expose the active service catalogue and the eligible client-bookable practitioner(s) for the selected service.
-5. Clients should also be able to browse in the reverse direction: practitioner -> active services that practitioner is mapped to.
-6. Client-bookable practitioners remain Christel, Abigail and Marietjie only. Savanna/Pieter remain internal overflow freelancers and must never appear as direct client choices.
+- Client policy acceptance alone is not treated as a booking claim. Canonical appointment creation occurs only after final identity, active service, client-bookable practitioner, `staff_services`, clinic-hours, practitioner-schedule, CRM-conflict, shared Google Calendar and practitioner Google Calendar checks.
+- Successful client bookings write canonical appointment/service/staff snapshots, status history and audit evidence, then consume the booking intent.
+- Shared Google helper functions already enforce dual-calendar behavior for client cancellation and rescheduling: availability checks include both calendars; updates maintain the practitioner mirror; cancellation removes the practitioner mirror and shared event.
+- The booking-integrity monitor recognizes linked practitioner events through the canonical Shiloh appointment identifier and keeps unlinked booking-like events fail-closed for review.
 
-## Audit finding — Practitioner profiles / AI answers
+## Prioritized checklist — current state
 
-- There is no dedicated authoritative customer-facing practitioner-profile layer yet.
-- Add structured CRM-backed fields for client-facing practitioner title/role, short bio and optional approved specialties/intro copy.
-- AI knowledge should combine those approved practitioner profiles with the live active `staff_services` mapping.
-- Never infer or embellish qualifications/titles. Christel and Abigail are to be presented as Shiloh massage practitioners per current business direction. Marietjie's exact customer-facing title/description must be stored from an explicitly approved business value rather than guessed.
-- Once implemented, Shiloh should accurately answer: “Tell me about Christel”, “What does Abigail do?”, “What does Marietjie offer?”, “Who does Swedish Massage?”, and equivalent service/practitioner questions.
-
-## New prioritized checklist
-
-1. 🟡 **Admin Menu reliability + real WhatsApp UI.** Convert the top-level Admin Menu to a genuine interactive list with stable IDs; audit every visible action end-to-end for Christel, Abigail and Marietjie; retain scoped permissions and hard Menu/Home escape; remove generic-assistant fallthrough for advertised actions.
-2. 🟡 **Client booking UX + service/practitioner discovery.** Build a genuine WhatsApp-native client journey: Browse services / Our practitioners -> service category -> service -> eligible practitioner(s) -> availability -> onboarding/identity as needed -> guarded confirmation. Support practitioner -> services as well as service -> practitioners.
-3. 🟡 **Authoritative practitioner profiles + AI knowledge.** Add approved customer-facing practitioner metadata and include active practitioner/service mappings in AI context. Keep freelancer/internal data excluded. Do not guess Marietjie's public title.
-4. 🟡 **Booking-path end-to-end production audit.** Run synthetic/client-safe tests for new client, returning client, service questions, practitioner questions, practitioner-specific booking, any-eligible-practitioner booking, unavailable practitioner, reschedule, cancellation, policy acceptance, calendar mirroring and fail-closed conflict behavior.
-5. 🟡 **Admin reporting/earnings production audit.** Verify Today/Tomorrow/Last Week appointment views and Christel/Abigail Today/This Week/Last Week/This Month earnings; resolve remaining Goldie reconciliation exceptions and past appointments awaiting final status so reports can become final instead of provisional where appropriate.
+1. ✅ **Admin Menu reliability + real WhatsApp UI.** Complete and production-verified.
+2. ✅ **Client booking UX + service/practitioner discovery.** Complete and production-verified.
+3. ✅ **Authoritative practitioner profiles + AI knowledge.** Actionable engineering complete; Marietjie public descriptive metadata remains intentionally fail-closed pending approved business wording.
+4. ✅ **Booking-path end-to-end production audit.** Complete with CI/non-mutating contracts and read-only post-release production verification.
+5. 🟡 **Admin reporting/earnings production audit.** NEXT. Verify Today/Tomorrow/Last Week appointment views and Christel/Abigail Today/This Week/Last Week/This Month earnings. Resolve remaining reconciliation/final-status gaps where authoritative evidence permits so reports can become final instead of provisional; never guess or silently include uncertain earnings.
 6. 🟡 **Birthday template approval/configuration.** Preserve fail-closed state while externally blocked on Meta approval; enable only after positive approval of `shiloh_birthday_wish_v2`.
-7. 🟡 **Remaining P3 customer-care work.** Treatment-aware aftercare/rebooking, loyalty lifecycle follow-through and optional reminder-confirmation improvements only after booking/admin journeys are stable.
-8. ⬜ **P4 payments/Ozow/vouchers.** Deliberately deferred until Admin + client booking are proven reliable. Payment truth must remain separate from booking truth.
+7. 🟡 **Remaining P3 customer-care work.** Treatment-aware aftercare/rebooking, loyalty lifecycle follow-through and optional reminder-confirmation improvements after booking/admin journeys are stable.
+8. ⬜ **P4 payments/Ozow/vouchers.** Deliberately deferred until Admin + client booking/reporting are proven reliable. Payment truth must remain separate from booking truth.
 
 ## Safe engineering rule
 
@@ -58,4 +47,4 @@ Continue the Shiloh OS production project from `docs/HANDOFF-NEXT-CHAT-2026-08-1
 
 Treat GitHub `main`, Render production, Shiloh CRM and Google Calendar as authoritative. Do not redo completed work. Apply the safe self-test-first engineering rule automatically.
 
-Start with the highest-priority genuinely unfinished actionable item in the new checklist. Current expected next item: **#1 Admin Menu reliability + real WhatsApp UI**. If authoritative evidence shows #1 already complete, move automatically to #2.
+Start with the highest-priority genuinely unfinished actionable item. Current expected next item: **#5 Admin reporting/earnings production audit**. If an earlier item is externally blocked but safely prepared, preserve its fail-closed state and continue.
