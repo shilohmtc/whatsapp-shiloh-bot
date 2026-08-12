@@ -1,6 +1,6 @@
 const { pool } = require('../db/pool');
 const { listAvailableSlots } = require('./availabilityService');
-const { getIntent, extractDate, extractTime, processBookingMessage, displayDate } = require('./bookingIntent');
+const { getIntent, extractDate, extractTime, processBookingMessage, displayDate, verifyService } = require('./bookingIntent');
 const { decorateClientBookingResult } = require('./clientBookingInteractive');
 
 const SLOT_PAGE_SIZE = 9;
@@ -50,6 +50,8 @@ function daypartForSlot(slot) {
 }
 
 async function resolveService(intent) {
+  const verification = await verifyService(clean(intent.service_text));
+  if (!verification.verified || !verification.canonicalName) return null;
   const result = await pool.query(`
     SELECT id, name
       FROM services
@@ -57,7 +59,7 @@ async function resolveService(intent) {
        AND LOWER(name) = LOWER($1)
      ORDER BY id
      LIMIT 2
-  `, [clean(intent.service_text)]);
+  `, [verification.canonicalName]);
   return result.rows.length === 1 ? result.rows[0] : null;
 }
 
