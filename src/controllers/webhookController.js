@@ -1,4 +1,4 @@
-const { sendWhatsAppMessage, sendWhatsAppReplyButtons } = require("../services/whatsapp");
+const { sendWhatsAppMessage, sendWhatsAppReplyButtons, sendWhatsAppList } = require("../services/whatsapp");
 const { generateReply } = require("../services/ai");
 const { updateProfileFromMessage } = require("../services/profileExtractor");
 const { CLINIC_REDIRECT, evaluateClinicScope } = require("../services/scopeGuard");
@@ -33,7 +33,14 @@ function isGreetingOnly(text = "") { return /^(hi|hello|hey|good morning|good af
 function inboundText(message){
   if(message?.type==="text") return message.text?.body?.trim()||null;
   if(message?.type==="interactive"&&message.interactive?.type==="button_reply") return commandForAdminButton(message.interactive.button_reply?.id);
+  if(message?.type==="interactive"&&message.interactive?.type==="list_reply") return message.interactive.list_reply?.id?.trim()||null;
   return null;
+}
+async function sendAdminResult(to,result){
+  if(result?.interactive?.type==="list") return sendWhatsAppList(to,result.interactive.body,result.interactive.buttonText,result.interactive.rows,result.interactive.sectionTitle);
+  if(result?.interactive?.type==="button") return sendWhatsAppReplyButtons(to,result.interactive.body,result.interactive.buttons);
+  if(result?.interactive?.buttons) return sendWhatsAppReplyButtons(to,result.interactive.body,result.interactive.buttons);
+  return sendWhatsAppMessage(to,result?.reply||"Sorry, Shiloh could not render that admin response.");
 }
 exports.verifyWebhook = (req,res)=>{const mode=req.query["hub.mode"],token=req.query["hub.verify_token"],challenge=req.query["hub.challenge"];if(mode==="subscribe"&&token===process.env.VERIFY_TOKEN){(req.log||logger).info("WhatsApp webhook verified");return res.status(200).send(challenge);}(req.log||logger).warn("WhatsApp webhook verification rejected");return res.sendStatus(403);};
 exports.receiveWebhook=async(req,res)=>{const log=req.log||logger;try{const value=req.body.entry?.[0]?.changes?.[0]?.value;if(!value?.messages)return res.sendStatus(200);const message=value.messages[0];const from=message.from,text=inboundText(message);if(!text){log.info({messageType:message.type},"Ignoring unsupported or unknown WhatsApp message");return res.sendStatus(200);}if(!from){log.warn("Received WhatsApp message without sender");return res.sendStatus(200);}log.info({from:maskPhone(from),messageType:message.type},"Processing incoming WhatsApp message");try{
@@ -41,11 +48,11 @@ const language=await guardEnglishOnly(text);if(!language.allowed){log.info({from
 const adminClientDemo=await processAdminClientDemoMessage(from,text);if(adminClientDemo.handled){log.info({from:maskPhone(from),admin:adminClientDemo.admin?.display_name},"Handled controlled client demo message");await sendWhatsAppMessage(from,adminClientDemo.reply);return res.sendStatus(200);}
 const adminSlots=await processAdminAvailableSlotsMessage(from,text);if(adminSlots.handled){log.info({from:maskPhone(from),admin:adminSlots.admin?.display_name},"Handled authoritative available-slots request");await sendWhatsAppMessage(from,adminSlots.reply);return res.sendStatus(200);}
 const staffServices=await processAdminStaffServicesMessage(from,text);if(staffServices.handled){await sendWhatsAppMessage(from,staffServices.reply);return res.sendStatus(200);}
-const activeMobileBooking=await processAdminMobileBookingFlowMessage(from,text);if(activeMobileBooking.handled){await sendWhatsAppMessage(from,activeMobileBooking.reply);return res.sendStatus(200);}
+const activeMobileBooking=await processAdminMobileBookingFlowMessage(from,text);if(activeMobileBooking.handled){await sendAdminResult(from,activeMobileBooking);return res.sendStatus(200);}
 const adminReports=await processAdminReportsMessage(from,text);if(adminReports.handled){await sendWhatsAppMessage(from,adminReports.reply);return res.sendStatus(200);}
 const serviceTrends=await processAdminServiceTrendsMessage(from,text);if(serviceTrends.handled){await sendWhatsAppMessage(from,serviceTrends.reply);return res.sendStatus(200);}
 const adminAppointments=await processAdminAppointmentsByDateMessage(from,text);if(adminAppointments.handled){await sendWhatsAppMessage(from,adminAppointments.reply);return res.sendStatus(200);}
-const adminMobile=await processAdminMobileMenuMessage(from,text);if(adminMobile.handled){if(adminMobile.interactive){await sendWhatsAppReplyButtons(from,adminMobile.interactive.body,adminMobile.interactive.buttons);}else{await sendWhatsAppMessage(from,adminMobile.reply);}return res.sendStatus(200);}
+const adminMobile=await processAdminMobileMenuMessage(from,text);if(adminMobile.handled){await sendAdminResult(from,adminMobile);return res.sendStatus(200);}
 const rosterAudit=await processAdminRosterAuditMessage(from,text);if(rosterAudit.handled){await sendWhatsAppMessage(from,rosterAudit.reply);return res.sendStatus(200);}
 const nailAudit=await processAdminNailServicesAuditMessage(from,text);if(nailAudit.handled){await sendWhatsAppMessage(from,nailAudit.reply);return res.sendStatus(200);}
 const legacyOrphanAudit=await processAdminLegacyOrphanAuditMessage(from,text);if(legacyOrphanAudit.handled){await sendWhatsAppMessage(from,legacyOrphanAudit.reply);return res.sendStatus(200);}
