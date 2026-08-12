@@ -9,6 +9,7 @@ const BUTTON_COMMANDS = Object.freeze({
   admin_calendar_integrity_issues: 'Calendar integrity issues',
   admin_booking_confirm: 'Confirm booking',
   admin_booking_cancel: 'Cancel booking',
+  admin_menu_appointments: 'Appointments',
 });
 
 function abigailEarningsButtons() {

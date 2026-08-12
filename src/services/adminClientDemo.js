@@ -25,7 +25,62 @@ async function getAdmin(sender) {
   return r.rows[0] || null;
 }
 
-function allowed(admin) { return admin?.permissions?.['demo:client'] === true; }
+function demoScope(admin) {
+  const name = clean(admin?.display_name).toLowerCase();
+  if (name === 'marietjie' && admin?.business_role === 'tenant_practitioner') {
+    return { key: 'marietjie', staffNames: ['marietjie'], displayNames: ['Marietjie'] };
+  }
+  if (
+    (name === 'christel' && admin?.business_role === 'owner') ||
+    (name === 'abigail' && admin?.business_role === 'employee_practitioner')
+  ) {
+    return { key: 'christel_abigail', staffNames: ['christel', 'abigail'], displayNames: ['Christel', 'Abigail'] };
+  }
+  return null;
+}
+
+function allowed(admin) {
+  return admin?.permissions?.['demo:client'] === true && Boolean(demoScope(admin));
+}
+
+function practitionerPrompt(admin) {
+  const scope = demoScope(admin);
+  if (!scope) return 'This admin account does not have an authorized demo practitioner scope.';
+  if (scope.displayNames.length === 1) return `Which practitioner would you prefer? *${scope.displayNames[0]}*`;
+  return `Which practitioner would you prefer: *${scope.displayNames[0]}* or *${scope.displayNames[1]}*?`;
+}
+
+function practitionerAllowed(admin, staffName) {
+  const scope = demoScope(admin);
+  return Boolean(scope && scope.staffNames.includes(clean(staffName).toLowerCase()));
+}
+
+async function authorizeDemoStaffService(admin, staffName, serviceName) {
+  if (!practitionerAllowed(admin, staffName)) {
+    return { allowed: false, reply: `${staffName || 'That practitioner'} is outside ${admin.display_name}'s controlled demo booking scope. ${practitionerPrompt(admin)}` };
+  }
+  const mapped = await pool.query(
+    `SELECT st.id AS staff_id, st.display_name, s.id AS service_id, s.name AS service_name
+       FROM staff st
+       JOIN staff_services ss ON ss.staff_id=st.id
+       JOIN services s ON s.id=ss.service_id
+      WHERE st.status='active'
+        AND st.client_bookable=TRUE
+        AND s.status='active'
+        AND LOWER(st.display_name)=LOWER($1)
+        AND LOWER(s.name)=LOWER($2)
+      ORDER BY st.id,s.id
+      LIMIT 1`,
+    [staffName, serviceName]
+  );
+  if (!mapped.rowCount) {
+    return {
+      allowed: false,
+      reply: `That treatment is not currently assigned to ${staffName} in Shiloh CRM, so I won't create the demo booking. Choose an eligible practitioner or treatment.`,
+    };
+  }
+  return { allowed: true, mapping: mapped.rows[0] };
+}
 
 async function getSession(adminId) {
   const r = await pool.query(`SELECT * FROM admin_client_demo_sessions WHERE admin_id=$1`, [adminId]);
@@ -96,7 +151,7 @@ async function startDemo(admin, sender) {
   await pool.query(
     `INSERT INTO crm_audit_events (actor_admin_id,action,entity_type,metadata)
      VALUES ($1,'admin.client_demo_started','admin_demo',$2::jsonb)`,
-    [admin.id, JSON.stringify({ isolatedVirtualIdentity: true })]
+    [admin.id, JSON.stringify({ isolatedVirtualIdentity: true, demoScope: demoScope(admin)?.key || null })]
   );
   return { handled: true, reply: PREMIUM_GREETING };
 }
@@ -180,7 +235,10 @@ async function prepareDemoBooking(admin, session, requestedStaff) {
   const staffName = practitionerName(requestedStaff || intent.therapist_text || '');
   if (!staffName) {
     await pool.query(`UPDATE admin_client_demo_sessions SET state='collect_practitioner',updated_at=NOW() WHERE admin_id=$1`, [admin.id]);
-    return { handled: true, reply: 'Which practitioner would you prefer: *Christel*, *Abigail* or *Marietjie*?' };
+    return { handled: true, reply: practitionerPrompt(admin) };
+  }
+  if (!practitionerAllowed(admin, staffName)) {
+    return { handled: true, reply: `${staffName} is outside this demo booking scope. ${practitionerPrompt(admin)}` };
   }
   const when = localDateTime(intent.preferred_date, intent.preferred_time);
   if (!when) {
@@ -190,6 +248,9 @@ async function prepareDemoBooking(admin, session, requestedStaff) {
   if (!service.verified || !service.canonicalName) {
     return { handled: true, reply: 'I can no longer verify that treatment against Shiloh’s active service catalogue. Please start the booking again with a current treatment name.' };
   }
+  const scopeCheck = await authorizeDemoStaffService(admin, staffName, service.canonicalName);
+  if (!scopeCheck.allowed) return { handled: true, reply: scopeCheck.reply };
+
   const current = await getSession(admin.id);
   const clientId = current?.demo_client_id;
   if (!clientId) return { handled: true, reply: 'The demo client identity is incomplete, so I will not create an appointment. Restart with *DEMO CLIENT*.' };
@@ -233,11 +294,11 @@ async function confirmDemoBooking(admin, session) {
 
   const tagged = await pool.query(
     `UPDATE appointments
-        SET notes=COALESCE(notes || E'\n','') || 'Controlled Christel WhatsApp client demonstration',
+        SET notes=COALESCE(notes || E'\n','') || $3::text,
             updated_at=NOW()
       WHERE id=$1 AND client_id=$2 AND source='shiloh_demo_whatsapp'
       RETURNING id`,
-    [result.appointmentId, session.demo_client_id]
+    [result.appointmentId, session.demo_client_id, `Controlled ${admin.display_name} WhatsApp client demonstration`]
   );
   if (!tagged.rowCount) throw new Error('Demo booking source verification failed after canonical creation');
 
@@ -250,7 +311,7 @@ async function confirmDemoBooking(admin, session) {
   await pool.query(
     `INSERT INTO crm_audit_events (actor_admin_id,action,entity_type,entity_id,metadata)
      VALUES ($1,'admin.demo_booking_created','appointment',$2,$3::jsonb)`,
-    [admin.id, result.appointmentId, JSON.stringify({ demoClientId: session.demo_client_id, isolatedIdentity: true })]
+    [admin.id, result.appointmentId, JSON.stringify({ demoClientId: session.demo_client_id, isolatedIdentity: true, demoScope: demoScope(admin)?.key || null })]
   );
 
   return {
@@ -266,7 +327,7 @@ async function confirmDemoBooking(admin, session) {
       '',
       'We look forward to seeing you. 🌿',
       '',
-      `🧪 Demo complete — Christel is back in admin mode. Demo appointment #${result.appointmentId} is real in Shiloh CRM/Calendar so the team can inspect it. When finished, send *DELETE DEMO BOOKING*.`
+      `🧪 Demo complete — ${admin.display_name} is back in admin mode. Demo appointment #${result.appointmentId} is real in Shiloh CRM/Calendar so the team can inspect it. When finished, send *DELETE DEMO BOOKING*.`
     ].filter(Boolean).join('\n'),
   };
 }
@@ -288,7 +349,7 @@ async function prepareDelete(admin, session) {
   }
   const owner = String(a.custom_attributes?.demo_admin_id || '');
   if (String(a.client_id) !== String(session.demo_client_id) || a.source !== 'shiloh_demo_whatsapp' || a.client_source !== 'whatsapp_demo' || owner !== String(admin.id)) {
-    return { handled: true, reply: 'Deletion refused: Shiloh cannot prove that this appointment belongs exclusively to Christel’s controlled demo session.' };
+    return { handled: true, reply: `Deletion refused: Shiloh cannot prove that this appointment belongs exclusively to ${admin.display_name}'s controlled demo session.` };
   }
   await pool.query(`UPDATE admin_client_demo_sessions SET delete_pending=TRUE,updated_at=NOW() WHERE admin_id=$1`, [admin.id]);
   return {
@@ -332,7 +393,7 @@ async function purgeDemoBooking(admin, session) {
     const owner = String(row.custom_attributes?.demo_admin_id || '');
     if (String(row.client_id) !== String(session.demo_client_id) || row.source !== 'shiloh_demo_whatsapp' || row.client_source !== 'whatsapp_demo' || owner !== String(admin.id)) {
       await db.query('ROLLBACK');
-      return { handled: true, reply: 'Deletion refused: final locked-state verification could not prove this is Christel’s demo appointment.' };
+      return { handled: true, reply: `Deletion refused: final locked-state verification could not prove this is ${admin.display_name}'s demo appointment.` };
     }
 
     const redemption = await db.query(`SELECT 1 FROM loyalty_redemptions WHERE appointment_id=$1 LIMIT 1`, [row.id]);
@@ -362,7 +423,7 @@ async function purgeDemoBooking(admin, session) {
     await db.query(`DELETE FROM booking_policy_acceptances WHERE phone=$1`, [session.virtual_phone]);
     await db.query(`DELETE FROM admin_client_demo_sessions WHERE admin_id=$1`, [admin.id]);
     await db.query('COMMIT');
-    return { handled: true, reply: `✅ Demo appointment #${row.id} deleted from Shiloh CRM${row.event_id ? ' and removed from Google Calendar' : ''}. The synthetic demo client was archived, and Christel remains in normal admin mode.` };
+    return { handled: true, reply: `✅ Demo appointment #${row.id} deleted from Shiloh CRM${row.event_id ? ' and removed from Google Calendar' : ''}. The synthetic demo client was archived, and ${admin.display_name} remains in normal admin mode.` };
   } catch (error) {
     try { await db.query('ROLLBACK'); } catch (_) {}
     throw error;
@@ -382,7 +443,7 @@ async function processActiveClientMode(admin, session, text) {
 
   if (session.state === 'collect_practitioner') {
     const staff = practitionerName(text);
-    if (!staff) return { handled: true, reply: 'Please choose *Christel*, *Abigail* or *Marietjie*.' };
+    if (!staff || !practitionerAllowed(admin, staff)) return { handled: true, reply: practitionerPrompt(admin) };
     return prepareDemoBooking(admin, session, staff);
   }
 
@@ -458,4 +519,6 @@ module.exports = {
   practitionerName,
   exactTime,
   localDateTime,
+  demoScope,
+  practitionerAllowed,
 };
