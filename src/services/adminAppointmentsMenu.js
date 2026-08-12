@@ -45,6 +45,11 @@ function appointmentsInteractive(admin) {
       title: 'Manage a booking',
       description: 'Change an existing appointment',
     });
+    rows.push({
+      id: 'finalize past appointments',
+      title: 'Finalize past visits',
+      description: 'Mark Completed or No-show explicitly',
+    });
   }
   if (has(admin, 'demo:client')) {
     rows.push({
