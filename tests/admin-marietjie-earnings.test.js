@@ -16,10 +16,12 @@ test('Marietjie earnings are completed-only, 100 percent, and have no salary', (
   assert.doesNotMatch(earnings, /MONTHLY_SALARY|COMMISSION_RATE/);
 });
 
-test('Marietjie earnings are restricted to Christel and Jean-Pierre business admins', () => {
+test('Marietjie earnings are restricted to Marietjie self, Christel and Jean-Pierre business admin', () => {
   assert.match(earnings, /name === 'christel'/);
   assert.match(earnings, /name === 'jean-pierre'/);
-  assert.match(earnings, /Marietjie earnings are available only to Christel and the authorized business admin/);
+  assert.match(earnings, /name === 'marietjie'/);
+  assert.match(earnings, /String\(admin\.staff_id \|\| ''\) === String\(marietjie\.id\)/);
+  assert.match(earnings, /Marietjie earnings are available only to Marietjie, Christel, and the authorized business admin/);
 });
 
 test('Marietjie earnings expose all four stable periods and route from Reports', () => {

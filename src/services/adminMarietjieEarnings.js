@@ -39,11 +39,12 @@ function parseMarietjieEarningsCommand(raw = '') {
   const token = match[1] || 'today';
   return { period: token === 'last week' ? 'last_week' : token.includes('month') ? 'month' : token.includes('week') ? 'week' : 'today' };
 }
-function authorizedViewer(admin) {
+function authorizedViewer(admin, marietjie = null) {
   const name = normalizedName(admin?.display_name);
   const christel = name === 'christel' && ['owner', 'business_admin'].includes(admin?.business_role) && admin?.calendar_scope === 'all_business';
   const jeanPierre = name === 'jean-pierre' && admin?.business_role === 'business_admin' && admin?.calendar_scope === 'all_business' && admin?.service_scope === 'all_services';
-  return christel || jeanPierre;
+  const marietjieSelf = name === 'marietjie' && marietjie && String(admin.staff_id || '') === String(marietjie.id);
+  return christel || jeanPierre || marietjieSelf;
 }
 async function marietjieEarningsData(period = 'today') {
   const marietjie = await resolveMarietjieStaff(); const bounds = clinicBounds(period);
@@ -71,7 +72,8 @@ async function processAdminMarietjieEarningsMessage(sender, text) {
   const command = parseMarietjieEarningsCommand(text); if (!command) return { handled: false };
   const admin = await getAdmin(sender); if (!admin) return { handled: false };
   if (admin?.permissions?.['appointment:view'] !== true) return { handled: true, admin, reply: 'Your admin account does not currently have permission to view appointment reports.' };
-  if (!authorizedViewer(admin)) return { handled: true, admin, reply: 'Marietjie earnings are available only to Christel and the authorized business admin.' };
+  const marietjie = await resolveMarietjieStaff();
+  if (!authorizedViewer(admin, marietjie)) return { handled: true, admin, reply: 'Marietjie earnings are available only to Marietjie, Christel, and the authorized business admin.' };
   const data = await marietjieEarningsData(command.period); await audit(admin, command.period, data);
   return { handled: true, admin, reply: renderMarietjieEarnings(data, command.period) };
 }
