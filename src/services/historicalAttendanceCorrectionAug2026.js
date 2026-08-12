@@ -17,7 +17,8 @@ async function applyHistoricalAttendanceCorrectionAug2026() {
     const existing = await db.query(
       `SELECT id FROM crm_audit_events
         WHERE action='maintenance.historical_attendance_aug1_8_2026'
-          AND entity_type='batch' AND entity_id=$1
+          AND entity_type='batch'
+          AND metadata->>'batchKey'=$1
         LIMIT 1`,
       [BATCH_KEY]
     );
@@ -84,7 +85,7 @@ async function applyHistoricalAttendanceCorrectionAug2026() {
       await db.query(
         `INSERT INTO crm_audit_events (actor_admin_id,action,entity_type,entity_id,metadata)
          VALUES ($1,'maintenance.historical_appointment_completed','appointment',$2,$3::jsonb)`,
-        [actorAdminId, String(row.id), JSON.stringify({
+        [actorAdminId, Number(row.id), JSON.stringify({
           batchKey: BATCH_KEY,
           fromStatus: row.status,
           toStatus: 'completed',
@@ -98,8 +99,9 @@ async function applyHistoricalAttendanceCorrectionAug2026() {
 
     await db.query(
       `INSERT INTO crm_audit_events (actor_admin_id,action,entity_type,entity_id,metadata)
-       VALUES ($1,'maintenance.historical_attendance_aug1_8_2026','batch',$2,$3::jsonb)`,
-      [actorAdminId, BATCH_KEY, JSON.stringify({
+       VALUES ($1,'maintenance.historical_attendance_aug1_8_2026','batch',0,$2::jsonb)`,
+      [actorAdminId, JSON.stringify({
+        batchKey: BATCH_KEY,
         candidateCount: CANDIDATE_IDS.length,
         updated,
         alreadyCompleted,
