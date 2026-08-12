@@ -25,6 +25,7 @@ const { ensureDemoClientPermissions } = require("./src/services/demoClientAccess
 const { ensureJeanPierreAdminCapabilities } = require("./src/services/jeanPierreAdminAccessBootstrap");
 const { startMandatoryDemoCleanupScheduler } = require("./src/services/demoMandatoryCleanup");
 const { startAttendanceFinalizationReminderScheduler } = require("./src/services/attendanceFinalizationReminders");
+const { submitStaffFinalizationTemplate } = require("./src/services/staffFinalizationTemplateProvisioning");
 
 const app = express();
 app.disable("x-powered-by");
@@ -54,6 +55,22 @@ app.use((err, req, res, next) => {
   return res.status(500).json({ error: "Internal server error", requestId: req.id });
 });
 
+async function provisionStaffFinalizationTemplateSafely() {
+  try {
+    const result = await submitStaffFinalizationTemplate();
+    logger.info({
+      ok: result?.ok === true,
+      submitted: result?.submitted === true,
+      reason: result?.reason || null,
+      templateName: result?.templateName || null,
+      providerStatus: result?.provider?.status || result?.template?.status || null,
+      providerCategory: result?.provider?.category || result?.template?.category || null,
+    }, "Staff finalization WhatsApp template provisioning checked");
+  } catch (error) {
+    logger.warn({ err: error }, "Staff finalization WhatsApp template provisioning failed; reminders remain fail-closed");
+  }
+}
+
 const PORT = process.env.PORT || 3000;
 let server;
 async function start() {
@@ -62,6 +79,7 @@ async function start() {
   const jeanPierreAccess = await ensureJeanPierreAdminCapabilities();
   if (!jeanPierreAccess) throw new Error('Jean-Pierre business admin capability clone could not be initialized');
   logger.info({ configured: true, businessRole: jeanPierreAccess.business_role }, "Jean-Pierre business admin access verified");
+  await provisionStaffFinalizationTemplateSafely();
   server = app.listen(PORT, () => {
     logger.info({ port: PORT }, "Shiloh started");
     startConversationSessionCleanupScheduler();
