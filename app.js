@@ -59,7 +59,8 @@ async function start() {
   const demoAccess = await ensureDemoClientPermissions();
   logger.info(demoAccess, "Controlled demo client access verified");
   const jeanPierreAccess = await ensureJeanPierreAdminCapabilities();
-  logger.info({ configured: Boolean(jeanPierreAccess), businessRole: jeanPierreAccess?.business_role || null }, "Jean-Pierre business admin/client test access verified");
+  if (!jeanPierreAccess) throw new Error('Jean-Pierre business admin capability clone could not be initialized');
+  logger.info({ configured: true, businessRole: jeanPierreAccess.business_role }, "Jean-Pierre business admin/client test access verified");
   server = app.listen(PORT, () => {
     logger.info({ port: PORT }, "Shiloh started");
     startConversationSessionCleanupScheduler();
