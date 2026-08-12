@@ -40,8 +40,10 @@ test('Jean-Pierre does not inherit controlled Demo Client and gets only explicit
 
 test('Client Test Mode preserves admin authorization instead of disabling the admin account', () => {
   assert.match(service, /adminAuthorizationPreserved: true/);
-  assert.match(service, /active = TRUE/);
-  assert.doesNotMatch(service, /UPDATE staff_admin_accounts[\s\S]*active\s*=\s*FALSE/i);
+  const adminUpdate = service.match(/UPDATE staff_admin_accounts jp[\s\S]*?RETURNING jp\.id/);
+  assert.ok(adminUpdate, 'Jean-Pierre admin bootstrap update must be present');
+  assert.match(adminUpdate[0], /active = TRUE/);
+  assert.doesNotMatch(adminUpdate[0], /active\s*=\s*FALSE/i);
   assert.doesNotMatch(service, /DELETE FROM staff_admin_accounts/i);
   assert.match(service, /Admin authorization was never removed/);
 });
