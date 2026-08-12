@@ -1,5 +1,7 @@
 const { processAdminMobileMenuMessage } = require('./adminMobileMenu');
 const { processAdminAppointmentFinalizationMessage } = require('./adminAppointmentFinalization');
+const { processAdminClientTestModeControl } = require('./adminClientTestMode');
+const { processJeanPierreControlPlaneMessage } = require('./jeanPierreAdminControlPlane');
 
 const SECTION_ORDER = ['Appointments', 'Reports', 'Clients', 'Services', 'Schedule', 'More'];
 
@@ -19,6 +21,7 @@ const ACTIONS = [
   { key: 'pricing', labels: ['Services & pricing', 'My services & pricing'], command: 'Services & pricing', description: 'View or manage service pricing' },
   { key: 'schedule', labels: ['Schedule management', 'My schedule'], command: 'Schedule', description: 'Manage authorized diary settings' },
   { key: 'calendar_integrity', labels: ['🛡️ Calendar integrity', 'Calendar integrity'], command: 'Calendar integrity scan', description: 'Check booking/calendar integrity' },
+  { key: 'client_test', labels: ['🧪 Client Test Mode', 'Client Test Mode'], command: 'Client Test Mode', description: 'Test the real first-client journey' },
   { key: 'help', labels: ['Help'], command: 'Help', description: 'Show admin help' },
 ];
 
@@ -114,15 +117,37 @@ function sectionInteractive(section, body) {
   };
 }
 
+function isJeanPierreBusinessAdmin(admin) {
+  return String(admin?.display_name || '').trim().toLowerCase() === 'jean-pierre'
+    && admin?.business_role === 'business_admin'
+    && admin?.calendar_scope === 'all_business'
+    && admin?.service_scope === 'all_services';
+}
+
+function enrichJeanPierreMenu(result) {
+  if (!result?.handled || !result?.interactive?.body || !isJeanPierreBusinessAdmin(result.admin)) return result;
+  let body = String(result.interactive.body);
+  if (!/Christel earnings/i.test(body)) body += '\n\n*Reports*\n98️⃣ 💰 Christel earnings';
+  if (!/Calendar integrity/i.test(body) || !/Client Test Mode/i.test(body)) {
+    body += '\n\n*More*';
+    if (!/Calendar integrity/i.test(body)) body += '\n97️⃣ 🛡️ Calendar integrity';
+    if (!/Client Test Mode/i.test(body)) body += '\n96️⃣ 🧪 Client Test Mode';
+  }
+  return { ...result, interactive: { ...result.interactive, body } };
+}
+
 async function getRoleScopedMenu(sender) {
   const result = await processAdminMobileMenuMessage(sender, 'Menu');
   if (!result?.handled || !result?.interactive?.body) return result;
-  return result;
+  return enrichJeanPierreMenu(result);
 }
 
 async function processAdminInteractiveMenuMessage(sender, text) {
   const finalization = await processAdminAppointmentFinalizationMessage(sender, text);
   if (finalization.handled) return finalization;
+
+  const jeanPierreControl = await processJeanPierreControlPlaneMessage(sender, text);
+  if (jeanPierreControl.handled) return jeanPierreControl;
 
   const raw = String(text || '').trim();
   const sectionMatch = raw.match(/^admin_section_(appointments|reports|clients|services|schedule|more)$/i);
@@ -138,12 +163,17 @@ async function processAdminInteractiveMenuMessage(sender, text) {
   }
 
   const action = actionForId(raw);
-  if (action) return processAdminMobileMenuMessage(sender, action.command);
+  if (action) {
+    if (action.key === 'client_test') return processAdminClientTestModeControl(sender, 'Client Test Mode');
+    const privileged = await processJeanPierreControlPlaneMessage(sender, action.command);
+    if (privileged.handled) return privileged;
+    return processAdminMobileMenuMessage(sender, action.command);
+  }
   if (/^admin_action_/i.test(raw)) {
     return { handled: true, reply: 'That admin action is no longer available. Send *Menu* to refresh your options.' };
   }
 
-  const result = await processAdminMobileMenuMessage(sender, text);
+  const result = enrichJeanPierreMenu(await processAdminMobileMenuMessage(sender, text));
   if (result?.handled && result?.interactive?.type === 'button' && /^\*Shiloh Admin 🌿\*/.test(result.interactive.body || '')) {
     return { ...result, interactive: topLevelInteractive(result.interactive.body) };
   }
@@ -155,6 +185,7 @@ module.exports = {
   actionForId,
   actionForLabel,
   compactMenuBody,
+  enrichJeanPierreMenu,
   parseVisibleMenu,
   processAdminInteractiveMenuMessage,
   sectionInteractive,
