@@ -147,6 +147,7 @@ async function confirmAdminBooking(admin, options = {}) {
   let googleEventCreatedByThisAttempt = null;
   let practitionerEventCreatedByThisAttempt = false;
   let practitionerEventStaffName = null;
+  let practitionerEventAppointmentId = null;
   try {
     await db.query("BEGIN");
 
@@ -294,6 +295,7 @@ async function confirmAdminBooking(admin, options = {}) {
     if (practitionerCalendarResult.enabled && practitionerCalendarResult.configured && practitionerCalendarResult.event && !practitionerCalendarResult.idempotentReplay) {
       practitionerEventCreatedByThisAttempt = true;
       practitionerEventStaffName = session.staff_name;
+      practitionerEventAppointmentId = appointment.id;
     }
 
     await db.query(
@@ -347,8 +349,10 @@ async function confirmAdminBooking(admin, options = {}) {
     };
   } catch (error) {
     try { await db.query("ROLLBACK"); } catch (_) {}
-    if (practitionerEventCreatedByThisAttempt && practitionerEventStaffName) {
-      try { await cancelPractitionerBookingEvent({ appointmentId: null, staffName: practitionerEventStaffName }); } catch (_) {}
+    if (practitionerEventCreatedByThisAttempt && practitionerEventStaffName && practitionerEventAppointmentId) {
+      try { await cancelPractitionerBookingEvent({ appointmentId: practitionerEventAppointmentId, staffName: practitionerEventStaffName }); } catch (cleanupError) {
+        console.error("Practitioner Google Calendar compensation failed", { appointmentId: practitionerEventAppointmentId, staffName: practitionerEventStaffName, error: cleanupError.message });
+      }
     }
     if (googleEventCreatedByThisAttempt) {
       try { await cancelBookingEvent(googleEventCreatedByThisAttempt); } catch (cleanupError) {
