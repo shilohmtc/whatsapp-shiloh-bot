@@ -14,9 +14,12 @@ const commonPermissions = {
   'demo:client': true,
 };
 
-test('Appointments opens through a real WhatsApp reply button',()=>{
+test('Appointments and Demo Client route through genuine WhatsApp reply buttons',()=>{
   assert.equal(commandForAdminButton('admin_menu_appointments'),'Appointments');
-  assert.match(menuSource,/interactive:\{type:'button',body,buttons:\[\{id:'admin_menu_appointments',title:'Appointments'\}\]\}/);
+  assert.equal(commandForAdminButton('admin_demo_client_start'),'Demo Client');
+  assert.match(menuSource,/const buttons=\[\{id:'admin_menu_appointments',title:'Appointments'\}\]/);
+  assert.match(menuSource,/if\(has\(admin,'demo:client'\)\)buttons\.push\(\{id:'admin_demo_client_start',title:'🧪 Demo Client'\}\)/);
+  assert.match(menuSource,/interactive:\{type:'button',body,buttons\}/);
   assert.match(menuSource,/if\(v==='appointments'\)/);
   assert.match(menuSource,/appointmentsInteractive\(admin\)/);
 });
@@ -44,6 +47,7 @@ test('Demo Client is not exposed through the appointments panel without explicit
     permissions:{'appointment:view':true,'appointment:create':true,'booking:update':true},
   });
   assert.equal(panel.rows.some(row=>row.id==='demo client'),false);
+  assert.match(menuSource,/if\(has\(admin,'demo:client'\)\)buttons\.push/);
 });
 
 test('flat-menu fallback also places Demo Client in the Appointments section only when permitted',()=>{
