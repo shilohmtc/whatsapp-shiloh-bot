@@ -15,13 +15,13 @@ test('guided admin booking starts from every active CRM service, not practitione
 
 test('practitioner eligibility is resolved only after the service is selected', () => {
   assert.match(source, /async function staffRowsForService\(serviceId\)/);
-  assert.match(source, /WHERE ss\.service_id=\$1 AND st\.status='active'/);
+  assert.match(source, /WHERE ss\.service_id=\$1 AND st\.status='active' AND st\.client_bookable=TRUE/);
   assert.match(source, /if\(session\.step==='service'\).*staffRowsForService\(service\.id\)/s);
   assert.match(source, /Eligible practitioner/);
 });
 
-test('an active service without an eligible practitioner fails closed instead of being silently hidden or misrouted', () => {
-  assert.match(source, /This service is active in CRM, but no active practitioner is currently mapped to perform it/);
+test('an active service without an eligible client-bookable practitioner fails closed instead of being silently hidden or misrouted', () => {
+  assert.match(source, /This service is active in CRM, but no client-bookable practitioner is currently mapped to perform it/);
   assert.match(source, /Nothing has been booked/);
 });
 
