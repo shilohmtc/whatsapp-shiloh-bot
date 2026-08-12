@@ -1,4 +1,5 @@
 const { processAdminMobileMenuMessage } = require('./adminMobileMenu');
+const { processAdminAppointmentFinalizationMessage } = require('./adminAppointmentFinalization');
 
 const SECTION_ORDER = ['Appointments', 'Reports', 'Clients', 'Services', 'Schedule', 'More'];
 
@@ -120,6 +121,9 @@ async function getRoleScopedMenu(sender) {
 }
 
 async function processAdminInteractiveMenuMessage(sender, text) {
+  const finalization = await processAdminAppointmentFinalizationMessage(sender, text);
+  if (finalization.handled) return finalization;
+
   const raw = String(text || '').trim();
   const sectionMatch = raw.match(/^admin_section_(appointments|reports|clients|services|schedule|more)$/i);
   if (sectionMatch) {
