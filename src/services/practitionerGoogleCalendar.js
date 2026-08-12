@@ -84,6 +84,16 @@ async function cancelPractitionerBookingEvent({ appointmentId, staffName }) {
   return { ...result, configured: true, calendarId, eventId };
 }
 
+async function cancelPractitionerBookingEvents({ appointmentId, staffNames = [] }) {
+  const unique = [...new Set(staffNames.map((name) => String(name || '').trim()).filter(Boolean))];
+  const results = [];
+  for (const staffName of unique) {
+    if (!ENV_BY_STAFF[normalizeStaffName(staffName)]) continue;
+    results.push({ staffName, ...(await cancelPractitionerBookingEvent({ appointmentId, staffName })) });
+  }
+  return results;
+}
+
 module.exports = {
   ENV_BY_STAFF,
   normalizeStaffName,
@@ -94,4 +104,5 @@ module.exports = {
   createPractitionerBookingEvent,
   syncPractitionerBookingEvent,
   cancelPractitionerBookingEvent,
+  cancelPractitionerBookingEvents,
 };
