@@ -23,6 +23,8 @@ const { startCustomerCareScheduler } = require("./src/services/customerCare");
 const { startBookingIntegrityScheduler } = require("./src/services/bookingIntegrityMonitor");
 const { ensureDemoClientPermissions } = require("./src/services/demoClientAccessBootstrap");
 const { startMandatoryDemoCleanupScheduler } = require("./src/services/demoMandatoryCleanup");
+// TEMPORARY_READ_ONLY_BIRTHDAY_AUDIT_PROBE — remove immediately after provider status is captured.
+const { getBirthdayTemplateStatus, TEMPLATE_BODY } = require("./src/services/birthdayTemplateProvisioning");
 
 const app = express();
 app.disable("x-powered-by");
@@ -66,6 +68,31 @@ async function start() {
     startCustomerCareScheduler();
     startBookingIntegrityScheduler();
     startMandatoryDemoCleanupScheduler();
+    setImmediate(async () => {
+      try {
+        const provider = await getBirthdayTemplateStatus();
+        const currentBrand = "Shiloh Massage Therapy and Aesthetic Clinic";
+        logger.info({
+          birthdayTemplateAudit: {
+            safety: "read_only_sanitized_provider_status",
+            ok: provider.ok === true,
+            reason: provider.reason || null,
+            templateName: provider.templateName || null,
+            configuredTemplateName: provider.configuredTemplateName || null,
+            exists: Boolean(provider.template),
+            providerStatus: provider.template?.status || null,
+            category: provider.template?.category || null,
+            language: provider.template?.language || null,
+            submittedCopyUsesCurrentBrand: TEMPLATE_BODY.includes(currentBrand),
+            safeToEnable: provider.template?.status === "APPROVED" && TEMPLATE_BODY.includes(currentBrand),
+            legacyTemplateName: provider.legacyTemplateName || null,
+            legacyProviderStatus: provider.legacyTemplate?.status || null,
+          },
+        }, "Temporary read-only birthday template audit probe");
+      } catch (error) {
+        logger.warn({ err: error }, "Temporary read-only birthday template audit probe failed");
+      }
+    });
   });
 }
 start().catch((error) => { logger.fatal({ err: error }, "Shiloh failed during startup"); process.exit(1); });
