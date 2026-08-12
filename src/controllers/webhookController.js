@@ -34,11 +34,14 @@ function isGreetingOnly(text = "") { return /^(hi|hello|hey|good morning|good af
 function inboundText(message){
   if(message?.type==="text") return message.text?.body?.trim()||null;
   if(message?.type==="interactive"&&message.interactive?.type==="button_reply") return commandForAdminButton(message.interactive.button_reply?.id);
-  if(message?.type==="interactive"&&message.interactive?.type==="list_reply") return message.interactive.list_reply?.id?.trim()||null;
+  if(message?.type==="interactive"&&message.interactive?.type==="list_reply") {
+    const id=message.interactive.list_reply?.id?.trim()||'';
+    return commandForAdminButton(id)||id||null;
+  }
   return null;
 }
 async function sendAdminResult(to,result){
-  if(result?.interactive?.type==="list") return sendWhatsAppList(to,result.interactive.body,result.interactive.buttonText,result.interactive.rows,result.interactive.sectionTitle);
+  if(result?.interactive?.type==="list") return sendWhatsAppList(to,result.interactive.body,result.interactive.buttonText||result.interactive.button,result.interactive.rows||result.interactive.sections?.[0]?.rows,result.interactive.sectionTitle||result.interactive.sections?.[0]?.title);
   if(result?.interactive?.type==="button") return sendWhatsAppReplyButtons(to,result.interactive.body,result.interactive.buttons);
   if(result?.interactive?.buttons) return sendWhatsAppReplyButtons(to,result.interactive.body,result.interactive.buttons);
   return sendWhatsAppMessage(to,result?.reply||"Sorry, Shiloh could not render that admin response.");
