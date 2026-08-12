@@ -5,6 +5,7 @@ const path = require('node:path');
 
 const interactivePath = path.join(__dirname, '..', 'src', 'services', 'clientBookingInteractive.js');
 const discoveryPath = path.join(__dirname, '..', 'src', 'services', 'clientDiscoveryMenu.js');
+const staffGuardPath = path.join(__dirname, '..', 'src', 'services', 'clientBookingStaffGuard.js');
 const source = fs.readFileSync(interactivePath, 'utf8');
 const discovery = fs.readFileSync(discoveryPath, 'utf8');
 const {
@@ -13,6 +14,7 @@ const {
   decorateClientBookingResult,
   practitionerRequiredInteractive,
 } = require(interactivePath);
+const { clientFacingPractitionerLabel } = require(staffGuardPath);
 
 const serviceIntent = {
   service_text: 'Swedish Massage',
@@ -30,6 +32,18 @@ test('booking entry explains the three-person client-facing treatment team', () 
   assert.match(view.body, /Abigail — Massage practitioner/);
   assert.match(view.body, /Marietjie — Esthetician/);
   assert.deepEqual(view.buttons.map((button) => button.id), ['client_browse_services', 'client_practitioners']);
+});
+
+test('Our practitioners chooser labels the three client-facing roles without exposing owner or employee status', () => {
+  assert.equal(clientFacingPractitionerLabel('Christel'), 'Christel · Massage');
+  assert.equal(clientFacingPractitionerLabel('Abigail'), 'Abigail · Massage');
+  assert.equal(clientFacingPractitionerLabel('Marietjie'), 'Marietjie · Esthetician');
+  const labels = [
+    clientFacingPractitionerLabel('Christel'),
+    clientFacingPractitionerLabel('Abigail'),
+    clientFacingPractitionerLabel('Marietjie'),
+  ].join(' ');
+  assert.doesNotMatch(labels, /owner|employee/i);
 });
 
 test('missing practitioner preference blocks date collection and redirects to CRM-backed discovery', () => {
