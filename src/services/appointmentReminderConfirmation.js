@@ -70,15 +70,18 @@ async function confirmReminderAppointment(phone, appointmentId) {
   try {
     await db.query('BEGIN');
     const locked = await db.query(
-      `SELECT DISTINCT a.id,a.status,a.starts_at,a.ends_at,al.status AS lifecycle_status
+      `SELECT a.id,a.status,a.starts_at,a.ends_at,al.status AS lifecycle_status
          FROM appointments a
          JOIN appointment_lifecycle al ON al.appointment_id=a.id
          JOIN clients c ON c.id=a.client_id
-         JOIN client_contacts cc ON cc.client_id=c.id
         WHERE a.id=$2
-          AND cc.normalized_value=$1
-          AND cc.contact_type IN ('whatsapp','mobile','phone')
           AND c.status='active'
+          AND EXISTS (
+            SELECT 1 FROM client_contacts cc
+             WHERE cc.client_id=c.id
+               AND cc.normalized_value=$1
+               AND cc.contact_type IN ('whatsapp','mobile','phone')
+          )
           AND al.reminder_sent_at IS NOT NULL
           AND al.appointment_at>NOW()
           AND a.ends_at>NOW()
