@@ -106,7 +106,7 @@ async function tagDemoClient(admin, session, clientId) {
     `UPDATE clients
         SET source='whatsapp_demo',
             custom_attributes=COALESCE(custom_attributes,'{}'::jsonb) ||
-              jsonb_build_object('demo_admin_id',$2::text,'demo_owner',$3,'demo_only',true),
+              jsonb_build_object('demo_admin_id',$2::text,'demo_owner',$3::text,'demo_only',true),
             updated_at=NOW()
       WHERE id=$1`,
     [clientId, admin.id, admin.display_name]
