@@ -23,6 +23,7 @@ const { startCustomerCareScheduler } = require("./src/services/customerCare");
 const { startBookingIntegrityScheduler } = require("./src/services/bookingIntegrityMonitor");
 const { ensureDemoClientPermissions } = require("./src/services/demoClientAccessBootstrap");
 const { startMandatoryDemoCleanupScheduler } = require("./src/services/demoMandatoryCleanup");
+const { getReportingIntegrityAudit } = require("./src/services/reportingIntegrityAudit");
 
 const app = express();
 app.disable("x-powered-by");
@@ -66,6 +67,14 @@ async function start() {
     startCustomerCareScheduler();
     startBookingIntegrityScheduler();
     startMandatoryDemoCleanupScheduler();
+    setImmediate(async () => {
+      try {
+        const reportingIntegrityAudit = await getReportingIntegrityAudit();
+        logger.info({ reportingIntegrityAudit }, "Temporary read-only reporting integrity audit probe");
+      } catch (error) {
+        logger.warn({ err: error }, "Temporary read-only reporting integrity audit probe failed");
+      }
+    });
   });
 }
 start().catch((error) => { logger.fatal({ err: error }, "Shiloh failed during startup"); process.exit(1); });
