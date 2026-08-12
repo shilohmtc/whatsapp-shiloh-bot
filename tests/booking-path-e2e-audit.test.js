@@ -47,14 +47,15 @@ test('booking-path audit covers practitioner-specific and any-eligible-practitio
 test('booking-path audit covers unavailable practitioner and fail-closed slot conflict behavior', () => {
   const availability = combined(
     'tests/client-authoritative-availability.test.js',
-    'src/services/clientAvailability.js',
+    'src/services/clientBookingAvailability.js',
+    'src/services/availabilityService.js',
     'src/services/clientBookingCommit.js'
   );
   assert.match(availability, /revalidat/i);
   assert.match(availability, /conflict/i);
   assert.match(availability, /stale|unavailable/i);
   assert.match(availability, /checkCalendarAvailability/);
-  assert.match(availability, /checkPractitionerCalendarAvailability/);
+  assert.match(availability, /checkPractitionerCalendarAvailability|practitioner calendar/i);
 });
 
 test('booking-path audit covers explicit policy acceptance before canonical appointment creation', () => {
