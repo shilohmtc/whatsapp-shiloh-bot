@@ -66,10 +66,22 @@ function assertBeforeGenericAssistant(handler) {
   assert.ok(target < generic, `${handler} must run before generic admin assistant fallthrough`);
 }
 
+function rolloutBlock(name) {
+  return rollout
+    .split(/(?=UPDATE staff_admin_accounts)/)
+    .find((block) => block.includes(`WHERE LOWER(display_name)='${name}';`)) || '';
+}
+
 test('checked-in production role contracts match Christel, Abigail and Marietjie scope', () => {
-  assert.match(rollout, /LOWER\(display_name\)='christel'[\s\S]*business_role='owner'[\s\S]*calendar_scope='all_business'/);
-  assert.match(rollout, /LOWER\(display_name\)='marietjie'[\s\S]*business_role='tenant_practitioner'[\s\S]*calendar_scope='own_services'/);
-  assert.match(rollout, /LOWER\(display_name\)='abigail'[\s\S]*business_role='employee_practitioner'[\s\S]*calendar_scope='own_appointments'/);
+  const christel = rolloutBlock('christel');
+  const abigail = rolloutBlock('abigail');
+  const marietjie = rolloutBlock('marietjie');
+  assert.match(christel, /business_role='owner'/);
+  assert.match(christel, /calendar_scope='all_business'/);
+  assert.match(marietjie, /business_role='tenant_practitioner'/);
+  assert.match(marietjie, /calendar_scope='own_services'/);
+  assert.match(abigail, /business_role='employee_practitioner'/);
+  assert.match(abigail, /calendar_scope='own_appointments'/);
   assert.match(demoAccess, /LOWER\(display_name\) = 'christel'/);
   assert.match(demoAccess, /LOWER\(display_name\) = 'abigail'/);
   assert.match(demoAccess, /LOWER\(display_name\) = 'marietjie'/);
