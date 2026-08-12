@@ -4,7 +4,8 @@ const { processAdminAppointmentsByDateMessage } = require('./adminAppointmentsBy
 const { processAdminHelpMessage } = require('./adminHelp');
 const { processAdminWalkinMessage } = require('./adminWalkin');
 const { processJeanPierreControlPlaneMessage } = require('./jeanPierreAdminControlPlane');
-const { abigailEarningsButtons, christelEarningsButtons } = require('./adminEarningsButtons');
+const { processAdminMarietjieEarningsMessage } = require('./adminMarietjieEarnings');
+const { abigailEarningsButtons, christelEarningsButtons, marietjieEarningsButtons } = require('./adminEarningsButtons');
 
 const SECTION_ORDER = ['Appointments', 'Reports', 'Clients', 'Services', 'Schedule', 'More'];
 
@@ -16,6 +17,7 @@ const ACTIONS = [
   { key: 'today_report', labels: ["Today's report", 'My report today'], command: "Today's report", description: 'View today’s scoped business report' },
   { key: 'christel_earnings', labels: ['💰 Christel earnings', 'Christel earnings'], command: 'Christel earnings', description: 'Completed-only earnings report' },
   { key: 'abigail_earnings', labels: ['💰 Abigail earnings', 'Abigail earnings'], command: 'Abigail earnings', description: 'Completed-only earnings report' },
+  { key: 'marietjie_earnings', labels: ['💰 Marietjie earnings', 'Marietjie earnings'], command: 'Marietjie earnings', description: 'Completed-only earnings report' },
   { key: 'booking', labels: ['Make a booking'], command: 'Make a booking', description: 'Create a guarded appointment' },
   { key: 'manage_booking', labels: ['Manage a booking'], command: 'Manage a booking', description: 'Change an existing appointment' },
   { key: 'client', labels: ['Find a client', 'Find my client'], command: 'Find a client', description: 'Search authorized CRM clients' },
@@ -72,29 +74,37 @@ function sectionInteractive(section, body) {
   rows.push({ id: 'menu', title: '← Back to Admin', description: 'Return to the main admin menu' });
   return { type: 'list', body: `*${section}*\nChoose what you want to do.`, buttonText: section.length <= 20 ? section : 'Open options', rows, sectionTitle: section };
 }
+function normalizedAdminName(admin) { return String(admin?.display_name || '').trim().toLowerCase(); }
 function isJeanPierreBusinessAdmin(admin) {
-  return String(admin?.display_name || '').trim().toLowerCase() === 'jean-pierre' && admin?.business_role === 'business_admin' && admin?.calendar_scope === 'all_business' && admin?.service_scope === 'all_services';
+  return normalizedAdminName(admin) === 'jean-pierre' && admin?.business_role === 'business_admin' && admin?.calendar_scope === 'all_business' && admin?.service_scope === 'all_services';
 }
-function enrichJeanPierreMenu(result) {
-  if (!result?.handled || !result?.interactive?.body || !isJeanPierreBusinessAdmin(result.admin)) return result;
+function isChristelOwnerAdmin(admin) {
+  return normalizedAdminName(admin) === 'christel' && ['owner', 'business_admin'].includes(admin?.business_role) && admin?.calendar_scope === 'all_business';
+}
+function enrichPrivilegedReportsMenu(result) {
+  if (!result?.handled || !result?.interactive?.body) return result;
+  const jeanPierre = isJeanPierreBusinessAdmin(result.admin);
+  const christel = isChristelOwnerAdmin(result.admin);
+  if (!jeanPierre && !christel) return result;
   let body = String(result.interactive.body);
-  if (!/Christel earnings/i.test(body)) body += '\n\n*Reports*\n98️⃣ 💰 Christel earnings';
-  if (!/Calendar integrity/i.test(body)) body += '\n\n*More*\n97️⃣ 🛡️ Calendar integrity';
+  if (jeanPierre && !/Christel earnings/i.test(body)) body += '\n\n*Reports*\n98️⃣ 💰 Christel earnings';
+  if (!/Marietjie earnings/i.test(body)) body += /\*Reports\*/i.test(body) ? '\n99️⃣ 💰 Marietjie earnings' : '\n\n*Reports*\n99️⃣ 💰 Marietjie earnings';
+  if (jeanPierre && !/Calendar integrity/i.test(body)) body += '\n\n*More*\n97️⃣ 🛡️ Calendar integrity';
   return { ...result, interactive: { ...result.interactive, body } };
 }
+function enrichJeanPierreMenu(result) { return enrichPrivilegedReportsMenu(result); }
 async function getRoleScopedMenu(sender) {
   const result = await processAdminMobileMenuMessage(sender, 'Menu');
   if (!result?.handled || !result?.interactive?.body) return result;
-  return enrichJeanPierreMenu(result);
+  return enrichPrivilegedReportsMenu(result);
 }
 async function dispatchStableAction(sender, action) {
-  if (action.key === 'today' || action.key === 'tomorrow') {
-    return processAdminAppointmentsByDateMessage(sender, action.command);
-  }
+  if (action.key === 'today' || action.key === 'tomorrow') return processAdminAppointmentsByDateMessage(sender, action.command);
   if (action.key === 'walkin') return processAdminWalkinMessage(sender, action.command);
   if (action.key === 'help') return processAdminHelpMessage(sender, action.command);
   if (action.key === 'abigail_earnings') return { handled: true, interactive: abigailEarningsButtons() };
   if (action.key === 'christel_earnings') return { handled: true, interactive: christelEarningsButtons() };
+  if (action.key === 'marietjie_earnings') return { handled: true, interactive: marietjieEarningsButtons() };
 
   const privileged = await processJeanPierreControlPlaneMessage(sender, action.command);
   if (privileged.handled) return privileged;
@@ -103,6 +113,8 @@ async function dispatchStableAction(sender, action) {
 async function processAdminInteractiveMenuMessage(sender, text) {
   const finalization = await processAdminAppointmentFinalizationMessage(sender, text);
   if (finalization.handled) return finalization;
+  const marietjieEarnings = await processAdminMarietjieEarningsMessage(sender, text);
+  if (marietjieEarnings.handled) return marietjieEarnings;
   const jeanPierreControl = await processJeanPierreControlPlaneMessage(sender, text);
   if (jeanPierreControl.handled) return jeanPierreControl;
   const raw = String(text || '').trim();
@@ -118,9 +130,9 @@ async function processAdminInteractiveMenuMessage(sender, text) {
   const action = actionForId(raw);
   if (action) return dispatchStableAction(sender, action);
   if (/^admin_action_/i.test(raw)) return { handled: true, reply: 'That admin action is no longer available. Send *Menu* to refresh your options.' };
-  const result = enrichJeanPierreMenu(await processAdminMobileMenuMessage(sender, text));
+  const result = enrichPrivilegedReportsMenu(await processAdminMobileMenuMessage(sender, text));
   if (result?.handled && result?.interactive?.type === 'button' && /^\*Shiloh Admin 🌿\*/.test(result.interactive.body || '')) return { ...result, interactive: topLevelInteractive(result.interactive.body) };
   return result;
 }
 
-module.exports = { ACTIONS, actionForId, actionForLabel, compactMenuBody, dispatchStableAction, enrichJeanPierreMenu, parseVisibleMenu, processAdminInteractiveMenuMessage, sectionInteractive, topLevelInteractive };
+module.exports = { ACTIONS, actionForId, actionForLabel, compactMenuBody, dispatchStableAction, enrichJeanPierreMenu, enrichPrivilegedReportsMenu, parseVisibleMenu, processAdminInteractiveMenuMessage, sectionInteractive, topLevelInteractive };
