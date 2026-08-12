@@ -2,6 +2,7 @@ const {
   calendarEnabled,
   checkCalendarAvailabilityOnCalendar,
   createBookingEventOnCalendar,
+  getBookingEventOnCalendar,
   updateBookingEventOnCalendar,
   cancelBookingEventOnCalendar,
   deterministicEventId,
@@ -34,6 +35,11 @@ function requirePractitionerCalendarId(staffName) {
   return calendarId;
 }
 
+function eventIdForAppointment(appointmentId) {
+  if (!appointmentId) throw new Error('appointmentId is required for practitioner calendar synchronization.');
+  return deterministicEventId(`shiloh-appointment:${appointmentId}`);
+}
+
 async function checkPractitionerCalendarAvailability({ staffName, startsAt, endsAt, ignoreEventId = null }) {
   if (!calendarEnabled()) return { enabled: false, configured: false, available: true, conflicts: [] };
   const calendarId = requirePractitionerCalendarId(staffName);
@@ -55,20 +61,25 @@ async function createPractitionerBookingEvent(data) {
   return { ...result, configured: true, calendarId };
 }
 
-async function updatePractitionerBookingEvent(data) {
+async function syncPractitionerBookingEvent(data) {
   if (!calendarEnabled()) return { enabled: false, configured: false, event: null };
   const calendarId = requirePractitionerCalendarId(data.staffName);
   if (!calendarId) return { enabled: true, configured: false, event: null };
-  const eventId = data.eventId || deterministicEventId(`shiloh-appointment:${data.appointmentId}`);
-  const result = await updateBookingEventOnCalendar(calendarId, { ...data, eventId });
-  return { ...result, configured: true, calendarId };
+  const eventId = eventIdForAppointment(data.appointmentId);
+  const existing = await getBookingEventOnCalendar(eventId, calendarId);
+  if (!existing) {
+    const created = await createBookingEventOnCalendar(calendarId, data);
+    return { ...created, configured: true, calendarId, createdMissingMirror: true };
+  }
+  const updated = await updateBookingEventOnCalendar(calendarId, { ...data, eventId });
+  return { ...updated, configured: true, calendarId };
 }
 
 async function cancelPractitionerBookingEvent({ appointmentId, staffName }) {
   if (!calendarEnabled()) return { enabled: false, configured: false, cancelled: false };
   const calendarId = requirePractitionerCalendarId(staffName);
   if (!calendarId) return { enabled: true, configured: false, cancelled: false };
-  const eventId = deterministicEventId(`shiloh-appointment:${appointmentId}`);
+  const eventId = eventIdForAppointment(appointmentId);
   const result = await cancelBookingEventOnCalendar(eventId, calendarId);
   return { ...result, configured: true, calendarId, eventId };
 }
@@ -78,8 +89,9 @@ module.exports = {
   normalizeStaffName,
   practitionerCalendarId,
   requirePractitionerCalendarId,
+  eventIdForAppointment,
   checkPractitionerCalendarAvailability,
   createPractitionerBookingEvent,
-  updatePractitionerBookingEvent,
+  syncPractitionerBookingEvent,
   cancelPractitionerBookingEvent,
 };
