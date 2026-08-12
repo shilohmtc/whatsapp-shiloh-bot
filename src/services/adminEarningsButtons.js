@@ -7,6 +7,8 @@ const BUTTON_COMMANDS = Object.freeze({
   admin_christel_earnings_month: 'Christel earnings this month',
   admin_calendar_integrity_scan: 'Calendar integrity scan',
   admin_calendar_integrity_issues: 'Calendar integrity issues',
+  admin_booking_confirm: 'Confirm booking',
+  admin_booking_cancel: 'Cancel booking',
 });
 
 function abigailEarningsButtons() {
