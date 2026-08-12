@@ -10,6 +10,7 @@ const BUTTON_COMMANDS = Object.freeze({
   admin_booking_confirm: 'Confirm booking',
   admin_booking_cancel: 'Cancel booking',
   admin_menu_appointments: 'Appointments',
+  admin_demo_client_start: 'Demo Client',
 });
 
 function abigailEarningsButtons() {
