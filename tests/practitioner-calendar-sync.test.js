@@ -20,7 +20,7 @@ test('verified practitioner calendars are explicit environment-backed mappings',
 
 test('guided client booking cannot expose internal freelancers as practitioner choices', () => {
   assert.match(flow, /st\.client_bookable=TRUE/);
-  assert.match(flow, /no client-bookable practitioner is currently mapped/);
+  assert.match(flow, /no eligible practitioner in your booking scope is currently mapped/);
 });
 
 test('booking confirmation checks and creates both shared and practitioner calendar events', () => {
