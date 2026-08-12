@@ -4,6 +4,7 @@ const { processAdminAppointmentsByDateMessage } = require('./adminAppointmentsBy
 const { processAdminHelpMessage } = require('./adminHelp');
 const { processAdminWalkinMessage } = require('./adminWalkin');
 const { processJeanPierreControlPlaneMessage } = require('./jeanPierreAdminControlPlane');
+const { abigailEarningsButtons, christelEarningsButtons } = require('./adminEarningsButtons');
 
 const SECTION_ORDER = ['Appointments', 'Reports', 'Clients', 'Services', 'Schedule', 'More'];
 
@@ -92,6 +93,8 @@ async function dispatchStableAction(sender, action) {
   }
   if (action.key === 'walkin') return processAdminWalkinMessage(sender, action.command);
   if (action.key === 'help') return processAdminHelpMessage(sender, action.command);
+  if (action.key === 'abigail_earnings') return { handled: true, interactive: abigailEarningsButtons() };
+  if (action.key === 'christel_earnings') return { handled: true, interactive: christelEarningsButtons() };
 
   const privileged = await processJeanPierreControlPlaneMessage(sender, action.command);
   if (privileged.handled) return privileged;
