@@ -50,16 +50,17 @@ test('service list pagination never exceeds Meta list row bounds', () => {
   assert.equal(second.rows.at(-1).id, 'client_services_page_3');
 });
 
-test('client service and practitioner selections are revalidated before entering booking intent', () => {
+test('client service and practitioner selections are revalidated before entering the same booking intent', () => {
   assert.match(source, /findClientBookableService\(serviceMatch\[1\]\)/);
   assert.match(source, /findClientBookablePractitioner\(practitionerMatch\[1\]\)/);
-  assert.match(source, /return processBookingMessage\(sender, `Book \$\{service\.name\}`\)/);
-  assert.match(source, /return processBookingMessage\(sender, `booking with \$\{practitioner\.display_name\}`\)/);
+  assert.match(source, /processBookingMessage\(sender, `Book \$\{service\.name\}`\)/);
+  assert.match(source, /processBookingMessage\(sender, `booking with \$\{practitioner\.display_name\}`\)/);
+  assert.match(source, /decorateClientBookingResult\(await processBookingMessage/);
   assert.doesNotMatch(source, /Savanna|Pieter/);
 });
 
 test('non-admin interactive button IDs survive inbound normalization', () => {
-  assert.match(webhook, /button_reply[\s\S]*commandForAdminButton\(id\)\|\|id\|\|null/);
+  assert.match(webhook, /button_reply[\s\S]*commandForClientBookingButton\(id\)[\s\S]*\|\|id\|\|null/);
   assert.match(webhook, /list_reply[\s\S]*commandForAdminButton\(id\)\|\|id\|\|null/);
 });
 
