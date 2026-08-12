@@ -15,16 +15,62 @@ function commandForClientBookingButton(id = '') {
   return CLIENT_BOOKING_BUTTON_COMMANDS[String(id || '').trim()] || null;
 }
 
+function treatmentTeamLines() {
+  return [
+    'Shiloh’s client-facing treatment team:',
+    '• Christel — Massage practitioner',
+    '• Abigail — Massage practitioner',
+    '• Marietjie — Esthetician',
+  ];
+}
+
+function bookingDiscoveryInteractive() {
+  return {
+    type: 'button',
+    body: [
+      '*Book at Shiloh 🌿*',
+      '',
+      ...treatmentTeamLines(),
+      '',
+      'Choose a treatment first to see only the practitioners who currently offer it, or choose a practitioner first to see only their active CRM-mapped services.',
+    ].join('\n'),
+    buttons: [
+      { id: 'client_browse_services', title: 'Choose treatment' },
+      { id: 'client_practitioners', title: 'Choose practitioner' },
+    ],
+  };
+}
+
+function practitionerRequiredInteractive(intent) {
+  return {
+    type: 'button',
+    body: [
+      `*${intent.service_text}*`,
+      '',
+      'Please choose your practitioner preference before choosing a date.',
+      ...treatmentTeamLines(),
+      '',
+      'Use *Choose treatment* to reopen this treatment and see only the practitioners currently eligible for it, including an explicit *Any available* option. Or choose a practitioner first to see only their mapped services.',
+      '',
+      'Shiloh will not silently treat a missing practitioner choice as “Any available”.',
+    ].join('\n'),
+    buttons: [
+      { id: 'client_browse_services', title: 'Choose treatment' },
+      { id: 'client_practitioners', title: 'Choose practitioner' },
+    ],
+  };
+}
+
 function dateInteractive(intent) {
   return {
     type: 'button',
     body: [
       `*${intent.service_text}*`,
-      intent.therapist_text ? `Practitioner: ${intent.therapist_text}` : null,
+      `Practitioner: ${intent.therapist_text}`,
       '',
       'What day would you prefer?',
       'Choose a quick option below, or type another day/date such as *next Friday* or *21 August*.',
-    ].filter((line) => line !== null).join('\n'),
+    ].join('\n'),
     buttons: [
       { id: 'client_date_today', title: 'Today' },
       { id: 'client_date_tomorrow', title: 'Tomorrow' },
@@ -38,11 +84,11 @@ function timeInteractive(intent) {
     body: [
       `*${intent.service_text}*`,
       `Date: ${displayDate(intent.preferred_date)}`,
-      intent.therapist_text ? `Practitioner: ${intent.therapist_text}` : null,
+      `Practitioner: ${intent.therapist_text}`,
       '',
       'What time of day would you prefer?',
       'Choose below, or type an exact time such as *14:00* or *2pm*.',
-    ].filter((line) => line !== null).join('\n'),
+    ].join('\n'),
     buttons: [
       { id: 'client_time_morning', title: 'Morning' },
       { id: 'client_time_afternoon', title: 'Afternoon' },
@@ -57,9 +103,9 @@ function confirmationInteractive(intent) {
     body: [
       '*Please check your booking preferences*',
       `Service: ${intent.service_text}`,
+      `Practitioner: ${intent.therapist_text}`,
       `Date: ${displayDate(intent.preferred_date)}`,
       `Time: ${intent.preferred_time}`,
-      `Practitioner: ${intent.therapist_text || 'Any available practitioner'}`,
       '',
       'Nothing is booked yet. Confirm these details to continue to Shiloh’s Booking Policy & Terms, or change/cancel the request.',
     ].join('\n'),
@@ -75,10 +121,24 @@ function decorateClientBookingResult(result) {
   if (!result?.handled || !result.intent) return result;
   const intent = result.intent;
 
+  if (intent.status === 'collecting' && !intent.service_text) {
+    return { ...result, interactive: bookingDiscoveryInteractive() };
+  }
+
+  if (
+    ['collecting', 'awaiting_confirmation'].includes(intent.status) &&
+    intent.service_text &&
+    intent.service_verified !== false &&
+    !intent.therapist_text
+  ) {
+    return { ...result, interactive: practitionerRequiredInteractive(intent) };
+  }
+
   if (
     intent.status === 'collecting' &&
     intent.service_text &&
     intent.service_verified !== false &&
+    intent.therapist_text &&
     !intent.preferred_date
   ) {
     return { ...result, interactive: dateInteractive(intent) };
@@ -88,13 +148,14 @@ function decorateClientBookingResult(result) {
     intent.status === 'collecting' &&
     intent.service_text &&
     intent.service_verified !== false &&
+    intent.therapist_text &&
     intent.preferred_date &&
     !intent.preferred_time
   ) {
     return { ...result, interactive: timeInteractive(intent) };
   }
 
-  if (intent.status === 'awaiting_confirmation') {
+  if (intent.status === 'awaiting_confirmation' && intent.therapist_text) {
     return { ...result, interactive: confirmationInteractive(intent) };
   }
 
@@ -103,9 +164,12 @@ function decorateClientBookingResult(result) {
 
 module.exports = {
   CLIENT_BOOKING_BUTTON_COMMANDS,
+  bookingDiscoveryInteractive,
   commandForClientBookingButton,
   dateInteractive,
   timeInteractive,
   confirmationInteractive,
   decorateClientBookingResult,
+  practitionerRequiredInteractive,
+  treatmentTeamLines,
 };
