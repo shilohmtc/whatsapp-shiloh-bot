@@ -6,23 +6,37 @@ const path = require('node:path');
 const source = fs.readFileSync(path.join(__dirname, '..', 'src/services/adminMobileBookingFlow.js'), 'utf8');
 const booking = fs.readFileSync(path.join(__dirname, '..', 'src/services/adminBooking.js'), 'utf8');
 
-test('guided admin booking starts from every active CRM service, not practitioner-filtered services', () => {
-  assert.match(source, /FROM services s WHERE s\.status='active' ORDER BY s\.name,s\.id/);
-  assert.doesNotMatch(source, /async function serviceRows\(staffId\)/);
-  assert.match(source, /selectionOrder:'service_first'/);
-  assert.match(source, /Choose from the full active Shiloh service catalogue first/);
+test('guided booking catalogue is scoped by the admin business rule', () => {
+  assert.match(source, /name==='marietjie'.*staffNames:\['marietjie'\]/s);
+  assert.match(source, /name==='christel'\|\|name==='abigail'.*staffNames:\['christel','abigail'\]/s);
+  assert.match(source, /bookingScope:scope\.key/);
+  assert.match(source, /Available catalogue:/);
 });
 
-test('practitioner eligibility is resolved only after the service is selected', () => {
-  assert.match(source, /async function staffRowsForService\(serviceId\)/);
-  assert.match(source, /WHERE ss\.service_id=\$1 AND st\.status='active' AND st\.client_bookable=TRUE/);
-  assert.match(source, /if\(session\.step==='service'\).*staffRowsForService\(service\.id\)/s);
+test('Marietjie catalogue contains only services mapped to Marietjie', () => {
+  assert.match(source, /LOWER\(st\.display_name\)=ANY\(\$1::text\[\]\)/);
+  assert.match(source, /scopedActiveServiceRows\(admin\)/);
+  assert.match(source, /Marietjie services/);
+});
+
+test('Christel and Abigail share one service pool while practitioner selection remains eligibility based', () => {
+  assert.match(source, /Christel & Abigail services/);
+  assert.match(source, /async function staffRowsForService\(serviceId,admin\)/);
+  assert.match(source, /LOWER\(st\.display_name\)=ANY\(\$2::text\[\]\)/);
+  assert.match(source, /staffRowsForService\(service\.id,admin\)/);
   assert.match(source, /Eligible practitioner/);
 });
 
-test('an active service without an eligible client-bookable practitioner fails closed instead of being silently hidden or misrouted', () => {
-  assert.match(source, /This service is active in CRM, but no client-bookable practitioner is currently mapped to perform it/);
+test('client-bookable restriction remains enforced for both services and practitioner choices', () => {
+  const matches = source.match(/st\.client_bookable=TRUE/g) || [];
+  assert.ok(matches.length >= 3);
+  assert.match(source, /no eligible practitioner in your booking scope is currently mapped to perform it/);
   assert.match(source, /Nothing has been booked/);
+});
+
+test('business admins outside the practitioner-specific rules retain the client-bookable business catalogue', () => {
+  assert.match(source, /key:'business_admin',staffNames:null,label:'All client-bookable services'/);
+  assert.match(source, /SELECT DISTINCT s\.id,s\.name/);
 });
 
 test('final booking still revalidates staff-service eligibility before production write', () => {
@@ -30,8 +44,10 @@ test('final booking still revalidates staff-service eligibility before productio
   assert.match(booking, /eligibility_changed/);
 });
 
-test('calendar-backed booking still uses the canonical Google booking event path after CRM creation', () => {
+test('calendar-backed booking still uses canonical shared and practitioner Google calendar paths', () => {
   assert.match(booking, /createBookingEvent\(/);
+  assert.match(booking, /createPractitionerBookingEvent\(/);
   assert.match(booking, /appointment_calendar_events/);
   assert.match(booking, /sharedGoogleCalendarChecked/);
+  assert.match(booking, /practitionerGoogleCalendarChecked/);
 });
