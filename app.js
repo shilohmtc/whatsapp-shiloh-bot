@@ -20,6 +20,7 @@ const { startTemporarySessionCleanupScheduler } = require("./src/services/tempor
 const { startGoogleBusinessProfileSyncScheduler } = require("./src/services/googleBusinessProfileSync");
 const { startAppointmentLifecycleScheduler } = require("./src/services/appointmentLifecycle");
 const { startCustomerCareScheduler } = require("./src/services/customerCare");
+const { startBookingIntegrityScheduler } = require("./src/services/bookingIntegrityMonitor");
 
 const app = express();
 app.disable("x-powered-by");
@@ -59,6 +60,7 @@ async function start() {
     startGoogleBusinessProfileSyncScheduler();
     startAppointmentLifecycleScheduler();
     startCustomerCareScheduler();
+    startBookingIntegrityScheduler();
   });
 }
 start().catch((error) => { logger.fatal({ err: error }, "Shiloh failed during startup"); process.exit(1); });
