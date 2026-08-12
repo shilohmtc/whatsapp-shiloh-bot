@@ -10,6 +10,7 @@ const { processAppointmentChangeMessage } = require("../services/appointmentChan
 const { processCustomerExperienceMessage } = require("../services/customerExperience");
 const { processCustomerCareMessage } = require("../services/customerCare");
 const { processClientIdentityMessage } = require("../services/clientIdentityOnboarding");
+const { processClientDiscoveryMessage } = require("../services/clientDiscoveryMenu");
 const { processAdminWalkinMessage } = require("../services/adminWalkin");
 const { processAdminHelpMessage } = require("../services/adminHelp");
 const { processAdminInteractiveMenuMessage } = require("../services/adminInteractiveMenu");
@@ -33,7 +34,10 @@ function maskPhone(phone = "") { return phone.length > 4 ? `***${phone.slice(-4)
 function isGreetingOnly(text = "") { return /^(hi|hello|hey|good morning|good afternoon|good evening|howzit|hiya)[!. ]*$/i.test(String(text).trim()); }
 function inboundText(message){
   if(message?.type==="text") return message.text?.body?.trim()||null;
-  if(message?.type==="interactive"&&message.interactive?.type==="button_reply") return commandForAdminButton(message.interactive.button_reply?.id);
+  if(message?.type==="interactive"&&message.interactive?.type==="button_reply") {
+    const id=message.interactive.button_reply?.id?.trim()||'';
+    return commandForAdminButton(id)||id||null;
+  }
   if(message?.type==="interactive"&&message.interactive?.type==="list_reply") {
     const id=message.interactive.list_reply?.id?.trim()||'';
     return commandForAdminButton(id)||id||null;
@@ -44,7 +48,7 @@ async function sendAdminResult(to,result){
   if(result?.interactive?.type==="list") return sendWhatsAppList(to,result.interactive.body,result.interactive.buttonText||result.interactive.button,result.interactive.rows||result.interactive.sections?.[0]?.rows,result.interactive.sectionTitle||result.interactive.sections?.[0]?.title);
   if(result?.interactive?.type==="button") return sendWhatsAppReplyButtons(to,result.interactive.body,result.interactive.buttons);
   if(result?.interactive?.buttons) return sendWhatsAppReplyButtons(to,result.interactive.body,result.interactive.buttons);
-  return sendWhatsAppMessage(to,result?.reply||"Sorry, Shiloh could not render that admin response.");
+  return sendWhatsAppMessage(to,result?.reply||"Sorry, Shiloh could not render that response.");
 }
 exports.verifyWebhook = (req,res)=>{const mode=req.query["hub.mode"],token=req.query["hub.verify_token"],challenge=req.query["hub.challenge"];if(mode==="subscribe"&&token===process.env.VERIFY_TOKEN){(req.log||logger).info("WhatsApp webhook verified");return res.status(200).send(challenge);}(req.log||logger).warn("WhatsApp webhook verification rejected");return res.sendStatus(403);};
 exports.receiveWebhook=async(req,res)=>{const log=req.log||logger;try{const value=req.body.entry?.[0]?.changes?.[0]?.value;if(!value?.messages)return res.sendStatus(200);const message=value.messages[0];const from=message.from,text=inboundText(message);if(!text){log.info({messageType:message.type},"Ignoring unsupported or unknown WhatsApp message");return res.sendStatus(200);}if(!from){log.warn("Received WhatsApp message without sender");return res.sendStatus(200);}log.info({from:maskPhone(from),messageType:message.type},"Processing incoming WhatsApp message");try{
@@ -70,6 +74,7 @@ const customerCare=await processCustomerCareMessage(from,text);if(customerCare.h
 const nameGuard=await guardActiveNameConfirmation(from,text);if(nameGuard.handled){await sendWhatsAppMessage(from,nameGuard.reply);return res.sendStatus(200);}
 const identity=await processClientIdentityMessage(from,text);if(identity.handled){let reply=identity.reply;if(identity.identityStatus==="matched_incomplete"&&identity.client?.id){const forced=await forceMatchedClientNameConfirmation(from,identity.client.id);if(forced)reply=`Welcome back, ${identity.client.display_name}. Before I can continue with the booking, please confirm your full name.`;}if(identity.onboardingComplete&&identity.resumeBooking){const booking=await processBookingMessage(from,"I want to book an appointment");if(booking.handled&&booking.reply)reply=`${reply}\n\n${sanitizeBookingReply(booking.reply)}`;}await sendWhatsAppMessage(from,reply);return res.sendStatus(200);}
 if(identity.identityStatus==="matched_incomplete"&&identity.client?.display_name&&isGreetingOnly(text)){await sendWhatsAppMessage(from,`Welcome back, ${identity.client.display_name} 👋 How can I help you today?`);return res.sendStatus(200);}
+const clientDiscovery=await processClientDiscoveryMessage(from,text);if(clientDiscovery.handled){await sendAdminResult(from,clientDiscovery);return res.sendStatus(200);}
 const scope=evaluateClinicScope(text);if(!scope.allowed){await sendWhatsAppMessage(from,CLINIC_REDIRECT);return res.sendStatus(200);}
 const freelancerGuard=await guardClientFreelancerBooking(text);if(freelancerGuard.blocked){log.info({from:maskPhone(from),staff:freelancerGuard.staff?.display_name||null},"Blocked client freelancer booking request");await sendWhatsAppMessage(from,freelancerGuard.reply);return res.sendStatus(200);}
 const appointmentChange=await processAppointmentChangeMessage(from,text);if(appointmentChange.handled){await sendWhatsAppMessage(from,appointmentChange.reply);return res.sendStatus(200);}
