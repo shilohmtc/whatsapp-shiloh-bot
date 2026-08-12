@@ -107,17 +107,18 @@ async function loadAuthorizedPendingAppointment(admin, appointmentId, db = pool,
   const result = await db.query(
     `SELECT a.id,a.client_id,a.starts_at,a.ends_at,a.status,
             COALESCE(c.display_name,a.source_client_name,'Unknown client') AS client_name,
-            COALESCE(string_agg(DISTINCT aps.service_name_snapshot, ', ') FILTER (WHERE aps.service_name_snapshot IS NOT NULL), '') AS services,
-            COALESCE(string_agg(DISTINCT ast.staff_name_snapshot, ', ') FILTER (WHERE ast.staff_name_snapshot IS NOT NULL), '') AS staff
+            COALESCE((SELECT string_agg(DISTINCT aps.service_name_snapshot, ', ')
+                        FROM appointment_services aps
+                       WHERE aps.appointment_id=a.id AND aps.service_name_snapshot IS NOT NULL), '') AS services,
+            COALESCE((SELECT string_agg(DISTINCT ast.staff_name_snapshot, ', ')
+                        FROM appointment_staff ast
+                       WHERE ast.appointment_id=a.id AND ast.staff_name_snapshot IS NOT NULL), '') AS staff
        FROM appointments a
        LEFT JOIN clients c ON c.id=a.client_id
-       LEFT JOIN appointment_services aps ON aps.appointment_id=a.id
-       LEFT JOIN appointment_staff ast ON ast.appointment_id=a.id
       WHERE a.id=$3
         AND a.ends_at < NOW()
         AND a.status NOT IN ('completed','cancelled','no_show')
         AND ${scopeSql('a')}
-      GROUP BY a.id,a.client_id,a.starts_at,a.ends_at,a.status,c.display_name,a.source_client_name
       ${lock ? 'FOR UPDATE OF a' : ''}`,
     [isBusinessWide(admin), admin.staff_id, appointmentId]
   );
