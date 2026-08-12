@@ -108,6 +108,59 @@ async function sendWhatsAppReplyButtons(to, body, buttons = []) {
   }
 }
 
+async function sendWhatsAppList(to, body, buttonText, rows = [], sectionTitle = "Choose") {
+  const safeBody = String(body || "").trim();
+  const safeButton = String(buttonText || "").trim();
+  const safeSection = String(sectionTitle || "Choose").trim();
+  if (!safeBody) throw new Error("WhatsApp list body is required");
+  if (!safeButton || safeButton.length > 20) throw new Error("WhatsApp list button text must be 1-20 characters");
+  if (!Array.isArray(rows) || rows.length < 1 || rows.length > 10) throw new Error("WhatsApp list requires between 1 and 10 rows");
+  const normalized = rows.map((row) => {
+    const id = String(row?.id || "").trim();
+    const title = String(row?.title || "").trim();
+    const description = String(row?.description || "").trim();
+    if (!id || id.length > 200) throw new Error("WhatsApp list row id must be 1-200 characters");
+    if (!title || title.length > 24) throw new Error("WhatsApp list row title must be 1-24 characters");
+    if (description.length > 72) throw new Error("WhatsApp list row description must be 72 characters or fewer");
+    return { id, title, ...(description ? { description } : {}) };
+  });
+
+  try {
+    const response = await axios.post(
+      messagesUrl(),
+      {
+        messaging_product: "whatsapp",
+        to,
+        type: "interactive",
+        interactive: {
+          type: "list",
+          body: { text: safeBody },
+          action: {
+            button: safeButton,
+            sections: [{ title: safeSection.slice(0, 24), rows: normalized }],
+          },
+        },
+      },
+      requestConfig()
+    );
+    logger.info(
+      { messageId: response.data.messages?.[0]?.id || null, rowCount: normalized.length },
+      "WhatsApp interactive list sent"
+    );
+    return response.data;
+  } catch (error) {
+    logger.error(
+      {
+        err: error,
+        status: error.response?.status,
+        metaError: error.response?.data?.error,
+      },
+      "WhatsApp interactive-list send failed"
+    );
+    throw error;
+  }
+}
+
 async function sendWhatsAppTemplate(to, templateName, bodyParameters = [], languageCode = "en") {
   if (!templateName) {
     throw new Error("WhatsApp template name is required");
@@ -164,4 +217,4 @@ async function sendWhatsAppTemplate(to, templateName, bodyParameters = [], langu
   }
 }
 
-module.exports = { sendWhatsAppMessage, sendWhatsAppReplyButtons, sendWhatsAppTemplate };
+module.exports = { sendWhatsAppMessage, sendWhatsAppReplyButtons, sendWhatsAppList, sendWhatsAppTemplate };

@@ -1,0 +1,55 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+
+const root = path.resolve(__dirname, '..');
+const booking = fs.readFileSync(path.join(root, 'src/services/adminMobileBookingFlow.js'), 'utf8');
+const whatsapp = fs.readFileSync(path.join(root, 'src/services/whatsapp.js'), 'utf8');
+const webhook = fs.readFileSync(path.join(root, 'src/controllers/webhookController.js'), 'utf8');
+const buttons = fs.readFileSync(path.join(root, 'src/services/adminEarningsButtons.js'), 'utf8');
+
+test('staff booking catalogue remains scoped to Marietjie or the Christel-Abigail team', () => {
+  assert.match(booking, /name==='marietjie'.*staffNames:\['marietjie'\]/);
+  assert.match(booking, /name==='christel'\|\|name==='abigail'.*staffNames:\['christel','abigail'\]/);
+  assert.match(booking, /st\.client_bookable=TRUE/);
+});
+
+test('service-first booking uses genuine WhatsApp list payloads with bounded pagination', () => {
+  assert.match(booking, /ux:'whatsapp_interactive_list'/);
+  assert.match(booking, /function categoryInteractive/);
+  assert.match(booking, /function serviceInteractive/);
+  assert.match(booking, /admin_booking_service:/);
+  assert.match(booking, /PAGE_SIZE = 7/);
+  assert.match(booking, /admin_booking_page:/);
+});
+
+test('WhatsApp transport supports Meta interactive list messages and enforces row bounds', () => {
+  assert.match(whatsapp, /async function sendWhatsAppList/);
+  assert.match(whatsapp, /type: "list"/);
+  assert.match(whatsapp, /rows\.length < 1 \|\| rows\.length > 10/);
+  assert.match(whatsapp, /title\.length > 24/);
+  assert.match(whatsapp, /description\.length > 72/);
+});
+
+test('incoming list replies route into the guarded booking flow', () => {
+  assert.match(webhook, /message\.interactive\?\.type==="list_reply"/);
+  assert.match(webhook, /message\.interactive\.list_reply\?\.id/);
+  assert.match(webhook, /sendWhatsAppList/);
+  assert.match(webhook, /sendAdminResult\(from,activeMobileBooking\)/);
+});
+
+test('final booking decision uses real reply buttons, not typed-only confirmation', () => {
+  assert.match(booking, /admin_booking_confirm/);
+  assert.match(booking, /admin_booking_cancel/);
+  assert.match(buttons, /admin_booking_confirm: 'Confirm booking'/);
+  assert.match(buttons, /admin_booking_cancel: 'Cancel booking'/);
+  assert.match(booking, /buttonInteractive/);
+});
+
+test('interactive choices never bypass final authoritative booking validation', () => {
+  assert.match(booking, /prepareAdminBooking/);
+  assert.match(booking, /confirmAdminBooking/);
+  assert.match(booking, /staffRowsForService\(service\.id,admin\)/);
+  assert.match(booking, /listAvailableSlots/);
+});
