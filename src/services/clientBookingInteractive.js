@@ -1,4 +1,5 @@
 const { displayDate } = require('./bookingIntent');
+const { CLIENT_COPY } = require('../config/clientCopy');
 
 const CLIENT_BOOKING_BUTTON_COMMANDS = Object.freeze({
   client_date_today: 'today',
@@ -30,7 +31,7 @@ function bookingDiscoveryInteractive() {
     body: [
       '*What would you like to book? 🌿*',
       '',
-      'Choose a service below. Shiloh will then show only active CRM treatments and the practitioner(s) currently eligible for them.',
+      CLIENT_COPY.bookingDiscoveryPrompt,
     ].join('\n'),
     buttonText: 'Choose service',
     rows: [
