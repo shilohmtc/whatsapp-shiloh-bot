@@ -18,6 +18,17 @@ test('bare RESCHEDULE command enters canonical appointment-change flow and carri
   assert.match(source, /What new day or date would you prefer\?/);
 });
 
+test('reschedule date enters authoritative daypart and slot selection instead of asking the client to guess an exact time', () => {
+  assert.match(source, /listAvailableSlots/);
+  assert.match(source, /reschedule_daypart_morning/);
+  assert.match(source, /reschedule_daypart_afternoon/);
+  assert.match(source, /reschedule_daypart_evening/);
+  assert.match(source, /reschedule_slot_/);
+  assert.match(source, /service_id/);
+  assert.doesNotMatch(source, /What exact new time would you prefer\?/);
+  assert.match(webhookSource, /sendAdminResult\(from,appointmentChange\)/);
+});
+
 test('client reschedule locks the practitioner and revalidates authoritative availability before mutation', () => {
   const begin = source.indexOf("await db.query('BEGIN')", source.indexOf('async function rescheduleCanonical'));
   const advisory = source.indexOf('pg_advisory_xact_lock', begin);
