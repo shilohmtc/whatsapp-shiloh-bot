@@ -19,6 +19,12 @@ test('registered client discovery uses a four-choice WhatsApp list', () => {
   );
 });
 
+test('registered client discovery copy is client-friendly and hides CRM jargon', () => {
+  const interactive = bookingUi.bookingDiscoveryInteractive();
+  assert.match(interactive.body, /Choose a service below and I’ll show you the available treatments and practitioners\. 🌿/);
+  assert.doesNotMatch(interactive.body, /CRM|currently eligible/i);
+});
+
 test('pedicure is a guarded CRM-derived service family', () => {
   assert.equal(familyDiscovery.FAMILY_RULES.pedicure.title, 'Elim MediHeel Pedicures');
   const sql = familyDiscovery.familyFilterSql('pedicure');
