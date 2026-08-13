@@ -41,9 +41,9 @@ C1.10 privacy/governance remains open and all implemented safety controls remain
 | A3 | Staff finalization reminder template | 🟠 VERIFY PROVIDER STATE | Owner reports Meta templates are approved; verify exact `shiloh_staff_finalization_v1` provider status before promoting/sending. |
 | B1 | Remaining Admin route acceptance | ⚪ READY | Finish only genuinely unverified role-specific WhatsApp paths after product-critical client acceptance. |
 | B2 | JP Admin capability / client-test strategy | ⚪ READY | `JP` means the existing Jean-Pierre identity. Preserve business-admin authority; use dedicated non-admin test identities for genuine client acceptance. |
-| C1 | Client Perspective Testing | 🔵 ACTIVE / PRODUCT-CRITICAL | Real WhatsApp acceptance is the current priority. PR #168 client-entry UX is production-live; begin/resume Dummy Test journey. |
+| C1 | Client Perspective Testing | 🔵 ACTIVE / PRODUCT-CRITICAL | Dummy Test has reached the Beauty & Aesthetics treatment list in real WhatsApp. PR #172 presentation fix is production-live; re-open/refresh Treatments and verify the corrected list, then continue the same journey. |
 | C2 | Practitioner-information conversational audit | ⚪ READY / IN-JOURNEY | Exercise natural practitioner/service questions during real client acceptance; verify no invention and consistency with CRM booking eligibility. |
-| C3 | True first-time booking acceptance | 🔵 ACTIVE / HUMAN-ASSISTED | Authorised tester is available. Reset/use Dummy Test, prove real WhatsApp happy path and exact CRM + Calendar evidence. |
+| C3 | True first-time booking acceptance | 🔵 ACTIVE / HUMAN-ASSISTED | Dummy Test proved first-time registration through family/treatment discovery. Continue from the corrected Beauty treatment list through treatment selection, availability, booking, exact CRM + Calendar evidence. |
 | D0 | P3 customer-care foundation | 🟢 VERIFIED | Backend foundation implemented; real lifecycle/provider acceptance remains part of current client gate. |
 | D1 | Birthday automation | 🟠 VERIFY PROVIDER STATE | Owner reports Meta templates are approved; verify exact `shiloh_birthday_wish_v2` status before promoting/sending. |
 | E1 | Ozow activation gate | 🟠 WAITING | Merchant/account configuration + explicit payment/deposit/refund/Shiloh gift-voucher rules. |
@@ -57,25 +57,27 @@ C1.10 privacy/governance remains open and all implemented safety controls remain
 
 | Item | State | Meaning |
 |---|---|---|
-| First WhatsApp client entry UX | 🟢 VERIFIED (CODE/PRODUCTION) | PR #168 merged as `773cc41c840ca32bbd6fe2e6b16759525cb123c0`; CI #399 established the red pre-implementation gate and final CI #409 passed; Render deploy `dep-d9uvqrm7bikc73bbdjag` reached live. Real WhatsApp acceptance still required below. |
-| Registered-client initial routing | 🔵 ACTIVE / REAL ACCEPTANCE | Inbound WhatsApp number is checked first. A recognised complete client greeting is designed to receive the Shiloh intro, personalised `Welcome back, <first name>` and the four-family booking list. Verify on real WhatsApp. |
-| New-client registration | 🔵 ACTIVE / REAL ACCEPTANCE | WhatsApp self-registration no longer asks the client to re-enter the number. Request first name + surname + DOB + gender together; accept bundled or progressive replies; ask only for missing fields; bind to inbound WhatsApp identity. Verify with Dummy Test. |
-| Four service families | 🟢 VERIFIED (CODE/PRODUCTION) / 🔵 REAL ACCEPTANCE | Genuine WhatsApp list now exposes `Beauty & Aesthetics`, `Massage`, `Lymphatic Drainage`, `Elim MediHeel Pedicures`; downstream treatment/practitioner choices remain active CRM-derived/fail-closed. Verify real menu and catalogue fidelity. |
+| First WhatsApp client entry UX | 🟢 VERIFIED (CODE/PRODUCTION + REAL DUMMY TEST) | PR #168 remains deployed ancestry. Real Dummy Test evidence positively established unregistered-number handling without asking the client to re-enter the inbound WhatsApp number. |
+| Registered-client initial routing | 🔵 ACTIVE / REAL ACCEPTANCE | First-time Dummy Test registration is proven. Registered-client return recognition still needs its own real WhatsApp acceptance later in the journey. |
+| New-client registration | 🟢 VERIFIED (REAL DUMMY TEST) | Dummy Test successfully supplied `Dummy Test, 14 May 1990, Female` as a bundled reply and transitioned directly into booking discovery using the inbound WhatsApp identity. |
+| Four service families | 🟢 VERIFIED (REAL DUMMY TEST) | Real WhatsApp exposed `Beauty & Aesthetics`, `Massage`, `Lymphatic Drainage`, `Elim MediHeel Pedicures`; Dummy Test selected Beauty & Aesthetics and reached the Marietjie treatment flow. Downstream rows remain CRM-derived/fail-closed. |
+| Beauty & Aesthetics treatment-list presentation | 🟢 ENGINEERING DEPLOYED / 🔵 REAL RE-ACCEPTANCE | Real Dummy Test proved long-name truncation, inconsistent simple price formats, and ambiguous next-page wording. PR #172 (`2f9f9f5d024659a2df6850ca2bec66056b431b6b`) is live on Render deploy `dep-d9v0jijl550s73dqu8jg`; presentation now preserves materially more canonical treatment-name text in the row description, normalizes simple numeric price/range strings, and uses explicit next-page wording. Re-open Treatments on real WhatsApp and verify before advancing. |
 | Dummy Test reset | 🟢 VERIFIED (PRODUCTION TOOLING) | PR #167 merged as `376ab4fd…`; JP/Christel Admin → Clients can reset Dummy Test using the same guarded archive/contact-release model as Chenique/Juvan. |
-| Live Dummy Test booking | 🔵 ACTIVE | Run the natural registration/recognition → family → treatment → practitioner → availability → booking journey now. |
-| Live CRM catalogue fidelity | 🟠 VERIFY IN JOURNEY | Direct Render Postgres query connector remains unavailable (`SSL/TLS required`). Do not guess; verify through guarded application/CRM evidence where available. |
+| Live Dummy Test booking | 🔵 ACTIVE | Resume at Beauty & Aesthetics Treatments after production refresh; choose a treatment and continue through availability → booking. |
+| Live CRM catalogue fidelity | 🟠 VERIFY IN JOURNEY | Real WhatsApp already exposed CRM-backed Beauty catalogue rows, durations, prices and pagination. Continue verifying selected treatment/practitioner truth in-journey; direct Render Postgres query connector remains unavailable (`SSL/TLS required`). Do not guess. |
 | Controlled booking creation | ⚪ READY AFTER JOURNEY REACHES CONFIRMATION | WhatsApp success is not proof: verify canonical CRM appointment and Google Calendar mirrors. |
 | Cancellation/reschedule acceptance | ⚪ READY AFTER CONTROLLED BOOKING | Use the controlled appointment created by this journey. |
 | Client communication lifecycle | ⚪ READY IN/AFTER JOURNEY | Verify real confirmation/reminder/follow-up provider behavior; exact Meta template approvals must be positively verified. |
 | Error recovery / conversational resilience | 🟢 VERIFIED (CODE-LEVEL) | PR #163 deployed. Real provider/WhatsApp acceptance remains part of the controlled journey. |
 | Client privacy/data minimization | ⏸️ OPEN / NOT CURRENT CRITICAL PATH | PRs #164/#165 and provider map remain valid safe foundations. Destructive execution remains disabled. Resume governance after client gate unless immediate safety blocker appears. |
-| Final Client Perspective release gate | 🔵 ACTIVE / GATED | Requires real happy path plus booking-management lifecycle evidence; backend tests alone do not close it. |
+| Final Client Perspective release gate | 🔵 ACTIVE / GATED | Requires real happy path plus booking-management lifecycle evidence; backend tests or deployment alone do not close it. |
 
 ## Current production baseline
 
-- GitHub `main` and Render production are positively aligned on `773cc41c840ca32bbd6fe2e6b16759525cb123c0` from PR #168 (`Client entry UX`). Render deploy `dep-d9uvqrm7bikc73bbdjag` reached `live` on 2026-08-13.
-- Self-test-first evidence for PR #168: CI #399 failed on the pre-implementation client-entry acceptance contract; implementation/intentional regression updates followed; final exact candidate CI #409 completed successfully before merge.
-- PR #167 immediately precedes this work and added the guarded Dummy Test reset to the JP/Christel Clients menu. Its final CI #397 passed and Render deployed it before PR #168.
+- GitHub `main` and Render production are positively aligned on `2f9f9f5d024659a2df6850ca2bec66056b431b6b` from PR #172 (`Polish treatment list presentation`). Render deploy `dep-d9v0jijl550s73dqu8jg` reached `live` on 2026-08-13.
+- PR #172 was scoped to client treatment-list presentation only. The CRM-backed service-family queries, family ownership, practitioner eligibility predicates, stable interactive IDs and booking-selection logic were preserved. New formatting normalizes only simple numeric price/range strings; non-numeric CRM display text remains unchanged.
+- Self-test-first evidence for PR #172: the new presentation contract was run red locally before the presentation adapter existed, then green after implementation; the connected GitHub safety classifier blocked committing the new/augmented regression test file, so repository PR CI #425 was used as the independent full-suite gate and completed successfully before merge.
+- Real Dummy Test evidence immediately preceding PR #172 established: unregistered-number detection without redundant number entry; bundled first-time registration (`Dummy Test, 14 May 1990, Female`); direct transition to booking; the four-family list; Beauty & Aesthetics → Marietjie; and opening the real treatment list with CRM-derived duration/price/pagination rows. The presentation defect found there is repaired in production but still requires real WhatsApp re-acceptance.
 - G1 is resolved operationally: production Postgres `shiloh-memory` is `Basic-256mb` with the former Free expiry removed. Recovery/HA claims remain evidence-bounded.
 - Provider/privacy foundations remain deployed; C1.10 is open but subordinate to the current real-client acceptance gate.
 
@@ -96,6 +98,7 @@ C1.10 privacy/governance remains open and all implemented safety controls remain
 ## Engineering debt that must not disappear
 
 - **Test-client reset configurability:** the current Chenique/Juvan/Dummy Test reset mechanics are intentionally guarded but the allowlist lives inside a mutation-heavy service that the connected GitHub safety layer may refuse to edit. Refactor future approved test identities into a separate non-destructive config/allowlist source while keeping archival/contact-release mechanics frozen and guarded. Manual GitHub editing by the owner is not the preferred normal engineering workflow; exhaust safe automated paths first.
+- **Treatment-list presentation regression coverage:** the PR #172 acceptance contract was proven red/green locally, but the connected GitHub safety classifier blocked adding it to the repository test files. Preserve this as explicit debt: add equivalent repository regression coverage when a safe write path is available; do not remove the deployed adapter merely because the test write was blocked.
 - **Master/Tracker continuity:** after every material product-state change, re-rank against the Product-Critical Gate and reconcile both documents; specialist handoffs never become competing masters.
 
 ## Cross-chat operating rule
