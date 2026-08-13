@@ -7,6 +7,7 @@ const {
   cancelBookingEventOnCalendar,
   deterministicEventId,
 } = require('./googleBookingCalendar');
+const { prepareCalendarWrite } = require('./clientBookingCalendarRecovery');
 
 const ENV_BY_STAFF = Object.freeze({
   christel: 'GOOGLE_CHRISTEL_CALENDAR_ID',
@@ -57,6 +58,17 @@ async function createPractitionerBookingEvent(data) {
   if (!calendarEnabled()) return { enabled: false, configured: false, event: null };
   const calendarId = requirePractitionerCalendarId(data.staffName);
   if (!calendarId) return { enabled: true, configured: false, event: null };
+  const eventId = eventIdForAppointment(data.appointmentId);
+  await prepareCalendarWrite({
+    provider: 'practitioner_google',
+    calendarId,
+    eventId,
+    appointmentId: data.appointmentId,
+    staffName: data.staffName,
+    startsAt: data.startsAt,
+    endsAt: data.endsAt,
+    cancelEvent: cancelBookingEventOnCalendar,
+  });
   const result = await createBookingEventOnCalendar(calendarId, data);
   return { ...result, configured: true, calendarId };
 }
