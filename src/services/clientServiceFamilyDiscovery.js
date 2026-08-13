@@ -1,7 +1,7 @@
 const { pool } = require('../db/pool');
-const { formatPrice, formatDuration } = require('./serviceCatalogue');
 const { processBookingMessage } = require('./bookingIntent');
 const { decorateClientBookingResult } = require('./clientBookingInteractive');
+const { presentTreatmentRow, treatmentPageNavigationRow } = require('../presentation/clientTreatmentListPresentation');
 
 const FAMILY_PAGE_SIZE = 9;
 const FAMILY_RULES = Object.freeze({
@@ -13,7 +13,6 @@ const FAMILY_RULES = Object.freeze({
 
 function clean(value = '') { return String(value || '').trim().replace(/\s+/g, ' '); }
 function short(value = '') { const text = clean(value); return text.length <= 24 ? text : `${text.slice(0, 21)}…`; }
-function serviceDescription(row) { return [formatDuration(row), formatPrice(row)].filter(Boolean).join(' • ').slice(0, 72); }
 
 function familyFilterSql(family) {
   if (family === 'beauty') {
@@ -113,15 +112,13 @@ function familyServicesInteractive(family, rows = [], page = 1) {
   const totalPages = Math.max(1, Math.ceil(rows.length / FAMILY_PAGE_SIZE));
   const safePage = Math.min(Math.max(Number(page) || 1, 1), totalPages);
   const start = (safePage - 1) * FAMILY_PAGE_SIZE;
-  const pageRows = rows.slice(start, start + FAMILY_PAGE_SIZE).map((row) => ({
-    id: `client_family_${family}_service_${row.id}`,
-    title: short(row.name),
-    description: serviceDescription(row),
-  }));
+  const pageRows = rows.slice(start, start + FAMILY_PAGE_SIZE).map((row) =>
+    presentTreatmentRow(row, `client_family_${family}_service_${row.id}`)
+  );
   if (safePage < totalPages) {
-    pageRows.push({ id: `client_family_${family}_page_${safePage + 1}`, title: 'More treatments →', description: `Page ${safePage + 1} of ${totalPages}` });
+    pageRows.push(treatmentPageNavigationRow(`client_family_${family}_page_${safePage + 1}`, safePage + 1, totalPages));
   } else if (safePage > 1) {
-    pageRows.push({ id: `client_family_${family}_page_1`, title: '← First page', description: `Page 1 of ${totalPages}` });
+    pageRows.push({ id: `client_family_${family}_page_1`, title: '← First page', description: `Return to page 1 of ${totalPages}` });
   }
   const owner = config.practitioner ? ` • ${config.practitioner}` : ' • Christel or Abigail';
   return {
