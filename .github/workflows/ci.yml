@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, privacy/goldie-retention-inventory]
   pull_request:
     branches: [main]
 
