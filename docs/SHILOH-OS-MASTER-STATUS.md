@@ -171,6 +171,40 @@ Preserved product requirements/decisions:
 - Continue only provider-independent/sandbox-safe contracts, reconciliation/idempotency, sanitized observability and tests.
 - No live payment activation while E1 is unresolved.
 
+## F. Meta Business Portfolio consolidation / production ownership
+
+### F1. ✅ Keeper portfolio and core production ownership mapped
+
+Evidence from direct Meta Business Suite inspection in this session:
+- Business Portfolio `406573210678288` is the keeper portfolio; do **not** delete it.
+- `Shiloh_MTC` Meta App ID `1574685370960526` is present in this portfolio. Christel Botha and the `Employee` system user both showed full app access during inspection.
+- Production `Shiloh_MTC` WhatsApp Business Account ID `4002592316709920` is present in this portfolio.
+- The production WhatsApp number was verified after the Page consolidation as **Connected** with **High** quality rating.
+- The Test WhatsApp Business Account remains present.
+- Do not revoke tokens, remove the app/WABA/system user, or delete the portfolio without a separately evidenced migration plan.
+
+### F2. ✅ Existing Shiloh Facebook Page consolidated into keeper portfolio
+
+- Existing Page `Shiloh Massage Therapy Clinic PTYltd`, Page ID `865103253344538`, was found through Meta's `Add an existing Facebook Page` workflow.
+- Meta showed Christel Botha (You) as the existing person with Page access and stated the request would be approved automatically because she had full control of the business portfolio.
+- Meta confirmed `Page added successfully`.
+- Post-change verification under Accounts -> Pages showed the existing Page in the keeper portfolio, owned by Christel Botha, with Christel as the single assigned person with full access.
+- Immediate post-change WABA verification remained **Connected / High**, providing evidence that this consolidation did not disturb the production WhatsApp asset state.
+
+### F3. ⬜ Existing Instagram account ownership/connection audit
+
+- Keeper portfolio inspection showed **no Instagram accounts added** before any Instagram change.
+- A likely existing Shiloh Instagram identity was identified as `@shiloh_massage_studio`, but public-link inspection was insufficient to establish account type, ownership or Meta connection.
+- Do **not** create a duplicate Instagram account.
+- Next safe step: inspect Meta's existing-account connection workflow and verify the exact Instagram identity/ownership/access before connecting it to the keeper portfolio.
+
+### F4. ⬜ Portfolio naming and business-verification remediation
+
+- Keeper portfolio is still displayed as `Christel Botha`, which is operationally confusing beside the personal/account context. Rename only after the asset map remains stable and the correct business-facing name is chosen.
+- Portfolio-level business verification was observed as **Rejected**; the WABA summary separately showed business verification as **Unverified** while account status was Approved. Treat these as distinct Meta states and do not infer resolution.
+- Investigate the rejection reason and reconcile legal/business details against authoritative company documentation before resubmitting.
+- No portfolio deletion is currently justified: the earlier apparent duplicate was shown to be a personal/account context versus the production Business Portfolio, not two interchangeable portfolios.
+
 # Cross-chat continuity protocol — mandatory
 
 1. Every Shiloh OS chat starts by reading this file first.
@@ -188,9 +222,10 @@ Preserved product requirements/decisions:
 1. 🔵 Continue Client Perspective Testing at C1 item 9 (Error recovery / conversational resilience), because items 1, 2, 4, 6, 7 and 8 are preserved 🟡 and item 9 remains the highest-priority genuine ⬜ item.
 2. ⬜ Continue C1 item 10 privacy acceptance only after preserving item 9 priority: next privacy engineering step is the synthetic transaction/rollback execution-plan simulator; destructive execution remains disabled.
 3. ⬜ Incorporate C2 practitioner-information/service-visibility acceptance without losing its separate conversational requirements; do not infer live CRM mapping truth while the authoritative read remains blocked.
-4. ⬜ In parallel where non-mutating, continue A2/B1 evidence gathering without requiring A1 attendance outcomes.
-5. 🟡 Preserve A1, A3, C3, D1 and E1 until their real external/human facts become available.
-6. ⬜ Return to safe P4 engineering only after the higher-priority production acceptance work is clean.
+4. ⬜ Continue F3 Meta/Instagram consolidation only through verified existing-account ownership/access; do not create a duplicate account or disturb the production WABA/app chain.
+5. ⬜ In parallel where non-mutating, continue A2/B1 evidence gathering without requiring A1 attendance outcomes.
+6. 🟡 Preserve A1, A3, C3, D1 and E1 until their real external/human facts become available.
+7. ⬜ Return to safe P4 engineering only after the higher-priority production acceptance work is clean.
 
 # Standard new-chat prompt
 
