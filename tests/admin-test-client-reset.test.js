@@ -8,10 +8,12 @@ const serviceSource = fs.readFileSync(servicePath, 'utf8');
 const routerSource = fs.readFileSync(routerPath, 'utf8');
 const { TEST_CLIENTS, canResetTestClients, targetFromText } = require(`../${servicePath}`);
 
-test('test-client reset is restricted to Chenique and Juvan', () => {
-  assert.deepEqual(TEST_CLIENTS, { chenique: 'Chenique', juvan: 'Juvan' });
+test('test-client reset is restricted to Chenique, Juvan and Dummy Test', () => {
+  assert.deepEqual(TEST_CLIENTS, { chenique: 'Chenique', juvan: 'Juvan', dummy_test: 'Dummy Test' });
   assert.equal(targetFromText('Reset test client Chenique').key, 'chenique');
   assert.equal(targetFromText('admin_test_client_reset_confirm:juvan').key, 'juvan');
+  assert.equal(targetFromText('Reset test client Dummy Test').key, 'dummy_test');
+  assert.equal(targetFromText('admin_test_client_reset_confirm:dummy_test').key, 'dummy_test');
   assert.equal(targetFromText('Reset test client Abigail'), null);
 });
 
@@ -39,6 +41,7 @@ test('reset requires explicit confirmation and is exposed only through privilege
   assert.match(serviceSource, /admin_test_client_reset_confirm:/);
   assert.match(routerSource, /Reset Chenique profile/);
   assert.match(routerSource, /Reset Juvan profile/);
+  assert.match(routerSource, /Reset Dummy Test profile/);
   assert.match(routerSource, /\(jeanPierre \|\| christel\)/);
   assert.match(routerSource, /processAdminTestClientResetMessage\(sender, action\.command\)/);
   assert.match(routerSource, /const testClientReset = await processAdminTestClientResetMessage\(sender, text\)/);
