@@ -1,0 +1,74 @@
+name: Reconcile Meta booking template docs
+
+on:
+  push:
+    branches: [reconcile-meta-booking-template-state]
+
+permissions:
+  contents: write
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: reconcile-meta-booking-template-state
+      - name: Reconcile Master and Tracker
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          master = Path('docs/SHILOH-OS-MASTER-STATUS.md')
+          m = master.read_text()
+          old = "- GitHub `main` and Render production were positively aligned on `5992f2b87365c6a04a8460746994a991483c1638` after PR #165 (`Add read-only Goldie retention inventory`) was squash-merged and Render deployment `dep-d9uscfrbc2fs739o3v50` reached `live` on 2026-08-13. Verify the live baseline again in every new session before relying on this recorded identifier."
+          new = "- GitHub `main` and Render production were positively aligned on `66259e53ae2a897e089e895b322c712cbf4ef1c6` after PR #185 (`Provision booking confirmation utility`) was squash-merged and Render deployment `dep-d9v39h8ae00c73adc38g` reached `live` on 2026-08-13. Verify the live baseline again in every new session before relying on this recorded identifier.\n- Client Perspective Testing subsequently proved the real Dummy Test reschedule date-choice repair from PR #184 in production: `RESCHEDULE` now presents genuine **Today / Tomorrow / Choose another date** controls; `Choose another date` requests free text; a real `Friday` reply preserved HIFU + Marietjie and advanced correctly to Morning / Afternoon / Evening. Do not redo this accepted path.\n- Booking-confirmation Meta-template provisioning is now implemented through PR #185. Production submitted `shiloh_booking_confirmation_v1` as a Meta **UTILITY** template. Render startup evidence initially returned provider status `PENDING`; explicit Meta WhatsApp Manager evidence later on 2026-08-13 shows the exact template as **In review**. `WHATSAPP_BOOKING_CONFIRMATION_TEMPLATE` remains intentionally unset, so the existing plain-text confirmation stays active until the exact template is positively Active/APPROVED. Activation and real WhatsApp template acceptance remain fail-closed WAITING items."
+          if old in m:
+              m = m.replace(old, new, 1)
+          else:
+              raise SystemExit('Master baseline anchor not found')
+
+          old_a3 = "### A3. 🟡 Staff finalization reminder template\n\n- `shiloh_staff_finalization_v1` last evidenced Meta state: PENDING.\n- Managed provisioning/status discovery exists; reminder sending remains fail-closed until provider status is positively APPROVED.\n- No later approval evidence is present in this reconciliation, so preserve 🟡."
+          new_a3 = "### A3. ✅ Staff finalization reminder template provider activation verified\n\n- Explicit Meta WhatsApp Manager evidence on 2026-08-13 shows `shiloh_staff_finalization_v1` as **Utility / Active — Quality pending**.\n- Managed provisioning/status discovery remains deployed. Preserve template quality monitoring, but do not keep this item blocked on the superseded PENDING state."
+          if old_a3 in m:
+              m = m.replace(old_a3, new_a3, 1)
+          else:
+              raise SystemExit('Master A3 anchor not found')
+
+          old_c8 = "8. 🟡 **Client communication lifecycle** — duplicate booking-confirmation risk fixed in PR #159 and premature follow-up eligibility fixed in PR #160. Backend regressions are green and production-deployed, but real WhatsApp lifecycle acceptance/provider truth remains outstanding; do not promote to complete by inference."
+          new_c8 = "8. 🟡 **Client communication lifecycle** — duplicate booking-confirmation risk fixed in PR #159 and premature follow-up eligibility fixed in PR #160. Real booking confirmation/reminder evidence exists, and PR #185 now provisions the dedicated `shiloh_booking_confirmation_v1` Utility template. Exact Meta Manager evidence on 2026-08-13 shows that new template **In review**; production must continue the existing plain-text booking confirmation until the exact template becomes Active/APPROVED. Once approved, set `WHATSAPP_BOOKING_CONFIRMATION_TEMPLATE=shiloh_booking_confirmation_v1`, verify the resulting Render deployment, then perform a real WhatsApp booking-confirmation template acceptance. Do not infer provider approval."
+          if old_c8 in m:
+              m = m.replace(old_c8, new_c8, 1)
+          else:
+              raise SystemExit('Master C8 anchor not found')
+          master.write_text(m)
+
+          tracker = Path('docs/SHILOH-OS-PROJECT-TRACKER.md')
+          t = tracker.read_text()
+          replacements = {
+            "| A3 | Staff finalization reminder template | 🟠 VERIFY PROVIDER STATE | Owner reports Meta templates are approved; verify exact `shiloh_staff_finalization_v1` provider status before promoting/sending. |": "| A3 | Staff finalization reminder template | 🟢 VERIFIED | Exact Meta Manager evidence shows `shiloh_staff_finalization_v1` as Utility / Active — Quality pending. |",
+            "| C1 | Client Perspective Testing | 🔵 ACTIVE / PRODUCT-CRITICAL | Dummy Test has passed first-time registration, discovery, treatment presentation, booking creation and a real reschedule from 11:00 to 10:00 with both Calendar mirrors verified. PR #181 is live; real-accept the new confirmation buttons/copy, then continue to cancellation. |": "| C1 | Client Perspective Testing | 🔵 ACTIVE / PRODUCT-CRITICAL | Dummy Test has passed first-time registration, discovery, booking creation, reschedule mutation and the PR #184 reschedule date-choice UX in real WhatsApp. Continue cancellation and lifecycle/template acceptance without resetting the journey. |",
+            "| C3 | True first-time booking acceptance | 🟢 BOOKING + RESCHEDULE VERIFIED / 🔵 MANAGEMENT LIFECYCLE ACTIVE | Appointment #561 is now HIFU / Marietjie / Fri 14 Aug 2026 / 10:00–10:30 after a real reschedule. Continue confirmation-UX re-acceptance, then cancellation; do not reset Dummy Test. |": "| C3 | True first-time booking acceptance | 🟢 BOOKING + RESCHEDULE VERIFIED / 🔵 MANAGEMENT LIFECYCLE ACTIVE | Appointment #561 is HIFU / Marietjie / Fri 14 Aug 2026 / 10:00–10:30. PR #184 date-choice UX is real-WhatsApp accepted. Continue cancellation; do not reset Dummy Test. |",
+            "| Reschedule confirmation client UX | 🔵 DEPLOYED / REAL RE-ACCEPTANCE REQUIRED | PR #181 is live. Pre-confirmation now uses **Confirm reschedule** / **Keep appointment** buttons, removes client-visible Booking #, and post-success copy removes CRM/Calendar synchronization diagnostics. Re-enter RESCHEDULE on #561 and exercise the new controls before cancellation. |": "| Reschedule confirmation client UX | 🟢 VERIFIED (PRODUCTION + REAL WHATSAPP) | Real acceptance exercised the polished confirmation/keep-appointment flow and the subsequent PR #184 date-choice controls. Preserve the accepted UX; proceed to cancellation. |",
+            "| Cancellation acceptance | ⚪ READY AFTER PR #181 REAL RE-ACCEPTANCE | Use the same appointment #561. Verify explicit confirmation/fail-closed behavior, canonical cancellation, and removal/cancellation on both Calendar mirrors. |": "| Cancellation acceptance | ⚪ READY | Use the same appointment #561. Verify explicit confirmation/fail-closed behavior, canonical cancellation, and removal/cancellation on both Calendar mirrors. |",
+            "| Client communication lifecycle | 🔵 ACTIVE IN JOURNEY | Real booking confirmation and reminder were observed. Continue lifecycle/provider acceptance; exact Meta template approvals still require positive provider verification. |": "| Client communication lifecycle | 🟠 WAITING ON BOOKING TEMPLATE REVIEW + 🔵 IN-JOURNEY | Existing real booking confirmation/reminder evidence remains valid. PR #185 provisioned `shiloh_booking_confirmation_v1`; Meta Manager now shows the exact Utility template **In review**. Keep `WHATSAPP_BOOKING_CONFIRMATION_TEMPLATE` unset until Active/APPROVED, then activate on Render and real-accept the template. |",
+            "| Final Client Perspective release gate | 🔵 ACTIVE / GATED | Requires PR #181 real presentation acceptance, successful cancellation, remaining lifecycle evidence and explicit handling of outstanding booking/new-booking copy polish. |": "| Final Client Perspective release gate | 🔵 ACTIVE / GATED | Requires successful cancellation, remaining lifecycle evidence, Meta approval + real acceptance of `shiloh_booking_confirmation_v1`, and explicit handling of outstanding new-booking copy polish. |",
+            "- Before this documentation-only reconciliation commit, GitHub `main` and Render production were positively aligned on **`74348dccf9ad9fc3eacfdcd22fa789b4bceb71ed`** from PR #181 (`Polish reschedule confirmation UX`), with Render deploy **`dep-d9v21llg1s2s73fibeo0`** live on 2026-08-13.": "- Before this documentation-only reconciliation commit, GitHub `main` and Render production were positively aligned on **`66259e53ae2a897e089e895b322c712cbf4ef1c6`** from PR #185 (`Provision booking confirmation utility`), with Render deploy **`dep-d9v39h8ae00c73adc38g`** live on 2026-08-13.\n- PR #184 (`Add reschedule date quick choices`) is production-deployed and real-WhatsApp accepted: Today / Tomorrow / Choose another date render on bare RESCHEDULE; the alternate-date prompt accepts free text and a real `Friday` reply preserved HIFU/Marietjie and advanced to daypart selection.\n- PR #185 is provisioning-only for the new booking-confirmation Utility template. Production Meta submission succeeded, but explicit WhatsApp Manager evidence shows `shiloh_booking_confirmation_v1` **In review**. The sender remains fail-closed on the existing plain-text path because `WHATSAPP_BOOKING_CONFIRMATION_TEMPLATE` is intentionally unset until provider activation is positively evidenced.\n- Exact Meta Manager evidence also supersedes older provider uncertainty for `shiloh_staff_finalization_v1`: it is now **Active — Quality pending**."
+          }
+          for old_text, new_text in replacements.items():
+              if old_text not in t:
+                  raise SystemExit('Tracker anchor not found: ' + old_text[:80])
+              t = t.replace(old_text, new_text, 1)
+          tracker.write_text(t)
+          PY
+      - name: Commit reconciled docs
+        run: |
+          git config user.name "shilohmtc"
+          git config user.email "shilohmtc@gmail.com"
+          git add docs/SHILOH-OS-MASTER-STATUS.md docs/SHILOH-OS-PROJECT-TRACKER.md
+          if git diff --cached --quiet; then
+            echo "No reconciliation changes needed"
+            exit 0
+          fi
+          git commit -m "Reconcile Meta booking template provider state"
+          git push origin HEAD:reconcile-meta-booking-template-state
