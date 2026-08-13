@@ -355,7 +355,7 @@ async function processClientDiscoveryMessage(sender, text) {
 
   if (isHomeCommand(raw)) return { handled: true, interactive: clientHomeInteractive() };
 
-  if (['client_browse_services', 'browse services', 'services'].includes(value)) {
+  if (['client_browse_services', 'browse services', 'services', 'list treatments', 'list services', 'treatments'].includes(value)) {
     const categories = await listClientBookableCategories();
     if (!categories.length) {
       return { handled: true, reply: 'I can’t safely load Shiloh’s client-bookable service categories right now. Please try again shortly.' };
@@ -418,7 +418,7 @@ async function processClientDiscoveryMessage(sender, text) {
     return { handled: true, interactive: practitionerServicePageInteractive(services, practitioner, Number(practitionerPageMatch[2])) };
   }
 
-  if (['client_practitioners', 'our practitioners', 'practitioners'].includes(value)) {
+  if (['client_practitioners', 'our practitioners', 'practitioners', 'list your staff', 'list staff', 'staff'].includes(value)) {
     return { handled: true, interactive: await practitionersInteractive() };
   }
 
