@@ -6,61 +6,64 @@ Status: subordinate reconciliation evidence for `docs/SHILOH-OS-MASTER-STATUS.md
 
 Operational truth remains GitHub `main`, Render production, Shiloh CRM, Google Calendar, and explicit real WhatsApp/human evidence.
 
-As of this reconciliation, GitHub `main` and Render production are positively aligned on `2f9f9f5d024659a2df6850ca2bec66056b431b6b` from PR #172 (`Polish treatment list presentation`). Render deploy `dep-d9v0jijl550s73dqu8jg` is `live`.
+As of this reconciliation, GitHub `main` and Render production are positively aligned on `e5c73a626f83c18f3641f7724ed4fec73dc4cfb7` from PR #174 (`Fix client availability practitioner query`). Render deploy `dep-d9v0roht0dsc73bo8lt0` is `live`.
 
 ## Real Dummy Test evidence already established
 
-The real dedicated Dummy Test WhatsApp journey positively established all of the following before the PR #172 fix:
+The real dedicated Dummy Test WhatsApp journey positively established all of the following:
 
 - an unregistered inbound WhatsApp number is detected without asking the client to re-enter that number;
 - first-time registration accepted the bundled reply `Dummy Test, 14 May 1990, Female`;
 - registration transitioned directly into booking discovery;
 - the genuine four-family list displayed `Beauty & Aesthetics`, `Massage`, `Lymphatic Drainage`, and `Elim MediHeel Pedicures`;
 - selecting Beauty & Aesthetics routed to the Marietjie-owned family and client-friendly treatment prompt;
-- the real Beauty & Aesthetics treatment list opened with CRM-derived treatment rows, durations, price display data, and pagination.
+- the real Beauty & Aesthetics treatment list opened with CRM-derived treatment rows, durations, price display data, and pagination;
+- after PR #172 deployed, real WhatsApp re-acceptance verified materially more readable long treatment names, consistently formatted simple Rand prices/ranges, and explicit `Next treatments →` / `Go to page 2 of 4` navigation;
+- Dummy Test selected **HIFU**, and Shiloh correctly presented **Practitioner: Marietjie** plus Today/Tomorrow/date input before the availability lookup defect described below occurred.
 
 These are explicit real acceptance facts and must not be downgraded back to code-only status in later reconciliation.
 
-## Proven defect and production repair
+## Treatment-list presentation defect and repair
 
-The real Beauty & Aesthetics treatment list exposed a presentation defect:
+The real Beauty & Aesthetics treatment list originally exposed a presentation defect:
 
 - long canonical treatment names were heavily truncated by the 24-character WhatsApp row-title limit;
 - simple price/range values were displayed inconsistently, including examples such as `R1250 - R2200`, `1000 - 1200`, `350 - 450`, and `R500-R1250`;
 - the navigation row `More treatments →` with description `Page 2 of 4` was ambiguous about whether it described the current page or the destination.
 
-PR #172 repaired only this presentation surface. The deployed adapter:
+PR #172 repaired only this presentation surface. The deployed adapter preserves materially more canonical treatment-name text in the row description, normalizes only simple numeric amount/range strings into consistent Rand presentation, preserves non-numeric CRM `display_price` text unchanged, uses explicit next-page destination copy, and preserves stable interactive IDs. Real WhatsApp re-acceptance subsequently passed.
 
-- preserves materially more of the canonical treatment name in the WhatsApp row description while respecting Meta title/description limits;
-- normalizes only simple numeric amount/range strings into consistent Rand presentation, while preserving non-numeric CRM `display_price` text unchanged;
-- changes next-page copy to an explicit destination such as `Next treatments →` / `Go to page 2 of 4`;
-- preserves stable interactive IDs.
+The service-family CRM selection SQL, family ownership rules, practitioner eligibility predicates, booking-intent semantics, and canonical CRM data were not changed by PR #172.
 
-The service-family CRM selection SQL, family ownership rules, practitioner eligibility predicates, booking-intent semantics, and canonical CRM data were not changed.
+## Availability lookup defect and production repair
 
-## Verification evidence
+After HIFU → Marietjie, Dummy Test selected **Tomorrow**. Real production returned the generic `Sorry, I'm having trouble responding right now. Please try again in a moment.` response. Render application logs established the exact cause rather than treating this as a no-slot result:
 
-Self-test-first discipline was preserved as far as the connected tooling allowed:
+- request time: 2026-08-13 20:23 South Africa time;
+- PostgreSQL error `42P10`: `for SELECT DISTINCT, ORDER BY expressions must appear in select list`;
+- failure location: `resolveEligibleStaff()` in `src/services/clientBookingAvailability.js`, called by `authoritativeSlotsForIntent()`;
+- the failing query selected `DISTINCT st.id, st.display_name` while ordering first by `CASE LOWER(st.display_name) ...`, which PostgreSQL rejects under DISTINCT unless the ORDER BY expression is part of the select list;
+- no booking was created and no availability conclusion may be inferred from that failed request.
 
-- a new presentation acceptance contract was run locally before implementation and failed because the adapter did not yet exist;
-- after implementation, the same contract passed, including the four observed price variants, long-name visibility, row-size bounds, stable ID preservation, and explicit pagination wording;
-- the connected GitHub safety classifier blocked committing a new regression test file and also blocked augmenting the existing family test file;
-- PR #172 repository CI run #425 completed successfully on the exact branch candidate before merge;
-- the PR patch was inspected before merge and changed only the new presentation module plus the narrow family-list integration point;
-- Render auto-deployed the exact merged SHA and deployment `dep-d9v0jijl550s73dqu8jg` reached `live`.
+PR #174 repaired this query without weakening CRM truth. It replaced `SELECT DISTINCT` with ordinary selection plus `GROUP BY st.id, st.display_name`, preserving deduplication while leaving `staff_services`, active practitioner status, `resource_type = 'practitioner'`, `client_bookable = TRUE`, therapist scoping and staff ordering intact.
 
-Repository regression coverage for the new presentation contract therefore remains explicit engineering debt until a safe write route is available; this does not convert the production repair into an unverified claim because branch CI and exact production deployment are independently established.
+Self-test-first evidence is explicit:
+
+- commit `b8b15980088b7924d0ab7338c3bb1a87bf643536` added the regression before implementation;
+- PR CI #429 failed with the regression against the pre-fix query;
+- implementation commit `db6becbde2b8efa481149c014f3fc0709753911a` applied the narrow SQL correction;
+- PR CI #430 completed successfully on the corrected branch candidate;
+- final PR patch inspection showed only the query correction plus the regression test;
+- PR #174 squash-merged as `e5c73a626f83c18f3641f7724ed4fec73dc4cfb7`;
+- Render auto-deployed that exact SHA and deployment `dep-d9v0roht0dsc73bo8lt0` reached `live`.
 
 ## Current Product-Critical Gate
 
-Client Perspective Testing remains 🔵 ACTIVE / PRODUCT-CRITICAL. Engineering deployment does not close real acceptance.
+Client Perspective Testing remains 🔵 ACTIVE / PRODUCT-CRITICAL. Engineering deployment does not close real availability acceptance.
 
-The exact next real WhatsApp step is:
+The exact next real WhatsApp evidence is to continue the **same Dummy Test HIFU → Marietjie booking intent** and re-enter the availability step for the already-selected future date. Do not reset Dummy Test and do not repeat already accepted registration/catalogue work unless the client UI itself requires re-opening the treatment flow to refresh state. The production outcome must now be either authoritative available slots or an authoritative no-slot response—not the prior SQL exception.
 
-1. On the existing Dummy Test journey, re-open or refresh **Beauty & Aesthetics → Treatments** so the message is generated by the new production deployment.
-2. Verify that long treatment names are materially more readable, prices are consistently presented, and the next-page row clearly states its destination.
-3. If accepted, choose a real treatment from the CRM-backed list and continue the same journey through availability → booking → canonical CRM appointment → Google Calendar mirrors → real WhatsApp confirmation → view booking → reschedule → cancellation → lifecycle/template communications.
-4. Any new shared-path defect becomes the immediate engineering priority; never bypass it by direct CRM or Calendar mutation.
+If availability succeeds, continue the same journey through slot selection → booking → canonical CRM appointment → Google Calendar mirrors → real WhatsApp confirmation → view booking → reschedule → cancellation → lifecycle/template communications. Any new shared-path defect becomes the immediate engineering priority; never bypass it by direct CRM or Calendar mutation.
 
 ## WAITING / fail-closed preservation
 
@@ -70,8 +73,9 @@ No unavailable truth was promoted by this reconciliation:
 - A3 and D1 remain provider-state verification gates until exact Meta template status is positively established;
 - E1 Ozow remains WAITING for merchant/account configuration and explicit payment/deposit/refund/gift-voucher rules;
 - destructive privacy execution remains disabled;
-- CRM catalogue/practitioner eligibility remains authoritative and fail-closed; no treatment or practitioner may be invented from presentation copy.
+- CRM catalogue/practitioner eligibility remains authoritative and fail-closed; no treatment or practitioner may be invented from presentation copy;
+- the failed Tomorrow request is not evidence of Marietjie's availability or unavailability.
 
 ## Reconciliation instruction
 
-`docs/SHILOH-OS-PROJECT-TRACKER.md` has been reconciled to this state on the same branch. This file must be folded into `docs/SHILOH-OS-MASTER-STATUS.md` when the connector can safely perform a complete Master-file write; until then it is a clearly subordinate delta, not a competing master ledger.
+`docs/SHILOH-OS-PROJECT-TRACKER.md` is reconciled alongside this delta. This file must be folded into `docs/SHILOH-OS-MASTER-STATUS.md` when the connector can safely perform a complete Master-file write; until then it is a clearly subordinate delta, not a competing master ledger.
