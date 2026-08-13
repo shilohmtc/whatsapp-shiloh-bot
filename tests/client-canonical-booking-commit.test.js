@@ -50,6 +50,15 @@ test('successful client commit writes canonical appointment snapshots calendars 
   assert.match(commit, /DELETE FROM booking_intents WHERE phone = \$1/);
 });
 
+test('successful client reply stays client-friendly and does not expose internal sync or canonical CRM diagnostics', () => {
+  const commit = source('src/services/clientBookingCommit.js');
+  assert.match(commit, /Your appointment is confirmed\. We look forward to seeing you!/);
+  assert.doesNotMatch(commit, /Booking created successfully — appointment #\$\{appointment\.id\}/);
+  assert.doesNotMatch(commit, /Shiloh — Bookings: synced/);
+  assert.doesNotMatch(commit, /Google Calendar: synced/);
+  assert.doesNotMatch(commit, /confirmed in Shiloh’s canonical CRM after final availability and calendar revalidation/);
+});
+
 test('partial calendar writes are compensated if the canonical transaction fails', () => {
   const commit = source('src/services/clientBookingCommit.js');
   assert.match(commit, /ROLLBACK/);
