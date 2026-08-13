@@ -52,9 +52,10 @@ test('policy confirmation is gated after appointment-change handling and before 
   assert.ok(identityGate < policy);
 });
 
-test('onboarding completion resumes the existing booking and re-renders interactive confirmation', () => {
+test('onboarding completion resumes the existing booking and re-renders interactive discovery', () => {
   assert.match(webhook, /identity\.onboardingComplete&&identity\.resumeBooking/);
-  assert.match(webhook, /decorateClientBookingResult\(await processBookingMessage\(from,"I want to book an appointment"\)\)/);
+  assert.match(webhook, /decorateClientBookingResult\(await processBookingMessage\(from,"booking"\)\)/);
+  assert.doesNotMatch(webhook, /processBookingMessage\(from,"I want to book an appointment"\)/);
   assert.match(webhook, /booking\.handled&&booking\.interactive/);
   assert.match(webhook, /await sendAdminResult\(from,booking\)/);
 });
