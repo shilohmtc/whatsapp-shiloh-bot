@@ -1,1 +1,0 @@
-C1.10 self-test-first marker: the first simulator contract intentionally lands before implementation so CI must demonstrate the missing behavior. Remove this marker before merge.

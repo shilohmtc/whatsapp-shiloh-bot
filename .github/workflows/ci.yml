@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, privacy/synthetic-rollback-simulator]
+    branches: [main]
   pull_request:
     branches: [main]
 
