@@ -19,7 +19,7 @@ This file is the **project-management ledger**. Specialist handoffs are executio
 
 ## Current technical baseline
 
-- Immediately before this source-session reconciliation, GitHub `main` was `705902fc6dabf575743df2500f513548c43f3c42`; its production-code ancestry includes `640d0b6870632f3eaf21a601f5c70db082b6b521` (PR #160) plus later documentation/ledger reconciliation commits.
+- Immediately before this source-session reconciliation, GitHub `main` and Render production were aligned on `e62ce2681322b13b4f03e00df8a65391ccd66fa8`; its production-code ancestry includes `640d0b6870632f3eaf21a601f5c70db082b6b521` (PR #160) plus later documentation/ledger reconciliation commits.
 - Client Perspective Testing production fixes through PRs #156–#160 are merged:
   - #156 clears stale booking intent on client Home/Menu/Back escape paths.
   - #157 supports the natural sequential registration path name → mobile → DOB while preserving identity-conflict safeguards.
@@ -27,10 +27,18 @@ This file is the **project-management ledger**. Specialist handoffs are executio
   - #159 adds durable per-appointment booking-confirmation delivery claiming to prevent duplicate confirmations on retry/concurrency boundaries.
   - #160 gates post-appointment follow-up on explicit canonical `completed` attendance only.
 - Earlier 12 Aug production ancestry includes the attendance/finalization and earnings work reconciled from the source chat and `docs/HANDOFF-NEXT-CHAT-2026-08-12.md`: explicit attendance certification authority, historical 1–8 Aug Christel/Abigail correction, completed-only earnings integrity, explicit period selection, Marietjie earnings, practitioner-scoped finalization UX, and the shared bounded Admin `Check next available` no-slot recovery action.
-- Earlier 12 Aug Admin/client-booking foundations are also in the deployed ancestry and remain regression evidence, not a substitute for unfinished live acceptance:
+- The extended 11–12 Aug Shiloh OS production source session also established several foundations that remain relevant but do **not** replace unfinished live acceptance below:
+  - canonical client-facing brand policy: **Shiloh Massage Therapy and Aesthetic Clinic**; use `Shiloh` naturally as the short brand and never expand/use `Shiloh MTC` as `Shiloh Medical Training Centre` in client-facing copy;
+  - guarded August Goldie recovery after a read-only delta audit: seven missing real booking rows were restored, one duplicate source row was linked to the existing canonical appointment, and one `Personal` source row was promoted as a calendar block; the one-time audit/recovery hooks were removed after completion;
+  - WhatsApp Admin is the staff booking-entry surface; CRM remains booking authority; Google Calendar is availability/diary/mirror infrastructure rather than a parallel client-booking database;
+  - confirmed bookings are mirrored to `Shiloh — Bookings` and the selected practitioner calendar; manual practitioner-calendar events are availability blocks, while booking-like unlinked events are monitored/reviewed and are never silently imported into CRM;
+  - practitioner-team Admin booking scope is Marietjie -> Marietjie mapped services only, Christel/Abigail -> their shared mapped service pool, with final `staff_services` eligibility still revalidated fail-closed;
+  - genuine Meta interactive controls/lists are the preferred/implemented UX for menu/catalogue choices where supported; fake numbered "buttons" are not the product standard.
+- Earlier 12 Aug Admin/client-booking foundations remain in the deployed ancestry and are regression evidence, not a substitute for unfinished live acceptance:
   - PR #104 / `b822331d1e8f64ae822aa8e0cc5e084e2bd5dedd` made successful Demo Client cleanup mandatory and fail-closed.
-  - Admin demo access/escape, natural DOB input, appointment routing, reporting integrity, Last Week earnings, and guided client lookup were subsequently merged and production-promoted through PRs #105–#108, including `eef27f4a9658e6a21f438a414f9e914fe93f1c94` and `0bbb74761eda883fce561c3904426f57edce8213`.
-  - These foundations do **not** close the remaining role-specific Admin acceptance, reporting acceptance, practitioner-information, or true-client booking gates below.
+  - Admin demo escape, natural DOB input, appointment routing, reporting integrity, Last Week earnings, and guided client lookup were merged through PRs #105–#108.
+  - PR #110 subsequently implemented the stable top-level WhatsApp Admin list that the earlier audit had recommended; PR #150 later added current-role visibility revalidation for stable Admin actions. Do not redo that architecture; remaining B1 work is real role-specific acceptance and genuine defects only.
+  - PR #134 later retired the temporary Client Test Mode and hid/revoked production Demo Client permissions. The Demo engine/cleanup remains regression infrastructure; the earlier visible Demo Client rollout is superseded and must not be treated as currently enabled merely because PRs #100–#105 exist in ancestry.
 - Privacy/data-minimization hardening already present in the deployed ancestry includes P-PRIV-1 through the currently implemented P-PRIV-4 gates: fail-closed AI profile preference allowlisting, bounded local OpenAI conversation-state retention, short-lived temporary onboarding/walk-in staging retention, non-destructive client privacy inventory/retention planning, and privacy-request identity-verification/owner-authorization workflow state. Destructive privacy execution remains intentionally disabled.
 - The dedicated client audit is documented in `docs/HANDOFF-CLIENT-PERSPECTIVE-TESTING-2026-08-13.md`; its original checklist text is historical execution detail where this master reconciliation records newer evidence/status.
 - The prior production handoff remains `docs/HANDOFF-NEXT-CHAT-2026-08-12.md` and is retained as historical/supporting detail, not as a competing master checklist. It also preserves two user-supplied shared ChatGPT conversation references as supporting context; they are not production authority.
@@ -43,7 +51,7 @@ This file is the **project-management ledger**. Specialist handoffs are executio
 
 ### A0. ✅ Attendance/earnings production foundation implemented
 
-Evidence reconciled from the 12 Aug production session and handoff:
+Evidence reconciled from the 12 Aug production sessions and handoff:
 - Attendance is explicit human truth; elapsed appointment time or a Calendar event never auto-completes a visit.
 - Certification authority is enforced server-side:
   - Marietjie -> Marietjie appointments only.
@@ -53,15 +61,16 @@ Evidence reconciled from the 12 Aug production session and handoff:
 - `Finalize past visits` uses practitioner-scoped queues and explicit Completed / No-show decisions; canonical writes update appointment status, status history, lifecycle and CRM audit evidence transactionally.
 - A proof-bound historical correction for **1–8 August 2026 inclusive, Christel + Abigail only** identified 29 exact calendar-linked CRM appointments and recorded all 29 as `completed`; 0 were already completed, cancelled or no-show. The one-time maintenance startup hook was removed afterward. **Do not extend this historical completion assumption beyond 8 August.**
 - The historical correction had intermediate production maintenance attempts that failed closed before changing attendance rows (schema/query-shape defects were corrected); the successful exact batch then ran and the temporary hook was removed. Those implementation incidents are superseded/closed and are not ongoing work.
-- Earnings reports are completed-only and fail closed around unresolved attendance, joint-practitioner attribution and missing CRM prices.
+- The earlier August Goldie delta/recovery is also completed historical reconciliation evidence: a guarded source audit identified nine source rows requiring account; the recovery created/restored seven real canonical bookings, linked the Gwendie duplicate source row to the existing canonical appointment rather than duplicating it, and represented the `Personal` row as a calendar block rather than a client booking. Distinct identities with shared/duplicate source contact evidence remained contact-unverified/outbound-not-authorized rather than being merged by assumption. One-shot audit/recovery startup hooks were removed afterward.
+- Earnings reports are completed-only and fail closed around unresolved attendance, joint-practitioner attribution, missing CRM prices, and unresolved Goldie/reporting-integrity evidence rather than silently understating a clean-looking total.
 - Earnings routes expose Today / This Week / Last Week / This Month instead of silently defaulting the Reports menu to Today.
-- Abigail rule: 20% commission on qualifying completed solo treatment value + R5,000 fixed salary in monthly view only.
+- Abigail rule: 20% commission on qualifying completed solo treatment value + R5,000 fixed salary in monthly view only; no salary proration in shorter periods.
 - Christel rule: 100% of qualifying completed solo treatment value; clinic-wide revenue/other-practitioner earnings remain separate.
 - Marietjie rule: 100% of qualifying completed solo treatment value, no salary.
 - Marietjie earnings are authorized for Marietjie self-view (canonical staff binding), Christel and Jean-Pierre; Abigail has no access.
 - End-of-day/next-morning attendance-finalization reminder infrastructure is implemented and WhatsApp-template gated/fail-closed.
 - Reminder-ledger deployment hardening is complete: runtime initialization is idempotent so the future reminder path does not depend on every historical migration having been auto-run by Render. Managed template provisioning/status discovery remains approval-gated.
-- Temporary repository placeholder/no-op files created during branch setup were removed before the final functional state; they are superseded housekeeping, not open engineering work.
+- Temporary repository placeholder/no-op files and one-shot maintenance/audit hooks created during implementation were removed after their evidence was captured; they are superseded housekeeping, not open engineering work.
 
 ### A1. 🟡 Six known Christel/Abigail attendance finalizations
 
@@ -100,14 +109,20 @@ Last evidenced August report state:
 - Continue only genuinely unfinished real-WhatsApp role-specific paths for Christel, Abigail, Marietjie and Jean-Pierre.
 - Do not redo regression-locked coverage.
 - Verify section -> action -> guarded owner -> Back/Menu behavior and role visibility.
+- Preserve these production/business rules:
+  - staff client bookings are initiated through Shiloh's WhatsApp Admin booking flow, not by manually creating a client appointment in Google Calendar;
+  - Google Calendar remains availability/diary/mirror infrastructure: practitioner manual events may block availability, while client appointment authority remains the CRM/Shiloh booking path;
+  - Marietjie Admin booking scope is her mapped services/practitioner only; Christel and Abigail use the shared Christel+Abigail mapped service pool, with final service/practitioner eligibility revalidated from canonical CRM mappings;
+  - use genuine Meta WhatsApp interactive controls/lists with stable IDs wherever supported; legacy typed aliases may remain for resilience but should not be the primary UX.
 - 12 Aug source-session evidence to preserve without overstating completion:
   - the shared Admin booking flow gained a bounded `Check next available` action after a no-slot result; it searches forward through canonical availability while preserving selected service/practitioner and performs no booking/Calendar mutation during search;
   - that no-slot fix is shared for authorized Admins rather than an account-specific Jean-Pierre patch, preserving the rule that systemic defects are fixed at the shared routing/data/authorization layer when evidence supports that scope;
   - numbered top-level appointment selections were repaired so displayed Today/Tomorrow choices no longer fall through to the generic assistant;
   - `Last week's clients` was added as an operational appointment-history view;
-  - `Find a client` now has guided state so a next reply such as `Juvan`, `Find Juvan`, or a mobile number is interpreted as the lookup term;
-  - `Menu` / `Admin Menu` / `Home` can safely escape an unfinished Demo Client session back to Admin Mode;
-  - the audit still identified the architectural risk of relying on dynamic numbered text, so stable real WhatsApp interactive-list IDs remain the preferred Admin UX direction where not already implemented.
+  - `Find a client` gained guided state so a next reply such as `Juvan`, `Find Juvan`, or a mobile number is interpreted as the lookup term;
+  - `Menu` / `Admin Menu` / `Home` can safely escape an unfinished historical Demo Client session back to Admin Mode;
+  - the earlier architectural risk of dynamic numbered top-level menus was subsequently addressed by PR #110's stable WhatsApp top-level list and later role-scope hardening in PR #150. Remaining B1 work is acceptance of genuinely unverified routes, not reimplementation of the stable-ID menu.
+- Calendar-integrity monitoring is a guardrail, not a booking importer: booking-like unlinked practitioner-calendar events are review exceptions and never silently become CRM bookings or authorize client messaging.
 
 ### B2. ⬜ Reconcile Jean-Pierre Admin capability and client-test strategy
 
@@ -115,16 +130,16 @@ Prior requirement to preserve:
 - Jean-Pierre needs a practical Admin experience comparable to Christel where business authority permits, but authorization must remain role/authority based rather than blindly cloning certification powers.
 - Jean-Pierre also needs to be able to test the genuine first-time client journey.
 
-Verified Demo Client/test foundation from the 12 Aug source session:
-- controlled Demo Client access was extended to the authorized practitioner-admin test set and regression-locked with practitioner/service eligibility boundaries;
-- successful demo booking cleanup is mandatory/fail-closed, with demo appointment/calendar cleanup and synthetic-client deactivation while preserving audit evidence;
-- unfinished demo state can be escaped safely to Admin Mode without deleting a created real appointment;
-- temporary `Client Test Mode` / demo-client experiments were cleaned up rather than retained as competing production modes;
+Historical Demo Client/test foundation from the extended 12 Aug source session:
+- controlled Demo Client access was temporarily extended to Christel/Abigail/Marietjie with practitioner/service eligibility boundaries;
+- successful demo booking cleanup was made mandatory/fail-closed, with demo appointment/calendar cleanup and synthetic-client deactivation while preserving audit evidence;
+- unfinished demo state could be escaped safely to Admin Mode without deleting a created appointment;
+- **supersession:** PR #134 later retired Client Test Mode and hid/revoked production Demo Client permission from Admin accounts. Do not re-enable or expose Demo Client merely from the older rollout requirement; the underlying demo engine/cleanup remains regression infrastructure only unless a newer explicit product decision restores it;
 - Chenique/Juvan were intentionally treated as resettable family/test identities for genuine client-path acceptance. Later guarded reset/recovery work supersedes any notion that broad unrestricted CRM deletion should be the normal test mechanism.
 
 Decision rule:
 - Do **not** disable or weaken Jean-Pierre's production Admin identity merely to test client behavior until the identity-routing architecture is audited.
-- `Demo Client` is useful for safe/non-mutating Admin-side simulation, but it is **not sufficient by itself** to certify the true external first-time client journey, WhatsApp identity registration, real CRM creation, Calendar booking, webhook/idempotency, and client-facing UX.
+- Historical `Demo Client` simulation is not sufficient by itself to certify the true external first-time client journey, WhatsApp identity registration, real CRM creation, Calendar booking, webhook/idempotency, and client-facing UX.
 - Use dedicated non-admin client test identities (currently `Dummy Test`, plus Chenique/Juvan resettable test identities where appropriate) for true client acceptance unless a separately designed reversible Admin/client mode switch is proven safe and necessary.
 
 ## C. Client Perspective Testing
@@ -157,7 +172,11 @@ This workstream is a child of the broader production acceptance work; it does no
 
 Preserved product requirements/decisions:
 
+- Canonical client-facing business name is **Shiloh Massage Therapy and Aesthetic Clinic**. Use `Shiloh` naturally as the short brand. Do not call the clinic `Shiloh Medical Training Centre`; do not use `Shiloh MTC` as a client-facing expansion/name merely because MTC appears in internal Meta/app identifiers.
+- A forwardable `/walk-in` registration entry exists as a convenience client-registration surface, but registration/booking truth remains canonical CRM/WhatsApp workflow state rather than the link itself; do not treat the current Render hostname as a permanent brand/domain commitment.
 - New-client registration supports sequential entry and bundled full-name/mobile/DOB input.
+- WhatsApp is the client/staff booking interaction surface; CRM is the appointment/service/practitioner authority; Google Calendar is availability/diary/mirror infrastructure. Manual practitioner-calendar events can block availability but must not silently become CRM client appointments.
+- `Shiloh — Bookings` is intended as the shared booking diary/mirror, with human staff access kept non-authoritative for client creation/editing where Google permissions allow; real client bookings should flow through Shiloh so client, service, practitioner, price and appointment identity remain canonical.
 - Post-registration booking is service-family first:
   - Beauty & Aesthetics -> Marietjie.
   - Massage -> Christel or Abigail according to actual CRM eligibility.
@@ -173,12 +192,12 @@ Preserved product requirements/decisions:
 
 ### C2. ⬜ Practitioner-information conversational audit
 
-- Verify the AI/client route can answer practitioner-role/service questions from authoritative CRM/configured business knowledge.
+- Verify the AI/client route can answer practitioner-role/service questions from authoritative CRM/configured business knowledge in real client acceptance.
 - Verify no invented qualifications, services, ownership claims or eligibility.
 - Ensure service-family UI and free-text answers tell the same operational story.
-- Add regression coverage and production acceptance where gaps are established.
-- 12 Aug audit evidence established the reason this remains separate: the general AI context had the active service catalogue and booking rules, while practitioner↔service eligibility was enforced deeper in booking/availability and there was no dedicated authoritative public practitioner-profile layer. That finding supports this item; it does not prove the current live route complete.
-- Do not treat the partial family/service/practitioner evidence from C1 as completion of this dedicated conversational acceptance item.
+- Add/fix regression coverage only where current evidence establishes a gap.
+- The earlier 12 Aug audit originally found that practitioner↔service eligibility was enforced deeper in booking/availability while the general AI layer lacked a dedicated authoritative public-profile source. That **implementation gap was subsequently addressed** by PR #118's approval-gated public practitioner profile/service-mapping knowledge layer, with public treatment-team titles refined in PR #131 and service-family booking refined in PR #154. Do not redo those foundations.
+- This item remains ⬜ because authoritative **real client conversational acceptance** and live CRM catalogue/profile consistency are not yet fully proven; the direct Render Postgres read limitation also preserves C1.4 as 🟡.
 
 ### C3. 🟡 True first-time booking acceptance
 
@@ -186,14 +205,22 @@ Preserved product requirements/decisions:
 - Verify canonical CRM appointment and Google Calendar event.
 - Verify retry/idempotency and supported cancellation/cleanup behavior.
 - `Dummy Test` is the preferred dedicated work-time client identity unless authoritative evidence changes this.
-- Backend prerequisites are substantially regression-covered, but this item is now explicitly human/real-WhatsApp acceptance blocked; do not substitute direct CRM/Calendar mutation for the client path.
+- Backend prerequisites are substantially regression-covered, but this item is explicitly human/real-WhatsApp acceptance blocked; do not substitute direct CRM/Calendar mutation for the client path.
 
 ## D. Client lifecycle / automation blockers
+
+### D0. ✅ P3 customer-care foundation implemented
+
+- The client-care foundation reached production before P4 work was started, including treatment-aware aftercare/rebooking/loyalty lifecycle infrastructure already present in the code ancestry.
+- PR #127 added explicit client appointment reminder confirmation: only an exactly resolved active canonical client and eligible future appointment can be confirmed; ambiguous appointments require the booking number; final confirmation is row-locked, audited and idempotent; it can move canonical `scheduled` -> `confirmed` / lifecycle -> `confirmed_by_client` but can never infer attendance/completion/no-show/cancellation or payment truth.
+- Later PR #160 tightened post-appointment follow-up eligibility to canonical `completed` attendance only. Treat this as the current rule; do not reintroduce elapsed-time follow-up eligibility.
+- Real WhatsApp/provider lifecycle acceptance remains covered by C1.8 and is not implied complete by these backend foundations.
 
 ### D1. 🟡 Birthday automation
 
 - `shiloh_birthday_wish_v2` last known Meta state: PENDING.
 - Keep sending disabled until positively APPROVED and copy/current configuration is verified.
+- The temporary read-only provider-status startup probe used to capture the PENDING state was removed afterward; it is superseded audit tooling, not ongoing startup behavior.
 
 ## E. P4 payments / Ozow
 
@@ -201,10 +228,12 @@ Preserved product requirements/decisions:
 
 - Blocked on actual Ozow merchant/account configuration and explicit Shiloh rules for payable amount/deposit/full payment, refunds and Shiloh-issued gift vouchers.
 - Payment truth remains separate from booking, attendance, Calendar and loyalty truth.
+- Do not conflate Ozow's own voucher/redemption product with a future Shiloh-issued gift-voucher product; the latter requires explicit business rules.
 
 ### E2. ⬜ Safe P4 engineering after higher-priority acceptance is clean
 
-- Continue only provider-independent/sandbox-safe contracts, reconciliation/idempotency, sanitized observability and tests.
+- The provider-independent architecture/pure-state foundation is already complete (PR #129): payment intent/event truth boundaries, idempotency/reconciliation principles, refund separation, POPIA minimization and a pure state contract that requires verified provider evidence before paid/refund truth. It introduced no credentials, provider calls, payment links, routes/webhooks, DB migration or client messages. **Do not redo this slice.**
+- Continue only the next provider-independent/sandbox-safe contracts, reconciliation/idempotency, sanitized observability and tests after higher-priority Admin/client acceptance is clean.
 - No live payment activation while E1 is unresolved.
 
 ## F. Meta Business Portfolio consolidation / production ownership
@@ -257,11 +286,11 @@ Evidence from direct Meta Business Suite inspection in the Meta consolidation se
 
 1. 🔵 Continue Client Perspective Testing at C1 item 9 (Error recovery / conversational resilience), because items 1, 2, 4, 6, 7 and 8 are preserved 🟡 and item 9 remains the highest-priority genuine ⬜ item.
 2. ⬜ Continue C1 item 10 privacy acceptance only after preserving item 9 priority: next privacy engineering step is the synthetic transaction/rollback execution-plan simulator; destructive execution remains disabled.
-3. ⬜ Incorporate C2 practitioner-information/service-visibility acceptance without losing its separate conversational requirements; do not infer live CRM mapping truth while the authoritative read remains blocked.
+3. ⬜ Continue C2 practitioner-information/service-visibility **acceptance** without redoing PR #118/#131/#154 foundations; do not infer live CRM mapping truth while the authoritative read remains blocked.
 4. ⬜ Continue F3 Meta/Instagram consolidation only through verified existing-account ownership/access; do not create a duplicate account or disturb the production WABA/app chain.
 5. ⬜ In parallel where non-mutating, continue A2/B1 evidence gathering: practitioner finalization queues, Abigail/Christel post-finalization reports when human truth is supplied, Marietjie real-account earnings acceptance, and genuinely unfinished shared Admin route acceptance only.
 6. 🟡 Preserve A1, A3, C3, D1 and E1 until their real external/human facts become available.
-7. ⬜ Return to safe P4 engineering only after the higher-priority production acceptance work is clean.
+7. ⬜ Return to the next safe P4 engineering slice only after the higher-priority production acceptance work is clean; PR #129 architecture/pure-state work is already complete and must not be repeated.
 
 # Standard new-chat prompt
 
