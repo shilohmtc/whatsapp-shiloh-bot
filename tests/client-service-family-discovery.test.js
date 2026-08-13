@@ -19,6 +19,7 @@ test('service-family ownership is explicit and client-facing', () => {
     beauty: { title: 'Beauty & Aesthetics', practitioner: 'Marietjie' },
     massage: { title: 'Massage', practitioner: null },
     lymphatic: { title: 'Lymphatic Drainage', practitioner: 'Abigail' },
+    pedicure: { title: 'Elim MediHeel Pedicures', practitioner: 'Marietjie' },
   });
 });
 
@@ -29,11 +30,14 @@ test('family queries remain CRM-backed, active-only and client-bookable', () => 
   assert.match(familySource, /st\.client_bookable = TRUE/);
 });
 
-test('beauty is Marietjie-owned and excludes massage and lymphatic rows', () => {
+test('beauty is Marietjie-owned and excludes massage lymphatic and pedicure rows', () => {
   const sql = familyFilterSql('beauty');
   assert.match(sql, /LOWER\(st\.display_name\) = 'marietjie'/);
   assert.match(sql, /<> 'massage'/);
   assert.match(sql, /NOT LIKE '%lymphatic%'/);
+  assert.match(sql, /NOT LIKE '%pedicur%'/);
+  assert.match(sql, /NOT LIKE '%mediheel%'/);
+  assert.match(sql, /NOT LIKE '%elim%'/);
 });
 
 test('massage permits only Christel or Abigail and excludes lymphatic treatments', () => {
@@ -48,6 +52,14 @@ test('lymphatic is Abigail-only even if stale CRM mappings exist for another pra
   assert.match(sql, /LIKE '%lymphatic%'/);
   assert.match(sql, /LOWER\(st\.display_name\) = 'abigail'/);
   assert.match(familySource, /family === 'lymphatic' \? \['abigail'\]/);
+});
+
+test('Elim MediHeel Pedicures is Marietjie-only and CRM-name/category derived', () => {
+  const sql = familyFilterSql('pedicure');
+  assert.match(sql, /LOWER\(st\.display_name\) = 'marietjie'/);
+  assert.match(sql, /pedicur/);
+  assert.match(sql, /mediheel/);
+  assert.match(sql, /elim/);
 });
 
 test('family service lists use stable IDs and stay inside Meta row limits', () => {
