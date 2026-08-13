@@ -1,9 +1,13 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 
 const onboarding = require('../src/services/clientIdentityOnboarding');
 const bookingUi = require('../src/services/clientBookingInteractive');
 const familyDiscovery = require('../src/services/clientServiceFamilyDiscovery');
+const { CLIENT_COPY } = require('../src/config/clientCopy');
+const bookingUiSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'services', 'clientBookingInteractive.js'), 'utf8');
 
 test('registered client discovery uses a four-choice WhatsApp list', () => {
   const interactive = bookingUi.bookingDiscoveryInteractive();
@@ -19,8 +23,11 @@ test('registered client discovery uses a four-choice WhatsApp list', () => {
   );
 });
 
-test('registered client discovery copy is client-friendly and hides CRM jargon', () => {
+test('registered client discovery copy is client-friendly and comes from the safe copy config surface', () => {
   const interactive = bookingUi.bookingDiscoveryInteractive();
+  assert.equal(CLIENT_COPY.bookingDiscoveryPrompt, 'Choose a service below and I’ll show you the available treatments and practitioners. 🌿');
+  assert.match(bookingUiSource, /require\(['"]\.\.\/config\/clientCopy['"]\)/);
+  assert.match(bookingUiSource, /CLIENT_COPY\.bookingDiscoveryPrompt/);
   assert.match(interactive.body, /Choose a service below and I’ll show you the available treatments and practitioners\. 🌿/);
   assert.doesNotMatch(interactive.body, /CRM|currently eligible/i);
 });
