@@ -25,25 +25,29 @@ const serviceIntent = {
   status: 'collecting',
 };
 
-test('booking entry explains the three service-family ownership rules', () => {
+test('booking entry presents the four client service families as a genuine WhatsApp list', () => {
   const view = bookingDiscoveryInteractive();
-  assert.equal(view.type, 'button');
-  assert.match(view.body, /Beauty & Aesthetics — Marietjie/);
-  assert.match(view.body, /Massage — Christel or Abigail/);
-  assert.match(view.body, /Lymphatic Drainage — Abigail/);
-  assert.deepEqual(view.buttons.map((button) => button.id), ['client_family_beauty', 'client_family_massage', 'client_family_lymphatic']);
-  assert.ok(view.buttons.every((button) => button.title.length <= 20));
+  assert.equal(view.type, 'list');
+  assert.deepEqual(view.rows.map((row) => row.id), [
+    'client_family_beauty',
+    'client_family_massage',
+    'client_family_lymphatic',
+    'client_family_pedicure',
+  ]);
+  assert.deepEqual(view.rows.map((row) => row.title), [
+    'Beauty & Aesthetics',
+    'Massage',
+    'Lymphatic Drainage',
+    'Elim MediHeel Pedicures',
+  ]);
+  assert.ok(view.rows.every((row) => row.title.length <= 24));
 });
 
 test('Our practitioners chooser labels the three client-facing roles without exposing owner or employee status', () => {
   assert.equal(clientFacingPractitionerLabel('Christel'), 'Christel · Massage');
   assert.equal(clientFacingPractitionerLabel('Abigail'), 'Abigail · Massage');
   assert.equal(clientFacingPractitionerLabel('Marietjie'), 'Marietjie · Esthetician');
-  const labels = [
-    clientFacingPractitionerLabel('Christel'),
-    clientFacingPractitionerLabel('Abigail'),
-    clientFacingPractitionerLabel('Marietjie'),
-  ].join(' ');
+  const labels = [clientFacingPractitionerLabel('Christel'), clientFacingPractitionerLabel('Abigail'), clientFacingPractitionerLabel('Marietjie')].join(' ');
   assert.doesNotMatch(labels, /owner|employee/i);
 });
 
@@ -56,20 +60,10 @@ test('missing practitioner preference blocks date collection and redirects to CR
 });
 
 test('missing practitioner can never silently become Any available at final confirmation', () => {
-  const awaiting = decorateClientBookingResult({
-    handled: true,
-    intent: { ...serviceIntent, preferred_date: '2026-08-13', preferred_time: '14:00', status: 'awaiting_confirmation' },
-  });
+  const awaiting = decorateClientBookingResult({ handled: true, intent: { ...serviceIntent, preferred_date: '2026-08-13', preferred_time: '14:00', status: 'awaiting_confirmation' } });
   assert.match(awaiting.interactive.body, /Shiloh will not silently treat a missing practitioner choice as “Any available”/);
   assert.doesNotMatch(source, /therapist_text\s*\|\|\s*['"]Any available practitioner['"]/);
-
-  const explicit = confirmationInteractive({
-    ...serviceIntent,
-    therapist_text: 'Any available therapist',
-    preferred_date: '2026-08-13',
-    preferred_time: '14:00',
-    status: 'awaiting_confirmation',
-  });
+  const explicit = confirmationInteractive({ ...serviceIntent, therapist_text: 'Any available therapist', preferred_date: '2026-08-13', preferred_time: '14:00', status: 'awaiting_confirmation' });
   assert.match(explicit.body, /Practitioner: Any available therapist/);
 });
 
@@ -82,10 +76,10 @@ test('standard discovery keeps Any available explicit and service-scoped', () =>
   assert.match(discovery, /st\.client_bookable = TRUE/);
 });
 
-test('typed booking entry is redirected into service-family discovery when service is missing', () => {
+test('typed booking entry is redirected into the same four-family discovery list when service is missing', () => {
   const decorated = decorateClientBookingResult({ handled: true, intent: { ...serviceIntent, service_text: null, service_verified: null } });
-  assert.equal(decorated.interactive.type, 'button');
-  assert.deepEqual(decorated.interactive.buttons.map((button) => button.id), ['client_family_beauty', 'client_family_massage', 'client_family_lymphatic']);
+  assert.equal(decorated.interactive.type, 'list');
+  assert.deepEqual(decorated.interactive.rows.map((row) => row.id), ['client_family_beauty', 'client_family_massage', 'client_family_lymphatic', 'client_family_pedicure']);
 });
 
 test('practitioner requirement copy never labels the treatment team as employees', () => {
