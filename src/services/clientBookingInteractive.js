@@ -26,21 +26,20 @@ function treatmentTeamLines() {
 
 function bookingDiscoveryInteractive() {
   return {
-    type: 'button',
+    type: 'list',
     body: [
       '*What would you like to book? 🌿*',
       '',
-      'Choose a service family first. Shiloh will then show only active CRM treatments and the practitioner(s) currently eligible for them.',
-      '',
-      'Beauty & Aesthetics — Marietjie',
-      'Massage — Christel or Abigail',
-      'Lymphatic Drainage — Abigail',
+      'Choose a service below. Shiloh will then show only active CRM treatments and the practitioner(s) currently eligible for them.',
     ].join('\n'),
-    buttons: [
-      { id: 'client_family_beauty', title: 'Beauty & Aesthetics' },
-      { id: 'client_family_massage', title: 'Massage' },
-      { id: 'client_family_lymphatic', title: 'Lymphatic Drainage' },
+    buttonText: 'Choose service',
+    rows: [
+      { id: 'client_family_beauty', title: 'Beauty & Aesthetics', description: 'Beauty and aesthetics treatments' },
+      { id: 'client_family_massage', title: 'Massage', description: 'Massage treatments' },
+      { id: 'client_family_lymphatic', title: 'Lymphatic Drainage', description: 'Lymphatic drainage treatments' },
+      { id: 'client_family_pedicure', title: 'Elim MediHeel Pedicures', description: 'Elim MediHeel pedicure treatments' },
     ],
+    sectionTitle: 'Shiloh treatments',
   };
 }
 
