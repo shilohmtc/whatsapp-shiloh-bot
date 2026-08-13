@@ -11,11 +11,7 @@ const { pool } = require('../src/db/pool');
 async function withStubbedQuery(stub, fn) {
   const original = pool.query;
   pool.query = stub;
-  try {
-    return await fn();
-  } finally {
-    pool.query = original;
-  }
+  try { return await fn(); } finally { pool.query = original; }
 }
 
 test('registration completion resumes a bare booking intent instead of treating appointment as a service', () => {
@@ -23,17 +19,14 @@ test('registration completion resumes a bare booking intent instead of treating 
   assert.doesNotMatch(webhook, /processBookingMessage\(from,"I want to book an appointment"\)/);
 });
 
-test('bare booking start produces treatment discovery with no invalid appointment service', async () => {
+test('bare booking start produces service-family discovery with no invalid appointment service', async () => {
   let intent = null;
   const result = await withStubbedQuery(async (sql, params = []) => {
     const text = String(sql);
     if (text.includes('CREATE TABLE IF NOT EXISTS booking_intents') || text.includes('ALTER TABLE booking_intents')) return { rows: [], rowCount: 0 };
     if (text.includes('SELECT phone, service_text') && text.includes('FROM booking_intents WHERE phone = $1')) return { rows: intent ? [intent] : [], rowCount: intent ? 1 : 0 };
     if (text.includes('INSERT INTO booking_intents')) {
-      intent = {
-        phone: params[0], service_text: params[1], preferred_date: params[2], preferred_time: params[3],
-        therapist_text: params[4], service_verified: params[5], status: params[6],
-      };
+      intent = { phone: params[0], service_text: params[1], preferred_date: params[2], preferred_time: params[3], therapist_text: params[4], service_verified: params[5], status: params[6] };
       return { rows: [intent], rowCount: 1 };
     }
     throw new Error(`Unexpected query in regression: ${text}`);
@@ -43,6 +36,9 @@ test('bare booking start produces treatment discovery with no invalid appointmen
   assert.equal(decorated.handled, true);
   assert.equal(decorated.intent.service_text, null);
   assert.equal(decorated.interactive.type, 'button');
-  assert.match(decorated.interactive.body, /Choose a treatment first/);
-  assert.deepEqual(decorated.interactive.buttons.map((button) => button.id), ['client_browse_services', 'client_practitioners']);
+  assert.match(decorated.interactive.body, /What would you like to book/i);
+  assert.match(decorated.interactive.body, /Beauty & Aesthetics — Marietjie/);
+  assert.match(decorated.interactive.body, /Massage — Christel or Abigail/);
+  assert.match(decorated.interactive.body, /Lymphatic Drainage — Abigail/);
+  assert.deepEqual(decorated.interactive.buttons.map((button) => button.id), ['client_family_beauty', 'client_family_massage', 'client_family_lymphatic']);
 });

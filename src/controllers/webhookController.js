@@ -13,6 +13,7 @@ const { processAppointmentChangeMessage } = require("../services/appointmentChan
 const { processCustomerExperienceMessage } = require("../services/customerExperience");
 const { processCustomerCareMessage } = require("../services/customerCare");
 const { processClientIdentityMessage } = require("../services/clientIdentityOnboarding");
+const { processClientServiceFamilyMessage } = require("../services/clientServiceFamilyDiscovery");
 const { processClientDiscoveryMessage } = require("../services/clientDiscoveryMenu");
 const { processAdminWalkinMessage } = require("../services/adminWalkin");
 const { processAdminHelpMessage } = require("../services/adminHelp");
@@ -77,6 +78,7 @@ const customerCare=await processCustomerCareMessage(from,text);if(customerCare.h
 const nameGuard=await guardActiveNameConfirmation(from,text);if(nameGuard.handled){await sendWhatsAppMessage(from,nameGuard.reply);return res.sendStatus(200);}
 const identity=await processClientIdentityMessage(from,text);if(identity.handled){let reply=identity.reply;if(identity.identityStatus==="matched_incomplete"&&identity.client?.id){const forced=await forceMatchedClientNameConfirmation(from,identity.client.id);if(forced)reply=`Welcome back, ${identity.client.display_name}. Before I can continue with the booking, please confirm your full name.`;}if(identity.onboardingComplete&&identity.resumeBooking){const booking=decorateClientBookingResult(await processBookingMessage(from,"booking"));if(booking.handled&&booking.interactive){booking.interactive={...booking.interactive,body:`${reply}\n\n${booking.interactive.body}`};await sendAdminResult(from,booking);return res.sendStatus(200);}if(booking.handled&&booking.reply)reply=`${reply}\n\n${sanitizeBookingReply(booking.reply)}`;}await sendWhatsAppMessage(from,reply);return res.sendStatus(200);}
 if(identity.identityStatus==="matched_incomplete"&&identity.client?.display_name&&isGreetingOnly(text)){await sendWhatsAppMessage(from,`Welcome back, ${identity.client.display_name} 👋 How can I help you today?`);return res.sendStatus(200);}
+const familyDiscovery=await processClientServiceFamilyMessage(from,text);if(familyDiscovery.handled){await sendAdminResult(from,familyDiscovery);return res.sendStatus(200);}
 const clientDiscovery=await processClientDiscoveryMessage(from,text);if(clientDiscovery.handled){await sendAdminResult(from,clientDiscovery);return res.sendStatus(200);}
 const clientAvailability=await processClientAvailabilityMessage(from,text);if(clientAvailability.handled){if(clientAvailability.intent?.status==="awaiting_confirmation"){const availabilityIdentity=await ensureBookingIdentity(from);if(!availabilityIdentity.ready){await sendWhatsAppMessage(from,availabilityIdentity.reply);return res.sendStatus(200);}}await sendAdminResult(from,clientAvailability);return res.sendStatus(200);}
 const scope=evaluateClinicScope(text);if(!scope.allowed){await sendWhatsAppMessage(from,CLINIC_REDIRECT);return res.sendStatus(200);}

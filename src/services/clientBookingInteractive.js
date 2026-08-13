@@ -19,8 +19,8 @@ function treatmentTeamLines() {
   return [
     'Shiloh’s client-facing treatment team:',
     '• Christel — Massage practitioner',
-    '• Abigail — Massage practitioner',
-    '• Marietjie — Esthetician',
+    '• Abigail — Massage & Lymphatic Drainage practitioner',
+    '• Marietjie — Beauty & Aesthetics practitioner',
   ];
 }
 
@@ -28,15 +28,18 @@ function bookingDiscoveryInteractive() {
   return {
     type: 'button',
     body: [
-      '*Book at Shiloh 🌿*',
+      '*What would you like to book? 🌿*',
       '',
-      ...treatmentTeamLines(),
+      'Choose a service family first. Shiloh will then show only active CRM treatments and the practitioner(s) currently eligible for them.',
       '',
-      'Choose a treatment first to see only the practitioners who currently offer it, or choose a practitioner first to see only their active CRM-mapped services.',
+      'Beauty & Aesthetics — Marietjie',
+      'Massage — Christel or Abigail',
+      'Lymphatic Drainage — Abigail',
     ].join('\n'),
     buttons: [
-      { id: 'client_browse_services', title: 'Choose treatment' },
-      { id: 'client_practitioners', title: 'Choose practitioner' },
+      { id: 'client_family_beauty', title: 'Beauty & Aesthetics' },
+      { id: 'client_family_massage', title: 'Massage' },
+      { id: 'client_family_lymphatic', title: 'Lymphatic Drainage' },
     ],
   };
 }
