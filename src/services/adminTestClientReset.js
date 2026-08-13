@@ -4,6 +4,7 @@ const { normalizePhone } = require('./clientIdentityOnboarding');
 const TEST_CLIENTS = Object.freeze({
   chenique: 'Chenique',
   juvan: 'Juvan',
+  dummy_test: 'Dummy Test',
 });
 
 function normalizedName(admin) {
@@ -33,11 +34,11 @@ async function getAdmin(sender, db = pool) {
 
 function targetFromText(text = '') {
   const raw = String(text).trim();
-  let match = raw.match(/^reset test client (chenique|juvan)$/i);
-  if (match) return { mode: 'preview', key: match[1].toLowerCase() };
-  match = raw.match(/^admin_test_client_reset_confirm:(chenique|juvan)$/i);
+  let match = raw.match(/^reset test client (chenique|juvan|dummy test)$/i);
+  if (match) return { mode: 'preview', key: match[1].toLowerCase().replace(/\s+/g, '_') };
+  match = raw.match(/^admin_test_client_reset_confirm:(chenique|juvan|dummy_test)$/i);
   if (match) return { mode: 'confirm', key: match[1].toLowerCase() };
-  match = raw.match(/^admin_test_client_reset_cancel:(chenique|juvan)$/i);
+  match = raw.match(/^admin_test_client_reset_cancel:(chenique|juvan|dummy_test)$/i);
   if (match) return { mode: 'cancel', key: match[1].toLowerCase() };
   return null;
 }
