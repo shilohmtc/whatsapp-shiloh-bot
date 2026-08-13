@@ -31,6 +31,7 @@ const { ensureJeanPierreAdminCapabilities } = require("./src/services/jeanPierre
 const { startMandatoryDemoCleanupScheduler } = require("./src/services/demoMandatoryCleanup");
 const { startAttendanceFinalizationReminderScheduler } = require("./src/services/attendanceFinalizationReminders");
 const { submitStaffFinalizationTemplate } = require("./src/services/staffFinalizationTemplateProvisioning");
+const { submitBookingConfirmationTemplate } = require("./src/services/bookingConfirmationTemplateProvisioning");
 
 const app = express();
 app.disable("x-powered-by");
@@ -76,6 +77,23 @@ async function provisionStaffFinalizationTemplateSafely() {
   }
 }
 
+async function provisionBookingConfirmationTemplateSafely() {
+  try {
+    const result = await submitBookingConfirmationTemplate();
+    logger.info({
+      ok: result?.ok === true,
+      submitted: result?.submitted === true,
+      reason: result?.reason || null,
+      templateName: result?.templateName || null,
+      configuredTemplateName: result?.configuredTemplateName || null,
+      providerStatus: result?.provider?.status || result?.template?.status || null,
+      providerCategory: result?.provider?.category || result?.template?.category || null,
+    }, "Booking confirmation WhatsApp template provisioning checked");
+  } catch (error) {
+    logger.warn({ err: error }, "Booking confirmation WhatsApp template provisioning failed; plain-text confirmation remains active");
+  }
+}
+
 const PORT = process.env.PORT || 3000;
 let server;
 async function start() {
@@ -85,6 +103,7 @@ async function start() {
   if (!jeanPierreAccess) throw new Error('Jean-Pierre business admin capability clone could not be initialized');
   logger.info({ configured: true, businessRole: jeanPierreAccess.business_role }, "Jean-Pierre business admin access verified");
   await provisionStaffFinalizationTemplateSafely();
+  await provisionBookingConfirmationTemplateSafely();
   server = app.listen(PORT, () => {
     logger.info({ port: PORT }, "Shiloh started");
     startConversationSessionCleanupScheduler();
