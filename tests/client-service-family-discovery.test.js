@@ -5,9 +5,12 @@ const path = require('node:path');
 
 const familyPath = path.join(__dirname, '..', 'src', 'services', 'clientServiceFamilyDiscovery.js');
 const webhookPath = path.join(__dirname, '..', 'src', 'controllers', 'webhookController.js');
+const appPath = path.join(__dirname, '..', 'app.js');
 const familySource = fs.readFileSync(familyPath, 'utf8');
 const webhookSource = fs.readFileSync(webhookPath, 'utf8');
-const { CLIENT_COPY } = require('../src/config/clientCopy');
+const appSource = fs.readFileSync(appPath, 'utf8');
+const { CLIENT_FAMILY_COPY } = require('../src/config/clientFamilyCopy');
+const { presentClientFamilyResult } = require('../src/presentation/clientFamilyPresentation');
 const {
   FAMILY_RULES,
   familyFilterSql,
@@ -24,13 +27,15 @@ test('service-family ownership is explicit and client-facing', () => {
   });
 });
 
-test('family treatment prompt is client-friendly and sourced from safe copy config', () => {
-  assert.equal(CLIENT_COPY.familyTreatmentPrompt, 'Choose the treatment you’d like to book. 🌿');
-  const view = familyServicesInteractive('beauty', [{ id: 1, name: 'Facial', duration_minutes: 60, price: 500 }], 1);
+test('family treatment prompt is client-friendly at the presentation boundary', () => {
+  assert.equal(CLIENT_FAMILY_COPY.treatmentPrompt, 'Choose the treatment you’d like to book. 🌿');
+  const raw = familyServicesInteractive('beauty', [{ id: 1, name: 'Facial', duration_minutes: 60, price: 500 }], 1);
+  const view = presentClientFamilyResult({ handled: true, interactive: raw }).interactive;
   assert.match(view.body, /Beauty & Aesthetics • Marietjie/);
   assert.match(view.body, /Choose the treatment you’d like to book\. 🌿/);
   assert.doesNotMatch(view.body, /CRM|eligible|active treatment/i);
-  assert.match(familySource, /CLIENT_COPY\.familyTreatmentPrompt/);
+  assert.match(appSource, /presentClientFamilyResult/);
+  assert.match(appSource, /processClientServiceFamilyMessage/);
 });
 
 test('family queries remain CRM-backed, active-only and client-bookable', () => {
