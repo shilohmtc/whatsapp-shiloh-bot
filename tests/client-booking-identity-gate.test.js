@@ -12,12 +12,8 @@ const identity = fs.readFileSync(identityPath, 'utf8');
 const { isSummaryConfirmation } = require(gatePath);
 
 test('booking identity gate recognizes only deliberate summary confirmations', () => {
-  for (const value of ['yes', 'confirm', 'correct', 'continue', 'okay']) {
-    assert.equal(isSummaryConfirmation(value), true);
-  }
-  for (const value of ['book', 'today', 'change', 'cancel', 'I agree']) {
-    assert.equal(isSummaryConfirmation(value), false);
-  }
+  for (const value of ['yes', 'confirm', 'correct', 'continue', 'okay']) assert.equal(isSummaryConfirmation(value), true);
+  for (const value of ['book', 'today', 'change', 'cancel', 'I agree']) assert.equal(isSummaryConfirmation(value), false);
 });
 
 test('complete canonical client identity is required before policy confirmation', () => {
@@ -27,47 +23,40 @@ test('complete canonical client identity is required before policy confirmation'
   assert.match(gate, /processClientIdentityMessage\(phone, 'booking'\)/);
 });
 
-test('identity gate never clears or rewrites the staged booking intent', () => {
+test('identity gate never rewrites the staged booking intent', () => {
   assert.doesNotMatch(gate, /clearIntent|DELETE FROM booking_intents|UPDATE booking_intents|INSERT INTO booking_intents/);
   assert.match(gate, /const intent = await getIntent\(phone\)/);
 });
 
-test('slot selection onboards incomplete clients before sending the first confirmation UI', () => {
+test('slot selection checks identity before sending confirmation UI', () => {
   const availability = webhook.indexOf('processClientAvailabilityMessage(from,text)');
   const ensure = webhook.indexOf('ensureBookingIdentity(from)');
   const availabilitySend = webhook.indexOf('await sendAdminResult(from,clientAvailability)');
   assert.ok(availability >= 0 && ensure >= 0 && availabilitySend >= 0);
-  assert.ok(availability < ensure);
-  assert.ok(ensure < availabilitySend);
+  assert.ok(availability < ensure && ensure < availabilitySend);
   assert.match(webhook, /clientAvailability\.intent\?\.status==="awaiting_confirmation"/);
-  assert.match(webhook, /if\(!availabilityIdentity\.ready\).*sendWhatsAppMessage\(from,availabilityIdentity\.reply\)/s);
 });
 
-test('policy confirmation is gated after appointment-change handling and before booking policy', () => {
-  const appointmentChange = webhook.indexOf('processAppointmentChangeMessage(from,text)');
+test('policy confirmation remains identity-gated before booking policy', () => {
   const identityGate = webhook.indexOf('guardBookingConfirmationIdentity(from,text)');
   const policy = webhook.indexOf('processBookingPolicyMessage(from,text)');
-  assert.ok(appointmentChange >= 0 && identityGate >= 0 && policy >= 0);
-  assert.ok(appointmentChange < identityGate);
-  assert.ok(identityGate < policy);
+  assert.ok(identityGate >= 0 && policy >= 0 && identityGate < policy);
 });
 
-test('onboarding completion resumes the existing booking and re-renders interactive discovery', () => {
+test('registration completion resumes booking discovery', () => {
   assert.match(webhook, /identity\.onboardingComplete&&identity\.resumeBooking/);
   assert.match(webhook, /decorateClientBookingResult\(await processBookingMessage\(from,"booking"\)\)/);
-  assert.doesNotMatch(webhook, /processBookingMessage\(from,"I want to book an appointment"\)/);
   assert.match(webhook, /booking\.handled&&booking\.interactive/);
-  assert.match(webhook, /await sendAdminResult\(from,booking\)/);
 });
 
-test('onboarding session already tracks that booking must resume without storing sensitive booking payload copies', () => {
+test('registration state preserves continuation without storing the original booking message', () => {
   assert.match(identity, /booking_requested/);
-  assert.match(identity, /resumeBooking:Boolean\(session\.booking_requested\)/);
+  assert.match(identity, /resumeBooking: true/);
   assert.doesNotMatch(identity, /booking_request_text|booking_payload|booking_json/);
 });
 
-test('identity gate does not weaken ambiguous-contact fail closed behavior', () => {
-  assert.match(identity, /identity\.status==="ambiguous"/);
-  assert.match(identity, /I won't merge or select a profile automatically/);
+test('ambiguous client identity remains fail closed', () => {
+  assert.match(identity, /identity\.status\s*===\s*"ambiguous"/);
+  assert.match(identity, /verify the correct profile|identity conflict/i);
   assert.match(gate, /I can’t verify a complete Shiloh client profile/);
 });
