@@ -25,13 +25,14 @@ const serviceIntent = {
   status: 'collecting',
 };
 
-test('booking entry explains the three-person client-facing treatment team', () => {
+test('booking entry explains the three service-family ownership rules', () => {
   const view = bookingDiscoveryInteractive();
   assert.equal(view.type, 'button');
-  assert.match(view.body, /Christel — Massage practitioner/);
-  assert.match(view.body, /Abigail — Massage practitioner/);
-  assert.match(view.body, /Marietjie — Esthetician/);
-  assert.deepEqual(view.buttons.map((button) => button.id), ['client_browse_services', 'client_practitioners']);
+  assert.match(view.body, /Beauty & Aesthetics — Marietjie/);
+  assert.match(view.body, /Massage — Christel or Abigail/);
+  assert.match(view.body, /Lymphatic Drainage — Abigail/);
+  assert.deepEqual(view.buttons.map((button) => button.id), ['client_family_beauty', 'client_family_massage', 'client_family_lymphatic']);
+  assert.ok(view.buttons.every((button) => button.title.length <= 20));
 });
 
 test('Our practitioners chooser labels the three client-facing roles without exposing owner or employee status', () => {
@@ -81,13 +82,10 @@ test('standard discovery keeps Any available explicit and service-scoped', () =>
   assert.match(discovery, /st\.client_bookable = TRUE/);
 });
 
-test('typed booking entry is redirected into treatment-or-practitioner discovery when service is missing', () => {
-  const decorated = decorateClientBookingResult({
-    handled: true,
-    intent: { ...serviceIntent, service_text: null, service_verified: null },
-  });
+test('typed booking entry is redirected into service-family discovery when service is missing', () => {
+  const decorated = decorateClientBookingResult({ handled: true, intent: { ...serviceIntent, service_text: null, service_verified: null } });
   assert.equal(decorated.interactive.type, 'button');
-  assert.deepEqual(decorated.interactive.buttons.map((button) => button.id), ['client_browse_services', 'client_practitioners']);
+  assert.deepEqual(decorated.interactive.buttons.map((button) => button.id), ['client_family_beauty', 'client_family_massage', 'client_family_lymphatic']);
 });
 
 test('practitioner requirement copy never labels the treatment team as employees', () => {
