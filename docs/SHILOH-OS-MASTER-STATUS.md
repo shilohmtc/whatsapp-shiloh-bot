@@ -19,8 +19,14 @@ This file is the **project-management ledger**. Specialist handoffs are executio
 
 ## Current technical baseline
 
-- GitHub `main` currently includes PR #156 (`Clear stale client booking state on home escape`).
-- The dedicated client audit is documented in `docs/HANDOFF-CLIENT-PERSPECTIVE-TESTING-2026-08-13.md`.
+- Before this ledger-only reconciliation, GitHub `main` and Render production were aligned on `640d0b6870632f3eaf21a601f5c70db082b6b521` (PR #160).
+- Client Perspective Testing production fixes through PRs #156–#160 are merged:
+  - #156 clears stale booking intent on client Home/Menu/Back escape paths.
+  - #157 supports the natural sequential registration path name → mobile → DOB while preserving identity-conflict safeguards.
+  - #158 makes client rescheduling atomic across CRM/calendar conflict revalidation and compensates partial Calendar movement on failure.
+  - #159 adds durable per-appointment booking-confirmation delivery claiming to prevent duplicate confirmations on retry/concurrency boundaries.
+  - #160 gates post-appointment follow-up on explicit canonical `completed` attendance only.
+- The dedicated client audit is documented in `docs/HANDOFF-CLIENT-PERSPECTIVE-TESTING-2026-08-13.md`; its original checklist text is historical execution detail where this master reconciliation records newer evidence/status.
 - The prior production handoff remains `docs/HANDOFF-NEXT-CHAT-2026-08-12.md` and is retained as historical/supporting detail, not as a competing master checklist.
 - Every new session must verify current GitHub `main` and Render before relying on a commit/deploy identifier recorded here.
 
@@ -76,6 +82,20 @@ Execution checklist: `docs/HANDOFF-CLIENT-PERSPECTIVE-TESTING-2026-08-13.md`.
 
 This workstream is a child of the broader production acceptance work; it does not replace sections A, B, D or E.
 
+#### Reconciled Client Perspective Testing status — 2026-08-13 session
+
+1. 🟡 **Resume live Dummy Test booking after PR #155** — still requires real Dummy Test WhatsApp retry/acceptance. Do not infer from backend evidence.
+2. 🟡 **Non-mutating end-to-end route audit** — route/regression evidence is clean enough to expose and fix stale Home/Menu/Back booking state in PR #156, but authoritative live CRM family/service/practitioner mapping comparison remains blocked by the Render Postgres connector SSL/TLS failure. Preserve fail-closed rather than declaring full completion.
+3. ✅ **Client registration acceptance matrix** — regression-audited and production-fixed through PR #157, including sequential mobile entry, supported normalization, identity conflict protection, incomplete-client continuation and post-registration service-family transition.
+4. 🟡 **CRM catalogue fidelity audit** — repository/query behavior confirms active-only filtering and CRM-derived presentation/eligibility, but authoritative live CRM catalogue comparison remains blocked by the Render Postgres connector SSL/TLS failure and unavailable fallback read. Do not guess.
+5. ✅ **Date/time availability and Calendar conflict audit** — non-mutating production evidence verified shared/practitioner Calendar reads, stale-slot revalidation, final pre-write conflict checks, practitioner eligibility and fail-closed conflict behavior.
+6. 🟡 **Controlled booking creation acceptance** — backend commit path is policy-gated, transaction-locked, conflict-revalidated and Calendar-compensating, but the required real Dummy Test WhatsApp booking plus exact CRM/Calendar acceptance evidence has not been performed in this session.
+7. 🟡 **Client self-service appointment management** — backend reschedule race/partial-Calendar failure defects were fixed and deployed in PR #158; final cancellation/reschedule acceptance still requires a real controlled Dummy Test appointment from item 6.
+8. 🟡 **Client communication lifecycle** — duplicate booking-confirmation risk fixed in PR #159 and premature follow-up eligibility fixed in PR #160. Backend regressions are green and production-deployed, but real WhatsApp lifecycle acceptance/provider truth remains outstanding; do not promote to complete by inference.
+9. ⬜ **Error recovery / conversational resilience audit** — partially audited. Stale slot actions fail closed, invalid date/time parsing does not silently normalize bad input, and failed final booking writes preserve explicit retry state with transactional CRM rollback/known Calendar compensation. Still investigate the distributed uncertainty edge where Google Calendar may accept an event but the HTTP result is uncertain before Shiloh records it; prove that a rolled-back CRM attempt cannot leave an orphan/duplicate Calendar event when a later retry allocates a different appointment ID. No production fix has yet been justified for this edge.
+10. ⬜ **Client privacy and data-minimization acceptance** — not completed in this session; preserve.
+11. ⬜ **Final Client Perspective release gate** — cannot close until all actionable items are complete or explicitly 🟡, the real Dummy Test happy path is proven, one controlled booking is verified in CRM + Calendar, cancellation/reschedule is accepted, and remaining blockers are documented fail-closed.
+
 Preserved product requirements/decisions:
 
 - New-client registration supports sequential entry and bundled full-name/mobile/DOB input.
@@ -98,13 +118,15 @@ Preserved product requirements/decisions:
 - Verify no invented qualifications, services, ownership claims or eligibility.
 - Ensure service-family UI and free-text answers tell the same operational story.
 - Add regression coverage and production acceptance where gaps are established.
+- Do not treat the partial family/service/practitioner evidence from C1 as completion of this dedicated conversational acceptance item.
 
-### C3. ⬜ True first-time booking acceptance
+### C3. 🟡 True first-time booking acceptance
 
 - Complete a controlled real-client registration -> family -> treatment -> practitioner resolution -> date/time -> confirmation journey.
 - Verify canonical CRM appointment and Google Calendar event.
 - Verify retry/idempotency and supported cancellation/cleanup behavior.
 - `Dummy Test` is the preferred dedicated work-time client identity unless authoritative evidence changes this.
+- Backend prerequisites are substantially regression-covered, but this item is now explicitly human/real-WhatsApp acceptance blocked; do not substitute direct CRM/Calendar mutation for the client path.
 
 ## D. Client lifecycle / automation blockers
 
@@ -139,10 +161,11 @@ Preserved product requirements/decisions:
 
 # Current recommended execution order
 
-1. 🔵 Continue Client Perspective Testing because it is the currently active acceptance workstream; incorporate C2 practitioner-information/service-visibility acceptance rather than losing it.
-2. ⬜ In parallel where non-mutating, continue A2/B1 evidence gathering without requiring A1 attendance outcomes.
-3. 🟡 Preserve A1, A3, D1 and E1 until their real external/human facts become available.
-4. ⬜ Return to safe P4 engineering only after the higher-priority production acceptance work is clean.
+1. 🔵 Continue Client Perspective Testing at C1 item 9 (Error recovery / conversational resilience), because items 1, 2, 4, 6, 7 and 8 are preserved 🟡 and item 9 is the highest-priority genuine ⬜ item.
+2. ⬜ Incorporate C2 practitioner-information/service-visibility acceptance without losing its separate conversational requirements; do not infer live CRM mapping truth while the authoritative read remains blocked.
+3. ⬜ In parallel where non-mutating, continue A2/B1 evidence gathering without requiring A1 attendance outcomes.
+4. 🟡 Preserve A1, A3, C3, D1 and E1 until their real external/human facts become available.
+5. ⬜ Return to safe P4 engineering only after the higher-priority production acceptance work is clean.
 
 # Standard new-chat prompt
 
