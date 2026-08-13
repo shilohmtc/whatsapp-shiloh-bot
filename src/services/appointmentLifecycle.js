@@ -112,7 +112,7 @@ async function claimDueFollowup() {
   const result = await pool.query(
     `UPDATE appointment_lifecycle a SET followup_sent_at=NOW(),updated_at=NOW()
      WHERE a.id=(SELECT id FROM appointment_lifecycle
-       WHERE status IN ('confirmed','confirmed_by_client','completed') AND followup_sent_at IS NULL
+       WHERE status='completed' AND followup_sent_at IS NULL
          AND COALESCE(appointment_ends_at,appointment_at)<=NOW()-($1*INTERVAL '1 hour')
        ORDER BY COALESCE(appointment_ends_at,appointment_at) ASC FOR UPDATE SKIP LOCKED LIMIT 1)
      RETURNING a.*`, [FOLLOWUP_HOURS]
