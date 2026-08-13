@@ -1,0 +1,90 @@
+# Shiloh OS — Provider / Subprocessor Data-Flow Register
+
+Updated: 2026-08-13
+Status: governance evidence register; **not legal approval and not a destructive-processing authorization**
+
+## Purpose and authority boundary
+
+This register documents externally processed Shiloh data using two deliberately separate evidence classes:
+
+1. **Code-observed / infrastructure-observed fact** — what the deployed Shiloh implementation currently sends, receives, stores, or requests.
+2. **Provider / legal fact requiring account-level confirmation** — current public provider documentation may describe controls or contractual terms, but this register does not infer that Shiloh has accepted a particular DPA, enabled a particular retention control, obtained a lawful transfer basis, or completed a POPIA assessment.
+
+This file is subordinate to `docs/SHILOH-OS-MASTER-STATUS.md`. It does not establish a retention period, lawful basis, Section 72 transfer mechanism, prior-authorisation conclusion, consent, or owner approval. Where evidence is missing, the state is `REVIEW_REQUIRED` rather than guessed.
+
+## POPIA cross-border control gate
+
+Shiloh operates in South Africa. POPIA regulates transfers of personal information outside the Republic. A foreign transfer must therefore be assessed against the applicable Section 72 route and any other applicable POPIA obligations before this register may be promoted from technical mapping to an approved legal/governance record.
+
+No provider row below is marked `LEGALLY_APPROVED`. Public vendor terms, certifications, security claims, or availability of a DPA are **not** treated as proof that Shiloh's own transfer, notice, contract, purpose, retention, or account configuration is compliant.
+
+The existing health-data red line remains controlling: medical history, medications, allergies, pregnancy/contraindication information, treatment notes, or other health/special personal information must not be moved into generic AI profile/preferences, ordinary conversation memory, or general-purpose provider context without a separately designed protected domain and explicit legal/governance review.
+
+## Provider register
+
+| Provider / system | Shiloh purpose | Code/infrastructure-observed data boundary | Current technical controls / minimization evidence | External/provider facts reviewed | Unresolved Shiloh decision / evidence | State |
+|---|---|---|---|---|---|---|
+| **Meta / WhatsApp Cloud API** | Client/staff messaging transport; inbound webhook and outbound messages/templates/interactives | Inbound webhook processing reads the sender WhatsApp identifier (`message.from`) and supported message/interactive content. Logs mask the sender to the final four digits. Outbound Graph API requests send the destination WhatsApp number plus Shiloh-generated message body, interactive content, or template parameters. | Webhook logs avoid full sender numbers; unsupported inbound types are ignored. Outbound API access uses bearer-token authentication. The general AI path receives only the text that survives routing/guards. | Meta's current public WhatsApp/Business terms provide a contractual/data-processing framework and the Tech Provider terms reference Cloud API hosting terms and data-protection obligations. Public terms alone do not prove which exact terms/account agreements Shiloh has accepted. | Confirm the exact WABA/Cloud API contractual entity and accepted terms; record Meta/WhatsApp retention/deletion behavior applicable to the production WABA; document client notice and purpose; confirm any relevant subprocessor/transfer mechanism. | `REVIEW_REQUIRED` |
+| **Render** | Hosts the Node application and production data infrastructure | Production web service `shiloh-whatsapp-bot` is deployed in **Oregon, USA**. Application requests and database-backed Shiloh processing therefore involve infrastructure outside South Africa. | Service uses Render-managed deployment/runtime infrastructure. Shiloh application logging already masks WhatsApp sender numbers in the main webhook path. No claim is made here about all platform/system logs or database backups. | Render publishes a DPA, an authorized-subprocessor process/list, security/compliance material, and region documentation. Render currently documents Oregon as a US deployment region. | Confirm the production database's exact region and backup/retention configuration from authoritative account state; confirm which Render DPA/terms bind Shiloh; review current authorized subprocessors and notification process; determine and document the applicable POPIA Section 72 transfer basis; define deletion/backup handling. | `REVIEW_REQUIRED` |
+| **OpenAI API** | General conversational response generation and embeddings/AI-supported functions where invoked | `src/services/ai.js` sends the current user message as `input` plus Shiloh-generated `instructions` built from the allowlisted client profile and authoritative knowledge. The current Responses request explicitly sets `store: true` and may send `previous_response_id`. Local response-ID reuse is separately bounded by Shiloh's P-PRIV-2 controls. | P-PRIV-1 excludes opaque/unclassified profile attributes from general AI context. P-PRIV-2 bounds local response-ID reuse. Usage logs record provider/model/response ID/token counts rather than prompt text in `ai.js`. Health/special-personal-information use in generic AI context is prohibited by project policy. | OpenAI's current official API data-controls documentation states API data is not used for model training by default unless the customer opts in. It also documents default abuse-monitoring retention and Responses API application-state behavior; with `store: true`, response state is retained by the provider under the documented Responses retention rules. Zero Data Retention/Modified Abuse Monitoring are separate account-level controls subject to eligibility/configuration. | Verify Shiloh's actual OpenAI organization/project data-control setting; determine whether conversation continuity can safely move toward `store:false` or another approved configuration without degrading required functionality; confirm the binding DPA/services agreement and transfer basis; document deletion/data-subject handling for provider-side state. | `REVIEW_REQUIRED` |
+| **Google Calendar API / Google Workspace** | Availability checking and human booking diary/mirror | Shiloh currently requests the broad `https://www.googleapis.com/auth/calendar` scope. Booking events visibly place service/treatment, client and practitioner in the summary; the description repeats CRM appointment ID, client, service, practitioner, location and source; private extended properties separately store appointment/source/staff/service identifiers. Availability reads list event details to determine conflicts. | Extended properties used for machine synchronization are private to the relevant event/calendar copy. Deterministic appointment IDs and CRM authority reduce reliance on free-text matching. Current design remains fail-closed around calendar uncertainty. | Google documents narrower Calendar scopes and recommends requesting the most narrowly focused scope possible. Google also documents event visibility controls and private extended properties. | Establish authoritative staff diary requirements: whether client name, treatment/service, practitioner and location must be human-visible and on which calendars. Then minimize duplicated visible fields and assess whether the current broad Calendar scope can be narrowed without breaking availability/write/reconciliation behavior. Confirm Workspace account sharing/ACLs, retention/deletion rules, binding contractual/data-processing terms and transfer basis. | `REVIEW_REQUIRED` |
+
+## Code evidence map
+
+### Meta / WhatsApp
+
+- `src/controllers/webhookController.js`
+  - extracts sender identifier and supported inbound text/interactive content;
+  - masks phone numbers in the principal webhook logs;
+  - routes content through guarded business/client flows before the general AI fallback.
+- `src/services/whatsapp.js`
+  - sends the destination WhatsApp identifier and message/template/interactive payload to Meta Graph API;
+  - logs provider message ID rather than the outbound body on success.
+
+### OpenAI
+
+- `src/services/ai.js`
+  - sends `input: message` and generated instructions;
+  - explicitly uses `store: true`;
+  - may continue provider state with `previous_response_id`;
+  - logs usage metadata without logging prompt text in this service.
+- P-PRIV-1/P-PRIV-2 controls remain documented in the Master ledger and their regression history.
+
+### Google Calendar
+
+- `src/services/googleBookingCalendar.js`
+  - currently uses the broad Calendar scope;
+  - duplicates booking details across visible summary, visible description and private extended properties;
+  - mirrors bookings to shared/practitioner calendars where configured;
+  - reads events for conflict detection.
+
+### Render
+
+- Authoritative Render service inspection on 2026-08-13 confirmed the production service region as Oregon, USA and the deployed branch as `main`.
+- This register intentionally does not infer the production Postgres region, backup retention or datastore deletion policy from the web-service region; those require separate authoritative account evidence.
+
+## External source register reviewed 2026-08-13
+
+Public primary/authoritative materials reviewed for this technical governance snapshot:
+
+- South African Government — Protection of Personal Information Act 4 of 2013.
+- Information Regulator (South Africa) — POPIA guidance / prior-authorisation materials.
+- OpenAI — API Data Controls in the OpenAI Platform; current Data Processing Addendum / business-services legal materials.
+- Google for Developers — Calendar API authorization scopes, event sharing/visibility, extended properties, and API user-data policy.
+- Render — Regions documentation and Data Processing Addendum.
+- Meta — current public Meta/WhatsApp business and technology-provider legal materials relevant to WhatsApp Business Solution / Cloud API processing.
+
+These public materials are evidence that provider controls/frameworks exist. They are **not** evidence that Shiloh has completed account-specific configuration or contractual/legal approval.
+
+## Required closure evidence
+
+C1.10 provider/cross-border governance must remain open until, at minimum:
+
+1. Shiloh's responsible owner/legal authority records the applicable lawful processing and cross-border transfer basis for each personal-data flow.
+2. Account-level provider/DPA/terms status is evidenced rather than inferred from public webpages.
+3. Provider retention/deletion and backup handling relevant to Shiloh is documented, including OpenAI Responses state and Render datastore/backups.
+4. Google Calendar human-diary requirements and ACL/access scope are authoritatively established, then the event payload and OAuth scope are minimized to the least functionality-compatible level.
+5. The privacy notice/data-subject handling process accurately describes material provider categories and international processing.
+6. Any future special-personal-information processing is separately designed and assessed before use.
+
+Until those gates are met, no real erasure/de-identification executor may be enabled merely because this data-flow map exists.
