@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'services', 'appointmentChange.js'), 'utf8');
+const webhookSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'controllers', 'webhookController.js'), 'utf8');
 
 test('appointment change intents remain isolated from onboarding state', () => {
   assert.match(source, /INSERT INTO appointment_change_intents/);
@@ -11,7 +12,8 @@ test('appointment change intents remain isolated from onboarding state', () => {
 });
 
 test('bare RESCHEDULE command enters canonical appointment-change flow and carries forward the existing booking', () => {
-  assert.match(source, /\^\s*reschedule\s*\$/i);
+  assert.match(webhookSource, /\^\(reschedule\|cancel\)\$/i);
+  assert.match(webhookSource, /processAppointmentChangeMessage\(from,appointmentChangeText\)/);
   assert.match(source, /if\(rows\.length===1\)return\{appointment:rows\[0\]\}/);
   assert.match(source, /What new day or date would you prefer\?/);
 });
