@@ -398,16 +398,13 @@ async function commitAcceptedClientBooking(phone) {
       status: 'created',
       appointmentId: appointment.id,
       reply: [
-        `Booking created successfully — appointment #${appointment.id}.`,
+        'Your appointment is confirmed. We look forward to seeing you! 🌿',
+        '',
         `• Service: ${canonical.service_name}`,
         `• Practitioner: ${canonical.staff_name}`,
         `• Time: ${formatLocalDateTime(startsAt)}`,
         `• Location: ${canonical.location_name}`,
-        sharedCalendarResult.enabled ? '• Shiloh — Bookings: synced' : null,
-        practitionerCalendarResult.enabled && practitionerCalendarResult.configured ? `• ${canonical.staff_name} Google Calendar: synced` : null,
-        '',
-        'Your appointment is now confirmed in Shiloh’s canonical CRM after final availability and calendar revalidation.',
-      ].filter(Boolean).join('\n'),
+      ].join('\n'),
     };
   } catch (error) {
     try { await db.query('ROLLBACK'); } catch (_) {}
