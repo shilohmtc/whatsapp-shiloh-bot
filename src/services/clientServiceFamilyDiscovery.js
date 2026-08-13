@@ -76,7 +76,7 @@ async function listFamilyEligiblePractitioners(family, serviceId) {
   const names = family === 'massage' ? ['christel', 'abigail'] : family === 'beauty' ? ['marietjie'] : family === 'lymphatic' ? ['abigail'] : [];
   if (!names.length) return [];
   const result = await pool.query(`
-    SELECT DISTINCT st.id, st.display_name
+    SELECT st.id, st.display_name
       FROM staff st
       JOIN staff_services ss ON ss.staff_id = st.id
       JOIN services s ON s.id = ss.service_id
@@ -86,6 +86,7 @@ async function listFamilyEligiblePractitioners(family, serviceId) {
        AND st.resource_type = 'practitioner'
        AND st.client_bookable = TRUE
        AND LOWER(st.display_name) = ANY($2::text[])
+     GROUP BY st.id, st.display_name
      ORDER BY CASE LOWER(st.display_name) WHEN 'christel' THEN 1 WHEN 'abigail' THEN 2 WHEN 'marietjie' THEN 3 ELSE 9 END,
               st.display_name, st.id
   `, [Number(serviceId), names]);
