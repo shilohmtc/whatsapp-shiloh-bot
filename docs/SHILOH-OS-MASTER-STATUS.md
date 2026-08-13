@@ -19,13 +19,17 @@ This file is the **project-management ledger**. Specialist handoffs are executio
 
 ## Current technical baseline
 
-- Before this ledger-only reconciliation, GitHub `main` and Render production were aligned on `c0bb3d6325ad300913c8a91aeff4c31091102f86`, whose parent production code baseline was `640d0b6870632f3eaf21a601f5c70db082b6b521` (PR #160).
+- At the start of this reconciliation, GitHub `main` and Render production were aligned on `3b50cdabb64ae475b6761508fab4bf5c12fd0e1f`; its production-code ancestry includes `640d0b6870632f3eaf21a601f5c70db082b6b521` (PR #160) plus ledger-only reconciliation commits.
 - Client Perspective Testing production fixes through PRs #156–#160 are merged:
   - #156 clears stale booking intent on client Home/Menu/Back escape paths.
   - #157 supports the natural sequential registration path name → mobile → DOB while preserving identity-conflict safeguards.
   - #158 makes client rescheduling atomic across CRM/calendar conflict revalidation and compensates partial Calendar movement on failure.
   - #159 adds durable per-appointment booking-confirmation delivery claiming to prevent duplicate confirmations on retry/concurrency boundaries.
   - #160 gates post-appointment follow-up on explicit canonical `completed` attendance only.
+- Earlier 12 Aug Admin/client-booking foundations are also in the deployed ancestry and remain regression evidence, not a substitute for unfinished live acceptance:
+  - PR #104 / `b822331d1e8f64ae822aa8e0cc5e084e2bd5dedd` made successful Demo Client cleanup mandatory and fail-closed.
+  - Admin demo access/escape, natural DOB input, appointment routing, reporting integrity, Last Week earnings, and guided client lookup were subsequently merged and production-promoted through PRs #105–#108, including `eef27f4a9658e6a21f438a414f9e914fe93f1c94` and `0bbb74761eda883fce561c3904426f57edce8213`.
+  - These foundations do **not** close the remaining role-specific Admin acceptance, reporting acceptance, practitioner-information, or true-client booking gates below.
 - Privacy/data-minimization hardening already present in the deployed ancestry includes P-PRIV-1 through the currently implemented P-PRIV-4 gates: fail-closed AI profile preference allowlisting, bounded local OpenAI conversation-state retention, short-lived temporary onboarding/walk-in staging retention, non-destructive client privacy inventory/retention planning, and privacy-request identity-verification/owner-authorization workflow state. Destructive privacy execution remains intentionally disabled.
 - The dedicated client audit is documented in `docs/HANDOFF-CLIENT-PERSPECTIVE-TESTING-2026-08-13.md`; its original checklist text is historical execution detail where this master reconciliation records newer evidence/status.
 - The prior production handoff remains `docs/HANDOFF-NEXT-CHAT-2026-08-12.md` and is retained as historical/supporting detail, not as a competing master checklist.
@@ -49,6 +53,7 @@ This file is the **project-management ledger**. Specialist handoffs are executio
 - After A1 is resolved, re-run Abigail and Christel `This Month` reports and verify pending/final state from CRM truth.
 - Test Marietjie -> Admin -> Reports -> Marietjie earnings -> This Month.
 - Inspect any Marietjie pending visits through her own queue; do not assume zero.
+- Preserve the already-deployed earnings period choices Today / This Week / Last Week / This Month and the fail-closed reporting-integrity behavior; do not treat their presence as real-account acceptance.
 - Fix only established defects.
 
 ### A3. 🟡 Staff finalization reminder template
@@ -63,12 +68,23 @@ This file is the **project-management ledger**. Specialist handoffs are executio
 - Continue only genuinely unfinished real-WhatsApp role-specific paths for Christel, Abigail, Marietjie and Jean-Pierre.
 - Do not redo regression-locked coverage.
 - Verify section -> action -> guarded owner -> Back/Menu behavior and role visibility.
+- 12 Aug session evidence to preserve without overstating completion:
+  - numbered top-level appointment selections were repaired so displayed Today/Tomorrow choices no longer fall through to the generic assistant;
+  - `Last week's clients` was added as an operational appointment-history view;
+  - `Find a client` now has guided state so a next reply such as `Juvan`, `Find Juvan`, or a mobile number is interpreted as the lookup term;
+  - `Menu` / `Admin Menu` / `Home` can safely escape an unfinished Demo Client session back to Admin Mode;
+  - the audit still identified the architectural risk of relying on dynamic numbered text, so stable real WhatsApp interactive-list IDs remain the preferred Admin UX direction where not already implemented.
 
 ### B2. ⬜ Reconcile Jean-Pierre Admin capability and client-test strategy
 
 Prior requirement to preserve:
 - Jean-Pierre needs a practical Admin experience comparable to Christel where business authority permits, but authorization must remain role/authority based rather than blindly cloning certification powers.
 - Jean-Pierre also needs to be able to test the genuine first-time client journey.
+
+Verified Demo Client foundation from the 12 Aug session:
+- controlled Demo Client access was extended to the authorized practitioner-admin test set and regression-locked with practitioner/service eligibility boundaries;
+- successful demo booking cleanup is mandatory/fail-closed, with demo appointment/calendar cleanup and synthetic-client deactivation while preserving audit evidence;
+- unfinished demo state can be escaped safely to Admin Mode without deleting a created real appointment.
 
 Decision rule:
 - Do **not** disable or weaken Jean-Pierre's production Admin identity merely to test client behavior until the identity-routing architecture is audited.
@@ -87,7 +103,7 @@ This workstream is a child of the broader production acceptance work; it does no
 
 1. 🟡 **Resume live Dummy Test booking after PR #155** — still requires real Dummy Test WhatsApp retry/acceptance. Do not infer from backend evidence.
 2. 🟡 **Non-mutating end-to-end route audit** — route/regression evidence is clean enough to expose and fix stale Home/Menu/Back booking state in PR #156, but authoritative live CRM family/service/practitioner mapping comparison remains blocked by the Render Postgres connector SSL/TLS failure. Preserve fail-closed rather than declaring full completion.
-3. ✅ **Client registration acceptance matrix** — regression-audited and production-fixed through PR #157, including sequential mobile entry, supported normalization, identity conflict protection, incomplete-client continuation and post-registration service-family transition.
+3. ✅ **Client registration acceptance matrix** — regression-audited and production-fixed through PR #157, including sequential mobile entry, supported normalization, identity conflict protection, incomplete-client continuation and post-registration service-family transition. Earlier Demo Client/onboarding UX work also regression-locked clear natural DOB forms such as `20/10/1988` and `20 Sep 1988`; ambiguous/impossible dates remain rejected.
 4. 🟡 **CRM catalogue fidelity audit** — repository/query behavior confirms active-only filtering and CRM-derived presentation/eligibility, but authoritative live CRM catalogue comparison remains blocked by the Render Postgres connector SSL/TLS failure and unavailable fallback read. Do not guess.
 5. ✅ **Date/time availability and Calendar conflict audit** — non-mutating production evidence verified shared/practitioner Calendar reads, stale-slot revalidation, final pre-write conflict checks, practitioner eligibility and fail-closed conflict behavior.
 6. 🟡 **Controlled booking creation acceptance** — backend commit path is policy-gated, transaction-locked, conflict-revalidated and Calendar-compensating, but the required real Dummy Test WhatsApp booking plus exact CRM/Calendar acceptance evidence has not been performed in this session.
@@ -125,6 +141,7 @@ Preserved product requirements/decisions:
 - Verify no invented qualifications, services, ownership claims or eligibility.
 - Ensure service-family UI and free-text answers tell the same operational story.
 - Add regression coverage and production acceptance where gaps are established.
+- 12 Aug audit evidence established the reason this remains separate: the general AI context had the active service catalogue and booking rules, while practitioner↔service eligibility was enforced deeper in booking/availability and there was no dedicated authoritative public practitioner-profile layer. That finding supports this item; it does not prove the current live route complete.
 - Do not treat the partial family/service/practitioner evidence from C1 as completion of this dedicated conversational acceptance item.
 
 ### C3. 🟡 True first-time booking acceptance
