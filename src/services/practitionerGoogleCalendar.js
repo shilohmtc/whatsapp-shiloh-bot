@@ -5,8 +5,9 @@ const {
   getBookingEventOnCalendar,
   updateBookingEventOnCalendar,
   cancelBookingEventOnCalendar,
-  deterministicEventId,
+  eventIdForAppointment,
 } = require('./googleBookingCalendar');
+const { prepareCalendarWrite } = require('./clientBookingCalendarRecovery');
 
 const ENV_BY_STAFF = Object.freeze({
   christel: 'GOOGLE_CHRISTEL_CALENDAR_ID',
@@ -35,11 +36,6 @@ function requirePractitionerCalendarId(staffName) {
   return calendarId;
 }
 
-function eventIdForAppointment(appointmentId) {
-  if (!appointmentId) throw new Error('appointmentId is required for practitioner calendar synchronization.');
-  return deterministicEventId(`shiloh-appointment:${appointmentId}`);
-}
-
 async function checkPractitionerCalendarAvailability({ staffName, startsAt, endsAt, ignoreEventId = null }) {
   if (!calendarEnabled()) return { enabled: false, configured: false, available: true, conflicts: [] };
   const calendarId = requirePractitionerCalendarId(staffName);
@@ -57,6 +53,17 @@ async function createPractitionerBookingEvent(data) {
   if (!calendarEnabled()) return { enabled: false, configured: false, event: null };
   const calendarId = requirePractitionerCalendarId(data.staffName);
   if (!calendarId) return { enabled: true, configured: false, event: null };
+  const eventId = eventIdForAppointment(data.appointmentId);
+  await prepareCalendarWrite({
+    provider: 'practitioner_google',
+    calendarId,
+    eventId,
+    appointmentId: data.appointmentId,
+    staffName: data.staffName,
+    startsAt: data.startsAt,
+    endsAt: data.endsAt,
+    cancelEvent: cancelBookingEventOnCalendar,
+  });
   const result = await createBookingEventOnCalendar(calendarId, data);
   return { ...result, configured: true, calendarId };
 }
