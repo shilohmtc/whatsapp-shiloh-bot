@@ -19,7 +19,9 @@ This file is the **project-management ledger**. Specialist handoffs are executio
 
 ## Current technical baseline
 
-- GitHub `main` and Render production were positively aligned on `5992f2b87365c6a04a8460746994a991483c1638` after PR #165 (`Add read-only Goldie retention inventory`) was squash-merged and Render deployment `dep-d9uscfrbc2fs739o3v50` reached `live` on 2026-08-13. Verify the live baseline again in every new session before relying on this recorded identifier.
+- GitHub `main` and Render production were positively aligned on `66259e53ae2a897e089e895b322c712cbf4ef1c6` after PR #185 (`Provision booking confirmation utility`) was squash-merged and Render deployment `dep-d9v39h8ae00c73adc38g` reached `live` on 2026-08-13. Verify the live baseline again in every new session before relying on this recorded identifier.
+- Client Perspective Testing subsequently proved the real Dummy Test reschedule date-choice repair from PR #184 in production: `RESCHEDULE` now presents genuine **Today / Tomorrow / Choose another date** controls; `Choose another date` requests free text; a real `Friday` reply preserved HIFU + Marietjie and advanced correctly to Morning / Afternoon / Evening. Do not redo this accepted path.
+- Booking-confirmation Meta-template provisioning is now implemented through PR #185. Production submitted `shiloh_booking_confirmation_v1` as a Meta **UTILITY** template. Render startup evidence initially returned provider status `PENDING`; explicit Meta WhatsApp Manager evidence later on 2026-08-13 shows the exact template as **In review**. `WHATSAPP_BOOKING_CONFIRMATION_TEMPLATE` remains intentionally unset, so the existing plain-text confirmation stays active until the exact template is positively Active/APPROVED. Activation and real WhatsApp template acceptance remain fail-closed WAITING items.
 - Client Perspective Testing production fixes through PRs #156–#160 are merged:
   - #156 clears stale booking intent on client Home/Menu/Back escape paths.
   - #157 supports the natural sequential registration path name → mobile → DOB while preserving identity-conflict safeguards.
@@ -100,11 +102,10 @@ Last evidenced August report state:
 - Preserve the already-deployed earnings period choices and fail-closed reporting-integrity behavior; do not treat backend/regression presence as complete real-account acceptance.
 - Fix only established defects.
 
-### A3. 🟡 Staff finalization reminder template
+### A3. ✅ Staff finalization reminder template provider activation verified
 
-- `shiloh_staff_finalization_v1` last evidenced Meta state: PENDING.
-- Managed provisioning/status discovery exists; reminder sending remains fail-closed until provider status is positively APPROVED.
-- No later approval evidence is present in this reconciliation, so preserve 🟡.
+- Explicit Meta WhatsApp Manager evidence on 2026-08-13 shows `shiloh_staff_finalization_v1` as **Utility / Active — Quality pending**.
+- Managed provisioning/status discovery remains deployed. Preserve template quality monitoring, but do not keep this item blocked on the superseded PENDING state.
 
 ## B. Admin acceptance and Jean-Pierre role/testing
 
@@ -163,7 +164,7 @@ This workstream is a child of the broader production acceptance work; it does no
 5. ✅ **Date/time availability and Calendar conflict audit** — non-mutating production evidence verified shared/practitioner Calendar reads, stale-slot revalidation, final pre-write conflict checks, practitioner eligibility and fail-closed conflict behavior.
 6. 🟡 **Controlled booking creation acceptance** — backend commit path is policy-gated, transaction-locked, conflict-revalidated and Calendar-compensating, but the required real Dummy Test WhatsApp booking plus exact CRM/Calendar acceptance evidence has not been performed in this session.
 7. 🟡 **Client self-service appointment management** — backend reschedule race/partial-Calendar failure defects were fixed and deployed in PR #158; final cancellation/reschedule acceptance still requires a real controlled Dummy Test appointment from item 6.
-8. 🟡 **Client communication lifecycle** — duplicate booking-confirmation risk fixed in PR #159 and premature follow-up eligibility fixed in PR #160. Backend regressions are green and production-deployed, but real WhatsApp lifecycle acceptance/provider truth remains outstanding; do not promote to complete by inference.
+8. 🟡 **Client communication lifecycle** — duplicate booking-confirmation risk fixed in PR #159 and premature follow-up eligibility fixed in PR #160. Real booking confirmation/reminder evidence exists, and PR #185 now provisions the dedicated `shiloh_booking_confirmation_v1` Utility template. Exact Meta Manager evidence on 2026-08-13 shows that new template **In review**; production must continue the existing plain-text booking confirmation until the exact template becomes Active/APPROVED. Once approved, set `WHATSAPP_BOOKING_CONFIRMATION_TEMPLATE=shiloh_booking_confirmation_v1`, verify the resulting Render deployment, then perform a real WhatsApp booking-confirmation template acceptance. Do not infer provider approval.
 9. ✅ **Error recovery / conversational resilience audit — code-level distributed Calendar uncertainty edge closed in production.** Existing stale-slot/date-time/final-write fail-closed behavior remains regression-covered. PR #163 added a durable Calendar write-attempt ledger and exact-slot reconciliation before shared/practitioner provider POSTs. The self-test-first sequence proved the original gap with failing CI #370, then the final concurrency-scoped implementation passed CI #376. A prior unresolved write is considered for cleanup only for the same provider, practitioner and exact start/end slot; if its old appointment exists canonically it is preserved, if the appointment rolled back its deterministic event is removed, and if cleanup cannot be proven the retry throws `CALENDAR_RECONCILIATION_PENDING` before creating another Calendar event. Render positively deployed merge `498a431a6a54afcb655ac7aa615660b2f12ab1a7` live. No real WhatsApp/provider failure injection was performed or inferred; that external evidence remains part of the broader controlled booking acceptance gates rather than a reason to leave this code-level resilience defect open.
 10. 🔵 **Client privacy and data-minimization acceptance** — materially advanced but not complete. Evidence and rules reconciled from the full Hostname Change Implications/privacy source chat:
    - P-PRIV-1 is implemented: PR #82 blocked opaque `custom_attributes` from general AI context, and PR #83 added an exact fail-closed preference allowlist. Unknown, broad, medical-looking or future unclassified profile keys do not reach the general LLM by default.
