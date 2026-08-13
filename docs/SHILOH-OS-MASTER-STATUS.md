@@ -19,13 +19,14 @@ This file is the **project-management ledger**. Specialist handoffs are executio
 
 ## Current technical baseline
 
-- Before this ledger-only reconciliation, GitHub `main` and Render production were aligned on `640d0b6870632f3eaf21a601f5c70db082b6b521` (PR #160).
+- Before this ledger-only reconciliation, GitHub `main` and Render production were aligned on `c0bb3d6325ad300913c8a91aeff4c31091102f86`, whose parent production code baseline was `640d0b6870632f3eaf21a601f5c70db082b6b521` (PR #160).
 - Client Perspective Testing production fixes through PRs #156–#160 are merged:
   - #156 clears stale booking intent on client Home/Menu/Back escape paths.
   - #157 supports the natural sequential registration path name → mobile → DOB while preserving identity-conflict safeguards.
   - #158 makes client rescheduling atomic across CRM/calendar conflict revalidation and compensates partial Calendar movement on failure.
   - #159 adds durable per-appointment booking-confirmation delivery claiming to prevent duplicate confirmations on retry/concurrency boundaries.
   - #160 gates post-appointment follow-up on explicit canonical `completed` attendance only.
+- Privacy/data-minimization hardening already present in the deployed ancestry includes P-PRIV-1 through the currently implemented P-PRIV-4 gates: fail-closed AI profile preference allowlisting, bounded local OpenAI conversation-state retention, short-lived temporary onboarding/walk-in staging retention, non-destructive client privacy inventory/retention planning, and privacy-request identity-verification/owner-authorization workflow state. Destructive privacy execution remains intentionally disabled.
 - The dedicated client audit is documented in `docs/HANDOFF-CLIENT-PERSPECTIVE-TESTING-2026-08-13.md`; its original checklist text is historical execution detail where this master reconciliation records newer evidence/status.
 - The prior production handoff remains `docs/HANDOFF-NEXT-CHAT-2026-08-12.md` and is retained as historical/supporting detail, not as a competing master checklist.
 - Every new session must verify current GitHub `main` and Render before relying on a commit/deploy identifier recorded here.
@@ -93,8 +94,14 @@ This workstream is a child of the broader production acceptance work; it does no
 7. 🟡 **Client self-service appointment management** — backend reschedule race/partial-Calendar failure defects were fixed and deployed in PR #158; final cancellation/reschedule acceptance still requires a real controlled Dummy Test appointment from item 6.
 8. 🟡 **Client communication lifecycle** — duplicate booking-confirmation risk fixed in PR #159 and premature follow-up eligibility fixed in PR #160. Backend regressions are green and production-deployed, but real WhatsApp lifecycle acceptance/provider truth remains outstanding; do not promote to complete by inference.
 9. ⬜ **Error recovery / conversational resilience audit** — partially audited. Stale slot actions fail closed, invalid date/time parsing does not silently normalize bad input, and failed final booking writes preserve explicit retry state with transactional CRM rollback/known Calendar compensation. Still investigate the distributed uncertainty edge where Google Calendar may accept an event but the HTTP result is uncertain before Shiloh records it; prove that a rolled-back CRM attempt cannot leave an orphan/duplicate Calendar event when a later retry allocates a different appointment ID. No production fix has yet been justified for this edge.
-10. ⬜ **Client privacy and data-minimization acceptance** — not completed in this session; preserve.
-11. ⬜ **Final Client Perspective release gate** — cannot close until all actionable items are complete or explicitly 🟡, the real Dummy Test happy path is proven, one controlled booking is verified in CRM + Calendar, cancellation/reschedule is accepted, and remaining blockers are documented fail-closed.
+10. ⬜ **Client privacy and data-minimization acceptance** — materially advanced but not complete. Evidence established in this session:
+   - P-PRIV-1: general AI context now excludes opaque `custom_attributes` and uses an exact fail-closed preference allowlist; unknown, broad, medical-looking or future unclassified preference keys do not reach the LLM by default.
+   - P-PRIV-2: local OpenAI `previous_response_id` mappings have a bounded short reuse window with stale-session rejection/deletion and periodic cleanup. Provider-side OpenAI retention remains a separate documented boundary; no claim is made that local deletion erases provider-side state.
+   - P-PRIV-3: temporary WhatsApp onboarding and staff walk-in staging data has short bounded retention and automatic cleanup that does not delete canonical `clients` or `client_contacts` records.
+   - P-PRIV-4: Shiloh now has a protected non-destructive client privacy inventory, fail-closed retention classifications, and a privacy-request workflow for access/correction/deletion/de-identification/objection with explicit identity-verification evidence and a separate owner-authorization gate. Unknown client-linked data remains `manual_review_required`.
+   - P-PRIV-4 remains deliberately non-destructive: `executionReady=false` and `destructiveActionAllowed=false`; no production erase/de-identification executor exists. The separate owner approval secret is not yet configured, so sensitive authorization transitions remain fail-closed.
+   - Remaining privacy acceptance work: build and regression-test a transaction/rollback execution-plan simulator on synthetic data; establish approved retention/legal basis and owner-facing approval handling; then decide whether any real destructive/de-identification executor is appropriate. Do not mark this item complete until those controls and production acceptance are evidenced.
+11. ⬜ **Final Client Perspective release gate** — cannot close until all actionable items are complete or explicitly 🟡, the real Dummy Test happy path is proven, one controlled booking is verified in CRM + Calendar, cancellation/reschedule is accepted, privacy/error-recovery acceptance is resolved to supported final states, and remaining blockers are documented fail-closed.
 
 Preserved product requirements/decisions:
 
@@ -161,11 +168,12 @@ Preserved product requirements/decisions:
 
 # Current recommended execution order
 
-1. 🔵 Continue Client Perspective Testing at C1 item 9 (Error recovery / conversational resilience), because items 1, 2, 4, 6, 7 and 8 are preserved 🟡 and item 9 is the highest-priority genuine ⬜ item.
-2. ⬜ Incorporate C2 practitioner-information/service-visibility acceptance without losing its separate conversational requirements; do not infer live CRM mapping truth while the authoritative read remains blocked.
-3. ⬜ In parallel where non-mutating, continue A2/B1 evidence gathering without requiring A1 attendance outcomes.
-4. 🟡 Preserve A1, A3, C3, D1 and E1 until their real external/human facts become available.
-5. ⬜ Return to safe P4 engineering only after the higher-priority production acceptance work is clean.
+1. 🔵 Continue Client Perspective Testing at C1 item 9 (Error recovery / conversational resilience), because items 1, 2, 4, 6, 7 and 8 are preserved 🟡 and item 9 remains the highest-priority genuine ⬜ item.
+2. ⬜ Continue C1 item 10 privacy acceptance only after preserving item 9 priority: next privacy engineering step is the synthetic transaction/rollback execution-plan simulator; destructive execution remains disabled.
+3. ⬜ Incorporate C2 practitioner-information/service-visibility acceptance without losing its separate conversational requirements; do not infer live CRM mapping truth while the authoritative read remains blocked.
+4. ⬜ In parallel where non-mutating, continue A2/B1 evidence gathering without requiring A1 attendance outcomes.
+5. 🟡 Preserve A1, A3, C3, D1 and E1 until their real external/human facts become available.
+6. ⬜ Return to safe P4 engineering only after the higher-priority production acceptance work is clean.
 
 # Standard new-chat prompt
 
