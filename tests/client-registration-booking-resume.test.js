@@ -19,7 +19,7 @@ test('registration completion resumes a bare booking intent instead of treating 
   assert.doesNotMatch(webhook, /processBookingMessage\(from,"I want to book an appointment"\)/);
 });
 
-test('bare booking start produces service-family discovery with no invalid appointment service', async () => {
+test('bare booking start produces the four-family service list with no invalid appointment service', async () => {
   let intent = null;
   const result = await withStubbedQuery(async (sql, params = []) => {
     const text = String(sql);
@@ -35,10 +35,18 @@ test('bare booking start produces service-family discovery with no invalid appoi
   const decorated = decorateClientBookingResult(result);
   assert.equal(decorated.handled, true);
   assert.equal(decorated.intent.service_text, null);
-  assert.equal(decorated.interactive.type, 'button');
+  assert.equal(decorated.interactive.type, 'list');
   assert.match(decorated.interactive.body, /What would you like to book/i);
-  assert.match(decorated.interactive.body, /Beauty & Aesthetics — Marietjie/);
-  assert.match(decorated.interactive.body, /Massage — Christel or Abigail/);
-  assert.match(decorated.interactive.body, /Lymphatic Drainage — Abigail/);
-  assert.deepEqual(decorated.interactive.buttons.map((button) => button.id), ['client_family_beauty', 'client_family_massage', 'client_family_lymphatic']);
+  assert.deepEqual(decorated.interactive.rows.map((row) => row.id), [
+    'client_family_beauty',
+    'client_family_massage',
+    'client_family_lymphatic',
+    'client_family_pedicure',
+  ]);
+  assert.deepEqual(decorated.interactive.rows.map((row) => row.title), [
+    'Beauty & Aesthetics',
+    'Massage',
+    'Lymphatic Drainage',
+    'Elim MediHeel Pedicures',
+  ]);
 });
