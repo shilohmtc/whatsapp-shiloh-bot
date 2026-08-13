@@ -35,6 +35,16 @@ test('client availability restricts candidates to active client-bookable practit
   assert.doesNotMatch(source, /Savanna|Pieter/);
 });
 
+test('eligible practitioner query deduplicates without PostgreSQL DISTINCT ORDER BY conflict', () => {
+  const start = source.indexOf('async function resolveEligibleStaff');
+  const end = source.indexOf('async function authoritativeSlotsForIntent');
+  assert.ok(start >= 0 && end > start);
+  const querySource = source.slice(start, end);
+  assert.doesNotMatch(querySource, /SELECT DISTINCT st\.id, st\.display_name/);
+  assert.match(querySource, /GROUP BY st\.id, st\.display_name/);
+  assert.match(querySource, /ORDER BY CASE LOWER\(st\.display_name\)/);
+});
+
 test('already-past slots are filtered before client display', () => {
   const now = new Date('2026-08-12T12:00:00Z');
   assert.equal(isFutureSlot({ starts_at: '2026-08-12T11:59:59Z' }, now), false);
