@@ -6,6 +6,7 @@ const path = require('node:path');
 const root = path.resolve(__dirname, '..');
 const reminder = fs.readFileSync(path.join(root, 'src/services/appointmentReminderConfirmation.js'), 'utf8');
 const care = fs.readFileSync(path.join(root, 'src/services/customerCare.js'), 'utf8');
+const bookingConfirmation = fs.readFileSync(path.join(root, 'src/services/customerBookingConfirmation.js'), 'utf8');
 const { parseConfirmationCommand } = require('../src/services/appointmentReminderConfirmation');
 
 test('reminder confirmation command is deliberately explicit', () => {
@@ -56,4 +57,31 @@ test('customer-care router gives explicit reminder confirmation first chance', (
   const reminderIndex = care.indexOf('processAppointmentReminderConfirmationMessage(phone,text)');
   const birthdayIndex = care.indexOf('const birthdayOn=');
   assert.ok(reminderIndex >= 0 && birthdayIndex >= 0 && reminderIndex < birthdayIndex);
+});
+
+test('booking confirmation has a durable per-appointment delivery claim', () => {
+  assert.match(bookingConfirmation, /CREATE TABLE IF NOT EXISTS customer_message_deliveries/);
+  assert.match(bookingConfirmation, /PRIMARY KEY \(appointment_id,message_kind\)/);
+  assert.match(bookingConfirmation, /ON CONFLICT \(appointment_id,message_kind\) DO NOTHING/);
+  assert.match(bookingConfirmation, /already_sent_or_in_progress/);
+});
+
+test('booking lifecycle is enrolled before the confirmation delivery claim and provider send', () => {
+  const enroll = bookingConfirmation.indexOf('await enrollAppointmentLifecycle');
+  const claim = bookingConfirmation.indexOf('claimed=await claimBookingConfirmation');
+  const sendTemplate = bookingConfirmation.indexOf('await sendWhatsAppTemplate', claim);
+  const sendText = bookingConfirmation.indexOf('await sendWhatsAppMessage', claim);
+  assert.ok(enroll >= 0 && claim > enroll);
+  assert.ok(sendTemplate > claim && sendText > claim);
+});
+
+test('definitive provider failure releases the claim but post-send bookkeeping failure cannot duplicate', () => {
+  assert.match(bookingConfirmation, /providerAccepted=true/);
+  assert.match(bookingConfirmation, /if\(claimed&&!providerAccepted\)/);
+  assert.match(bookingConfirmation, /releaseBookingConfirmationClaim\(appointmentId\)/);
+  assert.match(bookingConfirmation, /providerAccepted\?'delivery_state_uncertain':'error'/);
+  const accepted = bookingConfirmation.indexOf('providerAccepted=true');
+  const marked = bookingConfirmation.indexOf('await markBookingConfirmationSent', accepted);
+  const audit = bookingConfirmation.indexOf("customer.booking_confirmation_sent", marked);
+  assert.ok(accepted >= 0 && marked > accepted && audit > marked);
 });
