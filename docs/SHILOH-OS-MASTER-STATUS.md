@@ -19,47 +19,74 @@ This file is the **project-management ledger**. Specialist handoffs are executio
 
 ## Current technical baseline
 
-- At the start of this reconciliation, GitHub `main` and Render production were aligned on `3b50cdabb64ae475b6761508fab4bf5c12fd0e1f`; its production-code ancestry includes `640d0b6870632f3eaf21a601f5c70db082b6b521` (PR #160) plus ledger-only reconciliation commits.
+- Immediately before this reconciliation, GitHub `main` was `cec710ac06df7e93d2427e14ae62e3621f52cfb8`, a ledger-only Meta portfolio reconciliation commit. Its production-code ancestry includes `640d0b6870632f3eaf21a601f5c70db082b6b521` (PR #160) plus later documentation/ledger reconciliation commits.
 - Client Perspective Testing production fixes through PRs #156–#160 are merged:
   - #156 clears stale booking intent on client Home/Menu/Back escape paths.
   - #157 supports the natural sequential registration path name → mobile → DOB while preserving identity-conflict safeguards.
   - #158 makes client rescheduling atomic across CRM/calendar conflict revalidation and compensates partial Calendar movement on failure.
   - #159 adds durable per-appointment booking-confirmation delivery claiming to prevent duplicate confirmations on retry/concurrency boundaries.
   - #160 gates post-appointment follow-up on explicit canonical `completed` attendance only.
+- Earlier 12 Aug production ancestry includes the attendance/finalization and earnings work reconciled from `docs/HANDOFF-NEXT-CHAT-2026-08-12.md`: explicit attendance certification authority, historical 1–8 Aug Christel/Abigail correction, completed-only earnings integrity, explicit period selection, Marietjie earnings, and practitioner-scoped finalization UX.
 - Earlier 12 Aug Admin/client-booking foundations are also in the deployed ancestry and remain regression evidence, not a substitute for unfinished live acceptance:
   - PR #104 / `b822331d1e8f64ae822aa8e0cc5e084e2bd5dedd` made successful Demo Client cleanup mandatory and fail-closed.
   - Admin demo access/escape, natural DOB input, appointment routing, reporting integrity, Last Week earnings, and guided client lookup were subsequently merged and production-promoted through PRs #105–#108, including `eef27f4a9658e6a21f438a414f9e914fe93f1c94` and `0bbb74761eda883fce561c3904426f57edce8213`.
   - These foundations do **not** close the remaining role-specific Admin acceptance, reporting acceptance, practitioner-information, or true-client booking gates below.
 - Privacy/data-minimization hardening already present in the deployed ancestry includes P-PRIV-1 through the currently implemented P-PRIV-4 gates: fail-closed AI profile preference allowlisting, bounded local OpenAI conversation-state retention, short-lived temporary onboarding/walk-in staging retention, non-destructive client privacy inventory/retention planning, and privacy-request identity-verification/owner-authorization workflow state. Destructive privacy execution remains intentionally disabled.
 - The dedicated client audit is documented in `docs/HANDOFF-CLIENT-PERSPECTIVE-TESTING-2026-08-13.md`; its original checklist text is historical execution detail where this master reconciliation records newer evidence/status.
-- The prior production handoff remains `docs/HANDOFF-NEXT-CHAT-2026-08-12.md` and is retained as historical/supporting detail, not as a competing master checklist.
+- The prior production handoff remains `docs/HANDOFF-NEXT-CHAT-2026-08-12.md` and is retained as historical/supporting detail, not as a competing master checklist. It also preserves two user-supplied shared ChatGPT conversation references as supporting context; they are not production authority.
 - Every new session must verify current GitHub `main` and Render before relying on a commit/deploy identifier recorded here.
 
 # Master remaining-work ledger
 
 ## A. Attendance, finalization and earnings
 
+### A0. ✅ Attendance/earnings production foundation implemented
+
+Evidence reconciled from the 12 Aug production session and handoff:
+- Attendance is explicit human truth; elapsed appointment time or a Calendar event never auto-completes a visit.
+- Certification authority is enforced server-side:
+  - Marietjie -> Marietjie appointments only.
+  - Abigail -> Abigail appointments only.
+  - Christel -> Christel + Abigail appointments.
+  - Jean-Pierre -> business-wide review visibility only; no routine Completed/No-show certification authority.
+- `Finalize past visits` uses practitioner-scoped queues and explicit Completed / No-show decisions; canonical writes update appointment status, status history, lifecycle and CRM audit evidence transactionally.
+- A proof-bound historical correction for **1–8 August 2026 inclusive, Christel + Abigail only** identified 29 exact calendar-linked CRM appointments and recorded all 29 as `completed`; 0 were already completed, cancelled or no-show. The one-time maintenance startup hook was removed afterward. **Do not extend this historical completion assumption beyond 8 August.**
+- Earnings reports are completed-only and fail closed around unresolved attendance, joint-practitioner attribution and missing CRM prices.
+- Earnings routes expose Today / This Week / Last Week / This Month instead of silently defaulting the Reports menu to Today.
+- Abigail rule: 20% commission on qualifying completed solo treatment value + R5,000 fixed salary in monthly view only.
+- Christel rule: 100% of qualifying completed solo treatment value; clinic-wide revenue/other-practitioner earnings remain separate.
+- Marietjie rule: 100% of qualifying completed solo treatment value, no salary.
+- Marietjie earnings are authorized for Marietjie self-view (canonical staff binding), Christel and Jean-Pierre; Abigail has no access.
+- End-of-day/next-morning attendance-finalization reminder infrastructure is implemented and WhatsApp-template gated/fail-closed.
+
 ### A1. 🟡 Six known Christel/Abigail attendance finalizations
 
+Last evidenced August report state:
 - Abigail: 2 unresolved.
 - Christel: 4 unresolved.
 - These require genuine practitioner/supervisor Completed / No-show truth.
 - Never infer outcomes from elapsed time, Calendar events, or earnings needs.
 - Christel may certify Christel + Abigail visits; Abigail may certify Abigail visits; Jean-Pierre has business-wide review visibility but no routine certification authority.
+- No evidence in the reconciled session establishes that these six have since been finalized, so preserve 🟡.
 
 ### A2. ⬜ Production acceptance of finalization/earnings UX
 
 - Verify the simplified practitioner `Finalize past visits` queues from real authorized accounts.
 - After A1 is resolved, re-run Abigail and Christel `This Month` reports and verify pending/final state from CRM truth.
-- Test Marietjie -> Admin -> Reports -> Marietjie earnings -> This Month.
+- Last real-user August screenshots established that the period-routing defect was fixed and the reports were calculating non-zero completed earnings:
+  - Abigail: 19 completed solo appointments; R11,800 completed treatment value; R2,360 commission; R5,000 salary; R7,360 total gross compensation; 2 pending; PROVISIONAL.
+  - Christel: 10 completed solo appointments; R5,460 completed treatment value/earnings; 4 pending; PROVISIONAL.
+- These are snapshots, not frozen ledger amounts. Re-query after attendance truth changes.
+- Test Marietjie -> Admin -> Reports -> Marietjie earnings -> This Month from her real account; the self-view implementation is deployed but no reconciled real-account screenshot/acceptance closes it.
 - Inspect any Marietjie pending visits through her own queue; do not assume zero.
-- Preserve the already-deployed earnings period choices Today / This Week / Last Week / This Month and the fail-closed reporting-integrity behavior; do not treat their presence as real-account acceptance.
+- Preserve the already-deployed earnings period choices and fail-closed reporting-integrity behavior; do not treat backend/regression presence as complete real-account acceptance.
 - Fix only established defects.
 
 ### A3. 🟡 Staff finalization reminder template
 
-- `shiloh_staff_finalization_v1` last known Meta state: PENDING.
-- Fail closed until positive APPROVED state is observed.
+- `shiloh_staff_finalization_v1` last evidenced Meta state: PENDING.
+- Managed provisioning/status discovery exists; reminder sending remains fail-closed until provider status is positively APPROVED.
+- No later approval evidence is present in this reconciliation, so preserve 🟡.
 
 ## B. Admin acceptance and Jean-Pierre role/testing
 
@@ -175,7 +202,7 @@ Preserved product requirements/decisions:
 
 ### F1. ✅ Keeper portfolio and core production ownership mapped
 
-Evidence from direct Meta Business Suite inspection in this session:
+Evidence from direct Meta Business Suite inspection in the Meta consolidation session:
 - Business Portfolio `406573210678288` is the keeper portfolio; do **not** delete it.
 - `Shiloh_MTC` Meta App ID `1574685370960526` is present in this portfolio. Christel Botha and the `Employee` system user both showed full app access during inspection.
 - Production `Shiloh_MTC` WhatsApp Business Account ID `4002592316709920` is present in this portfolio.
@@ -223,7 +250,7 @@ Evidence from direct Meta Business Suite inspection in this session:
 2. ⬜ Continue C1 item 10 privacy acceptance only after preserving item 9 priority: next privacy engineering step is the synthetic transaction/rollback execution-plan simulator; destructive execution remains disabled.
 3. ⬜ Incorporate C2 practitioner-information/service-visibility acceptance without losing its separate conversational requirements; do not infer live CRM mapping truth while the authoritative read remains blocked.
 4. ⬜ Continue F3 Meta/Instagram consolidation only through verified existing-account ownership/access; do not create a duplicate account or disturb the production WABA/app chain.
-5. ⬜ In parallel where non-mutating, continue A2/B1 evidence gathering without requiring A1 attendance outcomes.
+5. ⬜ In parallel where non-mutating, continue A2/B1 evidence gathering: practitioner finalization queues, Abigail/Christel post-finalization reports when human truth is supplied, and Marietjie real-account earnings acceptance.
 6. 🟡 Preserve A1, A3, C3, D1 and E1 until their real external/human facts become available.
 7. ⬜ Return to safe P4 engineering only after the higher-priority production acceptance work is clean.
 
