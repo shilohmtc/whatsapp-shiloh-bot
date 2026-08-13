@@ -35,6 +35,10 @@ test('List your staff routes to authoritative client-bookable practitioner disco
   assert.equal(result.handled, true);
   assert.equal(result.interactive.type, 'list');
   assert.match(result.interactive.body, /Our practitioners/);
-  assert.deepEqual(result.interactive.rows.slice(0, 3).map((row) => row.title), ['Christel', 'Abigail', 'Marietjie']);
+  assert.deepEqual(result.interactive.rows.slice(0, 3).map((row) => row.title), [
+    'Christel · Massage',
+    'Abigail · Massage',
+    'Marietjie · Esthetician',
+  ]);
   assert.equal(result.interactive.rows.at(-1).id, 'client_book_now');
 });
