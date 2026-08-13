@@ -4,10 +4,49 @@ const { sendWhatsAppMessage, sendWhatsAppTemplate } = require('./whatsapp');
 const { createAppointment: enrollAppointmentLifecycle } = require('./appointmentLifecycle');
 const logger = require('../lib/logger');
 
+let deliveryTableReady = false;
+
 function fmtDate(v){return new Intl.DateTimeFormat('en-ZA',{timeZone:'Africa/Johannesburg',weekday:'long',day:'2-digit',month:'long',year:'numeric'}).format(new Date(v));}
 function fmtTime(v){return new Intl.DateTimeFormat('en-ZA',{timeZone:'Africa/Johannesburg',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(v));}
 function googleStamp(v){return new Date(v).toISOString().replace(/[-:]/g,'').replace(/\.\d{3}Z$/,'Z');}
 function baseUrl(){return String(process.env.SHILOH_PUBLIC_BASE_URL||process.env.RENDER_EXTERNAL_URL||'').replace(/\/$/,'');}
+
+async function ensureDeliveryTable(){
+  if(deliveryTableReady)return;
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS customer_message_deliveries (
+      appointment_id BIGINT NOT NULL REFERENCES appointments(id) ON DELETE CASCADE,
+      message_kind TEXT NOT NULL,
+      status TEXT NOT NULL CHECK (status IN ('sending','sent')),
+      claimed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      sent_at TIMESTAMPTZ,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (appointment_id,message_kind)
+    )
+  `);
+  deliveryTableReady=true;
+}
+
+async function claimBookingConfirmation(appointmentId){
+  await ensureDeliveryTable();
+  const legacy=await pool.query(`SELECT 1 FROM crm_audit_events WHERE action='customer.booking_confirmation_sent' AND entity_type='appointment' AND entity_id=$1 LIMIT 1`,[appointmentId]);
+  if(legacy.rowCount)return false;
+  const claimed=await pool.query(`
+    INSERT INTO customer_message_deliveries (appointment_id,message_kind,status)
+    VALUES ($1,'booking_confirmation','sending')
+    ON CONFLICT (appointment_id,message_kind) DO NOTHING
+    RETURNING appointment_id
+  `,[appointmentId]);
+  return claimed.rowCount===1;
+}
+
+async function releaseBookingConfirmationClaim(appointmentId){
+  await pool.query(`DELETE FROM customer_message_deliveries WHERE appointment_id=$1 AND message_kind='booking_confirmation' AND status='sending'`,[appointmentId]);
+}
+
+async function markBookingConfirmationSent(appointmentId){
+  await pool.query(`UPDATE customer_message_deliveries SET status='sent',sent_at=NOW(),updated_at=NOW() WHERE appointment_id=$1 AND message_kind='booking_confirmation' AND status='sending'`,[appointmentId]);
+}
 
 async function ensureToken(appointmentId){
   const existing=await pool.query(`SELECT token FROM appointment_calendar_share_tokens WHERE appointment_id=$1`,[appointmentId]);
@@ -24,6 +63,8 @@ function googleCalendarUrl({serviceName,staffName,locationName,startsAt,endsAt})
 
 async function sendCustomerBookingConfirmation(data){
   const {appointmentId,clientId,clientName,serviceName,staffName,locationName,startsAt,endsAt,source='shiloh'}=data;
+  let claimed=false;
+  let providerAccepted=false;
   try{
     const contact=await pool.query(`SELECT normalized_value FROM client_contacts WHERE client_id=$1 AND contact_type IN ('whatsapp','phone','mobile') AND normalized_value IS NOT NULL ORDER BY is_primary DESC, id LIMIT 1`,[clientId]);
     const phone=contact.rows[0]?.normalized_value;if(!phone)return {sent:false,reason:'no_phone'};
@@ -32,6 +73,14 @@ async function sendCustomerBookingConfirmation(data){
     const google=googleCalendarUrl({serviceName,staffName,locationName,startsAt,endsAt});
     const date=fmtDate(startsAt),time=`${fmtTime(startsAt)}–${fmtTime(endsAt)}`;
     const template=process.env.WHATSAPP_BOOKING_CONFIRMATION_TEMPLATE;
+
+    // Enrol first so a lifecycle/database failure cannot leave a sent confirmation with no lifecycle row.
+    await enrollAppointmentLifecycle({appointmentId,clientId,phone,service:serviceName,appointmentAt:startsAt,appointmentEndsAt:endsAt,therapist:staffName,source});
+
+    // Durable claim is the idempotency boundary. Concurrent or retried callers must not both send.
+    claimed=await claimBookingConfirmation(appointmentId);
+    if(!claimed)return {sent:false,reason:'already_sent_or_in_progress'};
+
     if(template){
       await sendWhatsAppTemplate(phone,template,[clientName||'there',serviceName,staffName,date,time,google,ics||google],process.env.WHATSAPP_TEMPLATE_LANGUAGE||'en');
     }else{
@@ -42,11 +91,20 @@ async function sendCustomerBookingConfirmation(data){
       lines.push('','Need to make a change? Reply *RESCHEDULE* or *CANCEL*.','We look forward to seeing you. 🌿');
       await sendWhatsAppMessage(phone,lines.join('\n'));
     }
+    providerAccepted=true;
 
-    await enrollAppointmentLifecycle({appointmentId,clientId,phone,service:serviceName,appointmentAt:startsAt,appointmentEndsAt:endsAt,therapist:staffName,source});
-    await pool.query(`INSERT INTO crm_audit_events (action,entity_type,entity_id,metadata) VALUES ('customer.booking_confirmation_sent','appointment',$1,$2::jsonb)`,[appointmentId,JSON.stringify({clientId,calendarLinks:true,template:Boolean(template),lifecycleEnrolled:true})]);
+    // Persist sent state before secondary audit bookkeeping. If bookkeeping fails after Meta
+    // accepted the message, retain the claim so an automatic retry cannot duplicate it.
+    await markBookingConfirmationSent(appointmentId);
+    await pool.query(`INSERT INTO crm_audit_events (action,entity_type,entity_id,metadata) VALUES ('customer.booking_confirmation_sent','appointment',$1,$2::jsonb)`,[appointmentId,JSON.stringify({clientId,calendarLinks:true,template:Boolean(template),lifecycleEnrolled:true,idempotentDelivery:true})]);
     return {sent:true,phone};
-  }catch(error){logger.error({err:error,appointmentId},'Customer booking confirmation failed');return {sent:false,reason:'error'};}
+  }catch(error){
+    if(claimed&&!providerAccepted){
+      try{await releaseBookingConfirmationClaim(appointmentId);}catch(releaseError){logger.error({err:releaseError,appointmentId},'Booking confirmation claim release failed');}
+    }
+    logger.error({err:error,appointmentId,providerAccepted},'Customer booking confirmation failed');
+    return {sent:false,reason:providerAccepted?'delivery_state_uncertain':'error'};
+  }
 }
 
 async function sendCustomerBookingConfirmationForAppointment(appointmentId){
@@ -62,4 +120,4 @@ async function sendCustomerBookingConfirmationForAppointment(appointmentId){
   return sendCustomerBookingConfirmation({appointmentId:a.id,clientId:a.client_id,clientName:a.client_name,serviceName:a.service_name,staffName:a.staff_name,locationName:a.location_name,startsAt:a.starts_at,endsAt:a.ends_at,source:a.source||'shiloh'});
 }
 
-module.exports={sendCustomerBookingConfirmation,sendCustomerBookingConfirmationForAppointment,googleCalendarUrl};
+module.exports={sendCustomerBookingConfirmation,sendCustomerBookingConfirmationForAppointment,googleCalendarUrl,claimBookingConfirmation,releaseBookingConfirmationClaim,markBookingConfirmationSent,ensureDeliveryTable};
