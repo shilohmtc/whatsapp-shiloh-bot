@@ -4,8 +4,13 @@ const express = require("express");
 const { validateEnv } = require("./src/config/env");
 const logger = require("./src/lib/logger");
 const requestContext = require("./src/middleware/requestContext");
+const { presentClientFamilyResult } = require("./src/presentation/clientFamilyPresentation");
+const clientFamilyService = require("./src/services/clientServiceFamilyDiscovery");
 
 validateEnv();
+
+const processClientServiceFamilyMessage = clientFamilyService.processClientServiceFamilyMessage;
+clientFamilyService.processClientServiceFamilyMessage = async (...args) => presentClientFamilyResult(await processClientServiceFamilyMessage(...args));
 
 const webhookRoutes = require("./src/routes/webhook");
 const adminRoutes = require("./src/routes/admin");
