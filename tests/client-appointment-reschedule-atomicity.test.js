@@ -10,6 +10,12 @@ test('appointment change intents remain isolated from onboarding state', () => {
   assert.doesNotMatch(source, /INSERT INTO client_onboarding_sessions\(phone,action/);
 });
 
+test('bare RESCHEDULE command enters canonical appointment-change flow and carries forward the existing booking', () => {
+  assert.match(source, /\^\s*reschedule\s*\$/i);
+  assert.match(source, /if\(rows\.length===1\)return\{appointment:rows\[0\]\}/);
+  assert.match(source, /What new day or date would you prefer\?/);
+});
+
 test('client reschedule locks the practitioner and revalidates authoritative availability before mutation', () => {
   const begin = source.indexOf("await db.query('BEGIN')", source.indexOf('async function rescheduleCanonical'));
   const advisory = source.indexOf('pg_advisory_xact_lock', begin);
