@@ -4,6 +4,10 @@ Effective: 2026-08-13
 
 This is authoritative project-management policy and must be read with the Master before selecting the next work item.
 
+## Project terminology
+
+- **JP = Jean-Pierre.** When the owner refers to `JP` in Shiloh OS instructions (for example, `JP Admin WhatsApp`), interpret it as the existing Jean-Pierre staff/admin identity. `JP` is shorthand/display terminology only: never create a new staff member, CRM record, WhatsApp identity, permissions profile, Calendar binding, or other parallel identity by interpreting `JP` as a separate person.
+
 ## Mandatory priority selection
 
 Before ordinary ACTIVE / READY engineering, identify unresolved production defects and the current **Product-Critical Gate**. Rank work by threat to Shiloh's core business function, not merely by workstream number or which technical item was previously ACTIVE.
