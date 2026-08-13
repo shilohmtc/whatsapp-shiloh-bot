@@ -7,6 +7,7 @@ const familyPath = path.join(__dirname, '..', 'src', 'services', 'clientServiceF
 const webhookPath = path.join(__dirname, '..', 'src', 'controllers', 'webhookController.js');
 const familySource = fs.readFileSync(familyPath, 'utf8');
 const webhookSource = fs.readFileSync(webhookPath, 'utf8');
+const { CLIENT_COPY } = require('../src/config/clientCopy');
 const {
   FAMILY_RULES,
   familyFilterSql,
@@ -21,6 +22,15 @@ test('service-family ownership is explicit and client-facing', () => {
     lymphatic: { title: 'Lymphatic Drainage', practitioner: 'Abigail' },
     pedicure: { title: 'Elim MediHeel Pedicures', practitioner: 'Marietjie' },
   });
+});
+
+test('family treatment prompt is client-friendly and sourced from safe copy config', () => {
+  assert.equal(CLIENT_COPY.familyTreatmentPrompt, 'Choose the treatment you’d like to book. 🌿');
+  const view = familyServicesInteractive('beauty', [{ id: 1, name: 'Facial', duration_minutes: 60, price: 500 }], 1);
+  assert.match(view.body, /Beauty & Aesthetics • Marietjie/);
+  assert.match(view.body, /Choose the treatment you’d like to book\. 🌿/);
+  assert.doesNotMatch(view.body, /CRM|eligible|active treatment/i);
+  assert.match(familySource, /CLIENT_COPY\.familyTreatmentPrompt/);
 });
 
 test('family queries remain CRM-backed, active-only and client-bookable', () => {
