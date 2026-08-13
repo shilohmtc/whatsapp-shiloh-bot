@@ -7,7 +7,7 @@ const discoveryPath = path.join(__dirname, '..', 'src', 'services', 'clientDisco
 const webhookPath = path.join(__dirname, '..', 'src', 'controllers', 'webhookController.js');
 const source = fs.readFileSync(discoveryPath, 'utf8');
 const webhook = fs.readFileSync(webhookPath, 'utf8');
-const { clientHomeInteractive, servicePageInteractive, SERVICE_PAGE_SIZE } = require(discoveryPath);
+const { clientHomeInteractive, isHomeCommand, servicePageInteractive, SERVICE_PAGE_SIZE } = require(discoveryPath);
 
 test('client home uses exactly three genuine WhatsApp reply-button actions', () => {
   const home = clientHomeInteractive();
@@ -18,6 +18,17 @@ test('client home uses exactly three genuine WhatsApp reply-button actions', () 
     'client_book_now',
   ]);
   assert.ok(home.buttons.every((button) => button.title.length <= 20));
+});
+
+test('client home escape aliases include Back, Menu and Home', () => {
+  assert.equal(isHomeCommand('Back'), true);
+  assert.equal(isHomeCommand('Menu'), true);
+  assert.equal(isHomeCommand('Home'), true);
+});
+
+test('client home escape clears stale booking intent before rendering home', () => {
+  assert.match(source, /processBookingMessage, getIntent, clearIntent/);
+  assert.match(source, /if \(isHomeCommand\(raw\)\) \{[\s\S]*await clearIntent\(sender\);[\s\S]*clientHomeInteractive\(\)/);
 });
 
 test('client service browsing is CRM-backed and restricted to client-bookable practitioners', () => {

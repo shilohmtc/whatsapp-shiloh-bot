@@ -1,7 +1,7 @@
 const { pool } = require('../db/pool');
 const { formatPrice, formatDuration } = require('./serviceCatalogue');
 const { listClientBookableStaff } = require('./clientBookingStaffGuard');
-const { processBookingMessage, getIntent } = require('./bookingIntent');
+const { processBookingMessage, getIntent, clearIntent } = require('./bookingIntent');
 const { decorateClientBookingResult } = require('./clientBookingInteractive');
 
 const SERVICE_PAGE_SIZE = 9;
@@ -17,7 +17,7 @@ function isGreeting(text = '') {
 
 function isHomeCommand(text = '') {
   const value = clean(text).toLowerCase();
-  return isGreeting(text) || ['menu', 'home', 'client menu', 'main menu'].includes(value);
+  return isGreeting(text) || ['menu', 'home', 'back', 'client menu', 'main menu'].includes(value);
 }
 
 function clientHomeInteractive() {
@@ -353,7 +353,10 @@ async function processClientDiscoveryMessage(sender, text) {
   const raw = clean(text);
   const value = raw.toLowerCase();
 
-  if (isHomeCommand(raw)) return { handled: true, interactive: clientHomeInteractive() };
+  if (isHomeCommand(raw)) {
+    await clearIntent(sender);
+    return { handled: true, interactive: clientHomeInteractive() };
+  }
 
   if (['client_browse_services', 'browse services', 'services', 'list treatments', 'list services', 'treatments'].includes(value)) {
     const categories = await listClientBookableCategories();
