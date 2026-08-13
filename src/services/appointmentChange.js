@@ -73,8 +73,78 @@ async function cancelCanonical(phone,a){const db=await pool.connect();try{await 
  let eventId=a.event_id;try{if(!eventId){const found=await findBookingEventByAppointmentId(a.id);eventId=found?.id||null;}if(eventId){await cancelBookingEvent(eventId);await pool.query(`UPDATE appointment_calendar_events SET sync_status='cancelled',last_error=NULL,updated_at=NOW() WHERE appointment_id=$1 AND provider='google_calendar'`,[a.id]);}}catch(error){logger.error({err:error,appointmentId:a.id},'Client cancellation Google Calendar sync failed');try{await pool.query(`UPDATE appointment_calendar_events SET sync_status='error',last_error=$2,updated_at=NOW() WHERE appointment_id=$1 AND provider='google_calendar'`,[a.id,String(error.message||error).slice(0,2000)]);}catch(_){}}
  return{status:'cancelled'};}
 
-async function rescheduleCanonical(phone,a,date,time){const starts=localDateTime(date,time);if(!starts)return{status:'invalid_time',reply:'Please send an exact time, for example *14:00* or *2pm*.'};if(starts.getTime()<=Date.now())return{status:'past',reply:'Please choose a future date and time.'};if(Number(a.staff_count)!==1||!Number(a.staff_id))return{status:'multi_staff',reply:'This booking has a complex practitioner setup, so the clinic team needs to help reschedule it safely.'};const duration=new Date(a.ends_at)-new Date(a.starts_at);const ends=new Date(starts.getTime()+duration);const clinic=await checkClinicHours({locationId:a.location_id,startsAt:starts,endsAt:ends});if(!clinic.covered)return{status:'clinic_hours',reply:'That time falls outside Shiloh’s clinic hours. Please choose another time.'};const schedule=await checkAuthoritativeSchedule({staffId:Number(a.staff_id),locationId:a.location_id,startsAt:starts,endsAt:ends});if(schedule.partialUnavailable||(schedule.allDayUnavailable&&!schedule.insideAvailableException)||!schedule.covered)return{status:'staff_schedule',reply:`${a.staff_name} is not available at that time. Please choose another time.`};const conflict=await pool.query(`SELECT 1 FROM appointments ap JOIN appointment_staff ast ON ast.appointment_id=ap.id WHERE ast.staff_id=$1 AND ap.id<>$2 AND ap.status<>'cancelled' AND ap.starts_at<$4 AND ap.ends_at>$3 LIMIT 1`,[a.staff_id,a.id,starts,ends]);if(conflict.rowCount)return{status:'conflict',reply:'That time has just become unavailable. Please choose another time.'};let eventId=a.event_id;if(!eventId){const found=await findBookingEventByAppointmentId(a.id);eventId=found?.id||null;}const external=await checkCalendarAvailability({startsAt:starts,endsAt:ends,staffName:a.staff_name,ignoreEventId:eventId||null});if(external.enabled&&!external.available)return{status:'calendar_conflict',reply:'That time is already occupied on the Shiloh calendar. Please choose another time.'};
- const db=await pool.connect();try{await db.query('BEGIN');const locked=await db.query(`SELECT status,starts_at,ends_at FROM appointments WHERE id=$1 FOR UPDATE`,[a.id]);if(!locked.rows[0]||locked.rows[0].status==='cancelled'){await db.query('ROLLBACK');return{status:'changed',reply:'That appointment changed while I was checking it. Please start the reschedule again.'};}await db.query(`UPDATE appointments SET starts_at=$1,ends_at=$2,updated_at=NOW() WHERE id=$3`,[starts,ends,a.id]);await db.query(`UPDATE appointment_lifecycle SET appointment_at=$1,appointment_ends_at=$2,reminder_sent_at=NULL,updated_at=NOW() WHERE appointment_id=$3`,[starts,ends,a.id]);if(eventId){await updateBookingEvent({eventId,appointmentId:a.id,startsAt:starts,endsAt:ends,clientName:a.client_name,serviceName:a.service_name,staffName:a.staff_name});await db.query(`UPDATE appointment_calendar_events SET sync_status='synced',last_error=NULL,updated_at=NOW() WHERE appointment_id=$1 AND provider='google_calendar'`,[a.id]);}await db.query(`INSERT INTO appointment_status_history(appointment_id,from_status,to_status,changed_by,reason) VALUES($1,$2,$2,$3,'Client reschedule confirmed in WhatsApp')`,[a.id,locked.rows[0].status,`client:${normalizePhone(phone)}`]);await db.query(`INSERT INTO crm_audit_events(action,entity_type,entity_id,metadata) VALUES('client.appointment_rescheduled','appointment',$1,$2::jsonb)`,[a.id,JSON.stringify({phone:normalizePhone(phone),fromStart:locked.rows[0].starts_at,toStart:starts.toISOString()})]);await db.query('COMMIT');return{status:'rescheduled',starts,ends};}catch(error){try{await db.query('ROLLBACK');}catch(_){}throw error;}finally{db.release();}}
+async function rescheduleCanonical(phone,a,date,time){
+ const starts=localDateTime(date,time);
+ if(!starts)return{status:'invalid_time',reply:'Please send an exact time, for example *14:00* or *2pm*.'};
+ if(starts.getTime()<=Date.now())return{status:'past',reply:'Please choose a future date and time.'};
+ if(Number(a.staff_count)!==1||!Number(a.staff_id))return{status:'multi_staff',reply:'This booking has a complex practitioner setup, so the clinic team needs to help reschedule it safely.'};
+ const duration=new Date(a.ends_at)-new Date(a.starts_at);
+ const ends=new Date(starts.getTime()+duration);
+ let eventId=a.event_id;
+ if(!eventId){const found=await findBookingEventByAppointmentId(a.id);eventId=found?.id||null;}
+
+ const clinic=await checkClinicHours({locationId:a.location_id,startsAt:starts,endsAt:ends});
+ if(!clinic.covered)return{status:'clinic_hours',reply:'That time falls outside Shiloh’s clinic hours. Please choose another time.'};
+ const schedule=await checkAuthoritativeSchedule({staffId:Number(a.staff_id),locationId:a.location_id,startsAt:starts,endsAt:ends});
+ if(schedule.partialUnavailable||(schedule.allDayUnavailable&&!schedule.insideAvailableException)||!schedule.covered)return{status:'staff_schedule',reply:`${a.staff_name} is not available at that time. Please choose another time.`};
+ const conflict=await pool.query(`SELECT 1 FROM appointments ap JOIN appointment_staff ast ON ast.appointment_id=ap.id WHERE ast.staff_id=$1 AND ap.id<>$2 AND ap.status<>'cancelled' AND ap.starts_at<$4 AND ap.ends_at>$3 LIMIT 1`,[a.staff_id,a.id,starts,ends]);
+ if(conflict.rowCount)return{status:'conflict',reply:'That time has just become unavailable. Please choose another time.'};
+ const external=await checkCalendarAvailability({startsAt:starts,endsAt:ends,staffName:a.staff_name,ignoreEventId:eventId||null});
+ if(external.enabled&&!external.available)return{status:'calendar_conflict',reply:'That time is already occupied on the Shiloh calendar. Please choose another time.'};
+
+ const db=await pool.connect();
+ let originalStartsAt=null;
+ let originalEndsAt=null;
+ let calendarMutationAttempted=false;
+ try{
+   await db.query('BEGIN');
+   const locked=await db.query(`SELECT status,starts_at,ends_at FROM appointments WHERE id=$1 FOR UPDATE`,[a.id]);
+   if(!locked.rows[0]||locked.rows[0].status==='cancelled'){
+     await db.query('ROLLBACK');
+     return{status:'changed',reply:'That appointment changed while I was checking it. Please start the reschedule again.'};
+   }
+   originalStartsAt=locked.rows[0].starts_at;
+   originalEndsAt=locked.rows[0].ends_at;
+   if(new Date(originalStartsAt).getTime()!==new Date(a.starts_at).getTime()||new Date(originalEndsAt).getTime()!==new Date(a.ends_at).getTime()){
+     await db.query('ROLLBACK');
+     return{status:'changed',reply:'That appointment changed while I was checking it. Please start the reschedule again.'};
+   }
+
+   await db.query('SELECT pg_advisory_xact_lock($1::bigint)',[Number(a.staff_id)]);
+
+   const finalClinic=await checkClinicHours({db,locationId:a.location_id,startsAt:starts,endsAt:ends});
+   if(!finalClinic.covered){await db.query('ROLLBACK');return{status:'clinic_hours',reply:'That time is no longer inside Shiloh’s clinic hours. Please choose another time.'};}
+   const finalSchedule=await checkAuthoritativeSchedule({db,staffId:Number(a.staff_id),locationId:a.location_id,startsAt:starts,endsAt:ends});
+   if(finalSchedule.partialUnavailable||(finalSchedule.allDayUnavailable&&!finalSchedule.insideAvailableException)||!finalSchedule.covered){await db.query('ROLLBACK');return{status:'staff_schedule',reply:`${a.staff_name} is no longer available at that time. Please choose another time.`};}
+   const finalConflict=await db.query(`SELECT 1 FROM appointments ap JOIN appointment_staff ast ON ast.appointment_id=ap.id WHERE ast.staff_id=$1 AND ap.id<>$2 AND ap.status<>'cancelled' AND ap.starts_at<$4 AND ap.ends_at>$3 LIMIT 1`,[a.staff_id,a.id,starts,ends]);
+   if(finalConflict.rowCount){await db.query('ROLLBACK');return{status:'conflict',reply:'That time has just become unavailable. Please choose another time.'};}
+   const finalExternal=await checkCalendarAvailability({startsAt:starts,endsAt:ends,staffName:a.staff_name,ignoreEventId:eventId||null});
+   if(finalExternal.enabled&&!finalExternal.available){await db.query('ROLLBACK');return{status:'calendar_conflict',reply:'That time has just become occupied on the Shiloh calendar. Please choose another time.'};}
+
+   await db.query(`UPDATE appointments SET starts_at=$1,ends_at=$2,updated_at=NOW() WHERE id=$3`,[starts,ends,a.id]);
+   await db.query(`UPDATE appointment_lifecycle SET appointment_at=$1,appointment_ends_at=$2,reminder_sent_at=NULL,updated_at=NOW() WHERE appointment_id=$3`,[starts,ends,a.id]);
+   if(eventId){
+     calendarMutationAttempted=true;
+     await updateBookingEvent({eventId,appointmentId:a.id,startsAt:starts,endsAt:ends,clientName:a.client_name,serviceName:a.service_name,staffName:a.staff_name});
+     await db.query(`UPDATE appointment_calendar_events SET sync_status='synced',last_error=NULL,updated_at=NOW() WHERE appointment_id=$1 AND provider='google_calendar'`,[a.id]);
+   }
+   await db.query(`INSERT INTO appointment_status_history(appointment_id,from_status,to_status,changed_by,reason) VALUES($1,$2,$2,$3,'Client reschedule confirmed in WhatsApp')`,[a.id,locked.rows[0].status,`client:${normalizePhone(phone)}`]);
+   await db.query(`INSERT INTO crm_audit_events(action,entity_type,entity_id,metadata) VALUES('client.appointment_rescheduled','appointment',$1,$2::jsonb)`,[a.id,JSON.stringify({phone:normalizePhone(phone),fromStart:locked.rows[0].starts_at,toStart:starts.toISOString()})]);
+   await db.query('COMMIT');
+   return{status:'rescheduled',starts,ends};
+ }catch(error){
+   try{await db.query('ROLLBACK');}catch(_){}
+   if(eventId&&calendarMutationAttempted&&originalStartsAt&&originalEndsAt){
+     try{
+       await updateBookingEvent({eventId,appointmentId:a.id,startsAt:originalStartsAt,endsAt:originalEndsAt,clientName:a.client_name,serviceName:a.service_name,staffName:a.staff_name});
+     }catch(compensationError){
+       logger.error({err:compensationError,appointmentId:a.id},'Client reschedule calendar compensation failed');
+       try{await pool.query(`UPDATE appointment_calendar_events SET sync_status='error',last_error=$2,updated_at=NOW() WHERE appointment_id=$1 AND provider='google_calendar'`,[a.id,String(compensationError.message||compensationError).slice(0,2000)]);}catch(_){}
+     }
+   }
+   throw error;
+ }finally{db.release();}
+}
 
 async function processAppointmentChangeMessage(phone,text){try{const action=detectAction(text);let intent=await getIntent(phone);if(intent&&isAbort(text)){await clearIntent(phone);return{handled:true,reply:'No problem — I stopped that request. Your appointment is unchanged.'};}if(action&&intent&&intent.action!==action){await clearIntent(phone);intent=null;}if(!intent&&!action)return{handled:false};if(!intent){intent=await saveIntent(phone,{action,status:'selecting_appointment'});}if(intent.status==='selecting_appointment'){const selected=await selectAppointment(phone,text,intent);if(selected.error==='none'){await clearIntent(phone);return{handled:true,reply:'I can’t find an upcoming Shiloh appointment linked to this WhatsApp number.'};}if(selected.error==='choose'||selected.error==='ambiguous_date'){return{handled:true,reply:choiceReply(selected.matches)};}const a=selected.appointment;intent=await saveIntent(phone,{appointmentId:a.id,currentDate:localDateOf(a.starts_at),status:intent.action==='cancel'?'awaiting_confirmation':'collecting'});if(intent.action==='cancel')return{handled:true,reply:[`Please confirm the cancellation:`,summary(a),'',latePolicy(a.starts_at),'','Reply *YES* to cancel this booking, or *STOP* to leave it unchanged.'].join('\n')};const date=extractDate(text);const time=extractTime(text);if(date||time){intent=await saveIntent(phone,{preferredDate:date||null,preferredTime:time||null,status:'collecting'});}if(!intent.preferred_date)return{handled:true,reply:`${summary(a)}\n\nWhat new day or date would you prefer?`};if(!intent.preferred_time)return{handled:true,reply:'What exact new time would you prefer? For example *14:00* or *2pm*.'};intent=await saveIntent(phone,{status:'awaiting_confirmation'});return{handled:true,reply:[`Please confirm this reschedule:`,summary(a),'',`➡️ New date: ${displayDate(intent.preferred_date)}`,`➡️ New time: ${intent.preferred_time}`,'',latePolicy(a.starts_at),'','Reply *YES* to reschedule, or *STOP* to leave it unchanged.'].join('\n')};}
  const a=await appointmentForPhone(phone,intent.appointment_id);if(!a){await clearIntent(phone);return{handled:true,reply:'That booking is no longer available to change. Please start again.'};}
