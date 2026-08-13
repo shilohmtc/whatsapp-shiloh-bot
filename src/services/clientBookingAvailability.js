@@ -73,7 +73,7 @@ async function resolveEligibleStaff(serviceId, therapistText) {
   }
 
   const result = await pool.query(`
-    SELECT DISTINCT st.id, st.display_name
+    SELECT st.id, st.display_name
       FROM staff st
       JOIN staff_services ss ON ss.staff_id = st.id
      WHERE ss.service_id = $1
@@ -81,6 +81,7 @@ async function resolveEligibleStaff(serviceId, therapistText) {
        AND st.resource_type = 'practitioner'
        AND st.client_bookable = TRUE
        ${therapistClause}
+     GROUP BY st.id, st.display_name
      ORDER BY CASE LOWER(st.display_name)
        WHEN 'christel' THEN 1
        WHEN 'abigail' THEN 2
