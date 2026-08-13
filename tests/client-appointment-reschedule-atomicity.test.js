@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'services', 'appointmentChange.js'), 'utf8');
+const availabilitySource = fs.readFileSync(path.join(__dirname, '..', 'src', 'services', 'clientRescheduleAvailability.js'), 'utf8');
 const webhookSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'controllers', 'webhookController.js'), 'utf8');
 
 test('appointment change intents remain isolated from onboarding state', () => {
@@ -19,14 +20,22 @@ test('bare RESCHEDULE command enters canonical appointment-change flow and carri
 });
 
 test('reschedule date enters authoritative daypart and slot selection instead of asking the client to guess an exact time', () => {
-  assert.match(source, /listAvailableSlots/);
-  assert.match(source, /reschedule_daypart_morning/);
-  assert.match(source, /reschedule_daypart_afternoon/);
-  assert.match(source, /reschedule_daypart_evening/);
-  assert.match(source, /reschedule_slot_/);
-  assert.match(source, /service_id/);
-  assert.doesNotMatch(source, /What exact new time would you prefer\?/);
-  assert.match(webhookSource, /sendAdminResult\(from,appointmentChange\)/);
+  assert.match(availabilitySource, /listAvailableSlots/);
+  assert.match(availabilitySource, /reschedule_daypart_morning/);
+  assert.match(availabilitySource, /reschedule_daypart_afternoon/);
+  assert.match(availabilitySource, /reschedule_daypart_evening/);
+  assert.match(availabilitySource, /reschedule_slot_/);
+  assert.match(availabilitySource, /service_id/);
+  assert.match(availabilitySource, /current CRM schedule and connected calendars/);
+  assert.match(webhookSource, /processClientRescheduleAvailabilityMessage\(from,text\)/);
+  assert.ok(webhookSource.indexOf('processClientRescheduleAvailabilityMessage(from,text)') < webhookSource.indexOf('processAppointmentChangeMessage(from,appointmentChangeText)'));
+  assert.match(webhookSource, /sendAdminResult\(from,rescheduleAvailability\)/);
+});
+
+test('authoritative reschedule slot is rechecked before the existing atomic confirmation path is entered', () => {
+  assert.match(availabilitySource, /authoritativeSlots\(a,intent\.preferred_date,daypart\)/);
+  assert.match(availabilitySource, /preferred_time:time,status:'awaiting_confirmation'/);
+  assert.match(availabilitySource, /Nothing has changed yet/);
 });
 
 test('client reschedule locks the practitioner and revalidates authoritative availability before mutation', () => {

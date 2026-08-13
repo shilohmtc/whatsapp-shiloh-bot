@@ -10,6 +10,7 @@ const { guardBookingConfirmationIdentity, ensureBookingIdentity } = require("../
 const { guardClientFreelancerBooking } = require("../services/clientBookingStaffGuard");
 const { guardEnglishOnly } = require("../services/englishLanguageGuard");
 const { processAppointmentChangeMessage } = require("../services/appointmentChange");
+const { processClientRescheduleAvailabilityMessage } = require("../services/clientRescheduleAvailability");
 const { processCustomerExperienceMessage } = require("../services/customerExperience");
 const { processCustomerCareMessage } = require("../services/customerCare");
 const { processClientIdentityMessage } = require("../services/clientIdentityOnboarding");
@@ -36,30 +37,14 @@ const { forceMatchedClientNameConfirmation, guardActiveNameConfirmation } = requ
 const logger = require("../lib/logger");
 function maskPhone(phone = "") { return phone.length > 4 ? `***${phone.slice(-4)}` : "***"; }
 function isGreetingOnly(text = "") { return /^(hi|hello|hey|good morning|good afternoon|good evening|howzit|hiya)[!. ]*$/i.test(String(text).trim()); }
-function inboundText(message){
-  if(message?.type==="text") return message.text?.body?.trim()||null;
-  if(message?.type==="interactive"&&message.interactive?.type==="button_reply") {
-    const id=message.interactive.button_reply?.id?.trim()||'';
-    return commandForAdminButton(id)||commandForClientBookingButton(id)||id||null;
-  }
-  if(message?.type==="interactive"&&message.interactive?.type==="list_reply") {
-    const id=message.interactive.list_reply?.id?.trim()||'';
-    return commandForAdminButton(id)||id||null;
-  }
-  return null;
-}
-async function sendAdminResult(to,result){
-  if(result?.interactive?.type==="list") return sendWhatsAppList(to,result.interactive.body,result.interactive.buttonText||result.interactive.button,result.interactive.rows||result.interactive.sections?.[0]?.rows,result.interactive.sectionTitle||result.interactive.sections?.[0]?.title);
-  if(result?.interactive?.type==="button") return sendWhatsAppReplyButtons(to,result.interactive.body,result.interactive.buttons);
-  if(result?.interactive?.buttons) return sendWhatsAppReplyButtons(to,result.interactive.body,result.interactive.buttons);
-  return sendWhatsAppMessage(to,result?.reply||"Sorry, Shiloh could not render that response.");
-}
-exports.verifyWebhook = (req,res)=>{const mode=req.query["hub.mode"],token=req.query["hub.verify_token"],challenge=req.query["hub.challenge"];if(mode==="subscribe"&&token===process.env.VERIFY_TOKEN){(req.log||logger).info("WhatsApp webhook verified");return res.status(200).send(challenge);}(req.log||logger).warn("WhatsApp webhook verification rejected");return res.sendStatus(403);};
+function inboundText(message){if(message?.type==="text") return message.text?.body?.trim()||null;if(message?.type==="interactive"&&message.interactive?.type==="button_reply"){const id=message.interactive.button_reply?.id?.trim()||'';return commandForAdminButton(id)||commandForClientBookingButton(id)||id||null;}if(message?.type==="interactive"&&message.interactive?.type==="list_reply"){const id=message.interactive.list_reply?.id?.trim()||'';return commandForAdminButton(id)||id||null;}return null;}
+async function sendAdminResult(to,result){if(result?.interactive?.type==="list") return sendWhatsAppList(to,result.interactive.body,result.interactive.buttonText||result.interactive.button,result.interactive.rows||result.interactive.sections?.[0]?.rows,result.interactive.sectionTitle||result.interactive.sections?.[0]?.title);if(result?.interactive?.type==="button") return sendWhatsAppReplyButtons(to,result.interactive.body,result.interactive.buttons);if(result?.interactive?.buttons) return sendWhatsAppReplyButtons(to,result.interactive.body,result.interactive.buttons);return sendWhatsAppMessage(to,result?.reply||"Sorry, Shiloh could not render that response.");}
+exports.verifyWebhook=(req,res)=>{const mode=req.query["hub.mode"],token=req.query["hub.verify_token"],challenge=req.query["hub.challenge"];if(mode==="subscribe"&&token===process.env.VERIFY_TOKEN){(req.log||logger).info("WhatsApp webhook verified");return res.status(200).send(challenge);}(req.log||logger).warn("WhatsApp webhook verification rejected");return res.sendStatus(403);};
 exports.receiveWebhook=async(req,res)=>{const log=req.log||logger;try{const value=req.body.entry?.[0]?.changes?.[0]?.value;if(!value?.messages)return res.sendStatus(200);const message=value.messages[0];const from=message.from,text=inboundText(message);if(!text){log.info({messageType:message.type},"Ignoring unsupported or unknown WhatsApp message");return res.sendStatus(200);}if(!from){log.warn("Received WhatsApp message without sender");return res.sendStatus(200);}log.info({from:maskPhone(from),messageType:message.type},"Processing incoming WhatsApp message");try{
 const language=await guardEnglishOnly(text);if(!language.allowed){log.info({from:maskPhone(from)},"Rejected non-English WhatsApp message");await sendWhatsAppMessage(from,language.reply);return res.sendStatus(200);}
 const demoMenuEscape=await escapeActiveDemoToAdminMenu(from,text);if(demoMenuEscape.escaped){log.info({from:maskPhone(from),admin:demoMenuEscape.admin?.display_name},"Escaped unfinished client demo to admin menu");}
-const adminClientDemo=await processAdminClientDemoMessage(from,text);if(adminClientDemo.handled){log.info({from:maskPhone(from),admin:adminClientDemo.admin?.display_name},"Handled controlled client demo message");await sendWhatsAppMessage(from,adminClientDemo.reply);return res.sendStatus(200);}
-const adminSlots=await processAdminAvailableSlotsMessage(from,text);if(adminSlots.handled){log.info({from:maskPhone(from),admin:adminSlots.admin?.display_name},"Handled authoritative available-slots request");await sendWhatsAppMessage(from,adminSlots.reply);return res.sendStatus(200);}
+const adminClientDemo=await processAdminClientDemoMessage(from,text);if(adminClientDemo.handled){await sendWhatsAppMessage(from,adminClientDemo.reply);return res.sendStatus(200);}
+const adminSlots=await processAdminAvailableSlotsMessage(from,text);if(adminSlots.handled){await sendWhatsAppMessage(from,adminSlots.reply);return res.sendStatus(200);}
 const staffServices=await processAdminStaffServicesMessage(from,text);if(staffServices.handled){await sendWhatsAppMessage(from,staffServices.reply);return res.sendStatus(200);}
 const activeMobileBooking=await processAdminMobileBookingFlowMessage(from,text);if(activeMobileBooking.handled){await sendAdminResult(from,activeMobileBooking);return res.sendStatus(200);}
 const adminReports=await processAdminReportsMessage(from,text);if(adminReports.handled){await sendWhatsAppMessage(from,adminReports.reply);return res.sendStatus(200);}
@@ -82,9 +67,10 @@ const familyDiscovery=await processClientServiceFamilyMessage(from,text);if(fami
 const clientDiscovery=await processClientDiscoveryMessage(from,text);if(clientDiscovery.handled){await sendAdminResult(from,clientDiscovery);return res.sendStatus(200);}
 const clientAvailability=await processClientAvailabilityMessage(from,text);if(clientAvailability.handled){if(clientAvailability.intent?.status==="awaiting_confirmation"){const availabilityIdentity=await ensureBookingIdentity(from);if(!availabilityIdentity.ready){await sendWhatsAppMessage(from,availabilityIdentity.reply);return res.sendStatus(200);}}await sendAdminResult(from,clientAvailability);return res.sendStatus(200);}
 const scope=evaluateClinicScope(text);if(!scope.allowed){await sendWhatsAppMessage(from,CLINIC_REDIRECT);return res.sendStatus(200);}
-const freelancerGuard=await guardClientFreelancerBooking(text);if(freelancerGuard.blocked){log.info({from:maskPhone(from),staff:freelancerGuard.staff?.display_name||null},"Blocked client freelancer booking request");await sendWhatsAppMessage(from,freelancerGuard.reply);return res.sendStatus(200);}
+const freelancerGuard=await guardClientFreelancerBooking(text);if(freelancerGuard.blocked){await sendWhatsAppMessage(from,freelancerGuard.reply);return res.sendStatus(200);}
+const rescheduleAvailability=await processClientRescheduleAvailabilityMessage(from,text);if(rescheduleAvailability.handled){await sendAdminResult(from,rescheduleAvailability);return res.sendStatus(200);}
 const appointmentChangeText=/^(reschedule|cancel)$/i.test(String(text).trim())?`${String(text).trim()} appointment`:text;
-const appointmentChange=await processAppointmentChangeMessage(from,appointmentChangeText);if(appointmentChange.handled){await sendWhatsAppMessage(from,appointmentChange.reply);return res.sendStatus(200);}
+const appointmentChange=await processAppointmentChangeMessage(from,appointmentChangeText);if(appointmentChange.handled){await sendAdminResult(from,appointmentChange);return res.sendStatus(200);}
 const bookingIdentity=await guardBookingConfirmationIdentity(from,text);if(bookingIdentity.handled){await sendWhatsAppMessage(from,bookingIdentity.reply);return res.sendStatus(200);}
 const bookingPolicy=await processBookingPolicyMessage(from,text);if(bookingPolicy.handled){await sendWhatsAppMessage(from,bookingPolicy.reply);return res.sendStatus(200);}
 const booking=decorateClientBookingResult(await processBookingMessage(from,text));if(booking.handled){await sendAdminResult(from,booking.interactive?booking:{...booking,reply:sanitizeBookingReply(booking.reply)});return res.sendStatus(200);}
