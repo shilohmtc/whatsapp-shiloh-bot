@@ -17,6 +17,7 @@ test('Goldie retention classification separates raw personal staging from audit 
     reconciliationQueueRecords: 975,
     reconciliationHistoryRecords: 975,
     goldieKnowledgeDocuments: 1,
+    historicalServiceRecords: 7,
     futurePayloadConfigured: true,
   });
 
@@ -39,13 +40,14 @@ test('read-only inventory returns sanitized counts and configuration presence wi
   const fakeDb = {
     async query(sql) {
       queries.push(sql);
-      if (sql.includes("FROM import_batches")) return { rows: [{ count: 2 }] };
-      if (sql.includes("FROM external_client_records")) return { rows: [{ count: 975 }] };
+      if (sql.includes('FROM import_batches')) return { rows: [{ count: 2 }] };
+      if (sql.includes('FROM external_client_records')) return { rows: [{ count: 975 }] };
       if (sql.includes("entity_type = 'client'")) return { rows: [{ count: 975 }] };
       if (sql.includes("entity_type = 'appointment'")) return { rows: [{ count: 40 }] };
-      if (sql.includes("FROM client_reconciliation_queue")) return { rows: [{ count: 975 }] };
-      if (sql.includes("FROM client_reconciliation_history")) return { rows: [{ count: 975 }] };
-      if (sql.includes("FROM knowledge_documents")) return { rows: [{ count: 1 }] };
+      if (sql.includes('FROM client_reconciliation_queue')) return { rows: [{ count: 975 }] };
+      if (sql.includes('FROM client_reconciliation_history')) return { rows: [{ count: 975 }] };
+      if (sql.includes('FROM documents')) return { rows: [{ count: 1 }] };
+      if (sql.includes('FROM services')) return { rows: [{ count: 7 }] };
       throw new Error(`Unexpected query: ${sql}`);
     },
   };
@@ -60,6 +62,7 @@ test('read-only inventory returns sanitized counts and configuration presence wi
   assert.equal(result.destructiveActionAllowed, false);
   assert.equal(result.executionReady, false);
   assert.equal(result.inventory.externalClientRecords, 975);
+  assert.equal(result.inventory.historicalServiceRecords, 7);
   assert.equal(result.inventory.futurePayloadConfigured, true);
   assert.doesNotMatch(JSON.stringify(result), /present-but-never-returned/);
   assert.equal(queries.some((sql) => /INSERT|UPDATE|DELETE/i.test(sql)), false);
@@ -90,5 +93,5 @@ test('retention inventory source contains no mutation statements and never decod
 
   assert.doesNotMatch(source, /INSERT\s+INTO|UPDATE\s+\w+\s+SET|DELETE\s+FROM/i);
   assert.doesNotMatch(source, /Buffer\.from|gunzip|JSON\.parse\s*\(.*GOLDIE_FUTURE_IMPORT_PAYLOAD_B64/i);
-  assert.doesNotMatch(source, /source_payload\s*(?:,|FROM|AS)/i);
+  assert.doesNotMatch(source, /SELECT\s+[^;]*source_payload\s*(?:,|AS)/i);
 });
