@@ -5,7 +5,7 @@ const {
   getBookingEventOnCalendar,
   updateBookingEventOnCalendar,
   cancelBookingEventOnCalendar,
-  eventIdForAppointment,
+  deterministicEventId,
 } = require('./googleBookingCalendar');
 const { prepareCalendarWrite } = require('./clientBookingCalendarRecovery');
 
@@ -34,6 +34,11 @@ function requirePractitionerCalendarId(staffName) {
     throw new Error(`${envName} is required for ${staffName} practitioner calendar synchronization.`);
   }
   return calendarId;
+}
+
+function eventIdForAppointment(appointmentId) {
+  if (!appointmentId) throw new Error('appointmentId is required for practitioner calendar synchronization.');
+  return deterministicEventId(`shiloh-appointment:${appointmentId}`);
 }
 
 async function checkPractitionerCalendarAvailability({ staffName, startsAt, endsAt, ignoreEventId = null }) {
