@@ -30,7 +30,7 @@ async function ensureMarietjiePedicureOwnership() {
     const marietjieId = Number(marietjieResult.rows[0].id);
 
     const servicesResult = await client.query(`
-      SELECT DISTINCT s.id
+      SELECT s.id
         FROM services s
         LEFT JOIN service_categories sc ON sc.id = s.category_id
        WHERE s.status = 'active'
