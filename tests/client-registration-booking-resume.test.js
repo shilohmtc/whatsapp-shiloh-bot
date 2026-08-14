@@ -45,7 +45,7 @@ test('bare booking start produces the four-family service list with no invalid a
   ]);
   assert.deepEqual(decorated.interactive.rows.map((row) => row.title), [
     'Beauty & Aesthetics',
-    'Massage',
+    'Massage Treatments',
     'Lymphatic Drainage',
     'Elim MediHeel Pedicures',
   ]);
