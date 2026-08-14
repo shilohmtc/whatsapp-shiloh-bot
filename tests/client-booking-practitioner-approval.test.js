@@ -32,7 +32,7 @@ test('client booking completion is converted to a durable pending-approval hold 
 });
 
 test('pending-approval client copy names the actual authorized approver rather than blindly naming the assigned practitioner', () => {
-  assert.match(policy, /notification\.approver/);
+  assert.match(policy, /notification\?*\.approver/);
   assert.match(policy, /authorized approver/i);
   assert.doesNotMatch(policy, /while \$\{staff\.staff_name_snapshot\} reviews the request/);
   assert.doesNotMatch(policy, /until the practitioner explicitly approves or declines/i);
