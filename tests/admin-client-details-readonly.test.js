@@ -15,14 +15,14 @@ test('client lookup keeps masked summary but exposes a separate read-only detail
   assert.doesNotMatch(lookupSource, /\b(?:UPDATE|INSERT|DELETE)\s+(?:clients|client_contacts)\b/i);
 });
 
-test('client details action is permission gated and scope revalidated before display', () => {
-  assert.match(menuSource, /admin_client_details_\(\\d\+\)/);
-  assert.match(menuSource, /client:lookup/);
+test('client details request reuses the existing permission gate and scope filter', () => {
+  assert.match(menuSource, /clientCommand&&has\(admin,'client:lookup'\)/);
   assert.match(menuSource, /filterClientsForAdminScope/);
-  assert.match(menuSource, /admin\.client_details_viewed/);
+  assert.match(lookupSource, /details\s+#?\(\\d\+\)/);
 });
 
-test('single safe lookup offers an explicit details action rather than unmasking the search result', () => {
-  assert.match(menuSource, /View contact details/);
-  assert.match(menuSource, /admin_client_details_/);
+test('single safe lookup advertises an explicit details request without unmasking the search result', () => {
+  assert.match(lookupSource, /Find client details/);
+  assert.match(lookupSource, /formatClientLookupReply/);
+  assert.match(lookupSource, /maskContact/);
 });
