@@ -4,52 +4,69 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const root = path.join(__dirname, '..');
-const commitPath = path.join(root, 'src', 'services', 'clientBookingCommit.js');
 const approvalPath = path.join(root, 'src', 'services', 'clientBookingApproval.js');
+const schemaPath = path.join(root, 'src', 'services', 'clientBookingApprovalSchema.js');
+const policyPath = path.join(root, 'src', 'services', 'bookingPolicy.js');
 const availabilityPath = path.join(root, 'src', 'services', 'availabilityService.js');
 const confirmationPath = path.join(root, 'src', 'services', 'customerBookingConfirmation.js');
 const webhookPath = path.join(root, 'src', 'controllers', 'webhookController.js');
 
-const commit = fs.readFileSync(commitPath, 'utf8');
+const approval = fs.readFileSync(approvalPath, 'utf8');
+const schema = fs.readFileSync(schemaPath, 'utf8');
+const policy = fs.readFileSync(policyPath, 'utf8');
 const availability = fs.readFileSync(availabilityPath, 'utf8');
 const confirmation = fs.readFileSync(confirmationPath, 'utf8');
 const webhook = fs.readFileSync(webhookPath, 'utf8');
 
-test('client booking commit creates a durable approval hold rather than final confirmation', () => {
-  assert.equal(fs.existsSync(approvalPath), true, 'clientBookingApproval service must exist');
-  assert.match(commit, /createPendingBookingApproval|requestPractitionerApproval/);
-  assert.match(commit, /awaiting practitioner approval|pending approval|held for approval/i);
-  assert.doesNotMatch(commit, /Your appointment is now confirmed in Shiloh’s canonical CRM/);
+test('client booking completion is converted to a durable pending-approval hold before client delivery', () => {
+  assert.match(policy, /ensureBookingApprovalInfrastructure/);
+  assert.match(policy, /createPendingBookingApproval/);
+  assert.match(policy, /requestPractitionerApproval/);
+  assert.match(policy, /status: ["']pending_approval["']/);
+  assert.match(policy, /not yet confirmed/);
+  assert.doesNotMatch(policy, /Booking created successfully\s*[—-]\s*appointment/);
 });
 
-test('pending approval has no automatic expiry and remains an availability conflict', () => {
-  assert.match(availability, /a\.status <> 'cancelled'/);
-  const approval = fs.existsSync(approvalPath) ? fs.readFileSync(approvalPath, 'utf8') : '';
+test('approval hold is inserted atomically with client appointment staff and has no automatic expiry', () => {
+  assert.match(schema, /CREATE TRIGGER trg_client_booking_approval_hold/);
+  assert.match(schema, /AFTER INSERT ON appointment_staff/);
+  assert.match(schema, /shiloh_client_whatsapp/);
+  assert.match(schema, /VALUES \(NEW\.appointment_id, NEW\.staff_id, observer_id, 'pending'\)/);
+  assert.doesNotMatch(schema, /expires_at|expiry|expirePending|setTimeout|TTL/i);
   assert.doesNotMatch(approval, /expires_at|expiry|expirePending|setTimeout|TTL/i);
+});
+
+test('pending approval remains an availability conflict until an explicit decision', () => {
+  assert.match(availability, /a\.status <> 'cancelled'/);
   assert.match(approval, /status[^\n]*(pending|approved|declined)/i);
 });
 
 test('assigned practitioner is the sole required approver and Abigail has Christel as observer only', () => {
-  const approval = fs.existsSync(approvalPath) ? fs.readFileSync(approvalPath, 'utf8') : '';
-  assert.match(approval, /required_approver_staff_id|approver_staff_id/);
+  assert.match(approval, /approver_staff_id/);
   assert.match(approval, /observer_staff_id/);
   assert.match(approval, /Abigail/i);
   assert.match(approval, /Christel/i);
-  assert.match(approval, /observer/i);
+  assert.match(approval, /observer only|observer/i);
+  assert.match(schema, /LOWER\(COALESCE\(NEW\.staff_name_snapshot/);
+  assert.match(schema, /= 'abigail'/);
+  assert.match(schema, /LOWER\(display_name\) = 'christel'/);
 });
 
 test('approval unlocks final customer confirmation while decline releases the held slot', () => {
-  const approval = fs.existsSync(approvalPath) ? fs.readFileSync(approvalPath, 'utf8') : '';
   assert.match(approval, /sendCustomerBookingConfirmationForAppointment/);
-  assert.match(approval, /approved/);
-  assert.match(approval, /declined/);
-  assert.match(approval, /status\s*=\s*'cancelled'|SET status = 'cancelled'/);
+  assert.match(approval, /status = 'approved'/);
+  assert.match(approval, /status = 'declined'/);
+  assert.match(approval, /SET status = 'cancelled'/);
+  assert.match(approval, /cancelBookingEvent/);
+  assert.match(approval, /cancelPractitionerBookingEvent/);
   assert.match(confirmation, /Booking confirmed/);
 });
 
-test('approval decisions are authorized through the WhatsApp admin identity and routed before generic admin handling', () => {
-  const approval = fs.existsSync(approvalPath) ? fs.readFileSync(approvalPath, 'utf8') : '';
+test('approval decisions are authorized through WhatsApp admin identity and routed before generic admin handling', () => {
   assert.match(approval, /staff_admin_accounts/);
   assert.match(approval, /normalized_whatsapp/);
   assert.match(webhook, /processClientBookingApprovalMessage/);
+  const approvalRoute = webhook.indexOf('processClientBookingApprovalMessage(from,text)');
+  const genericAdminRoute = webhook.indexOf('processAdminInteractiveMenuMessage(from,text)');
+  assert.ok(approvalRoute >= 0 && genericAdminRoute >= 0 && approvalRoute < genericAdminRoute);
 });
