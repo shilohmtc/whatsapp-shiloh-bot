@@ -161,3 +161,46 @@ Self-test-first PR #205 evidence:
 🔵 **Appointment #564 is already held. Do not send `RETRY BOOKING` again, do not create another booking, and do not let JP decide yet.** The immediate evidence required is JP's side of this same appointment: confirm whether JP received actionable **Approve / Decline** controls for #564. This is the live Meta-delivery/sole-authority acceptance gate. If JP received nothing, preserve #564 unchanged and inspect notification evidence before any further state transition.
 
 After JP receipt is proven, verify the exact Christel/time slot is excluded while #564 remains pending. Only after sole-JP delivery and slot exclusion are accepted should JP press Approve. Then verify final Dummy Test confirmation plus both shared and Christel Google Calendar mirrors/client-mobile presentation. A JP decline test remains a separate later genuine request. Ordinary Marietjie/Christel/Abigail approval acceptance remains open afterward. Preserve every unrelated WAITING item fail-closed.
+
+## Latest operational reconciliation — #564 completed / PR #207 / Google Contacts
+
+**This section supersedes every earlier #564 gate and continuation instruction above.** The controlled real Dummy Test journey for appointment **#564** is now fully accepted through approval and Calendar creation:
+- JP received the correct actionable Approve / Decline request with Dummy Test, the MediHeel treatment, Christel, Sat 15 Aug 2026 10:45, and explicit sole-JP authority.
+- Before JP decided, the same 10:45 slot disappeared from a fresh Christel/MediHeel availability check while #564 remained pending, proving authoritative held-slot exclusion.
+- JP approved #564 and received explicit confirmation that Jean-Pierre approved it and that client confirmation was sent.
+- Dummy Test received the correct final booking confirmation for Medi-Heel Pedicure (With Gel Toes) & Foot Massage, Christel, Saturday 15 August 2026, 10:45–12:15.
+- Connected Google Calendar independently showed the matching event on **Shiloh — Bookings** with `Shiloh CRM appointment #564`, `Client: Dummy Test`, `Mobile: 27716742646`, service, `Practitioner: Christel`, and `Source: shiloh_client_whatsapp`.
+- Visible Calendar configuration contains `Shiloh — Bookings`, `Shiloh — Abigail`, `Shiloh — Marietjie` and the primary account, but no separate `Shiloh — Christel`; therefore Christel's real booking architecture is the shared `Shiloh — Bookings` calendar. Do not invent or reopen a separate-Christel-calendar requirement without explicit clinic instruction.
+
+This real journey closes the positive Dummy Test approval lifecycle: request → indefinite pending hold → JP-only actionable approval → held-slot exclusion → JP approval → final client confirmation → canonical Google Calendar event with staff-useful client mobile. A JP **decline** path remains for a separate genuine request. Ordinary-client approval acceptance (Marietjie self; Christel self; Abigail or Christel first valid decision) remains open.
+
+### PR #207 — booking confirmation action UX
+
+The user approved replacing raw confirmation links/typed-only change instructions with native WhatsApp controls. PR **#207** (`Polish booking confirmation actions`) implemented this self-test-first:
+- regression-only commit `25842f425243332355a0cc7066f208da866e63b9` failed CI #573 before implementation;
+- final head `65afe7fd35d54f1614e3bf224a994d32d13f1321` passed CI #576;
+- squash merge `5c83b8f406f1cfce62175f7dc80904faa7cf6d56` is production-live on Render deploy `dep-d9veettbedkc73837hkg`.
+
+Active plain-text confirmation behavior now:
+- sends the concise appointment-confirmed summary and retains `We look forward to seeing you. 🌿`;
+- removes raw Google/ICS URLs from the visible summary;
+- sends **Google Calendar** and, when the ICS endpoint is available, **Apple / Outlook** as WhatsApp CTA URL controls;
+- sends **Reschedule** and **Cancel booking** as WhatsApp reply buttons with stable IDs `client_reschedule_booking` / `client_cancel_booking`;
+- those IDs normalize into the existing canonical `RESCHEDULE` / `CANCEL` appointment-change commands, while typed `RESCHEDULE` / `CANCEL` remain supported fallbacks;
+- supplemental controls are independently logged; failure of an optional button after the core confirmation has already been provider-accepted does not release the idempotency claim and risk a duplicate core confirmation.
+
+The client-phone-in-Calendar requirement was already protected by `tests/calendar-client-mobile.test.js`: client WhatsApp booking carries the uniquely resolved normalized phone into calendar creation and later updates preserve it. Real #564 provides production acceptance of that requirement. The phone is for staff Calendar context; it need not be echoed back to the client in their own WhatsApp confirmation.
+
+### Google Contacts truth
+
+🟠 **Google Contacts is not currently a synchronized Shiloh client store.** A connected Google Contacts search for `Dummy Test` returned no contact, and repository inspection found no Google Contacts / Google People API synchronization implementation. Therefore do **not** state that all existing or new CRM clients are automatically captured in Google Contacts today. Shiloh CRM remains authoritative.
+
+If the clinic chooses to implement Google Contacts synchronization, use a separate explicit workstream and preserve CRM authority. Recommended contract: one-way CRM → Google Contacts; normalized-phone deduplication; durable CRM-client identity metadata where supported; controlled existing-active-client backfill; incremental sync for new/updated clients; auditable failures/retries; and explicit privacy/erasure propagation rules. Never import Google Contacts back into CRM as authoritative truth by assumption.
+
+### Operational hygiene note
+
+During PR #207 staging, two connector calls accidentally created non-runtime placeholder/test files directly on `main`; each was immediately deleted before engineering continued. The resulting cleanup commits `680045f9cd82a80a3c12acb131ccc776d08dde59` and `6cdd3dac01fe8735540923c1a93535134d7bfd52` restored the intended tree. No appointment, CRM, approval, Calendar or production runtime logic was changed by those transient files. PR #207 was then built from the restored `main` and passed its red→green gate normally.
+
+### Exact continuation state
+
+Appointment #564 is confirmed and should not be recreated. Cancelled #561 must never be recreated. The newly deployed PR #207 confirmation controls still need **real WhatsApp transport acceptance on a future genuine confirmation**; do not mutate #564 merely to manufacture that evidence. Once a safe genuine confirmation naturally occurs, verify the Google Calendar and Apple / Outlook CTA controls plus Reschedule / Cancel booking reply buttons. A separate genuine Dummy Test request is needed for the JP-decline path, and ordinary approval-rule acceptance remains open. Preserve all attendance/provider/payment/privacy WAITING items fail-closed.
