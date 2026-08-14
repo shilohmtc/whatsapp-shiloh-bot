@@ -7,6 +7,7 @@ const {
   createPendingBookingApproval,
   requestPractitionerApproval,
 } = require("./clientBookingApproval");
+const { ensureBookingApprovalInfrastructure } = require("./clientBookingApprovalSchema");
 const logger = require("../lib/logger");
 
 const POLICY_VERSION = "2026-08-11-v1";
@@ -43,6 +44,7 @@ let initialized = false;
 async function ensurePolicySchema() {
   if (initialized) return;
 
+  await ensureBookingApprovalInfrastructure();
   await pool.query(`ALTER TABLE booking_intents ADD COLUMN IF NOT EXISTS policy_version TEXT`);
   await pool.query(`ALTER TABLE booking_intents ADD COLUMN IF NOT EXISTS policy_accepted_at TIMESTAMPTZ`);
   await pool.query(`ALTER TABLE booking_intents ADD COLUMN IF NOT EXISTS policy_channel TEXT`);
@@ -221,6 +223,7 @@ async function stageCreatedBookingForApproval(result) {
 
 async function finalizeAcceptedBooking(phone) {
   try {
+    await ensureBookingApprovalInfrastructure();
     return stageCreatedBookingForApproval(await commitAcceptedClientBooking(phone));
   } catch (error) {
     logger.error({ err: error }, "Canonical client booking commit failed after policy acceptance");
@@ -238,6 +241,7 @@ async function processBookingPolicyMessage(phone, text) {
     if (!intent) return { handled: false };
 
     if (intent.status === "policy_accepted") {
+      await ensureBookingApprovalInfrastructure();
       return stageCreatedBookingForApproval(await processAcceptedClientBookingMessage(phone, text));
     }
 
