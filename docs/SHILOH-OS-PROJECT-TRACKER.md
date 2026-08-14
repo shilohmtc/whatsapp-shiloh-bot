@@ -5,17 +5,17 @@ Purpose: concise operational dashboard. `docs/SHILOH-OS-MASTER-STATUS.md` is the
 
 ## Current Product-Critical Gate
 
-🔵 **Real Client Perspective held-booking approval lifecycle acceptance.**
+🔵 **Real Client Perspective acceptance: first confirm Elim MediHeel family presentation after PR #199, then resume the held-booking approval lifecycle.**
 
-Production runtime baseline: PR #197 squash merge `61151ba771ffd90213cc8947ae28f661e152f768`; GitHub `main` CI #533 passed; Render deploy `dep-d9vd7n3ncjis738r6nq0` reached live and `/health` returned HTTP 200.
+Production runtime baseline: PR #199 squash merge `0562ca279304ab8fd92b7bc2cb69bea758ba6f3e`; Render deploy `dep-d9vdeonavr4c73ag8e30` reached live. Startup logged `Marietjie pedicure ownership verified` with `repaired: true`, `serviceCount: 2`, `marietjieId: 6`.
 
 Pre-booking routing/presentation state:
 - PR #194 fixed the English-language false positive on `Lymphatic drainage treatments`; real WhatsApp proved the rejection disappeared.
 - PR #195 fixed the subsequent generic service-verification fallthrough. Regression-only commit `b8de7a6d7757661858ad7e51c7c296ef54c4e68a` failed CI #517; final head `c4343e07ec9cb99fb4ae6ea86136b4a7f385e934` passed CI #518; runtime/deploy reached live.
-- **Real WhatsApp proves the exact phrase enters the CRM-backed Lymphatic treatment list.** Observed rows: `Facial Lymphatic Drainage Massage` • 60 min • R450 and `Lymphatic Drainage Reset Package` • 90 min • R500. C1-FAMILY-NL is closed; do not repeat solely for proof.
-- PR #197 polished the actual booking-entry `Choose service` surface only: visible rows are now `Beauty & Aesthetics`, `Massage Treatments`, `Lymphatic Drainage`, and `Elim MediHeel Pedicures`, with `View ... treatments` descriptions. Stable `client_family_*` IDs and CRM/practitioner truth are unchanged.
-- PR #197 regression-first evidence: `ed9e64437c1c858a790d506f8e8851a8f1ae8110` failed before implementation; final head `810992a9240d5f46f3b59955035b4c629bb2bf84` passed CI #532. A transient whole-file overwrite caused seven CI failures and was corrected before merge by restoring current `main` behavior and applying only the intended minimal presentation diff.
-- Elim MediHeel Pedicures previously returned zero eligible active CRM rows. Preserve that fail-closed catalogue result pending authoritative CRM evidence.
+- **Real WhatsApp proves the exact Lymphatic phrase enters the CRM-backed treatment list.** Observed rows: `Facial Lymphatic Drainage Massage` • 60 min • R450 and `Lymphatic Drainage Reset Package` • 90 min • R500. C1-FAMILY-NL is closed; do not repeat solely for proof.
+- PR #197 polished the actual booking-entry `Choose service` surface: visible rows are `Beauty & Aesthetics`, `Massage Treatments`, `Lymphatic Drainage`, and `Elim MediHeel Pedicures`, with `View ... treatments` descriptions. Stable `client_family_*` IDs are unchanged.
+- **PR #199 resolved the Elim MediHeel zero-row root cause.** Existing active Medi-Heel services were present in the imported CRM catalogue, but their historical staff-service mappings were Abigail/Christel while the current client family is Marietjie-only; migration 026 had omitted `Pedicures & Foot Care`. PR #199 repairs only existing active pedicure/MediHeel/Elim ownership to unique active Marietjie, fail-closed and idempotently. It does not create/activate/rename/reprice services.
+- PR #199 self-test-first evidence: regression-only commit `1144d92441de1563b2ff9b430edae87672569673` failed CI #536 before implementation; final head `b362c1391cb7d17f27ba9da239274604963f619e` passed CI #541; runtime/deploy reached live and startup proved two mappings repaired.
 
 Approval policy live:
 - **CRM Dummy Test booking → JP/Jean-Pierre alone may approve/decline.** Unique Dummy Test and qualifying JP authority are required; ambiguity fails closed.
@@ -30,9 +30,9 @@ Approval policy live:
 | ID | Workstream | State | Next evidence/action |
 |---|---|---|---|
 | C1-FAMILY-NL | Natural treatment-family routing | 🟢 REAL-ACCEPTED | Exact Lymphatic phrase rendered authoritative treatment list. Do not repeat. |
-| C1-FAMILY-MENU | Booking-entry family menu presentation | 🔵 PRODUCTION-LIVE / REAL ACCEPTANCE PENDING | Observe naturally next time the menu appears; do not restart current journey solely for copy. |
-| C1 | Client Perspective Testing | 🔵 ACTIVE / PRODUCT-CRITICAL | Continue current Dummy Test journey: choose a Lymphatic treatment, future slot, complete request, then stop at pending approval. Do not recreate #561. |
-| C1-MEDIHEEL | Elim MediHeel catalogue | 🟠 WAITING FOR AUTHORITATIVE CRM EVIDENCE | Do not patch/seed speculatively. |
+| C1-FAMILY-MENU | Booking-entry family menu presentation | 🔵 PRODUCTION-LIVE / REAL ACCEPTANCE PENDING | Observe naturally; menu copy is live. |
+| C1-MEDIHEEL | Elim MediHeel ownership/presentation | 🔵 REPAIRED / ONE REAL CHECK REQUIRED | Select Elim MediHeel once; expected existing active Marietjie treatment list. Do not seed services. |
+| C1 | Client Perspective Testing | 🔵 ACTIVE / PRODUCT-CRITICAL | After MediHeel check, continue Dummy Test to future booking and stop at pending approval. Do not recreate #561. |
 | C1-APP-DUMMY | Dummy Test → JP approval override | 🔵 LIVE / REAL ACCEPTANCE REQUIRED | Prove JP receives Approve/Decline and assigned practitioner is not required approver. No expiry. |
 | C1-APP-ORD | Ordinary client approval rules | 🔵 LIVE / REAL ACCEPTANCE REQUIRED | Marietjie self; Christel self; Abigail or Christel first decision. |
 | C1-RETURN | Registered-client return recognition | ⚪ READY / IN-JOURNEY | Observe naturally without redundant registration. |
@@ -53,8 +53,9 @@ Approval policy live:
 | First-time Dummy Test registration | 🟢 VERIFIED | Historical real WhatsApp evidence retained; do not redo. |
 | Lymphatic language-guard false positive | 🟢 REAL-ACCEPTED FIXED | Real post-PR-#194 WhatsApp evidence. |
 | Natural Lymphatic family routing | 🟢 REAL-ACCEPTED | Exact phrase rendered two CRM-backed Lymphatic treatment rows with duration/pricing. |
-| Booking-entry family menu presentation | 🔵 PRODUCTION-LIVE | PR #197 CI/deploy verified; observe new `Massage Treatments` + `View ... treatments` copy naturally through real WhatsApp. |
-| Elim MediHeel Pedicures family | 🟠 CRM TRUTH REQUIRED | Current real result zero eligible active rows. |
+| Booking-entry family menu presentation | 🔵 PRODUCTION-LIVE | PR #197 CI/deploy verified; observe copy naturally through real WhatsApp. |
+| Elim MediHeel Pedicures ownership | 🟢 PRODUCTION-REPAIRED | Startup proved two existing active service mappings repaired to Marietjie; no catalogue rows created. |
+| Elim MediHeel Pedicures WhatsApp list | 🔵 REAL ACCEPTANCE REQUIRED | Re-open/select family once and confirm treatment list renders through Meta. |
 | Beauty & Aesthetics treatment-list presentation | 🟢 VERIFIED | PR #172 + real WhatsApp acceptance. |
 | HIFU → Marietjie eligibility/routing | 🟢 VERIFIED | Historical real WhatsApp evidence. |
 | Authoritative availability | 🟢 VERIFIED | SQL repair + real acceptance retained. |
@@ -76,13 +77,14 @@ Approval policy live:
 - CI/unit/source-contract evidence is necessary but broad real WhatsApp acceptance requires actual transport/human observation.
 - Every deterministic client-visible production defect found manually should become a permanent regression before repair where feasible.
 - Human real-WhatsApp acceptance validates Meta transport, live CRM state and presentation.
-- On high-churn files, preserve the current `main` implementation and apply the smallest possible delta; PR #197 demonstrated CI correctly catches accidental whole-file regressions before merge.
+- On high-churn files, preserve current `main` and apply the smallest possible delta; PR #197 demonstrated CI correctly catches accidental whole-file regressions before merge.
+- Positive startup/database-backed application evidence may resolve CRM-mapping truth when the direct Render Postgres connector is unavailable; do not infer beyond the logged mutation result.
 
 ## Exact next test
 
-Continue from the currently displayed **Lymphatic treatment list** as CRM Dummy Test. Select one genuine treatment, choose a genuine future slot and complete the booking request. Do not recreate #561. When Shiloh says the request is held/pending approval, **stop before JP decides**. Capture Dummy Test’s exact pending wording and JP’s actionable request. We then verify slot exclusion and sole-JP authority before JP presses Approve; afterward verify final client confirmation and both Calendar mirrors. JP decline is a later separate genuine request.
+From CRM Dummy Test, select/send **`Elim MediHeel Pedicures` once**. The previous zero-row response should be gone; the family should render the existing active Marietjie pedicure/MediHeel treatment list. Do not seed treatments and do not recreate #561.
 
-Do **not** restart this in-progress journey solely to re-open PR #197’s booking-family menu. Observe that menu naturally the next time it appears.
+If that passes, continue the same Dummy Test journey using a genuine desired treatment and genuine future slot. When Shiloh says the request is held/pending approval, **stop before JP decides**. Capture Dummy Test’s exact pending wording and JP’s actionable request. Then verify slot exclusion and sole-JP authority before JP presses Approve; afterward verify final client confirmation and both Calendar mirrors. JP decline is a later separate genuine request.
 
 ## Guardrails
 
