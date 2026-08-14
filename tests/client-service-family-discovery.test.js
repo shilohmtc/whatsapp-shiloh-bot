@@ -23,7 +23,7 @@ test('service-family ownership is explicit and client-facing', () => {
     beauty: { title: 'Beauty & Aesthetics', practitioner: 'Marietjie' },
     massage: { title: 'Massage', practitioner: null },
     lymphatic: { title: 'Lymphatic Drainage', practitioner: 'Abigail' },
-    pedicure: { title: 'Elim MediHeel Pedicures', practitioner: 'Marietjie' },
+    pedicure: { title: 'Elim MediHeel Pedicures', practitioner: 'Christel' },
   });
 });
 
@@ -69,12 +69,13 @@ test('lymphatic is Abigail-only even if stale CRM mappings exist for another pra
   assert.match(familySource, /family === 'lymphatic' \? \['abigail'\]/);
 });
 
-test('Elim MediHeel Pedicures is Marietjie-only and CRM-name/category derived', () => {
+test('Elim MediHeel Pedicures is Christel-only and CRM-name/category derived', () => {
   const sql = familyFilterSql('pedicure');
-  assert.match(sql, /LOWER\(st\.display_name\) = 'marietjie'/);
+  assert.match(sql, /LOWER\(st\.display_name\) = 'christel'/);
   assert.match(sql, /pedicur/);
   assert.match(sql, /mediheel/);
   assert.match(sql, /elim/);
+  assert.match(familySource, /family === 'beauty' \? \['marietjie'\] : family === 'pedicure' \? \['christel'\]/);
 });
 
 test('family service lists use stable IDs and stay inside Meta row limits', () => {
