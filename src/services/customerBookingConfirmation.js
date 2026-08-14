@@ -106,9 +106,9 @@ async function sendCustomerBookingConfirmation(data){
       providerAccepted=true;
 
       const actionContext={appointmentId,clientId};
-      confirmationActions.googleCalendar=await sendOptionalConfirmationAction('google_calendar',()=>sendWhatsAppCtaUrl(phone,'*Add to calendar*','Google Calendar',google),actionContext);
+      confirmationActions.googleCalendar=await sendOptionalConfirmationAction('google_calendar',()=>sendWhatsAppCtaUrl(phone,'Add to Google Calendar','Google Calendar',google),actionContext);
       if(ics){
-        confirmationActions.appleOutlook=await sendOptionalConfirmationAction('apple_outlook_calendar',()=>sendWhatsAppCtaUrl(phone,'Add this appointment to your phone or desktop calendar.','Apple / Outlook',ics),actionContext);
+        confirmationActions.appleOutlook=await sendOptionalConfirmationAction('apple_outlook_calendar',()=>sendWhatsAppCtaUrl(phone,'Add to Apple / Outlook','Apple / Outlook',ics),actionContext);
       }
       confirmationActions.changeButtons=await sendOptionalConfirmationAction('booking_change_buttons',()=>sendWhatsAppReplyButtons(phone,'*Need to make a change?*\nUse a button below, or type *RESCHEDULE* or *CANCEL*.',[
         {id:'client_reschedule_booking',title:'Reschedule'},
