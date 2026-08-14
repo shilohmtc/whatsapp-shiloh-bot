@@ -8,6 +8,8 @@ const reminder = fs.readFileSync(path.join(root, 'src/services/appointmentRemind
 const lifecycle = fs.readFileSync(path.join(root, 'src/services/appointmentLifecycle.js'), 'utf8');
 const care = fs.readFileSync(path.join(root, 'src/services/customerCare.js'), 'utf8');
 const bookingConfirmation = fs.readFileSync(path.join(root, 'src/services/customerBookingConfirmation.js'), 'utf8');
+const reminderTemplate = fs.readFileSync(path.join(root, 'src/services/reminderActionTemplateProvisioning.js'), 'utf8');
+const whatsapp = fs.readFileSync(path.join(root, 'src/services/whatsapp.js'), 'utf8');
 const { parseConfirmationCommand } = require('../src/services/appointmentReminderConfirmation');
 
 test('reminder confirmation command is deliberately explicit', () => {
@@ -41,6 +43,16 @@ test('reminder greeting prefers one unambiguous active CRM client name before pr
   assert.match(lifecycle, /c\.status='active'/);
   assert.match(lifecycle, /HAVING COUNT\(DISTINCT c\.id\)=1/);
   assert.match(lifecycle, /getProfile/);
+});
+
+test('reminder action template is provider-safe and exposes deterministic change actions', () => {
+  assert.match(reminderTemplate, /UTILITY/);
+  assert.match(reminderTemplate, /Reschedule/);
+  assert.match(reminderTemplate, /Cancel booking/);
+  assert.match(reminderTemplate, /QUICK_REPLY/);
+  assert.match(lifecycle, /WHATSAPP_REMINDER_ACTIONS_TEMPLATE/);
+  assert.match(whatsapp, /quickReplyPayloads/);
+  assert.match(whatsapp, /sub_type:\s*["']quick_reply["']/);
 });
 
 test('client identity fails closed unless exactly one active canonical client matches the phone', () => {
