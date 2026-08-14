@@ -1,28 +1,44 @@
 # Shiloh OS — Project Tracker
 
 Updated: 2026-08-14
-Purpose: concise operational dashboard. `docs/SHILOH-OS-MASTER-STATUS.md` is the current detailed ledger. The pre-approval tracker is preserved at `docs/archive/SHILOH-OS-PROJECT-TRACKER-pre-approval-2026-08-14.md`; do not redo completed work from that archive.
+Purpose: concise operational dashboard. `docs/SHILOH-OS-MASTER-STATUS.md` is the detailed current ledger. Historical pre-approval detail remains preserved at `docs/archive/SHILOH-OS-PROJECT-TRACKER-pre-approval-2026-08-14.md`; do not redo completed work from that archive.
 
 ## Current Product-Critical Gate
 
-🔵 **Real Client Perspective acceptance: first confirm Elim MediHeel family presentation after PR #201, then resume the held-booking approval lifecycle.**
+🔵 **Resume the existing policy-accepted CRM Dummy Test booking by sending exactly `RETRY BOOKING` once, then stop at the pending hold before JP decides.**
 
-Production runtime baseline: PR #201 squash merge `1dd589904114726b7696f34bed9ce5800a7c6aa2`; Render deploy `dep-d9vdjgnavr4c73agbv4g` reached live.
+Production runtime baseline: PR #203 squash merge `cb8091ef36e5805635a4c4e82b7d198454d2c451`; Render deploy `dep-d9vdt1jbc2fs73cbjtk0` reached live.
 
-Pre-booking routing/presentation state:
-- PR #194 fixed the English-language false positive on `Lymphatic drainage treatments`; real WhatsApp proved the rejection disappeared.
-- PR #195 fixed the subsequent generic service-verification fallthrough. Real WhatsApp proves the exact Lymphatic phrase enters the CRM-backed treatment list. C1-FAMILY-NL is closed; do not repeat solely for proof.
-- PR #197 polished the actual booking-entry `Choose service` surface: visible rows are `Beauty & Aesthetics`, `Massage Treatments`, `Lymphatic Drainage`, and `Elim MediHeel Pedicures`, with stable `client_family_*` IDs unchanged.
-- PR #199 proved the two active Medi-Heel services already existed and that the zero-row result was a staff-service ownership problem, not missing catalogue data. Its temporary Marietjie assignment is superseded.
-- **Authoritative clinic evidence on 2026-08-14 states MediHeel treatments are currently bookable with Christel only.** PR #201 makes the family and CRM repair Christel-only and narrows the family scope to MediHeel/Elim service names so unrelated pedicure services are not reassigned.
-- PR #201 self-test-first evidence: regression-only commit `b28919fb99a38474bcb13a05536d88f7af24a658` failed CI #545 before implementation. CI #550 then exposed two stale assertions still encoding the old Marietjie/broad-pedicure rule. Final head `0e43c29e1dcd31079a7f85db7ee0fa163e5db5d1` passed CI #552; squash merge `1dd589904114726b7696f34bed9ce5800a7c6aa2`; Render deploy reached live.
-- PR #201 creates/activates/renames/reprices no services. Do not seed duplicate MediHeel treatments.
+### Why PR #203 was required
 
-Approval policy live:
-- **CRM Dummy Test booking → JP/Jean-Pierre alone may approve/decline.** Unique Dummy Test and qualifying JP authority are required; ambiguity fails closed.
+Real WhatsApp on 2026-08-14 reached MediHeel/Christel/15 Aug 2026/10:45, recorded Booking Policy acceptance, then safely failed the final appointment write without claiming a booking. Repository truth proved the mismatch: Jean-Pierre's authoritative admin migration says he is a project admin and `staff_id` may remain NULL, while the Dummy Test approval trigger incorrectly required JP to join through clinic `staff`.
+
+PR #203 fixes the model without inventing a staff record:
+- normal practitioner approvals continue to use `approver_staff_id`;
+- Dummy Test uses `approver_admin_id` → the unique qualifying Jean-Pierre `staff_admin_accounts.id`;
+- JP must still be active `business_admin`, `all_business`, `all_services`, with a WhatsApp identity;
+- ambiguity/missing JP authority fails closed;
+- hold remains indefinite and final confirmation remains blocked until approval.
+
+Self-test-first evidence: regression-only commit `564a143363d20c3ff089b4f3b98dc4b331eba3aa` failed CI #556; final head `aad08a5c672083004e1511d5c5af44b809d61505` passed CI #559; merge/deploy reached live.
+
+## Current accepted client evidence
+
+- ✅ Exact `Lymphatic drainage treatments` phrase renders CRM-backed treatment rows.
+- ✅ Booking family menu presentation code is production-live.
+- ✅ Elim MediHeel list is real-accepted: two existing Medi-Heel treatments rendered with duration/pricing.
+- ✅ MediHeel practitioner truth is **Christel only**; selecting the With Gel Toes treatment showed `Practitioner: Christel`.
+- ✅ Saturday 15 August 2026 produced real Christel availability; 10:45–12:30 slots rendered cleanly.
+- ✅ Selected 10:45 summary showed correct service/practitioner/date/time and `Nothing is booked yet`.
+- ✅ Policy version `2026-08-11-v1` rendered and explicit `I AGREE` was recorded.
+- 🔵 Final held appointment still needs post-PR-#203 acceptance via the existing retry path.
+
+## Approval policy live
+
+- **CRM Dummy Test → JP/Jean-Pierre admin account alone may approve/decline.** JP does not need a clinic `staff_id`.
 - Ordinary Marietjie booking → Marietjie alone.
 - Ordinary Christel booking → Christel alone.
-- Ordinary Abigail booking → Abigail or Christel, first explicit decision authoritative.
+- Ordinary Abigail booking → Abigail or Christel, first valid decision authoritative.
 - Pending hold has no automatic expiry and blocks the slot until explicit approval/decline.
 - Final client confirmation remains fail-closed until approval.
 
@@ -30,70 +46,51 @@ Approval policy live:
 
 | ID | Workstream | State | Next evidence/action |
 |---|---|---|---|
-| C1-FAMILY-NL | Natural treatment-family routing | 🟢 REAL-ACCEPTED | Exact Lymphatic phrase rendered authoritative treatment list. Do not repeat. |
-| C1-FAMILY-MENU | Booking-entry family menu presentation | 🔵 PRODUCTION-LIVE / REAL ACCEPTANCE PENDING | Observe naturally; menu copy is live. |
-| C1-MEDIHEEL | Elim MediHeel ownership/presentation | 🔵 CHRISTEL-ONLY / PRODUCTION-LIVE / ONE REAL CHECK REQUIRED | Select Elim MediHeel once; confirm Christel-owned treatment list. Do not seed services. |
-| C1 | Client Perspective Testing | 🔵 ACTIVE / PRODUCT-CRITICAL | After MediHeel check, continue Dummy Test to future booking and stop at pending approval. Do not recreate #561. |
-| C1-APP-DUMMY | Dummy Test → JP approval override | 🔵 LIVE / REAL ACCEPTANCE REQUIRED | Prove JP receives Approve/Decline and assigned practitioner is not required approver. No expiry. |
-| C1-APP-ORD | Ordinary client approval rules | 🔵 LIVE / REAL ACCEPTANCE REQUIRED | Marietjie self; Christel self; Abigail or Christel first decision. |
-| C1-RETURN | Registered-client return recognition | ⚪ READY / IN-JOURNEY | Observe naturally without redundant registration. |
-| C1-CAL | Calendar/mobile presentation | 🟠 WAITING FOR GENUINE BOOKING | Verify on same next genuine future booking. |
-| C1-TPL | Booking confirmation Meta template | 🟠 WAITING | Preserve plain-text path until exact Meta Active/APPROVED evidence. |
+| C1-MEDIHEEL | Elim MediHeel presentation/Christel routing | 🟢 REAL-ACCEPTED | Two treatments shown; With Gel Toes resolved Christel. Do not repeat solely for proof. |
+| C1-AVAIL | New-booking availability presentation | 🟢 REAL-ACCEPTED IN CURRENT JOURNEY | Christel slots 10:45–12:30 rendered cleanly. |
+| C1-POLICY | Booking Policy acceptance | 🟢 REAL-ACCEPTED | `2026-08-11-v1`, explicit `I AGREE` recorded. |
+| C1-WRITE | Final booking write after policy | 🟡 DEFECT REPAIRED / REAL RETRY REQUIRED | Send `RETRY BOOKING` once on the existing accepted intent. |
+| C1-APP-DUMMY | Dummy Test → JP approval | 🔵 LIVE / REAL ACCEPTANCE REQUIRED | After retry succeeds, prove JP gets Approve/Decline and Christel is not required approver. |
+| C1-HOLD | Pending slot/no-expiry | 🔵 REAL ACCEPTANCE REQUIRED | Verify exact slot is unavailable and remains held until explicit JP decision. |
+| C1-CONFIRM | JP approval → final confirmation | 🔵 REAL ACCEPTANCE REQUIRED | Approve only after pending evidence is captured. |
+| C1-CAL | Shared + Christel Calendar/mobile presentation | 🟠 WAITING FOR CURRENT GENUINE BOOKING | Verify on the same held/approved booking. |
+| C1-APP-ORD | Ordinary approval rules | 🔵 LIVE / FOLLOW-UP REAL ACCEPTANCE | Marietjie self; Christel self; Abigail or Christel first decision. |
+| C1-RETURN | Registered-client return recognition | ⚪ READY / IN-JOURNEY | Observe naturally; no redundant registration. |
+| C1-TPL | Booking confirmation Meta template | 🟠 WAITING | Preserve plain-text path until exact provider Active/APPROVED evidence. |
 | A1 | Six known attendance finalizations | 🟠 WAITING | Genuine Completed/No-show truth only; never infer. |
-| A2 | Finalization/earnings UX acceptance | ⚪ READY | Remaining authorized-account acceptance after client-critical gate. |
-| B1 | Remaining Admin route acceptance | ⚪ READY | Only genuinely unverified role-specific paths after client gate. |
-| D0 | Customer-care foundation | 🟢 VERIFIED | Real lifecycle/provider acceptance remains evidence-gated. |
-| E1 | Ozow activation | 🟠 WAITING | Merchant configuration + explicit business rules. |
-| F3 | Instagram ownership/connection | ⚪ READY | Verify existing `@shiloh_massage_studio`; never create duplicate by assumption. |
-| PRIV | Destructive privacy execution | 🟠 WAITING / FAIL-CLOSED | Requires legal/owner authority and sufficient evidence. |
-
-## Client acceptance board
-
-| Item | State | Required evidence |
-|---|---|---|
-| First-time Dummy Test registration | 🟢 VERIFIED | Historical real WhatsApp evidence retained; do not redo. |
-| Lymphatic language-guard false positive | 🟢 REAL-ACCEPTED FIXED | Real post-PR-#194 WhatsApp evidence. |
-| Natural Lymphatic family routing | 🟢 REAL-ACCEPTED | Exact phrase rendered two CRM-backed Lymphatic treatment rows with duration/pricing. |
-| Booking-entry family menu presentation | 🔵 PRODUCTION-LIVE | PR #197 CI/deploy verified; observe copy naturally through real WhatsApp. |
-| Elim MediHeel Pedicures ownership | 🟢 CORRECTED / PRODUCTION-LIVE | Current authoritative rule is Christel-only via PR #201; PR #199 Marietjie assignment is superseded. |
-| Elim MediHeel Pedicures WhatsApp list | 🔵 REAL ACCEPTANCE REQUIRED | Re-open/select family once and confirm treatment list renders through Meta with Christel ownership. |
-| Beauty & Aesthetics treatment-list presentation | 🟢 VERIFIED | PR #172 + real WhatsApp acceptance. |
-| HIFU → Marietjie eligibility/routing | 🟢 VERIFIED | Historical real WhatsApp evidence. |
-| Authoritative availability | 🟢 VERIFIED | SQL repair + real acceptance retained. |
-| New-booking availability client copy | 🟢 PRODUCTION-LIVE | Exercise naturally in next journey. |
-| Appointment #561 booking/reschedule/cancellation | 🟢 VERIFIED / CANCELLED | Do not recreate #561. |
-| New Dummy Test booking pending-approval copy | 🔵 REAL ACCEPTANCE REQUIRED | Client must see request received/time held/not yet confirmed. |
-| Pending slot exclusion | 🔵 REAL ACCEPTANCE REQUIRED | Same practitioner/time must not appear available while pending. |
-| Hold no-expiry behavior | 🔵 REAL ACCEPTANCE REQUIRED | Hold persists until explicit JP decision. |
-| JP approval request for Dummy Test | 🔵 REAL ACCEPTANCE REQUIRED | JP receives actionable Approve/Decline as sole required approver. |
-| Practitioner non-authority for Dummy Test | 🔵 REAL ACCEPTANCE REQUIRED | Assigned practitioner must not be required decision-maker. |
-| JP approval → final client confirmation | 🔵 REAL ACCEPTANCE REQUIRED | Final confirmation/calendar links only after JP approval. |
-| JP decline → release | ⚪ FOLLOW-UP TEST | Separate genuine Dummy Test request later. |
-| Ordinary Abigail/Christel approval | ⚪ FOLLOW-UP REAL ACCEPTANCE | Normal client booking after Dummy Test path. |
-| Calendar client-mobile metadata | 🟠 WAITING FOR NEXT GENUINE BOOKING | Check shared + practitioner Calendar on same genuine booking. |
-| Registered-client return | ⚪ READY / IN-JOURNEY | Confirm recognition without redundant registration. |
-
-## Verification-quality rule
-
-- CI/unit/source-contract evidence is necessary but broad real WhatsApp acceptance requires actual transport/human observation.
-- Every deterministic client-visible production defect found manually should become a permanent regression before repair where feasible.
-- Explicit clinic/operator evidence overrides an earlier engineering inference about practitioner eligibility; correct runtime and ledger together.
-- Human real-WhatsApp acceptance validates Meta transport, live CRM state and presentation.
-- On high-churn files, preserve current `main` and apply the smallest possible delta.
+| A2 | Finalization/earnings UX | ⚪ READY | Remaining authorized-account acceptance after client gate. |
+| B1 | Remaining Admin route acceptance | ⚪ READY | Only genuinely unverified paths after client gate. |
+| D0 | Customer-care foundation | 🟢 VERIFIED | Provider/lifecycle acceptance remains evidence-gated. |
+| E1 | Ozow | 🟠 WAITING | Merchant configuration + explicit business rules. |
+| F3 | Instagram ownership/connection | ⚪ READY | Verify existing `@shiloh_massage_studio`; never create duplicate. |
+| PRIV | Destructive privacy execution | 🟠 WAITING / FAIL-CLOSED | Legal/owner authority + sufficient evidence required. |
 
 ## Exact next test
 
-From CRM Dummy Test, select/send **`Elim MediHeel Pedicures` once**. The previous zero-row response should be gone and the family should be **Christel-only**. Do not seed treatments and do not recreate #561.
+From the **same CRM Dummy Test WhatsApp conversation**, send exactly:
 
-If that passes, continue the same Dummy Test journey using a genuine desired treatment and genuine future slot. When Shiloh says the request is held/pending approval, **stop before JP decides**. Capture Dummy Test’s exact pending wording and JP’s actionable request. Then verify slot exclusion and sole-JP authority before JP presses Approve; afterward verify final client confirmation and both Calendar mirrors. JP decline is a later separate genuine request.
+`RETRY BOOKING`
+
+Do not restart the service/date/time journey and do not recreate #561. The existing accepted intent should re-run final CRM, availability, schedule and Calendar checks. If the 10:45 slot is still genuinely available, expected result is one canonical appointment request held pending approval—not final confirmation.
+
+When the pending/held response appears:
+1. **Stop before JP presses anything.**
+2. Capture Dummy Test's exact held/not-confirmed message.
+3. Capture JP's actionable Approve/Decline request.
+4. Verify the same Christel 10:45 slot is no longer offered to another client.
+5. Only after those checks should JP approve; then verify final client confirmation plus shared and Christel Calendar mirrors.
+6. Test JP decline later on a separate genuine request.
+
+If `RETRY BOOKING` fails again, do not repeatedly retry; preserve the exact message and inspect production evidence before another state transition.
 
 ## Guardrails
 
 - GitHub `main`, Render production, CRM, Google Calendar and explicit real WhatsApp/human evidence remain authoritative.
-- Current MediHeel practitioner truth: **Christel only**.
-- PR #199 Marietjie ownership assignment is historical/superseded and must not be reused as current truth.
+- Current MediHeel truth: **Christel only**.
+- Current Dummy Test approval truth: **Jean-Pierre admin account only; no clinic staff record is required or to be invented.**
+- PR #199 Marietjie MediHeel assignment is superseded.
 - Do not recreate cancelled appointment #561.
 - Do not infer provider/template/attendance outcomes.
-- CRM Dummy Test / JP authority ambiguity must fail closed; never fall back to practitioner approval.
-- Direct Render Postgres connector SSL failure is a tooling limitation, not CRM truth.
-- Re-rank after every defect/blocker resolution; product-critical client defects take precedence.
+- Dummy Test/JP ambiguity must fail closed.
+- Direct Render Postgres SSL connector failure is a tooling limitation, not CRM truth.
+- Human acceptance is for final transport/live-state proof; deterministic defects should be caught and retained as regressions.
