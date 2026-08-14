@@ -42,17 +42,18 @@ function slotOverlapsCalendarConflict(slot, conflicts) {
   });
 }
 
-async function applyGoogleCalendarConflicts(slots, staffName) {
+async function applyGoogleCalendarConflicts(slots, staffName, ignoreEventId = null) {
   if (!slots.length) return { slots, calendarEnabled: false, calendarConflictCount: 0 };
 
   // Fetch the relevant Google Calendar conflicts once for the full candidate range,
   // then remove every candidate slot that overlaps one of those busy events.
-  // This keeps authoritative availability checks consistent with CRM-3 without
-  // issuing one Google API request per candidate slot.
+  // Reschedule callers may explicitly ignore the Google event for the appointment
+  // being moved; ordinary booking callers leave ignoreEventId unset.
   const calendar = await checkCalendarAvailability({
     startsAt: slots[0].starts_at,
     endsAt: slots[slots.length - 1].ends_at,
     staffName,
+    ignoreEventId: ignoreEventId || null,
   });
 
   if (!calendar.enabled) {
@@ -67,11 +68,20 @@ async function applyGoogleCalendarConflicts(slots, staffName) {
   };
 }
 
-async function listAvailableSlots({ staffId, serviceId, date, locationId, intervalMinutes = 15 }) {
+async function listAvailableSlots({
+  staffId,
+  serviceId,
+  date,
+  locationId,
+  intervalMinutes = 15,
+  excludeAppointmentId = null,
+  ignoreEventId = null,
+}) {
   staffId = positiveInt(staffId);
   serviceId = positiveInt(serviceId);
   locationId = locationId == null ? null : positiveInt(locationId);
   intervalMinutes = positiveInt(intervalMinutes) || 15;
+  excludeAppointmentId = excludeAppointmentId == null ? null : positiveInt(excludeAppointmentId);
   date = localDate(date);
   if (!staffId || !serviceId || !date) return { status: 'invalid_request', slots: [] };
 
@@ -209,6 +219,7 @@ async function listAvailableSlots({ staffId, serviceId, date, locationId, interv
             JOIN appointments a ON a.id = ast.appointment_id
            WHERE ast.staff_id = $2
              AND a.status <> 'cancelled'
+             AND ($6::bigint IS NULL OR a.id <> $6)
              AND a.starts_at < (c.local_end AT TIME ZONE '${TZ}')
              AND a.ends_at > (c.local_start AT TIME ZONE '${TZ}')
         )
@@ -219,13 +230,13 @@ async function listAvailableSlots({ staffId, serviceId, date, locationId, interv
              AND cb.ends_at > (c.local_start AT TIME ZONE '${TZ}')
         )
       ORDER BY starts_at`,
-    [date, staffId, locationId, totalMinutes, intervalMinutes]
+    [date, staffId, locationId, totalMinutes, intervalMinutes, excludeAppointmentId]
   );
 
   // CRM-3: Google Calendar is an additional busy-time source. If the integration
   // is enabled, a Google API/config/auth failure is intentionally allowed to
   // propagate so callers cannot label an unchecked slot as authoritative.
-  const calendarFiltered = await applyGoogleCalendarConflicts(result.rows, resource.staff_name);
+  const calendarFiltered = await applyGoogleCalendarConflicts(result.rows, resource.staff_name, ignoreEventId);
 
   return {
     status: calendarFiltered.slots.length ? 'available' : 'no_slots',
