@@ -108,6 +108,53 @@ async function sendWhatsAppReplyButtons(to, body, buttons = []) {
   }
 }
 
+async function sendWhatsAppCtaUrl(to, body, displayText, url) {
+  const safeBody = String(body || "").trim();
+  const safeDisplayText = String(displayText || "").trim();
+  const safeUrl = String(url || "").trim();
+  if (!safeBody) throw new Error("WhatsApp CTA URL body is required");
+  if (!safeDisplayText || safeDisplayText.length > 20) throw new Error("WhatsApp CTA URL display text must be 1-20 characters");
+  if (!/^https:\/\//i.test(safeUrl)) throw new Error("WhatsApp CTA URL must use https");
+
+  try {
+    const response = await axios.post(
+      messagesUrl(),
+      {
+        messaging_product: "whatsapp",
+        to,
+        type: "interactive",
+        interactive: {
+          type: "cta_url",
+          body: { text: safeBody },
+          action: {
+            name: "cta_url",
+            parameters: {
+              display_text: safeDisplayText,
+              url: safeUrl,
+            },
+          },
+        },
+      },
+      requestConfig()
+    );
+    logger.info(
+      { messageId: response.data.messages?.[0]?.id || null },
+      "WhatsApp CTA URL sent"
+    );
+    return response.data;
+  } catch (error) {
+    logger.error(
+      {
+        err: error,
+        status: error.response?.status,
+        metaError: error.response?.data?.error,
+      },
+      "WhatsApp CTA URL send failed"
+    );
+    throw error;
+  }
+}
+
 async function sendWhatsAppList(to, body, buttonText, rows = [], sectionTitle = "Choose") {
   const safeBody = String(body || "").trim();
   const safeButton = String(buttonText || "").trim();
@@ -217,4 +264,4 @@ async function sendWhatsAppTemplate(to, templateName, bodyParameters = [], langu
   }
 }
 
-module.exports = { sendWhatsAppMessage, sendWhatsAppReplyButtons, sendWhatsAppList, sendWhatsAppTemplate };
+module.exports = { sendWhatsAppMessage, sendWhatsAppReplyButtons, sendWhatsAppCtaUrl, sendWhatsAppList, sendWhatsAppTemplate };

@@ -10,6 +10,8 @@ const CLIENT_BOOKING_BUTTON_COMMANDS = Object.freeze({
   client_booking_confirm: 'yes',
   client_booking_change: 'change',
   client_booking_cancel: 'cancel',
+  client_reschedule_booking: 'RESCHEDULE',
+  client_cancel_booking: 'CANCEL',
 });
 
 function commandForClientBookingButton(id = '') {

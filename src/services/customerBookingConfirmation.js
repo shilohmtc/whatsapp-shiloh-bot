@@ -1,6 +1,11 @@
 const crypto = require('crypto');
 const { pool } = require('../db/pool');
-const { sendWhatsAppMessage, sendWhatsAppTemplate } = require('./whatsapp');
+const {
+  sendWhatsAppMessage,
+  sendWhatsAppTemplate,
+  sendWhatsAppCtaUrl,
+  sendWhatsAppReplyButtons,
+} = require('./whatsapp');
 const { createAppointment: enrollAppointmentLifecycle } = require('./appointmentLifecycle');
 const logger = require('../lib/logger');
 
@@ -61,6 +66,16 @@ function googleCalendarUrl({serviceName,staffName,locationName,startsAt,endsAt})
   return `https://calendar.google.com/calendar/render?${p.toString()}`;
 }
 
+async function sendOptionalConfirmationAction(label, sendAction, context){
+  try{
+    await sendAction();
+    return true;
+  }catch(error){
+    logger.error({err:error,...context,action:label},'Booking confirmation supplemental action failed');
+    return false;
+  }
+}
+
 async function sendCustomerBookingConfirmation(data){
   const {appointmentId,clientId,clientName,serviceName,staffName,locationName,startsAt,endsAt,source='shiloh'}=data;
   let claimed=false;
@@ -79,21 +94,31 @@ async function sendCustomerBookingConfirmation(data){
     claimed=await claimBookingConfirmation(appointmentId);
     if(!claimed)return {sent:false,reason:'already_sent_or_in_progress'};
 
+    let confirmationActions={googleCalendar:false,appleOutlook:false,changeButtons:false};
     if(template){
       await sendWhatsAppTemplate(phone,template,[clientName||'there',serviceName,staffName,date,time,google,ics||google],process.env.WHATSAPP_TEMPLATE_LANGUAGE||'en');
+      providerAccepted=true;
     }else{
       const lines=['*Booking confirmed 🌿*','',`Hi ${clientName||'there'}, your appointment is confirmed.`,'',`✨ *Service:* ${serviceName}`,`👤 *With:* ${staffName}`,`📅 *Date:* ${date}`,`🕙 *Time:* ${time}`];
       if(locationName)lines.push(`📍 *Location:* ${locationName}`);
-      lines.push('','*Add to calendar*',`📅 Google Calendar: ${google}`);
-      if(ics)lines.push(`📱 Apple / Outlook / phone calendar: ${ics}`);
-      lines.push('','Need to make a change? Reply *RESCHEDULE* or *CANCEL*.','We look forward to seeing you. 🌿');
+      lines.push('','We look forward to seeing you. 🌿');
       await sendWhatsAppMessage(phone,lines.join('\n'));
+      providerAccepted=true;
+
+      const actionContext={appointmentId,clientId};
+      confirmationActions.googleCalendar=await sendOptionalConfirmationAction('google_calendar',()=>sendWhatsAppCtaUrl(phone,'*Add to calendar*','Google Calendar',google),actionContext);
+      if(ics){
+        confirmationActions.appleOutlook=await sendOptionalConfirmationAction('apple_outlook_calendar',()=>sendWhatsAppCtaUrl(phone,'Add this appointment to your phone or desktop calendar.','Apple / Outlook',ics),actionContext);
+      }
+      confirmationActions.changeButtons=await sendOptionalConfirmationAction('booking_change_buttons',()=>sendWhatsAppReplyButtons(phone,'*Need to make a change?*\nUse a button below, or type *RESCHEDULE* or *CANCEL*.',[
+        {id:'client_reschedule_booking',title:'Reschedule'},
+        {id:'client_cancel_booking',title:'Cancel booking'},
+      ]),actionContext);
     }
-    providerAccepted=true;
 
     await markBookingConfirmationSent(appointmentId);
-    await pool.query(`INSERT INTO crm_audit_events (action,entity_type,entity_id,metadata) VALUES ('customer.booking_confirmation_sent','appointment',$1,$2::jsonb)`,[appointmentId,JSON.stringify({clientId,calendarLinks:true,template:Boolean(template),lifecycleEnrolled:true,idempotentDelivery:true})]);
-    return {sent:true,phone};
+    await pool.query(`INSERT INTO crm_audit_events (action,entity_type,entity_id,metadata) VALUES ('customer.booking_confirmation_sent','appointment',$1,$2::jsonb)`,[appointmentId,JSON.stringify({clientId,calendarLinks:true,template:Boolean(template),lifecycleEnrolled:true,idempotentDelivery:true,confirmationActions})]);
+    return {sent:true,phone,confirmationActions};
   }catch(error){
     if(claimed&&!providerAccepted){
       try{await releaseBookingConfirmationClaim(appointmentId);}catch(releaseError){logger.error({err:releaseError,appointmentId},'Booking confirmation claim release failed');}
