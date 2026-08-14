@@ -11,6 +11,19 @@ Current runtime baseline: **PR #219** squash merge `f51d304112fc6d2b9274b23eda3b
 
 Approval policy remains: Marietjie self; Christel self; Abigail may be approved by Abigail or Christel, first valid decision authoritative. Dummy Test uses JP admin account alone. Pending holds have no automatic expiry. MediHeel remains Christel only.
 
+## Execution Protocol — mandatory checkpoint before substantial work
+
+Before beginning substantial engineering or any new controlled production mutation, Shiloh OS must stop at an explicit four-part checkpoint:
+
+1. **Authoritative current state** — verify and state the current truth from GitHub `main`, Render production, Shiloh CRM, Google Calendar and/or explicit real WhatsApp/human evidence as applicable. Do not rely on stale chat history where an authoritative source can be checked.
+2. **Highest-priority actionable item** — identify the single highest-priority genuinely unfinished item that is actionable now. Completed work must not be repeated, and externally blocked or evidence-gated items remain fail-closed.
+3. **Why this is next** — briefly explain why that item is the correct next action, including why any apparently higher-priority alternatives are already completed, blocked, waiting on genuine evidence, or lower priority.
+4. **Explicit approval gate** — do **not** proceed automatically with substantial engineering, schema/data changes, migrations, production mutations, new controlled bookings, or material workflow changes. Stop and ask the user for explicit approval to proceed.
+
+Read-only verification, diagnostics, repository/production-state inspection, reconciliation, documentation/status maintenance, and clearly requested minor housekeeping may proceed without a second approval gate. If a defect is exposed during an already-approved test, stop at the defect, explain the proposed correction and obtain approval before substantial engineering unless the user has already explicitly authorized that repair.
+
+Every continuation state should therefore end with the current authoritative state, the single next actionable item, why it is next, and either `WAITING FOR USER APPROVAL TO PROCEED` or a record of the user's explicit approval.
+
 ## Real Client Perspective acceptance — 2026-08-14
 
 ### #564 positive Dummy Test approval — REAL-ACCEPTED
@@ -58,6 +71,8 @@ Completed/accepted now includes both Dummy Test approval directions: #564 positi
 
 **Highest-priority genuinely unfinished actionable item: ordinary approval acceptance.** The production rules exist but still require controlled real evidence: Marietjie self-approval; Christel self-approval; Abigail booking approved by Abigail or Christel with first valid decision authoritative. Use genuine controlled requests and do not mutate #564 solely for proof. Apply safe self-test-first engineering only if a defect is exposed.
 
+**Why it is next:** both controlled Dummy Test approval directions are already accepted; ordinary production approval rules are not externally blocked and still lack genuine acceptance evidence; provider-template, attendance, payment and privacy items are either externally blocked or evidence-gated.
+
 ## Exact continuation state
 
 - **#561** — cancelled historical test. Never recreate.
@@ -65,4 +80,10 @@ Completed/accepted now includes both Dummy Test approval directions: #564 positi
 - **#565** — cancelled after accepted reschedule/cancellation lifecycle. Never recreate merely for proof.
 - **#566** — declined by JP; held Abigail/Bamboo 12:15 capacity was proven released; no #566 Calendar event. Never recreate merely for proof.
 
-**Next action:** begin controlled **ordinary approval acceptance**, starting with the least complex self-approval path (Marietjie or Christel), then cover the Abigail dual-authority rule. Preserve all WAITING items fail-closed.
+**Authoritative current state:** production baseline and controlled appointment state above remain authoritative until re-verified against the applicable sources.
+
+**Highest-priority actionable item:** controlled **ordinary approval acceptance**, starting with the least complex self-approval path (Marietjie or Christel), then covering Abigail's dual-authority/first-valid-decision rule.
+
+**Why this is next:** Dummy Test positive/negative approval is complete, while ordinary production approval remains genuinely unaccepted and is not externally blocked.
+
+**Approval gate:** **WAITING FOR USER APPROVAL TO PROCEED.** Do not begin a new controlled booking or substantial engineering solely from this continuation state.
