@@ -326,6 +326,7 @@ async function commitAcceptedClientBooking(phone) {
     const eventData = {
       appointmentId: appointment.id,
       clientName: canonical.client_name,
+      clientMobile: normalizedPhone,
       serviceName: canonical.service_name,
       staffName: canonical.staff_name,
       locationName: canonical.location_name,
