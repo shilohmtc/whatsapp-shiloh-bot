@@ -41,15 +41,23 @@ test('pending approval remains an availability conflict until an explicit decisi
   assert.match(approval, /status[^\n]*(pending|approved|declined)/i);
 });
 
-test('assigned practitioner is the sole required approver and Abigail has Christel as observer only', () => {
+test('Abigail bookings allow either Abigail or Christel to make the first authoritative decision', () => {
   assert.match(approval, /approver_staff_id/);
   assert.match(approval, /observer_staff_id/);
   assert.match(approval, /Abigail/i);
   assert.match(approval, /Christel/i);
-  assert.match(approval, /observer only|observer/i);
+  assert.match(approval, /isAuthorizedDecisionMaker|authorizedDecisionMaker/i);
+  assert.match(approval, /observer_staff_id[^\n]*admin\.staff_id|admin\.staff_id[^\n]*observer_staff_id/);
+  assert.match(approval, /sendWhatsAppReplyButtons\([^\n]*observer/i);
+  assert.doesNotMatch(approval, /no approval is required from you/i);
   assert.match(schema, /LOWER\(COALESCE\(NEW\.staff_name_snapshot/);
   assert.match(schema, /= 'abigail'/);
   assert.match(schema, /LOWER\(display_name\) = 'christel'/);
+});
+
+test('Marietjie and Christel bookings remain self-approval only', () => {
+  assert.match(approval, /Number\(context\.approver_staff_id\) === Number\(admin\.staff_id\)/);
+  assert.match(approval, /context\.observer_staff_id/);
 });
 
 test('approval unlocks final customer confirmation while decline releases the held slot', () => {
