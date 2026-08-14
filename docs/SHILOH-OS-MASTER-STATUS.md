@@ -18,7 +18,8 @@ Operational truth remains GitHub `main`, Render production, Shiloh CRM, Google C
 - PR #210 added deterministic appointment-selection controls for multi-booking Reschedule/Cancel journeys: up to three reply buttons, paginated list above three, typed booking-number fallback, and no guessing.
 - PR #211 suppressed due reminders during active client change collection and made reminder greetings prefer one unambiguous active CRM client name.
 - PR #213 fixed reschedule availability self-conflict by excluding only the appointment being moved and its own Google Calendar event from replacement-slot discovery; ordinary booking availability is unchanged.
-- **PR #214 is the current runtime baseline:** squash merge `560ba16efd6bf58c79b757184d15e5292061d9a0`; Render deploy `dep-d9vfrkgu01pc73acdoq0` reached `live`. It adds reusable post-reschedule calendar/change controls plus provider-safe support/provisioning for a future reminder template with native Reschedule/Cancel quick replies.
+- PR #214 added reusable post-reschedule calendar/change controls plus provider-safe support/provisioning for a future reminder template with native Reschedule/Cancel quick replies.
+- **PR #216 is the current runtime baseline:** squash merge `23c366271528aa851fccf588d2060ff66a8fee7e`; Render deploy `dep-d9vg4had0e5s73afuh30` reached `live`. It adds a presentation-layer destructive cancellation review with deterministic **Confirm cancellation** / **Keep appointment** buttons while preserving typed `YES` / `STOP`, the 24-hour policy warning and the existing canonical cancellation transaction.
 - Direct Render Postgres reads remain tooling-limited by the known SSL/TLS connector failure; do not treat that limitation as CRM truth.
 
 ## Real Client Perspective acceptance — 2026-08-14
@@ -52,9 +53,11 @@ Controlled Dummy Test booking **#565** was created for the same MediHeel treatme
 
 Dummy Test had #564 and #565. Reschedule correctly refused to infer which appointment the client meant and displayed deterministic buttons for `10:45 · #564` and `12:30 · #565`, while preserving full summaries, typed booking-number fallback, and the statement that other bookings remain unchanged. Selecting `12:30 · #565` isolated #565 only.
 
+The same deterministic multi-booking component is now real-observed for **Cancel booking** as well: Dummy Test saw #564 and the rescheduled #565, with buttons `10:45 · #564` and `12:15 · #565`, full summaries, typed booking-number fallback, and explicit wording that other bookings remain unchanged. Selecting `12:15 · #565` isolated #565 only.
+
 ### #565 canonical reschedule — real accepted
 
-The real #565 reschedule journey is now complete and accepted:
+The real #565 reschedule journey is complete and accepted:
 - client selected `Tomorrow` and retained canonical MediHeel + Christel context;
 - initial `Afternoon` search exposed a genuine self-conflict defect because #565 could block its own replacement slots;
 - PR #213 repaired that defect self-test-first;
@@ -85,9 +88,24 @@ Self-test evidence for PR #214:
 - post-reschedule implementation passed CI **#599**;
 - reminder-template regression commit `ffa74aed0de935412c2b845bfea9a76661ac2a96` failed CI **#600** before implementation;
 - final head `2985003a61ddd09b8aa9fe284c833325f2750a23` passed CI **#604**;
-- squash merge `560ba16efd6bf58c79b757184d15e5292061d9a0` is live on Render deploy `dep-d9vfrkgu01pc73acdoq0`.
+- squash merge `560ba16efd6bf58c79b757184d15e5292061d9a0` reached production on Render.
 
 Post-reschedule calendar/change controls are code/CI/production-live but still require a future genuine successful reschedule to be marked REAL-ACCEPTED; do not mutate #564 merely for proof. Reminder native buttons remain provider-template WAITING until Meta approves the new template, the production env explicitly selects it, and real delivery is observed.
+
+## #565 cancellation lifecycle — active
+
+Real WhatsApp reached the destructive review for appointment **#565** and correctly showed the MediHeel service, Christel, Saturday 15 August 2026 at 12:15, booking #565, and the within-24-hours warning that Shiloh's late-cancellation policy may apply a 50% fee. No cancellation has occurred.
+
+The pre-PR-#216 review was typed-only (`YES` / `STOP`), which was inconsistent with the now-button-first client UX. PR **#216** fixes only that presentation boundary:
+- regression commit `e543e68fde7e0847817bc53e18daf936c5df46b3` failed CI **#608** before implementation;
+- final head `d6ae107f068ba099a5886af4d096858dc135a996` passed CI **#611**;
+- squash merge `23c366271528aa851fccf588d2060ff66a8fee7e` is production-live on Render deploy `dep-d9vg4had0e5s73afuh30`;
+- destructive review now renders **Confirm cancellation** (`yes`) and **Keep appointment** (`stop`) buttons;
+- visible copy states `Nothing has changed yet.` and retains typed `YES` / `STOP` fallbacks;
+- the existing `latePolicy()` warning and `cancelCanonical()` transaction are unchanged;
+- the review remains before the canonical cancellation write, so merely rendering or selecting the booking cannot cancel it.
+
+Because WhatsApp cannot retroactively replace a message already delivered before deployment, the current pre-PR-#216 #565 cancellation intent remains safely awaiting confirmation. To obtain real acceptance of the new buttons, explicitly stop that unchanged intent once and re-enter Cancel booking; this is a presentation re-observation, not a cancellation write.
 
 ## Google Contacts truth
 
@@ -101,12 +119,13 @@ Post-reschedule calendar/change controls are code/CI/production-live but still r
 - ✅ Elim MediHeel presentation and Christel-only routing accepted.
 - ✅ #564 positive Dummy Test approval, indefinite hold, slot exclusion, final confirmation and Google Calendar event accepted.
 - ✅ Confirmation action UX accepted on #565.
-- ✅ Multi-booking appointment-selection UX accepted for Reschedule entry.
+- ✅ Multi-booking appointment-selection UX accepted for Reschedule and Cancel entry.
 - ✅ #565 canonical reschedule lifecycle accepted through authoritative availability, review-before-write, final write and independent Google Calendar verification.
 - ✅ Reminder suppression/name-resolution re-observed successfully after #565 reschedule completion.
 - 🟡 Post-reschedule Google/Apple calendar CTAs + Reschedule/Cancel controls are code/CI/production-live via PR #214; REAL acceptance waits for a future genuine successful reschedule.
 - 🟠 Reminder-template native Reschedule/Cancel buttons remain provider-template evidence-gated; Meta approval + production configuration + real delivery required.
-- 🔵 **Next actionable Client Perspective priority: controlled client cancellation lifecycle.** Prefer appointment #565 if cancellation is intentionally acceptable for the test; preserve #564 as accepted positive-path evidence.
+- 🔵 **#565 cancellation lifecycle is the immediate Product-Critical continuation.** Cancellation selection and policy review are real-observed; PR #216 button polish is production-live; #565 is not cancelled yet.
+- ⬜ Complete #565 cancellation only after real-observing the new Confirm cancellation / Keep appointment review, then verify CRM cancellation, Google Calendar reconciliation, final client message and #564 unchanged.
 - ⬜ Separate genuine Dummy Test JP-decline test.
 - ⬜ Ordinary approval acceptance: Marietjie self; Christel self; Abigail or Christel first valid decision.
 
@@ -122,14 +141,14 @@ Post-reschedule calendar/change controls are code/CI/production-live but still r
 
 ## Exact continuation state
 
-**Do not recreate cancelled #561. Do not recreate or mutate #564 merely for proof.**
+**Do not recreate cancelled #561. Do not recreate, mutate or cancel #564 merely for proof.**
 
 Current controlled appointments:
 - **#564** — confirmed, Saturday 15 August 2026, **10:45–12:15**, Christel, MediHeel; fully accepted positive approval evidence; leave unchanged.
-- **#565** — successfully rescheduled and confirmed for Saturday 15 August 2026, **12:15–13:45**, Christel, same MediHeel service; Google Calendar independently verified and mobile retained.
+- **#565** — confirmed after successful reschedule, Saturday 15 August 2026, **12:15–13:45**, Christel, same MediHeel service; Google Calendar independently verified and mobile retained. It is currently selected in a cancellation intent but **has not been cancelled**.
 
-The #565 reschedule intent is complete. A reminder was observed after completion with correct `Hello Dummy Test` and the updated 12:15 time, proving the reminder no longer collided with the active change and resumed against authoritative post-reschedule state.
+Current WhatsApp state: the client already received the old typed-only #565 cancellation review before PR #216 deployed. That intent is still awaiting explicit confirmation, and no destructive write has occurred.
 
-**Next real Client Perspective action:** test the controlled **Cancel booking** lifecycle. Because cancellation is destructive to the selected appointment, use #565 only if intentionally willing to cancel that controlled test booking. Do not cancel #564. Verify review-before-write, canonical CRM cancellation, Google Calendar removal/update behavior, client confirmation, and that #564 remains unchanged.
+**Next real action:** send **`STOP` once** to leave #565 unchanged and clear the pre-deploy cancellation intent. Then press **Cancel booking** again, select **`12:15 · #565`**, and stop at the newly rendered destructive review. Verify the **Confirm cancellation** / **Keep appointment** buttons, the 24-hour policy warning, `Nothing has changed yet.`, and typed `YES` / `STOP` fallback. Do not press Confirm cancellation until that review is accepted. #564 must remain unchanged throughout.
 
 Preserve all provider-template, attendance, payments, privacy and other externally blocked items fail-closed.
