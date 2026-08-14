@@ -4,6 +4,7 @@ const { updateProfileFromMessage } = require("../services/profileExtractor");
 const { CLINIC_REDIRECT, evaluateClinicScope } = require("../services/scopeGuard");
 const { processBookingMessage } = require("../services/bookingIntent");
 const { processBookingPolicyMessage, sanitizeBookingReply } = require("../services/bookingPolicy");
+const { processClientBookingApprovalMessage } = require("../services/clientBookingApproval");
 const { commandForClientBookingButton, decorateClientBookingResult } = require("../services/clientBookingInteractive");
 const { processClientAvailabilityMessage } = require("../services/clientBookingAvailability");
 const { guardBookingConfirmationIdentity, ensureBookingIdentity } = require("../services/clientBookingIdentityGate");
@@ -59,6 +60,7 @@ exports.verifyWebhook = (req,res)=>{const mode=req.query["hub.mode"],token=req.q
 exports.receiveWebhook=async(req,res)=>{const log=req.log||logger;try{const value=req.body.entry?.[0]?.changes?.[0]?.value;if(!value?.messages)return res.sendStatus(200);const message=value.messages[0];const from=message.from,text=inboundText(message);if(!text){log.info({messageType:message.type},"Ignoring unsupported or unknown WhatsApp message");return res.sendStatus(200);}if(!from){log.warn("Received WhatsApp message without sender");return res.sendStatus(200);}log.info({from:maskPhone(from),messageType:message.type},"Processing incoming WhatsApp message");try{
 const language=await guardEnglishOnly(text);if(!language.allowed){log.info({from:maskPhone(from)},"Rejected non-English WhatsApp message");await sendWhatsAppMessage(from,language.reply);return res.sendStatus(200);}
 const demoMenuEscape=await escapeActiveDemoToAdminMenu(from,text);if(demoMenuEscape.escaped){log.info({from:maskPhone(from),admin:demoMenuEscape.admin?.display_name},"Escaped unfinished client demo to admin menu");}
+const bookingApproval=await processClientBookingApprovalMessage(from,text);if(bookingApproval.handled){log.info({from:maskPhone(from),status:bookingApproval.status||null},"Handled practitioner booking approval decision");await sendAdminResult(from,bookingApproval);return res.sendStatus(200);}
 const adminClientDemo=await processAdminClientDemoMessage(from,text);if(adminClientDemo.handled){log.info({from:maskPhone(from),admin:adminClientDemo.admin?.display_name},"Handled controlled client demo message");await sendWhatsAppMessage(from,adminClientDemo.reply);return res.sendStatus(200);}
 const adminSlots=await processAdminAvailableSlotsMessage(from,text);if(adminSlots.handled){log.info({from:maskPhone(from),admin:adminSlots.admin?.display_name},"Handled authoritative available-slots request");await sendWhatsAppMessage(from,adminSlots.reply);return res.sendStatus(200);}
 const staffServices=await processAdminStaffServicesMessage(from,text);if(staffServices.handled){await sendWhatsAppMessage(from,staffServices.reply);return res.sendStatus(200);}
