@@ -11,6 +11,7 @@ const availabilityPath = path.join(root, 'src', 'services', 'availabilityService
 const confirmationPath = path.join(root, 'src', 'services', 'customerBookingConfirmation.js');
 const webhookPath = path.join(root, 'src', 'controllers', 'webhookController.js');
 const resetPath = path.join(root, 'src', 'services', 'adminTestClientReset.js');
+const jpMigrationPath = path.join(root, 'migrations', '012_add_jean_pierre_admin.sql');
 
 const approval = fs.readFileSync(approvalPath, 'utf8');
 const schema = fs.readFileSync(schemaPath, 'utf8');
@@ -19,6 +20,7 @@ const availability = fs.readFileSync(availabilityPath, 'utf8');
 const confirmation = fs.readFileSync(confirmationPath, 'utf8');
 const webhook = fs.readFileSync(webhookPath, 'utf8');
 const reset = fs.readFileSync(resetPath, 'utf8');
+const jpMigration = fs.readFileSync(jpMigrationPath, 'utf8');
 
 test('client booking completion is converted to a durable pending-approval hold before client delivery', () => {
   assert.match(policy, /ensureBookingApprovalInfrastructure/);
@@ -59,6 +61,20 @@ test('CRM Dummy Test uses the existing guarded identity contract and requires JP
   assert.match(schema, /Jean-Pierre/i);
   assert.match(schema, /business_admin/i);
   assert.match(schema, /RAISE EXCEPTION/i);
+});
+
+test('Dummy Test approval targets Jean-Pierre admin identity without requiring a clinic staff record', () => {
+  assert.match(jpMigration, /staff_id may remain NULL/i);
+  assert.match(jpMigration, /VALUES\s*\(\s*NULL,\s*'Jean-Pierre'/is);
+  assert.match(schema, /approver_admin_id/i);
+  assert.match(schema, /REFERENCES staff_admin_accounts\(id\)/i);
+  assert.match(schema, /approver_staff_id BIGINT REFERENCES staff\(id\)/i);
+  assert.doesNotMatch(schema, /approver_staff_id BIGINT NOT NULL REFERENCES staff\(id\)/i);
+  assert.match(schema, /required_approver_admin_id/i);
+  assert.match(schema, /MIN\(saa\.id\)/i);
+  assert.doesNotMatch(schema, /JOIN staff st ON st\.id = saa\.staff_id[\s\S]*Jean-Pierre/i);
+  assert.match(approval, /approverAdminId|approver_admin_id/);
+  assert.match(approval, /Number\(context\.approver_admin_id\) === Number\(admin\.id\)/);
 });
 
 test('normal Abigail bookings still allow either Abigail or Christel to make the first authoritative decision', () => {
