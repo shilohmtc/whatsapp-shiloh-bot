@@ -51,9 +51,59 @@ function formatDateTime(value) {
   }).format(date);
 }
 
+function contactLabel(contact = {}) {
+  const type = String(contact.type || "contact").trim().toLowerCase();
+  if (["whatsapp", "mobile", "phone", "telephone"].includes(type)) return "Mobile";
+  if (type === "email") return "Email";
+  return type ? `${type.charAt(0).toUpperCase()}${type.slice(1)}` : "Contact";
+}
+
+async function getClientDetails(clientId) {
+  if (!/^\d+$/.test(String(clientId)) || Number(clientId) <= 0) return null;
+  const result = await pool.query(
+    `SELECT
+       c.id,
+       c.display_name,
+       c.date_of_birth,
+       c.status,
+       c.source,
+       COALESCE(
+         jsonb_agg(
+           DISTINCT jsonb_build_object(
+             'id', cc.id,
+             'type', cc.contact_type,
+             'value', cc.value,
+             'normalizedValue', cc.normalized_value,
+             'isPrimary', cc.is_primary,
+             'verifiedAt', cc.verified_at
+           )
+         ) FILTER (WHERE cc.id IS NOT NULL),
+         '[]'::jsonb
+       ) AS contacts,
+       (SELECT COUNT(*)::int FROM appointments a_count WHERE a_count.client_id = c.id) AS appointment_count,
+       (SELECT MAX(a_last.starts_at) FROM appointments a_last
+         WHERE a_last.client_id = c.id AND a_last.starts_at < NOW() AND a_last.status <> 'cancelled') AS last_appointment_at,
+       (SELECT MIN(a_next.starts_at) FROM appointments a_next
+         WHERE a_next.client_id = c.id AND a_next.starts_at >= NOW() AND a_next.status <> 'cancelled') AS next_appointment_at
+     FROM clients c
+     LEFT JOIN client_contacts cc ON cc.client_id = c.id
+     WHERE c.id = $1
+     GROUP BY c.id
+     LIMIT 1`,
+    [Number(clientId)]
+  );
+  return result.rows[0] || null;
+}
+
 async function findClients(query, limit = 10) {
   const cleaned = cleanQuery(query);
   if (!cleaned) return { queryType: "empty", clients: [] };
+
+  const detailsMatch = cleaned.match(/^details\s+#?(\d+)$/i);
+  if (detailsMatch) {
+    const client = await getClientDetails(detailsMatch[1]);
+    return { queryType: "details", clients: client ? [client] : [] };
+  }
 
   const phoneSearch = isPhoneLike(cleaned);
   const values = [];
@@ -127,14 +177,45 @@ async function findClients(query, limit = 10) {
   return { queryType: phoneSearch ? "phone" : "name", clients: result.rows };
 }
 
+function formatClientDetailsReply(client) {
+  if (!client) return "That client detail view is unavailable. No client records were changed.";
+  const lines = [
+    "Client details",
+    `• ${client.display_name || "Unnamed client"} — CRM #${client.id}`,
+    `• Status: ${client.status || "unknown"}`,
+  ];
+  const dob = formatDate(client.date_of_birth);
+  if (dob) lines.push(`• DOB: ${dob}`);
+  const seen = new Set();
+  for (const contact of client.contacts || []) {
+    const value = String(contact.value || contact.normalizedValue || "").trim();
+    if (!value) continue;
+    const line = `• ${contactLabel(contact)}: ${value}`;
+    if (!seen.has(line)) {
+      seen.add(line);
+      lines.push(line);
+    }
+  }
+  lines.push(`• Appointments on record: ${client.appointment_count || 0}`);
+  const next = formatDateTime(client.next_appointment_at);
+  const last = formatDateTime(client.last_appointment_at);
+  if (next) lines.push(`• Next appointment: ${next}`);
+  if (last) lines.push(`• Last appointment: ${last}`);
+  lines.push("", "This is a read-only client detail view. No client identity or contact records were changed.");
+  return lines.join("\n");
+}
+
 function formatClientLookupReply(query, clients) {
   const cleaned = cleanQuery(query);
+  const detailsMatch = cleaned.match(/^details\s+#?(\d+)$/i);
   if (!clients.length) {
+    if (detailsMatch) return "That client detail view is unavailable in your authorized scope. No client records were changed.";
     return `I couldn't find a canonical CRM client matching “${cleaned}”. No client records were changed.`;
   }
 
   if (clients.length === 1) {
     const client = clients[0];
+    if (detailsMatch) return formatClientDetailsReply(client);
     const contacts = (client.contacts || []).map((contact) => `${contact.type}: ${maskContact(contact.normalizedValue || contact.value)}`);
     const lines = [
       "Client found",
@@ -149,6 +230,7 @@ function formatClientLookupReply(query, clients) {
     const last = formatDateTime(client.last_appointment_at);
     if (next) lines.push(`• Next appointment: ${next}`);
     if (last) lines.push(`• Last appointment: ${last}`);
+    lines.push("", `To view authorized contact details, send *Find client details #${client.id}*.`);
     lines.push("", "This is a read-only lookup. No client identity or contact records were changed.");
     return lines.join("\n");
   }
@@ -168,4 +250,4 @@ function formatClientLookupReply(query, clients) {
   return lines.join("\n");
 }
 
-module.exports = { findClients, formatClientLookupReply };
+module.exports = { findClients, getClientDetails, formatClientLookupReply, formatClientDetailsReply };
