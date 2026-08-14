@@ -11,7 +11,7 @@ Historical detail from the pre-approval ledger is preserved verbatim at `docs/ar
 
 ## Current production baseline
 
-- Production runtime code baseline: `47fe6051a8255c66cdfe4956c02b575fc64f9d9b` after PR #193 (`Require JP approval for CRM Dummy Test bookings`). Render deploy `dep-d9vcfrou01pc73a9k3pg` reached `live` on that runtime commit. Later documentation-only descendants may advance GitHub `main`/Render without changing runtime behavior; verify the exact current heads at the start of each session.
+- Production runtime code baseline: `996f912ab927d0055cf284ed7db06a5a158dbcfd` after PR #194 (`Prevent English treatment navigation from language false positives`). Render deploy `dep-d9vcoclbedkc7381r67g` reached `live` on that runtime commit. Later documentation-only descendants may advance GitHub `main`/Render without changing runtime behavior; verify exact current heads each session.
 - PR #190 polished new-booking availability client copy and is production-live.
 - PR #191 introduced mandatory approval for future client-created bookings with an indefinite held slot and fail-closed final confirmation.
 - PR #192 established the ordinary-client business rule: Marietjie bookings are Marietjie-only; Christel bookings are Christel-only; Abigail bookings may be decided by either Abigail or Christel, with the first valid decision authoritative and audited.
@@ -20,14 +20,22 @@ Historical detail from the pre-approval ledger is preserved verbatim at `docs/ar
 - Pending client booking holds have no automatic expiry, timer, TTL or background release. A pending hold remains a non-cancelled canonical appointment and therefore blocks that slot in authoritative availability until explicit approval or decline.
 - Final customer confirmation for `shiloh_client_whatsapp` appointments is fail-closed unless the booking approval record is exactly `approved`.
 - Decline transitions the held appointment to cancelled, releases Calendar mirrors/slot occupancy and notifies the client that nothing is booked.
-- Booking approval notification delivery and real Approve/Decline operation still require genuine WhatsApp acceptance evidence. Do not claim those human/provider surfaces verified from code or CI alone.
-- Direct Render Postgres read remains tooling-limited by the known `SSL/TLS required` connector issue; do not use that limitation to infer CRM rows.
+- PR #194 repairs a real Client Perspective language-guard defect: short English clinic-navigation phrases such as `Lymphatic drainage treatments` are now deterministically treated as English-compatible before probabilistic language classification. Substantive sentences still reach the language classifier, including non-English sentences. The OpenAI classifier client is lazy-initialized so deterministic guard tests do not require production credentials; runtime classifier failure remains fail-open.
+- Direct Render Postgres read remains tooling-limited by the known SSL/TLS connector failure. Do not use that limitation to infer CRM rows.
 
-## Self-test-first evidence for approval gate
+## Verification-quality rule clarified by real acceptance evidence
+
+- Code review, CI and non-mutating regression tests prove implementation contracts; they do **not** by themselves prove every real WhatsApp/Meta/CRM presentation path.
+- A real 2026-08-14 Dummy Test screenshot disproved an earlier over-broad assumption of service-family acceptance: `Lymphatic drainage treatments` was incorrectly intercepted by the English-only guard even though service-family unit regressions were green. Treat this as a testing-coverage gap now closed by PR #194, not as evidence that real Client Perspective acceptance can be skipped.
+- Final client-facing acceptance still requires genuine WhatsApp evidence. However, exact defects discovered by human acceptance must become permanent regressions so the tester is not asked to rediscover the same failure later.
+- The same screenshot showed the Elim MediHeel Pedicures family returning zero currently eligible active CRM treatments. That response is **not yet classified as a code defect**. The family query is intentionally CRM-backed, active-only, practitioner/client-bookable scoped, and fails closed when zero rows qualify. Direct production Postgres inspection could not be completed because the Render SQL connector again failed on SSL/TLS. Preserve CRM truth and do not invent/activate MediHeel services without authoritative catalogue evidence.
+
+## Self-test-first evidence for current approval/language gates
 
 - PR #191: regression-first practitioner approval gate. Final head `ac4d35eea6c47a9ca38252cb11e69e5c5b44fed1` passed CI #497; squash merge `bbdbbcc8f0d2a2bc8816ac56349c75c6c8d960fc`; Render deploy `dep-d9vaml6q1p3s738tp5l0` reached live.
 - PR #192: regression-only commit `d5fe3f20b23d5cfb9b35ad8ef828998134e531b6` failed CI #499 before implementation. Implementation head `bf761b0ad7f1be91bc22b60d8fd18f32aad8bd5f` passed CI #500. Squash merge `19428aecad9b79941c98885d6995eba46333a110`; Render deploy `dep-d9vc9mdbedkc7381femg` reached live.
 - PR #193: regression-only commit `7bb7c8b10fa8cba9373fe2dc2282e7461740d3c9` failed CI #503 before implementation. Final head `ec2dfba4e69a5677d6177a29442333d45f127090` passed CI #506. Squash merge `47fe6051a8255c66cdfe4956c02b575fc64f9d9b`; Render deploy `dep-d9vcfrou01pc73a9k3pg` reached live. Migration `052_dummy_test_jp_booking_approval.sql` mirrors the runtime-enforced trigger update; Render still relies on idempotent runtime schema convergence because migrations are not automatically run on deploy.
+- PR #194: exact screenshot-derived regression commit `473f8a4679b8b8dfb8bbb106e032f9d4342d777e` failed CI #509 before implementation. CI #510 then exposed a testability defect from eager OpenAI client construction, not a product-logic failure. Final head `3c7d26265bef93c621352c50bf758a43459fe9bd` passed CI #511 after lazy classifier initialization. Squash merge `996f912ab927d0055cf284ed7db06a5a158dbcfd`; Render deploy `dep-d9vcoclbedkc7381r67g` reached live.
 
 ## Product-Critical Gate
 
@@ -35,7 +43,11 @@ Historical detail from the pre-approval ledger is preserved verbatim at `docs/ar
 
 Do not recreate cancelled appointment #561. Its booking, reschedule and cancellation journey is already accepted historical evidence.
 
-The next highest-value actionable acceptance is a **new genuine future CRM Dummy Test booking**. It should prove the new held-booking lifecycle without using #561:
+Before advancing into a held booking, first re-exercise the exact production phrase **`Lymphatic drainage treatments`** once on WhatsApp to prove PR #194 at the real transport/presentation boundary. If it now reaches CRM-backed Lymphatic family discovery, continue the same genuine Dummy Test journey. If it fails differently, capture the exact output and treat the new result as authoritative evidence.
+
+For Elim MediHeel Pedicures, preserve the current fail-closed zero-row response unless authoritative CRM catalogue evidence proves active Marietjie/client-bookable treatments should be present. Do not create service rows merely to make the menu populate.
+
+The next genuine future CRM Dummy Test booking should then prove the held-booking lifecycle without using #561:
 
 1. Dummy Test completes the normal registered-client booking flow and policy acceptance.
 2. Shiloh creates a canonical held appointment but tells Dummy Test it is pending approval, not confirmed.
@@ -64,9 +76,11 @@ The next highest-value actionable acceptance is a **new genuine future CRM Dummy
 ### C — Client Perspective Testing
 
 - 🔵 Registered-client return recognition remains real-acceptance work and can be observed naturally when Dummy Test returns.
-- ✅ First-time Dummy Test registration, service-family discovery, HIFU→Marietjie routing, authoritative availability, booking #561, reschedule and cancellation are completed historical evidence.
+- ✅ First-time Dummy Test registration, HIFU→Marietjie routing, authoritative availability, booking #561, reschedule and cancellation are completed historical evidence.
+- ⚠️ Broad historical “service-family discovery verified” wording must be interpreted narrowly: the exact paths actually observed remain valid, but the 2026-08-14 screenshot proved an untested English-language-guard interception on Lymphatic navigation. PR #194 fixes that defect; real one-message acceptance is still required.
 - ✅ Beauty & Aesthetics treatment-list readability/pagination/price presentation was repaired and real-accepted.
-- ✅ New-booking availability client copy was polished by PR #190 and is production-live; real journey should naturally exercise it again without repeating completed acceptance solely for copy.
+- 🟡 Elim MediHeel Pedicures currently returned no eligible active CRM treatment rows in real WhatsApp. Preserve fail-closed until catalogue truth is independently established; do not infer a missing-code defect from an empty authoritative query.
+- ✅ New-booking availability client copy was polished by PR #190 and is production-live; real journey should naturally exercise it again without repeating solely for copy.
 - 🔵 Approval lifecycle is production-live but awaiting genuine WhatsApp acceptance. For CRM Dummy Test specifically, JP is now the sole approver; ordinary-client approval rules remain as defined above.
 - 🟡 Booking-confirmation Meta template remains fail-closed until exact provider Active/APPROVED evidence and real template acceptance exist. Plain-text confirmation remains the safe active path unless provider truth changes.
 - 🟡 Calendar-mobile presentation acceptance waits for the next genuine future booking; do not fabricate a booking only for this evidence.
@@ -97,6 +111,6 @@ The next highest-value actionable acceptance is a **new genuine future CRM Dummy
 
 ## Exact continuation state
 
-Production code is live and ready for real acceptance. Do **not** recreate appointment #561. The next controlled test is one new genuine future booking from the active CRM Dummy Test identity, stopped first at pending approval. Capture the client pending/held wording, verify the same practitioner/time is no longer available, and confirm that JP/Jean-Pierre receives the actionable Approve/Decline request as the sole required approver. Then let JP approve and verify final client confirmation plus both Calendar mirrors. Test JP decline separately with a later genuine request.
+PR #194 is production-live. The immediate next real acceptance is deliberately small: from Dummy Test, send **`Lymphatic drainage treatments`** once and confirm it no longer produces the English-only rejection. If it reaches the authoritative Lymphatic family list, continue naturally toward one new genuine future booking; stop at pending approval and capture the client message plus JP’s actionable request before deciding. Do **not** recreate appointment #561. Treat MediHeel’s zero-row result as catalogue truth pending stronger CRM evidence, not as something to patch speculatively.
 
 Before any new engineering, verify GitHub `main` and Render again. Preserve all WAITING items fail-closed and continue to the next actionable priority when external evidence is unavailable.
