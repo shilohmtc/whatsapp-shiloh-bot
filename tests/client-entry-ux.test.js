@@ -18,8 +18,13 @@ test('registered client discovery uses a four-choice WhatsApp list', () => {
     ['client_family_beauty', 'client_family_massage', 'client_family_lymphatic', 'client_family_pedicure']
   );
   assert.deepEqual(
-    interactive.rows.map((row) => row.title),
-    ['Beauty & Aesthetics', 'Massage', 'Lymphatic Drainage', 'Elim MediHeel Pedicures']
+    interactive.rows.map(({ title, description }) => ({ title, description })),
+    [
+      { title: 'Beauty & Aesthetics', description: 'View beauty & aesthetics treatments' },
+      { title: 'Massage Treatments', description: 'View massage treatments' },
+      { title: 'Lymphatic Drainage', description: 'View lymphatic drainage treatments' },
+      { title: 'Elim MediHeel Pedicures', description: 'View pedicure treatments' },
+    ]
   );
 });
 
