@@ -94,3 +94,17 @@ If `RETRY BOOKING` fails again, do not repeatedly retry; preserve the exact mess
 - Dummy Test/JP ambiguity must fail closed.
 - Direct Render Postgres SSL connector failure is a tooling limitation, not CRM truth.
 - Human acceptance is for final transport/live-state proof; deterministic defects should be caught and retained as regressions.
+
+## Latest reconciliation — held appointment #564 / PR #205
+
+**This section supersedes the earlier `RETRY BOOKING` next-step text above.** Real WhatsApp evidence now proves the retry succeeded and created canonical held appointment **#564**. Dummy Test saw `Booking request received — #564`, explicit held-slot wording, `there is no automatic expiry`, and `Your appointment is not yet confirmed`. Therefore C1-WRITE is now 🟢 REAL-ACCEPTED and the basic pending-hold/no-expiry client contract is real-observed.
+
+The same screenshot exposed a deterministic copy defect: it said the selected time was being held `while Christel reviews the request`, even though the controlled Dummy Test authority contract requires **JP alone**. The underlying runtime source proved this was presentation logic: `bookingPolicy.stageCreatedBookingForApproval()` blindly interpolated the assigned practitioner snapshot into client copy after approval routing had already resolved the real approver.
+
+PR #205 repairs only that presentation boundary. Client pending copy now derives the reviewer from `requestPractitionerApproval()`'s resolved `approver` identity, with a safe `an authorized approver` fallback, and the no-expiry sentence is authority-neutral rather than saying `the practitioner`. Approval authorization, held appointment #564, practitioner assignment, and no-expiry semantics are unchanged.
+
+Self-test-first evidence for PR #205: regression commit `e340bbe7752e2954e32fa4476f2e4f63b4370675` failed CI #563 before implementation. Runtime commit `01c15f8e0657a9524f4bfb0f4cd9aacb3d783ed3` then exposed one overly literal new assertion in CI #564; runtime behavior itself already used safe optional chaining. Final head `63048e1ac17db084d1dd3e0975f28cde57699cb2` passed CI #565. Squash merge `0fe9df17c32ba8503124a0f9e09936bdda612ab4`; Render deploy `dep-d9ve1glbedkc7382rng0` is live.
+
+### Exact continuation now
+
+Do **not** retry or create another booking: appointment **#564 is already held**. Do **not** let JP approve or decline yet. The next required real evidence is JP's WhatsApp side of this same request: capture whether JP received the actionable **Approve / Decline** controls for appointment #564. This will prove Meta delivery plus sole-JP routing. If JP received nothing, preserve #564 unchanged and inspect notification evidence before any further state transition. After JP receipt is proven, verify the same Christel/time slot is excluded while pending; only then may JP approve and unlock final client confirmation/calendar verification. JP decline remains a later separate genuine request.
