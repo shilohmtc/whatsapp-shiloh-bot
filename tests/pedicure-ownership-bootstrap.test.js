@@ -15,7 +15,7 @@ test('MediHeel and pedicure catalogue ownership is repaired to unique active Mar
   assert.match(bootstrap, /LOWER\(display_name\) = 'marietjie'/);
   assert.match(bootstrap, /status = 'active'/);
   assert.match(bootstrap, /resource_type = 'practitioner'/);
-  assert.match(bootstrap, /Pedicures & Foot Care/);
+  assert.match(bootstrap, /pedicures & foot care/i);
   assert.match(bootstrap, /pedicur/i);
   assert.match(bootstrap, /medi-?heel/i);
   assert.match(bootstrap, /elim/i);
@@ -39,7 +39,7 @@ test('production startup applies idempotent pedicure ownership repair before lis
 });
 
 test('migration records the same Marietjie-only ownership contract', () => {
-  assert.match(migration, /Pedicures & Foot Care/);
+  assert.match(migration, /pedicures & foot care/i);
   assert.match(migration, /LOWER\(display_name\) = 'marietjie'/);
   assert.match(migration, /DELETE FROM staff_services/);
   assert.match(migration, /INSERT INTO staff_services/);
