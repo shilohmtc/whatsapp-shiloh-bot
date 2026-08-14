@@ -206,6 +206,8 @@ async function stageCreatedBookingForApproval(result) {
     notification = { sent: false, reason: "notification_failed" };
   }
 
+  const reviewerName = notification?.approver || "an authorized approver";
+
   return {
     ...result,
     status: "pending_approval",
@@ -213,8 +215,8 @@ async function stageCreatedBookingForApproval(result) {
     reply: [
       `*Booking request received — #${result.appointmentId}*`,
       "",
-      `Your selected time is now being held while ${staff.staff_name_snapshot} reviews the request.`,
-      "The time will remain held until the practitioner explicitly approves or declines it; there is no automatic expiry.",
+      `Your selected time is now being held while ${reviewerName} reviews the request.`,
+      "The time will remain held until an authorized approver explicitly approves or declines it; there is no automatic expiry.",
       "",
       "Your appointment is not yet confirmed. I’ll send the final confirmation and calendar links after approval. 🌿",
     ].join("\n"),
