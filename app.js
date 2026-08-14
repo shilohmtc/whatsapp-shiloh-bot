@@ -5,12 +5,16 @@ const { validateEnv } = require("./src/config/env");
 const logger = require("./src/lib/logger");
 const requestContext = require("./src/middleware/requestContext");
 const { presentClientFamilyResult } = require("./src/presentation/clientFamilyPresentation");
+const { presentClientAppointmentChangeResult } = require("./src/presentation/clientAppointmentChangePresentation");
 const clientFamilyService = require("./src/services/clientServiceFamilyDiscovery");
+const appointmentChangeService = require("./src/services/appointmentChange");
 
 validateEnv();
 
 const processClientServiceFamilyMessage = clientFamilyService.processClientServiceFamilyMessage;
 clientFamilyService.processClientServiceFamilyMessage = async (...args) => presentClientFamilyResult(await processClientServiceFamilyMessage(...args));
+const processAppointmentChangeMessage = appointmentChangeService.processAppointmentChangeMessage;
+appointmentChangeService.processAppointmentChangeMessage = async (...args) => presentClientAppointmentChangeResult(await processAppointmentChangeMessage(...args));
 
 const webhookRoutes = require("./src/routes/webhook");
 const adminRoutes = require("./src/routes/admin");
