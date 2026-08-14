@@ -7,7 +7,7 @@ Purpose: permanent current-state project-management source of truth. Historical 
 
 Operational truth is GitHub `main`, Render production, Shiloh CRM, Google Calendar and explicit real WhatsApp/human evidence. Never infer provider, attendance, approval, CRM or Calendar state.
 
-Current application baseline: **PR #222** squash merge `5c856745f7ba4eb39fb363071a49418c09fd672e`; Render deploy **`dep-d9vh9sm7bikc73c40avg` live** with post-deploy `/health` 200. PR #222 is presentation-only for Google Calendar staff contact usability; booking, approval, hold, CRM catalogue/practitioner truth and private synchronization metadata are unchanged.
+Current application-code baseline: **PR #222** squash merge `5c856745f7ba4eb39fb363071a49418c09fd672e`. Functional deploy **`dep-d9vh9sm7bikc73c40avg`** was independently verified live with post-deploy `/health` 200. Subsequent documentation-only auto-deploys do not change that application code baseline and must not be mistaken for new functional behavior. PR #222 is presentation-only for Google Calendar staff contact usability; booking, approval, hold, CRM catalogue/practitioner truth and private synchronization metadata are unchanged.
 
 Approval policy remains: Marietjie self; Christel self; Abigail may be approved by Abigail or Christel, first valid decision authoritative. Dummy Test uses JP admin account alone. Pending holds have no automatic expiry. MediHeel remains Christel only.
 
@@ -54,7 +54,7 @@ User-approved presentation-only polish is now **CODE/CI + PROD LIVE**:
 - private Calendar synchronization metadata remains intact, including appointment id, source, staff, service and client mobile;
 - creation and later legitimate update/reschedule paths share the polished presentation contract;
 - self-test-first evidence: expectation-only CI **#627 failed**, implementation CI **#628 passed**;
-- PR #222 squash merge `5c856745f7ba4eb39fb363071a49418c09fd672e`; Render deploy `dep-d9vh9sm7bikc73c40avg` is live and healthy.
+- PR #222 squash merge `5c856745f7ba4eb39fb363071a49418c09fd672e`; functional Render deploy `dep-d9vh9sm7bikc73c40avg` was verified live and healthy before documentation reconciliation.
 
 **Real presentation acceptance remains WAITING for the next genuine Calendar create/update.** Do not alter #564 or create a booking solely to prove the polish.
 
@@ -82,7 +82,7 @@ Completed/accepted includes both Dummy Test approval directions: #564 positive J
 - **#565** — cancelled after accepted reschedule/cancellation lifecycle. Never recreate merely for proof.
 - **#566** — declined by JP; held Abigail/Bamboo 12:15 capacity proven released; no #566 Calendar event. Never recreate merely for proof.
 
-**Authoritative current state:** PR #222 / deploy `dep-d9vh9sm7bikc73c40avg` is the application baseline; controlled appointment state above remains authoritative until re-verified against applicable sources.
+**Authoritative current state:** PR #222 is the current application-code baseline; controlled appointment state above remains authoritative until re-verified against applicable sources. Render's exact current deploy must be re-verified directly because documentation-only commits also auto-deploy.
 
 **Highest-priority actionable item:** controlled **ordinary approval acceptance**, starting with the least-complex self-approval path (Marietjie or Christel), then Abigail's dual-authority/first-valid-decision rule.
 
