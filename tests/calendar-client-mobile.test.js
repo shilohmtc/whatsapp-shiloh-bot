@@ -13,16 +13,19 @@ test('calendar appointment description includes client mobile without changing t
   assert.match(calendarSource, /bookingSummary\(\{clientName,serviceName,staffName\}\)/);
 });
 
-test('client WhatsApp booking resolves canonical CRM contact before calendar creation', () => {
-  assert.match(clientCommitSource, /client_contacts/);
-  assert.match(clientCommitSource, /clientMobile:/);
+test('client WhatsApp booking carries the uniquely resolved WhatsApp identity into calendar creation', () => {
+  assert.match(clientCommitSource, /resolveClientByWhatsApp/);
+  assert.match(clientCommitSource, /identity\.status !== 'unique'/);
+  assert.match(clientCommitSource, /clientMobile: normalizedPhone/);
 });
 
-test('admin booking also resolves canonical CRM contact before calendar creation', () => {
+test('admin booking resolves canonical CRM contact before calendar creation', () => {
   assert.match(adminBookingSource, /client_contacts/);
-  assert.match(adminBookingSource, /clientMobile:/);
+  assert.match(adminBookingSource, /clientMobile: session\.client_mobile/);
 });
 
-test('calendar contact presentation remains descriptive only', () => {
+test('calendar mobile survives later event updates and remains descriptive only', () => {
+  assert.match(calendarSource, /shilohClientMobile/);
+  assert.match(calendarSource, /clientMobile\|\|p\.shilohClientMobile/);
   assert.doesNotMatch(calendarSource, /\b(?:UPDATE|INSERT|DELETE)\s+(?:clients|client_contacts)\b/i);
 });
