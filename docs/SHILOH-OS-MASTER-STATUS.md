@@ -11,12 +11,12 @@ Historical detail from the pre-approval ledger is preserved verbatim at `docs/ar
 
 ## Current production baseline
 
-- GitHub `main`: `19428aecad9b79941c98885d6995eba46333a110` after PR #192.
-- Render production: deploy `dep-d9vc9mdbedkc7381femg` reached `live` on the same commit.
+- Production runtime code baseline: `47fe6051a8255c66cdfe4956c02b575fc64f9d9b` after PR #193 (`Require JP approval for CRM Dummy Test bookings`). Render deploy `dep-d9vcfrou01pc73a9k3pg` reached `live` on that runtime commit. Later documentation-only descendants may advance GitHub `main`/Render without changing runtime behavior; verify the exact current heads at the start of each session.
 - PR #190 polished new-booking availability client copy and is production-live.
-- PR #191 introduced mandatory practitioner approval for future client-created bookings with an indefinite held slot and fail-closed final confirmation.
-- PR #192 corrected the business rule for Abigail bookings: either Abigail or Christel may make the first explicit Approve/Decline decision. Marietjie bookings remain Marietjie-only approval; Christel bookings remain Christel-only approval.
-- The first valid approval decision is authoritative. The other authorized Abigail decision-maker is informed of the outcome. CRM audit metadata records the actual decision-maker.
+- PR #191 introduced mandatory approval for future client-created bookings with an indefinite held slot and fail-closed final confirmation.
+- PR #192 established the ordinary-client business rule: Marietjie bookings are Marietjie-only; Christel bookings are Christel-only; Abigail bookings may be decided by either Abigail or Christel, with the first valid decision authoritative and audited.
+- PR #193 adds a **controlled CRM Dummy Test override**. If the booking belongs to the unique active CRM client whose canonical display name is `Dummy Test`, the sole required approver is the existing Jean-Pierre (JP) business-admin staff binding. The assigned practitioner and Christel/Abigail ordinary approval rules do not apply to that Dummy Test request.
+- Dummy Test identification deliberately reuses the guarded test-client uniqueness contract: there must be exactly one active CRM `Dummy Test` profile. JP resolution is also fail-closed: exactly one active Jean-Pierre staff-admin binding with `business_admin`, `all_business` Calendar scope and `all_services` service scope must exist. Ambiguity/missing authority aborts the booking transaction instead of falling back to practitioner approval.
 - Pending client booking holds have no automatic expiry, timer, TTL or background release. A pending hold remains a non-cancelled canonical appointment and therefore blocks that slot in authoritative availability until explicit approval or decline.
 - Final customer confirmation for `shiloh_client_whatsapp` appointments is fail-closed unless the booking approval record is exactly `approved`.
 - Decline transitions the held appointment to cancelled, releases Calendar mirrors/slot occupancy and notifies the client that nothing is booked.
@@ -27,6 +27,7 @@ Historical detail from the pre-approval ledger is preserved verbatim at `docs/ar
 
 - PR #191: regression-first practitioner approval gate. Final head `ac4d35eea6c47a9ca38252cb11e69e5c5b44fed1` passed CI #497; squash merge `bbdbbcc8f0d2a2bc8816ac56349c75c6c8d960fc`; Render deploy `dep-d9vaml6q1p3s738tp5l0` reached live.
 - PR #192: regression-only commit `d5fe3f20b23d5cfb9b35ad8ef828998134e531b6` failed CI #499 before implementation. Implementation head `bf761b0ad7f1be91bc22b60d8fd18f32aad8bd5f` passed CI #500. Squash merge `19428aecad9b79941c98885d6995eba46333a110`; Render deploy `dep-d9vc9mdbedkc7381femg` reached live.
+- PR #193: regression-only commit `7bb7c8b10fa8cba9373fe2dc2282e7461740d3c9` failed CI #503 before implementation. Final head `ec2dfba4e69a5677d6177a29442333d45f127090` passed CI #506. Squash merge `47fe6051a8255c66cdfe4956c02b575fc64f9d9b`; Render deploy `dep-d9vcfrou01pc73a9k3pg` reached live. Migration `052_dummy_test_jp_booking_approval.sql` mirrors the runtime-enforced trigger update; Render still relies on idempotent runtime schema convergence because migrations are not automatically run on deploy.
 
 ## Product-Critical Gate
 
@@ -34,17 +35,17 @@ Historical detail from the pre-approval ledger is preserved verbatim at `docs/ar
 
 Do not recreate cancelled appointment #561. Its booking, reschedule and cancellation journey is already accepted historical evidence.
 
-The next highest-value actionable acceptance is a **new genuine future client booking**, preferably with Abigail because it exercises the widest approval policy surface. The test must prove:
+The next highest-value actionable acceptance is a **new genuine future CRM Dummy Test booking**. It should prove the new held-booking lifecycle without using #561:
 
-1. Client completes the normal booking and policy-acceptance flow.
-2. Shiloh creates a canonical held appointment but tells the client it is pending approval, not confirmed.
+1. Dummy Test completes the normal registered-client booking flow and policy acceptance.
+2. Shiloh creates a canonical held appointment but tells Dummy Test it is pending approval, not confirmed.
 3. Before decision, the exact practitioner/time is not offered as available to another client.
 4. The hold remains indefinitely pending until an explicit decision; no automatic expiry is allowed.
-5. For an Abigail booking, both Abigail and Christel receive actionable Approve/Decline controls.
-6. Either Abigail or Christel may make the first decision; the other party cannot subsequently override it.
-7. Approval unlocks the existing final client confirmation and calendar-link flow.
-8. Decline is a separate follow-up test: it must cancel/release the hold and notify the client safely.
-9. Both shared and practitioner Google Calendar presentation, including client mobile metadata, should be checked on the next genuine booking rather than by creating an artificial booking solely for Calendar acceptance.
+5. **JP/Jean-Pierre alone receives actionable Approve/Decline controls for the CRM Dummy Test request.** The assigned practitioner must not be the required approver for this controlled test identity.
+6. JP approval unlocks the existing final client confirmation and calendar-link flow.
+7. A later separate Dummy Test request should exercise JP decline: cancellation/release of the held slot and safe client notification.
+8. Both shared and practitioner Google Calendar presentation, including client mobile metadata, should be checked on the same genuine future booking rather than by creating an extra artificial booking solely for Calendar acceptance.
+9. Ordinary-client approval acceptance remains open afterward: Marietjie self; Christel self; Abigail or Christel first decision.
 
 ## Remaining-work ledger
 
@@ -62,11 +63,11 @@ The next highest-value actionable acceptance is a **new genuine future client bo
 
 ### C — Client Perspective Testing
 
-- 🔵 Registered-client return recognition remains real-acceptance work.
+- 🔵 Registered-client return recognition remains real-acceptance work and can be observed naturally when Dummy Test returns.
 - ✅ First-time Dummy Test registration, service-family discovery, HIFU→Marietjie routing, authoritative availability, booking #561, reschedule and cancellation are completed historical evidence.
 - ✅ Beauty & Aesthetics treatment-list readability/pagination/price presentation was repaired and real-accepted.
 - ✅ New-booking availability client copy was polished by PR #190 and is production-live; real journey should naturally exercise it again without repeating completed acceptance solely for copy.
-- 🔵 New practitioner approval lifecycle is production-live but awaiting genuine WhatsApp acceptance as described above.
+- 🔵 Approval lifecycle is production-live but awaiting genuine WhatsApp acceptance. For CRM Dummy Test specifically, JP is now the sole approver; ordinary-client approval rules remain as defined above.
 - 🟡 Booking-confirmation Meta template remains fail-closed until exact provider Active/APPROVED evidence and real template acceptance exist. Plain-text confirmation remains the safe active path unless provider truth changes.
 - 🟡 Calendar-mobile presentation acceptance waits for the next genuine future booking; do not fabricate a booking only for this evidence.
 - ⬜ Natural practitioner/service conversational questions should continue to be exercised during the real client journey to verify CRM-consistent, non-invented answers.
@@ -96,6 +97,6 @@ The next highest-value actionable acceptance is a **new genuine future client bo
 
 ## Exact continuation state
 
-Production code is live and ready for real acceptance. Do **not** create or mutate any appointment merely to prove engineering. The next controlled test should be one genuine future client booking, preferably with Abigail, stopped first at the pending-approval state so the client message, dual Abigail/Christel approval requests, slot hold and no-expiry behavior can be observed before anyone approves. Then allow one of Abigail/Christel to approve and verify final client confirmation and Calendar mirrors. Test decline separately afterward with another genuine request.
+Production code is live and ready for real acceptance. Do **not** recreate appointment #561. The next controlled test is one new genuine future booking from the active CRM Dummy Test identity, stopped first at pending approval. Capture the client pending/held wording, verify the same practitioner/time is no longer available, and confirm that JP/Jean-Pierre receives the actionable Approve/Decline request as the sole required approver. Then let JP approve and verify final client confirmation plus both Calendar mirrors. Test JP decline separately with a later genuine request.
 
 Before any new engineering, verify GitHub `main` and Render again. Preserve all WAITING items fail-closed and continue to the next actionable priority when external evidence is unavailable.
