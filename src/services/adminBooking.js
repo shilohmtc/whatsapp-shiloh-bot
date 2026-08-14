@@ -155,6 +155,12 @@ async function confirmAdminBooking(admin, options = {}) {
       `SELECT abs.admin_id, abs.client_id, abs.staff_id, abs.service_id, abs.location_id,
               abs.starts_at, abs.ends_at, abs.state,
               c.display_name AS client_name, c.status AS client_status,
+              (SELECT COALESCE(NULLIF(cc.value, ''), cc.normalized_value)
+                 FROM client_contacts cc
+                WHERE cc.client_id = c.id
+                  AND LOWER(cc.contact_type) IN ('whatsapp', 'mobile', 'phone', 'telephone')
+                ORDER BY cc.is_primary DESC, cc.verified_at DESC NULLS LAST, cc.id
+                LIMIT 1) AS client_mobile,
               st.display_name AS staff_name, st.status AS staff_status,
               s.name AS service_name, s.status AS service_status,
               s.duration_minutes, s.processing_time_minutes, s.extra_time_minutes,
@@ -266,6 +272,7 @@ async function confirmAdminBooking(admin, options = {}) {
     const eventData = {
       appointmentId: appointment.id,
       clientName: session.client_name,
+      clientMobile: session.client_mobile,
       serviceName: session.service_name,
       staffName: session.staff_name,
       locationName: session.location_name,
