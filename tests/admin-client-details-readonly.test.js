@@ -18,7 +18,9 @@ test('client lookup keeps masked summary but exposes a separate read-only detail
 test('client details request reuses the existing permission gate and scope filter', () => {
   assert.match(menuSource, /clientCommand&&has\(admin,'client:lookup'\)/);
   assert.match(menuSource, /filterClientsForAdminScope/);
-  assert.match(lookupSource, /details\s+#?\(\\d\+\)/);
+  assert.match(lookupSource, /const detailsMatch = cleaned\.match/);
+  assert.match(lookupSource, /getClientDetails\(detailsMatch\[1\]\)/);
+  assert.match(lookupSource, /queryType: "details"/);
 });
 
 test('single safe lookup advertises an explicit details request without unmasking the search result', () => {
