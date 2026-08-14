@@ -40,6 +40,10 @@ function maskPhone(phone = "") { return phone.length > 4 ? `***${phone.slice(-4)
 function isGreetingOnly(text = "") { return /^(hi|hello|hey|good morning|good afternoon|good evening|howzit|hiya)[!. ]*$/i.test(String(text).trim()); }
 function inboundText(message){
   if(message?.type==="text") return message.text?.body?.trim()||null;
+  if(message?.type==="button") {
+    const id=message.button?.payload?.trim()||message.button?.text?.trim()||'';
+    return commandForAdminButton(id)||commandForClientBookingButton(id)||id||null;
+  }
   if(message?.type==="interactive"&&message.interactive?.type==="button_reply") {
     const id=message.interactive.button_reply?.id?.trim()||'';
     return commandForAdminButton(id)||commandForClientBookingButton(id)||id||null;
