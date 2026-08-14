@@ -5,6 +5,7 @@ const path = require('node:path');
 
 const root = path.resolve(__dirname, '..');
 const reminder = fs.readFileSync(path.join(root, 'src/services/appointmentReminderConfirmation.js'), 'utf8');
+const lifecycle = fs.readFileSync(path.join(root, 'src/services/appointmentLifecycle.js'), 'utf8');
 const care = fs.readFileSync(path.join(root, 'src/services/customerCare.js'), 'utf8');
 const bookingConfirmation = fs.readFileSync(path.join(root, 'src/services/customerBookingConfirmation.js'), 'utf8');
 const { parseConfirmationCommand } = require('../src/services/appointmentReminderConfirmation');
@@ -24,6 +25,14 @@ test('only reminded future non-final appointments are eligible', () => {
   assert.match(reminder, /a\.status IN \('scheduled','confirmed'\)/);
   assert.match(reminder, /al\.status IN \('confirmed','confirmed_by_client'\)/);
   assert.doesNotMatch(reminder, /completed','cancelled','no_show/);
+});
+
+test('lifecycle reminder claim pauses while the client has an active reschedule or cancel intent', () => {
+  assert.match(lifecycle, /appointment_change_intents/);
+  assert.match(lifecycle, /NOT EXISTS/);
+  assert.match(lifecycle, /aci\.phone\s*=\s*a\.phone/);
+  assert.match(lifecycle, /aci\.status\s*=\s*'collecting'/);
+  assert.match(lifecycle, /aci\.action\s+IN\s*\('reschedule','cancel'\)/);
 });
 
 test('client identity fails closed unless exactly one active canonical client matches the phone', () => {
