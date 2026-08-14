@@ -1,13 +1,36 @@
 const OpenAI = require('openai');
 const logger = require('../lib/logger');
 
-const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+let client = null;
 const FAST_MODEL = process.env.OPENAI_FAST_MODEL || process.env.OPENAI_MODEL || 'gpt-5.6-luna';
 const ENGLISH_ONLY_REPLY = "Shiloh's WhatsApp service is available in English only. Please send your message in English and I'll be happy to help.";
+
+const CLINIC_NAVIGATION_HINTS = Object.freeze([
+  'lymphatic', 'drainage', 'mediheel', 'pedicure', 'beauty', 'aesthetics',
+  'massage', 'facial', 'facials', 'nail', 'nails', 'waxing', 'brow', 'brows',
+  'lash', 'lashes', 'body', 'foot', 'feet', 'skin', 'treatment', 'treatments',
+  'service', 'services', 'booking', 'bookings', 'appointment', 'appointments',
+]);
+
+function classifierClient() {
+  if (!client) client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  return client;
+}
+
+function isEnglishCompatibleClinicNavigation(text='') {
+  const value = String(text || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  if (!value || value.length > 80) return false;
+  const words = value.match(/[a-z]+(?:['’-][a-z]+)*/g) || [];
+  if (words.length < 1 || words.length > 6) return false;
+  if (!/\b(treatments?|services?|bookings?|appointments?)\b/.test(value)) return false;
+  const hintCount = words.filter((word) => CLINIC_NAVIGATION_HINTS.includes(word)).length;
+  return hintCount >= 2;
+}
 
 function needsLanguageCheck(text='') {
   const value=String(text||'').trim();
   if(!value) return false;
+  if(isEnglishCompatibleClinicNavigation(value)) return false;
   const words=value.match(/[A-Za-zÀ-ÿ]+(?:['’-][A-Za-zÀ-ÿ]+)*/g)||[];
   // Names, confirmation tokens, menu numbers, dates and times must continue to work.
   return words.length >= 3 || /[^\u0000-\u024F\u2000-\u206F\u20A0-\u20CF\u2100-\u214F\u2190-\u21FF\u2600-\u27BF\uFE0F]/u.test(value);
@@ -16,7 +39,7 @@ function needsLanguageCheck(text='') {
 async function guardEnglishOnly(text) {
   if(!needsLanguageCheck(text)) return { allowed:true };
   try {
-    const response=await client.responses.create({
+    const response=await classifierClient().responses.create({
       model:FAST_MODEL,
       input:String(text).slice(0,700),
       instructions:[
@@ -40,4 +63,4 @@ async function guardEnglishOnly(text) {
   }
 }
 
-module.exports={guardEnglishOnly,ENGLISH_ONLY_REPLY,needsLanguageCheck};
+module.exports={guardEnglishOnly,ENGLISH_ONLY_REPLY,needsLanguageCheck,isEnglishCompatibleClinicNavigation};
