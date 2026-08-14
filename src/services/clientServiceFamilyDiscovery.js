@@ -8,7 +8,7 @@ const FAMILY_RULES = Object.freeze({
   beauty: { title: 'Beauty & Aesthetics', practitioner: 'Marietjie' },
   massage: { title: 'Massage', practitioner: null },
   lymphatic: { title: 'Lymphatic Drainage', practitioner: 'Abigail' },
-  pedicure: { title: 'Elim MediHeel Pedicures', practitioner: 'Marietjie' },
+  pedicure: { title: 'Elim MediHeel Pedicures', practitioner: 'Christel' },
 });
 
 function clean(value = '') { return String(value || '').trim().replace(/\s+/g, ' '); }
@@ -43,14 +43,11 @@ function familyFilterSql(family) {
       AND LOWER(st.display_name) = 'abigail'`;
   }
   if (family === 'pedicure') {
-    return `LOWER(st.display_name) = 'marietjie'
+    return `LOWER(st.display_name) = 'christel'
       AND (
-        LOWER(s.name) LIKE '%pedicur%'
+        LOWER(s.name) LIKE '%medi-heel%'
         OR LOWER(s.name) LIKE '%mediheel%'
         OR LOWER(s.name) LIKE '%elim%'
-        OR LOWER(COALESCE(sc.name, '')) LIKE '%pedicur%'
-        OR LOWER(COALESCE(sc.name, '')) LIKE '%mediheel%'
-        OR LOWER(COALESCE(sc.name, '')) LIKE '%elim%'
       )`;
   }
   return null;
@@ -97,7 +94,7 @@ async function findFamilyService(family, serviceId) {
 }
 
 async function listFamilyEligiblePractitioners(family, serviceId) {
-  const names = family === 'massage' ? ['christel', 'abigail'] : (family === 'beauty' || family === 'pedicure') ? ['marietjie'] : family === 'lymphatic' ? ['abigail'] : [];
+  const names = family === 'massage' ? ['christel', 'abigail'] : family === 'beauty' ? ['marietjie'] : family === 'pedicure' ? ['christel'] : family === 'lymphatic' ? ['abigail'] : [];
   if (!names.length) return [];
   const result = await pool.query(`
     SELECT st.id, st.display_name

@@ -37,11 +37,13 @@ test('registered client discovery copy is client-friendly and comes from the saf
   assert.doesNotMatch(interactive.body, /CRM|currently eligible/i);
 });
 
-test('pedicure is a guarded CRM-derived service family', () => {
+test('MediHeel is a guarded Christel-only CRM-derived service family', () => {
   assert.equal(familyDiscovery.FAMILY_RULES.pedicure.title, 'Elim MediHeel Pedicures');
+  assert.equal(familyDiscovery.FAMILY_RULES.pedicure.practitioner, 'Christel');
   const sql = familyDiscovery.familyFilterSql('pedicure');
-  assert.match(sql, /marietjie/i);
-  assert.match(sql, /pedicur|mediheel|elim/i);
+  assert.match(sql, /christel/i);
+  assert.match(sql, /medi-heel|mediheel|elim/i);
+  assert.doesNotMatch(sql, /marietjie/i);
   assert.match(familyDiscovery.familyFilterSql('beauty'), /NOT LIKE[\s\S]*pedicur|NOT LIKE[\s\S]*mediheel|NOT LIKE[\s\S]*elim/i);
 });
 

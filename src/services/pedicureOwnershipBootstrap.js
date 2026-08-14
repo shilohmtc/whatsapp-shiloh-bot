@@ -1,40 +1,37 @@
 const { pool } = require('../db/pool');
 
-function pedicureServiceFilterSql(alias = 's', categoryAlias = 'sc') {
+function mediHeelServiceFilterSql(alias = 's') {
   return `(
-    LOWER(COALESCE(${categoryAlias}.name, '')) = 'pedicures & foot care'
-    OR LOWER(${alias}.name) LIKE '%pedicur%'
-    OR LOWER(${alias}.name) LIKE '%medi-heel%'
+    LOWER(${alias}.name) LIKE '%medi-heel%'
     OR LOWER(${alias}.name) LIKE '%mediheel%'
     OR LOWER(${alias}.name) LIKE '%elim%'
   )`;
 }
 
-async function ensureMarietjiePedicureOwnership() {
+async function ensureChristelMediHeelOwnership() {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
 
-    const marietjieResult = await client.query(`
+    const christelResult = await client.query(`
       SELECT id, display_name
         FROM staff
-       WHERE LOWER(display_name) = 'marietjie'
+       WHERE LOWER(display_name) = 'christel'
          AND status = 'active'
          AND resource_type = 'practitioner'
        ORDER BY id
        FOR UPDATE
     `);
-    if (marietjieResult.rows.length !== 1) {
-      throw new Error(`Expected exactly one active Marietjie practitioner; found ${marietjieResult.rows.length}`);
+    if (christelResult.rows.length !== 1) {
+      throw new Error(`Expected exactly one active Christel practitioner; found ${christelResult.rows.length}`);
     }
-    const marietjieId = Number(marietjieResult.rows[0].id);
+    const christelId = Number(christelResult.rows[0].id);
 
     const servicesResult = await client.query(`
       SELECT s.id
         FROM services s
-        LEFT JOIN service_categories sc ON sc.id = s.category_id
        WHERE s.status = 'active'
-         AND ${pedicureServiceFilterSql('s', 'sc')}
+         AND ${mediHeelServiceFilterSql('s')}
        ORDER BY s.id
        FOR UPDATE OF s
     `);
@@ -42,24 +39,24 @@ async function ensureMarietjiePedicureOwnership() {
 
     if (!serviceIds.length) {
       await client.query('COMMIT');
-      return { repaired: false, serviceCount: 0, marietjieId };
+      return { repaired: false, serviceCount: 0, christelId };
     }
 
     await client.query(`
       DELETE FROM staff_services
        WHERE service_id = ANY($1::bigint[])
          AND staff_id <> $2
-    `, [serviceIds, marietjieId]);
+    `, [serviceIds, christelId]);
 
     await client.query(`
       INSERT INTO staff_services (staff_id, service_id)
       SELECT $1, service_id
         FROM UNNEST($2::bigint[]) AS service_id
       ON CONFLICT (staff_id, service_id) DO NOTHING
-    `, [marietjieId, serviceIds]);
+    `, [christelId, serviceIds]);
 
     await client.query('COMMIT');
-    return { repaired: true, serviceCount: serviceIds.length, marietjieId };
+    return { repaired: true, serviceCount: serviceIds.length, christelId };
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;
@@ -68,4 +65,4 @@ async function ensureMarietjiePedicureOwnership() {
   }
 }
 
-module.exports = { ensureMarietjiePedicureOwnership, pedicureServiceFilterSql };
+module.exports = { ensureChristelMediHeelOwnership, mediHeelServiceFilterSql };
