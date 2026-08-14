@@ -69,12 +69,13 @@ test('lymphatic is Abigail-only even if stale CRM mappings exist for another pra
   assert.match(familySource, /family === 'lymphatic' \? \['abigail'\]/);
 });
 
-test('Elim MediHeel Pedicures is Christel-only and CRM-name/category derived', () => {
+test('Elim MediHeel Pedicures is Christel-only and limited to MediHeel/Elim service names', () => {
   const sql = familyFilterSql('pedicure');
   assert.match(sql, /LOWER\(st\.display_name\) = 'christel'/);
-  assert.match(sql, /pedicur/);
+  assert.match(sql, /medi-heel/);
   assert.match(sql, /mediheel/);
   assert.match(sql, /elim/);
+  assert.doesNotMatch(sql, /LOWER\(s\.name\) LIKE '%pedicur%'/);
   assert.match(familySource, /family === 'beauty' \? \['marietjie'\] : family === 'pedicure' \? \['christel'\]/);
 });
 
