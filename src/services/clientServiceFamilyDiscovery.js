@@ -14,6 +14,16 @@ const FAMILY_RULES = Object.freeze({
 function clean(value = '') { return String(value || '').trim().replace(/\s+/g, ' '); }
 function short(value = '') { const text = clean(value); return text.length <= 24 ? text : `${text.slice(0, 21)}…`; }
 
+function familyCommandForNaturalText(text = '') {
+  const value = clean(text).toLowerCase().replace(/[.!?]+$/g, '');
+  if (/^lymphatic(?:\s+drainage)?(?:\s+(?:treatments?|services?))?$/.test(value)) return 'client_family_lymphatic';
+  if (/^(?:beauty\s*(?:&|and)\s*aesthetics|beauty)(?:\s+(?:treatments?|services?))?$/.test(value)) return 'client_family_beauty';
+  if (/^massage(?:\s+(?:treatments?|services?))?$/.test(value)) return 'client_family_massage';
+  if (/^(?:elim\s+)?mediheel(?:\s+pedicures?)?(?:\s+(?:treatments?|services?))?$/.test(value)) return 'client_family_pedicure';
+  if (/^elim\s+mediheel\s+pedicures?(?:\s+(?:treatments?|services?))?$/.test(value)) return 'client_family_pedicure';
+  return null;
+}
+
 function familyFilterSql(family) {
   if (family === 'beauty') {
     return `LOWER(st.display_name) = 'marietjie'
@@ -145,7 +155,7 @@ function massagePractitionersInteractive(service, staff) {
 }
 
 async function processClientServiceFamilyMessage(sender, text) {
-  const value = clean(text).toLowerCase();
+  const value = familyCommandForNaturalText(text) || clean(text).toLowerCase();
   const familyMatch = value.match(/^client_family_(beauty|massage|lymphatic|pedicure)$/);
   if (familyMatch) {
     const family = familyMatch[1];
@@ -183,6 +193,7 @@ async function processClientServiceFamilyMessage(sender, text) {
 module.exports = {
   FAMILY_PAGE_SIZE,
   FAMILY_RULES,
+  familyCommandForNaturalText,
   familyFilterSql,
   familyServicesInteractive,
   listFamilyEligiblePractitioners,
