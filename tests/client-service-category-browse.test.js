@@ -35,6 +35,22 @@ test('category lists respect Meta row bounds and use stable IDs', () => {
   assert.equal(first.rows.at(-1).id, 'client_categories_page_2');
 });
 
+test('client service category copy uses deliberate family labels and action-oriented descriptions', () => {
+  const view = categoryPageInteractive([
+    { id: 1, name: 'Beauty & Aesthetics', service_count: 12 },
+    { id: 2, name: 'Massage', service_count: 8 },
+    { id: 3, name: 'Lymphatic Drainage', service_count: 2 },
+    { id: 4, name: 'Elim MediHeel Pedicures', service_count: 3 },
+  ], 1);
+  assert.deepEqual(view.rows.map(({ title, description }) => ({ title, description })), [
+    { title: 'Beauty & Aesthetics', description: 'View beauty & aesthetics treatments' },
+    { title: 'Massage Treatments', description: 'View massage treatments' },
+    { title: 'Lymphatic Drainage', description: 'View lymphatic drainage treatments' },
+    { title: 'Elim MediHeel Pedicures', description: 'View pedicure treatments' },
+  ]);
+  assert.equal(view.rows[1].id, 'client_category_2');
+});
+
 test('category service pages retain category scope across pagination', () => {
   const rows = Array.from({ length: 20 }, (_, index) => ({
     id: index + 1,
