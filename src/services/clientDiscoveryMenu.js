@@ -145,374 +145,91 @@ function serviceTitle(name = '') {
   return value.length <= 24 ? value : `${value.slice(0, 21)}…`;
 }
 
+function categoryClientCopy(name = '') {
+  const value = clean(name).toLowerCase();
+  if (value === 'beauty & aesthetics' || value === 'beauty and aesthetics') return { title: 'Beauty & Aesthetics', description: 'View beauty & aesthetics treatments' };
+  if (value === 'massage') return { title: 'Massage Treatments', description: 'View massage treatments' };
+  if (value === 'lymphatic drainage') return { title: 'Lymphatic Drainage', description: 'View lymphatic drainage treatments' };
+  if (value === 'elim mediheel pedicures') return { title: 'Elim MediHeel Pedicures', description: 'View pedicure treatments' };
+  return { title: serviceTitle(name), description: 'View treatments' };
+}
+
 function categoryPageInteractive(rows = [], page = 1) {
   const totalPages = Math.max(1, Math.ceil(rows.length / CATEGORY_PAGE_SIZE));
   const safePage = Math.min(Math.max(Number(page) || 1, 1), totalPages);
   const start = (safePage - 1) * CATEGORY_PAGE_SIZE;
-  const pageRows = rows.slice(start, start + CATEGORY_PAGE_SIZE).map((row) => ({
-    id: `client_category_${row.id}`,
-    title: serviceTitle(row.name),
-    description: `${Number(row.service_count) || 0} active service${Number(row.service_count) === 1 ? '' : 's'}`,
-  }));
+  const pageRows = rows.slice(start, start + CATEGORY_PAGE_SIZE).map((row) => {
+    const copy = categoryClientCopy(row.name);
+    return {
+      id: `client_category_${row.id}`,
+      title: serviceTitle(copy.title),
+      description: copy.description.slice(0, 72),
+    };
+  });
 
   if (safePage < totalPages) {
-    pageRows.push({
-      id: `client_categories_page_${safePage + 1}`,
-      title: 'More categories →',
-      description: `Page ${safePage + 1} of ${totalPages}`,
-    });
+    pageRows.push({ id: `client_categories_page_${safePage + 1}`, title: 'More categories →', description: `Page ${safePage + 1} of ${totalPages}` });
   } else if (safePage > 1) {
-    pageRows.push({
-      id: 'client_categories_page_1',
-      title: '← First page',
-      description: `Page 1 of ${totalPages}`,
-    });
+    pageRows.push({ id: 'client_categories_page_1', title: '← First page', description: `Page 1 of ${totalPages}` });
   }
-
-  return {
-    type: 'list',
-    body: `*Browse Shiloh services*\nChoose a category first. Showing page ${safePage} of ${totalPages}.`,
-    buttonText: 'Categories',
-    rows: pageRows,
-    sectionTitle: 'Service categories',
-  };
+  return { type: 'list', body: `*Browse Shiloh services*\nChoose a category first. Showing page ${safePage} of ${totalPages}.`, buttonText: 'Categories', rows: pageRows, sectionTitle: 'Service categories' };
 }
 
 function servicePageInteractive(rows = [], page = 1, options = {}) {
   const totalPages = Math.max(1, Math.ceil(rows.length / SERVICE_PAGE_SIZE));
   const safePage = Math.min(Math.max(Number(page) || 1, 1), totalPages);
   const start = (safePage - 1) * SERVICE_PAGE_SIZE;
-  const pageRows = rows.slice(start, start + SERVICE_PAGE_SIZE).map((row) => ({
-    id: `client_service_${row.id}`,
-    title: serviceTitle(row.name),
-    description: serviceDescription(row),
-  }));
-
+  const pageRows = rows.slice(start, start + SERVICE_PAGE_SIZE).map((row) => ({ id: `client_service_${row.id}`, title: serviceTitle(row.name), description: serviceDescription(row) }));
   const categoryId = options.categoryId == null ? null : Number(options.categoryId);
-  if (safePage < totalPages) {
-    pageRows.push({
-      id: categoryId == null ? `client_services_page_${safePage + 1}` : `client_category_${categoryId}_page_${safePage + 1}`,
-      title: 'More services →',
-      description: `Page ${safePage + 1} of ${totalPages}`,
-    });
-  } else if (safePage > 1) {
-    pageRows.push({
-      id: categoryId == null ? 'client_services_page_1' : `client_category_${categoryId}_page_1`,
-      title: '← First page',
-      description: `Page 1 of ${totalPages}`,
-    });
-  }
-
+  if (safePage < totalPages) pageRows.push({ id: categoryId == null ? `client_services_page_${safePage + 1}` : `client_category_${categoryId}_page_${safePage + 1}`, title: 'More services →', description: `Page ${safePage + 1} of ${totalPages}` });
+  else if (safePage > 1) pageRows.push({ id: categoryId == null ? 'client_services_page_1' : `client_category_${categoryId}_page_1`, title: '← First page', description: `Page 1 of ${totalPages}` });
   const heading = options.categoryName ? `*${options.categoryName}*` : '*Browse Shiloh services*';
-  return {
-    type: 'list',
-    body: `${heading}\nChoose a treatment to start a booking. Showing page ${safePage} of ${totalPages}.`,
-    buttonText: 'View services',
-    rows: pageRows,
-    sectionTitle: options.categoryName ? serviceTitle(options.categoryName) : 'Client-bookable services',
-  };
+  return { type: 'list', body: `${heading}\nChoose a treatment to start a booking. Showing page ${safePage} of ${totalPages}.`, buttonText: 'View services', rows: pageRows, sectionTitle: options.categoryName ? serviceTitle(options.categoryName) : 'Client-bookable services' };
 }
 
 function practitionerServicePageInteractive(rows = [], practitioner, page = 1) {
-  const totalPages = Math.max(1, Math.ceil(rows.length / SERVICE_PAGE_SIZE));
-  const safePage = Math.min(Math.max(Number(page) || 1, 1), totalPages);
-  const start = (safePage - 1) * SERVICE_PAGE_SIZE;
-  const pageRows = rows.slice(start, start + SERVICE_PAGE_SIZE).map((row) => ({
-    id: `client_service_${row.id}`,
-    title: serviceTitle(row.name),
-    description: serviceDescription(row),
-  }));
-
-  if (safePage < totalPages) {
-    pageRows.push({
-      id: `client_practitioner_services_${practitioner.id}_page_${safePage + 1}`,
-      title: 'More services →',
-      description: `Page ${safePage + 1} of ${totalPages}`,
-    });
-  } else if (safePage > 1) {
-    pageRows.push({
-      id: `client_practitioner_services_${practitioner.id}_page_1`,
-      title: '← First page',
-      description: `Page 1 of ${totalPages}`,
-    });
-  }
-
-  return {
-    type: 'list',
-    body: `*Services with ${practitioner.display_name}*\nChoose an active service mapped to this practitioner. Showing page ${safePage} of ${totalPages}.`,
-    buttonText: 'View services',
-    rows: pageRows,
-    sectionTitle: `${serviceTitle(practitioner.display_name)} services`,
-  };
+  const totalPages = Math.max(1, Math.ceil(rows.length / SERVICE_PAGE_SIZE)); const safePage = Math.min(Math.max(Number(page) || 1, 1), totalPages); const start = (safePage - 1) * SERVICE_PAGE_SIZE;
+  const pageRows = rows.slice(start, start + SERVICE_PAGE_SIZE).map((row) => ({ id: `client_service_${row.id}`, title: serviceTitle(row.name), description: serviceDescription(row) }));
+  if (safePage < totalPages) pageRows.push({ id: `client_practitioner_services_${practitioner.id}_page_${safePage + 1}`, title: 'More services →', description: `Page ${safePage + 1} of ${totalPages}` });
+  else if (safePage > 1) pageRows.push({ id: `client_practitioner_services_${practitioner.id}_page_1`, title: '← First page', description: `Page 1 of ${totalPages}` });
+  return { type: 'list', body: `*Services with ${practitioner.display_name}*\nChoose an active service mapped to this practitioner. Showing page ${safePage} of ${totalPages}.`, buttonText: 'View services', rows: pageRows, sectionTitle: `${serviceTitle(practitioner.display_name)} services` };
 }
 
 function eligiblePractitionersInteractive(service, staff = []) {
-  const rows = [
-    {
-      id: 'client_practitioner_any',
-      title: 'Any available',
-      description: 'Use any eligible practitioner for this service',
-    },
-    ...staff.slice(0, 9).map((row) => ({
-      id: `client_practitioner_${row.id}`,
-      title: serviceTitle(row.display_name),
-      description: `Eligible for ${serviceTitle(service.name)}`.slice(0, 72),
-    })),
-  ].slice(0, 10);
-
-  return {
-    type: 'list',
-    body: `*${service.name}*\nChoose an eligible practitioner, or choose Any available.`,
-    buttonText: 'Practitioners',
-    rows,
-    sectionTitle: 'Eligible practitioners',
-  };
+  const rows = [{ id: 'client_practitioner_any', title: 'Any available', description: 'Use any eligible practitioner for this service' }, ...staff.slice(0, 9).map((row) => ({ id: `client_practitioner_${row.id}`, title: serviceTitle(row.display_name), description: `Eligible for ${serviceTitle(service.name)}`.slice(0, 72) }))].slice(0, 10);
+  return { type: 'list', body: `*${service.name}*\nChoose an eligible practitioner, or choose Any available.`, buttonText: 'Practitioners', rows, sectionTitle: 'Eligible practitioners' };
 }
 
 async function practitionersInteractive() {
   const staff = await listClientBookableStaff();
-  const rows = staff.slice(0, 9).map((row) => ({
-    id: `client_practitioner_${row.id}`,
-    title: serviceTitle(row.display_name),
-    description: 'Client-bookable Shiloh practitioner',
-  }));
+  const rows = staff.slice(0, 9).map((row) => ({ id: `client_practitioner_${row.id}`, title: serviceTitle(row.display_name), description: 'Client-bookable Shiloh practitioner' }));
   rows.push({ id: 'client_book_now', title: 'Book now', description: 'Start with a service or preference' });
-  return {
-    type: 'list',
-    body: '*Our practitioners*\nChoose a practitioner to see the active services currently mapped to them.',
-    buttonText: 'Practitioners',
-    rows,
-    sectionTitle: 'Shiloh practitioners',
-  };
+  return { type: 'list', body: '*Our practitioners*\nChoose a practitioner to see the active services currently mapped to them.', buttonText: 'Practitioners', rows, sectionTitle: 'Shiloh practitioners' };
 }
 
 async function findClientBookableService(id) {
-  const result = await pool.query(`
-    SELECT DISTINCT s.id, s.name
-      FROM services s
-      JOIN staff_services ss ON ss.service_id = s.id
-      JOIN staff st ON st.id = ss.staff_id
-     WHERE s.id = $1
-       AND s.status = 'active'
-       AND st.status = 'active'
-       AND st.resource_type = 'practitioner'
-       AND st.client_bookable = TRUE
-     LIMIT 1
-  `, [Number(id)]);
+  const result = await pool.query(`SELECT DISTINCT s.id, s.name FROM services s JOIN staff_services ss ON ss.service_id = s.id JOIN staff st ON st.id = ss.staff_id WHERE s.id = $1 AND s.status = 'active' AND st.status = 'active' AND st.resource_type = 'practitioner' AND st.client_bookable = TRUE LIMIT 1`, [Number(id)]);
   return result.rows[0] || null;
 }
-
-async function findClientBookablePractitioner(id) {
-  const result = await pool.query(`
-    SELECT id, display_name
-      FROM staff
-     WHERE id = $1
-       AND status = 'active'
-       AND resource_type = 'practitioner'
-       AND client_bookable = TRUE
-     LIMIT 1
-  `, [Number(id)]);
-  return result.rows[0] || null;
-}
-
-async function practitionerEligibleForService(practitionerId, serviceName) {
-  const result = await pool.query(`
-    SELECT st.id, st.display_name
-      FROM staff st
-      JOIN staff_services ss ON ss.staff_id = st.id
-      JOIN services s ON s.id = ss.service_id
-     WHERE st.id = $1
-       AND LOWER(s.name) = LOWER($2)
-       AND s.status = 'active'
-       AND st.status = 'active'
-       AND st.resource_type = 'practitioner'
-       AND st.client_bookable = TRUE
-     LIMIT 1
-  `, [Number(practitionerId), clean(serviceName)]);
-  return result.rows[0] || null;
-}
-
-async function serviceEligibleForPractitioner(serviceId, practitionerName) {
-  const result = await pool.query(`
-    SELECT s.id, s.name
-      FROM services s
-      JOIN staff_services ss ON ss.service_id = s.id
-      JOIN staff st ON st.id = ss.staff_id
-     WHERE s.id = $1
-       AND LOWER(st.display_name) = LOWER($2)
-       AND s.status = 'active'
-       AND st.status = 'active'
-       AND st.resource_type = 'practitioner'
-       AND st.client_bookable = TRUE
-     LIMIT 1
-  `, [Number(serviceId), clean(practitionerName)]);
-  return result.rows[0] || null;
-}
+async function findClientBookablePractitioner(id) { const result = await pool.query(`SELECT id, display_name FROM staff WHERE id = $1 AND status = 'active' AND resource_type = 'practitioner' AND client_bookable = TRUE LIMIT 1`, [Number(id)]); return result.rows[0] || null; }
+async function practitionerEligibleForService(practitionerId, serviceName) { const result = await pool.query(`SELECT st.id, st.display_name FROM staff st JOIN staff_services ss ON ss.staff_id = st.id JOIN services s ON s.id = ss.service_id WHERE st.id = $1 AND LOWER(s.name) = LOWER($2) AND s.status = 'active' AND st.status = 'active' AND st.resource_type = 'practitioner' AND st.client_bookable = TRUE LIMIT 1`, [Number(practitionerId), clean(serviceName)]); return result.rows[0] || null; }
+async function serviceEligibleForPractitioner(serviceId, practitionerName) { const result = await pool.query(`SELECT s.id, s.name FROM services s JOIN staff_services ss ON ss.service_id = s.id JOIN staff st ON st.id = ss.staff_id WHERE s.id = $1 AND LOWER(st.display_name) = LOWER($2) AND s.status = 'active' AND st.status = 'active' AND st.resource_type = 'practitioner' AND st.client_bookable = TRUE LIMIT 1`, [Number(serviceId), clean(practitionerName)]); return result.rows[0] || null; }
 
 async function processClientDiscoveryMessage(sender, text) {
-  const raw = clean(text);
-  const value = raw.toLowerCase();
-
-  if (isHomeCommand(raw)) {
-    await clearIntent(sender);
-    return { handled: true, interactive: clientHomeInteractive() };
-  }
-
-  if (['client_browse_services', 'browse services', 'services', 'list treatments', 'list services', 'treatments'].includes(value)) {
-    const categories = await listClientBookableCategories();
-    if (!categories.length) {
-      return { handled: true, reply: 'I can’t safely load Shiloh’s client-bookable service categories right now. Please try again shortly.' };
-    }
-    return { handled: true, interactive: categoryPageInteractive(categories, 1) };
-  }
-
-  const categoryPageMatch = value.match(/^client_categories_page_(\d+)$/);
-  if (categoryPageMatch) {
-    const categories = await listClientBookableCategories();
-    if (!categories.length) return { handled: true, reply: 'No client-bookable service categories are available to display right now.' };
-    return { handled: true, interactive: categoryPageInteractive(categories, Number(categoryPageMatch[1])) };
-  }
-
-  const categoryServicePageMatch = value.match(/^client_category_(\d+)_page_(\d+)$/);
-  if (categoryServicePageMatch) {
-    const categoryId = Number(categoryServicePageMatch[1]);
-    const services = await listServicesForCategory(categoryId);
-    if (!services.length) return { handled: true, reply: 'That category no longer has active client-bookable services. Send *Services* to refresh.' };
-    return {
-      handled: true,
-      interactive: servicePageInteractive(services, Number(categoryServicePageMatch[2]), {
-        categoryId,
-        categoryName: services[0].category_name,
-      }),
-    };
-  }
-
-  const categoryMatch = value.match(/^client_category_(\d+)$/);
-  if (categoryMatch) {
-    const categoryId = Number(categoryMatch[1]);
-    const services = await listServicesForCategory(categoryId);
-    if (!services.length) return { handled: true, reply: 'That category no longer has active client-bookable services. Send *Services* to refresh.' };
-    return {
-      handled: true,
-      interactive: servicePageInteractive(services, 1, {
-        categoryId,
-        categoryName: services[0].category_name,
-      }),
-    };
-  }
-
-  const pageMatch = value.match(/^client_services_page_(\d+)$/);
-  if (pageMatch) {
-    const services = await listClientBookableServices();
-    if (!services.length) return { handled: true, reply: 'No client-bookable services are available to display right now.' };
-    return { handled: true, interactive: servicePageInteractive(services, Number(pageMatch[1])) };
-  }
-
-  const practitionerPageMatch = value.match(/^client_practitioner_services_(\d+)_page_(\d+)$/);
-  if (practitionerPageMatch) {
-    const practitioner = await findClientBookablePractitioner(practitionerPageMatch[1]);
-    if (!practitioner) {
-      return { handled: true, reply: 'That practitioner is no longer available for direct client booking. Send *Our practitioners* to refresh the current list.' };
-    }
-    const services = await listServicesForPractitioner(practitioner.id);
-    if (!services.length) {
-      return { handled: true, reply: `${practitioner.display_name} has no active client-bookable services mapped right now.` };
-    }
-    return { handled: true, interactive: practitionerServicePageInteractive(services, practitioner, Number(practitionerPageMatch[2])) };
-  }
-
-  if (['client_practitioners', 'our practitioners', 'practitioners', 'list your staff', 'list staff', 'staff'].includes(value)) {
-    return { handled: true, interactive: await practitionersInteractive() };
-  }
-
-  if (['client_book_now', 'book now'].includes(value)) {
-    return decorateClientBookingResult(await processBookingMessage(sender, 'booking'));
-  }
-
-  const serviceMatch = value.match(/^client_service_(\d+)$/);
-  if (serviceMatch) {
-    let service = await findClientBookableService(serviceMatch[1]);
-    if (!service) {
-      return { handled: true, reply: 'That service is no longer available for direct client booking. Send *Services* to refresh the current list.' };
-    }
-
-    const existing = await getIntent(sender);
-    const chosenPractitioner = clean(existing?.therapist_text);
-    if (chosenPractitioner && chosenPractitioner !== 'Any available therapist') {
-      service = await serviceEligibleForPractitioner(service.id, chosenPractitioner);
-      if (!service) {
-        return {
-          handled: true,
-          reply: `That service is not currently mapped to ${chosenPractitioner}. Send *Our practitioners* to refresh the current practitioner/service options.`,
-        };
-      }
-    }
-
-    const staged = await processBookingMessage(sender, `Book ${service.name}`);
-    if (chosenPractitioner) return decorateClientBookingResult(staged);
-
-    const eligible = await listEligiblePractitionersForService(service.id);
-    if (!eligible.length) {
-      return { handled: true, reply: 'No client-bookable practitioner is currently mapped to that service. Nothing has been booked.' };
-    }
-    return { handled: true, intent: staged.intent, interactive: eligiblePractitionersInteractive(service, eligible) };
-  }
-
-  if (value === 'client_practitioner_any') {
-    const existing = await getIntent(sender);
-    if (!existing?.service_text) {
-      const staged = await processBookingMessage(sender, 'booking with any therapist');
-      const categories = await listClientBookableCategories();
-      if (!categories.length) return decorateClientBookingResult(staged);
-      return { handled: true, intent: staged.intent, interactive: categoryPageInteractive(categories, 1) };
-    }
-    return decorateClientBookingResult(await processBookingMessage(sender, 'booking with any therapist'));
-  }
-
-  const practitionerMatch = value.match(/^client_practitioner_(\d+)$/);
-  if (practitionerMatch) {
-    let practitioner = await findClientBookablePractitioner(practitionerMatch[1]);
-    if (!practitioner) {
-      return { handled: true, reply: 'That practitioner is no longer available for direct client booking. Send *Our practitioners* to refresh the current list.' };
-    }
-
-    const existing = await getIntent(sender);
-    if (existing?.service_text) {
-      practitioner = await practitionerEligibleForService(practitioner.id, existing.service_text);
-      if (!practitioner) {
-        return {
-          handled: true,
-          reply: 'That practitioner is not currently eligible for the selected service. Send *Services* to refresh the current service/practitioner options.',
-        };
-      }
-      return decorateClientBookingResult(await processBookingMessage(sender, `booking with ${practitioner.display_name}`));
-    }
-
-    const staged = await processBookingMessage(sender, `booking with ${practitioner.display_name}`);
-    const services = await listServicesForPractitioner(practitioner.id);
-    if (!services.length) {
-      return { handled: true, reply: `${practitioner.display_name} has no active client-bookable services mapped right now. Nothing has been booked.` };
-    }
-    return { handled: true, intent: staged.intent, interactive: practitionerServicePageInteractive(services, practitioner, 1) };
-  }
-
+  const raw = clean(text); const value = raw.toLowerCase();
+  if (isHomeCommand(raw)) { await clearIntent(sender); return { handled: true, interactive: clientHomeInteractive() }; }
+  if (['client_browse_services', 'browse services', 'services', 'list treatments', 'list services', 'treatments'].includes(value)) { const categories = await listClientBookableCategories(); if (!categories.length) return { handled: true, reply: 'I can’t safely load Shiloh’s client-bookable service categories right now. Please try again shortly.' }; return { handled: true, interactive: categoryPageInteractive(categories, 1) }; }
+  const categoryPageMatch = value.match(/^client_categories_page_(\d+)$/); if (categoryPageMatch) { const categories = await listClientBookableCategories(); if (!categories.length) return { handled: true, reply: 'No client-bookable service categories are available to display right now.' }; return { handled: true, interactive: categoryPageInteractive(categories, Number(categoryPageMatch[1])) }; }
+  const categoryServicePageMatch = value.match(/^client_category_(\d+)_page_(\d+)$/); if (categoryServicePageMatch) { const categoryId = Number(categoryServicePageMatch[1]); const services = await listServicesForCategory(categoryId); if (!services.length) return { handled: true, reply: 'That category no longer has active client-bookable services. Send *Services* to choose another category.' }; return { handled: true, interactive: servicePageInteractive(services, Number(categoryServicePageMatch[2]), { categoryId, categoryName: services[0].category_name }) }; }
+  const categoryMatch = value.match(/^client_category_(\d+)$/); if (categoryMatch) { const categoryId = Number(categoryMatch[1]); const services = await listServicesForCategory(categoryId); if (!services.length) return { handled: true, reply: 'That category no longer has active client-bookable services. Send *Services* to choose another category.' }; return { handled: true, interactive: servicePageInteractive(services, 1, { categoryId, categoryName: services[0].category_name }) }; }
+  const servicePageMatch = value.match(/^client_services_page_(\d+)$/); if (servicePageMatch) { const services = await listClientBookableServices(); if (!services.length) return { handled: true, reply: 'No client-bookable services are available to display right now.' }; return { handled: true, interactive: servicePageInteractive(services, Number(servicePageMatch[1])) }; }
+  const practitionerServicePageMatch = value.match(/^client_practitioner_services_(\d+)_page_(\d+)$/); if (practitionerServicePageMatch) { const practitioner = await findClientBookablePractitioner(practitionerServicePageMatch[1]); if (!practitioner) return { handled: true, reply: 'That practitioner is no longer available for client booking.' }; const services = await listServicesForPractitioner(practitioner.id); if (!services.length) return { handled: true, reply: `${practitioner.display_name} does not currently have any active client-bookable services.` }; return { handled: true, interactive: practitionerServicePageInteractive(services, practitioner, Number(practitionerServicePageMatch[2])) }; }
+  const serviceMatch = value.match(/^client_service_(\d+)$/); if (serviceMatch) { const service = await findClientBookableService(serviceMatch[1]); if (!service) return { handled: true, reply: 'That service is no longer available for client booking. Send *Services* to choose another treatment.' }; const currentIntent = await getIntent(sender); if (currentIntent?.therapist_text && currentIntent.therapist_text.toLowerCase() !== 'any available therapist') { const eligible = await serviceEligibleForPractitioner(service.id, currentIntent.therapist_text); if (!eligible) return { handled: true, reply: `${currentIntent.therapist_text} is not currently eligible for the selected service. Nothing has been booked. Choose another service or practitioner.` }; const result = await processBookingMessage(sender, service.name); return decorateClientBookingResult(result); } const staff = await listEligiblePractitionersForService(service.id); if (!staff.length) return { handled: true, reply: `I can’t safely offer ${service.name} because no active client-bookable practitioner is currently mapped to it.` }; return { handled: true, interactive: eligiblePractitionersInteractive(service, staff) }; }
+  if (value === 'client_practitioners' || value === 'our practitioners' || value === 'practitioners' || value === 'list your staff' || value === 'list staff') return { handled: true, interactive: await practitionersInteractive() };
+  const practitionerMatch = value.match(/^client_practitioner_(\d+)$/); if (practitionerMatch) { const practitioner = await findClientBookablePractitioner(practitionerMatch[1]); if (!practitioner) return { handled: true, reply: 'That practitioner is no longer available for client booking.' }; const currentIntent = await getIntent(sender); if (currentIntent?.service_text && currentIntent.service_verified !== false) { const eligible = await practitionerEligibleForService(practitioner.id, currentIntent.service_text); if (!eligible) return { handled: true, reply: `${practitioner.display_name} is not currently eligible for the selected service. Nothing has been booked. Choose another practitioner.` }; const result = await processBookingMessage(sender, `booking with ${practitioner.display_name}`); return decorateClientBookingResult(result); } await clearIntent(sender); await processBookingMessage(sender, `booking with ${practitioner.display_name}`); const services = await listServicesForPractitioner(practitioner.id); if (!services.length) return { handled: true, reply: `${practitioner.display_name} does not currently have any active client-bookable services.` }; return { handled: true, interactive: practitionerServicePageInteractive(services, practitioner, 1) }; }
+  if (value === 'client_practitioner_any') { const currentIntent = await getIntent(sender); if (currentIntent?.service_text && currentIntent.service_verified !== false) { const result = await processBookingMessage(sender, 'any available therapist'); return decorateClientBookingResult(result); } await clearIntent(sender); await processBookingMessage(sender, 'any available therapist'); const categories = await listClientBookableCategories(); if (!categories.length) return { handled: true, reply: 'No active client-bookable service categories are available right now.' }; return { handled: true, interactive: categoryPageInteractive(categories, 1) }; }
+  if (value === 'client_book_now' || value === 'book now') { await clearIntent(sender); const categories = await listClientBookableCategories(); if (!categories.length) return { handled: true, reply: 'No active client-bookable service categories are available right now.' }; return { handled: true, reply: 'Let’s start your booking. Choose a service category first.', interactive: categoryPageInteractive(categories, 1) }; }
   return { handled: false };
 }
 
-module.exports = {
-  CATEGORY_PAGE_SIZE,
-  SERVICE_PAGE_SIZE,
-  categoryPageInteractive,
-  clientHomeInteractive,
-  eligiblePractitionersInteractive,
-  isHomeCommand,
-  listClientBookableCategories,
-  listClientBookableServices,
-  listEligiblePractitionersForService,
-  listServicesForCategory,
-  listServicesForPractitioner,
-  practitionerServicePageInteractive,
-  practitionersInteractive,
-  processClientDiscoveryMessage,
-  servicePageInteractive,
-};
+module.exports = { CATEGORY_PAGE_SIZE, SERVICE_PAGE_SIZE, categoryPageInteractive, clientHomeInteractive, eligiblePractitionersInteractive, isGreeting, isHomeCommand, listClientBookableCategories, listClientBookableServices, listEligiblePractitionersForService, listServicesForCategory, listServicesForPractitioner, practitionerServicePageInteractive, practitionersInteractive, processClientDiscoveryMessage, serviceDescription, servicePageInteractive, serviceTitle };
