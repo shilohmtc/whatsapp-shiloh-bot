@@ -8,6 +8,8 @@ const logger = require('../lib/logger');
 
 const APPROVE_PREFIX = 'booking_approval_approve_';
 const DECLINE_PREFIX = 'booking_approval_decline_';
+const DUMMY_TEST_DISPLAY_NAME = 'Dummy Test';
+const JP_DISPLAY_NAME = 'Jean-Pierre';
 
 function fmtDateTime(value) {
   return new Intl.DateTimeFormat('en-ZA', {
@@ -43,7 +45,7 @@ async function ensureBookingApprovalTable(db = pool) {
 }
 
 async function resolveObserverStaffId(db, staffName) {
-  // Compatibility column: for Abigail bookings this stores Christel as the second authorized decision-maker.
+  // Compatibility column: for ordinary Abigail bookings this stores Christel as the second authorized decision-maker.
   if (String(staffName || '').trim().toLowerCase() !== 'abigail') return null;
   const result = await db.query(`
     SELECT id
@@ -56,9 +58,53 @@ async function resolveObserverStaffId(db, staffName) {
   return result.rows[0]?.id || null;
 }
 
+async function resolveDummyTestApprovalPolicy(db, appointmentId) {
+  const appointment = await db.query(`
+    SELECT a.client_id, c.display_name,
+           (SELECT COUNT(*)::int
+              FROM clients dc
+             WHERE LOWER(TRIM(dc.display_name)) = LOWER($2)
+               AND dc.status = 'active') AS active_dummy_count
+      FROM appointments a
+      JOIN clients c ON c.id = a.client_id
+     WHERE a.id = $1
+  `, [appointmentId, DUMMY_TEST_DISPLAY_NAME]);
+  const row = appointment.rows[0];
+  if (!row || String(row.display_name || '').trim().toLowerCase() !== DUMMY_TEST_DISPLAY_NAME.toLowerCase()) return null;
+
+  if (Number(row.active_dummy_count) !== 1) {
+    throw new Error(`Dummy Test approval blocked: expected exactly one active CRM ${DUMMY_TEST_DISPLAY_NAME} profile`);
+  }
+
+  const jp = await db.query(`
+    SELECT saa.staff_id, MIN(saa.id) AS admin_id
+      FROM staff_admin_accounts saa
+      JOIN staff st ON st.id = saa.staff_id
+     WHERE LOWER(TRIM(saa.display_name)) = LOWER($1)
+       AND saa.active = TRUE
+       AND saa.business_role = 'business_admin'
+       AND saa.calendar_scope = 'all_business'
+       AND saa.service_scope = 'all_services'
+       AND st.status = 'active'
+     GROUP BY saa.staff_id
+     ORDER BY saa.staff_id
+  `, [JP_DISPLAY_NAME]);
+  if (jp.rowCount !== 1) {
+    throw new Error(`Dummy Test approval blocked: expected exactly one active ${JP_DISPLAY_NAME} business_admin binding with all_business/all_services scope`);
+  }
+
+  return {
+    approverStaffId: Number(jp.rows[0].staff_id),
+    observerStaffId: null,
+    mode: 'dummy_test_jp',
+  };
+}
+
 async function createPendingBookingApproval(db, { appointmentId, staffId, staffName }) {
   await ensureBookingApprovalTable(db);
-  const observerStaffId = await resolveObserverStaffId(db, staffName);
+  const dummyPolicy = await resolveDummyTestApprovalPolicy(db, appointmentId);
+  const observerStaffId = dummyPolicy ? null : await resolveObserverStaffId(db, staffName);
+  const approverStaffId = dummyPolicy?.approverStaffId || Number(staffId);
   const result = await db.query(`
     INSERT INTO appointment_booking_approvals
       (appointment_id, approver_staff_id, observer_staff_id, status)
@@ -68,7 +114,7 @@ async function createPendingBookingApproval(db, { appointmentId, staffId, staffN
       observer_staff_id = EXCLUDED.observer_staff_id,
       updated_at = NOW()
     RETURNING appointment_id, approver_staff_id, observer_staff_id, status
-  `, [appointmentId, staffId, observerStaffId]);
+  `, [appointmentId, approverStaffId, observerStaffId]);
   return result.rows[0];
 }
 
@@ -136,8 +182,9 @@ function isAuthorizedDecisionMaker(admin, context) {
 }
 
 function approvalRequestBody(context) {
+  const dummyTest = String(context.client_name || '').trim().toLowerCase() === DUMMY_TEST_DISPLAY_NAME.toLowerCase();
   return [
-    '*Booking approval required*',
+    dummyTest ? '*Dummy Test booking approval required*' : '*Booking approval required*',
     '',
     `Client: ${context.client_name}`,
     `Treatment: ${context.service_name}`,
@@ -145,7 +192,8 @@ function approvalRequestBody(context) {
     `Time: ${fmtDateTime(context.starts_at)}`,
     '',
     'This time is being held and will remain unavailable until an authorized approver approves or declines the request.',
-    context.observer_staff_id ? 'For Abigail bookings, either Abigail or Christel may make the first decision.' : null,
+    dummyTest ? 'JP is the sole required approver for the controlled CRM Dummy Test journey.' : null,
+    !dummyTest && context.observer_staff_id ? 'For Abigail bookings, either Abigail or Christel may make the first decision.' : null,
   ].filter(Boolean).join('\n');
 }
 
@@ -362,4 +410,5 @@ module.exports = {
   parseApprovalDecision,
   processClientBookingApprovalMessage,
   requestPractitionerApproval,
+  resolveDummyTestApprovalPolicy,
 };
