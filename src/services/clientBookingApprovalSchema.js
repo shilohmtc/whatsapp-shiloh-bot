@@ -8,7 +8,8 @@ async function ensureBookingApprovalInfrastructure(db = pool) {
   await db.query(`
     CREATE TABLE IF NOT EXISTS appointment_booking_approvals (
       appointment_id BIGINT PRIMARY KEY REFERENCES appointments(id) ON DELETE CASCADE,
-      approver_staff_id BIGINT NOT NULL REFERENCES staff(id),
+      approver_staff_id BIGINT REFERENCES staff(id),
+      approver_admin_id BIGINT REFERENCES staff_admin_accounts(id),
       observer_staff_id BIGINT REFERENCES staff(id),
       status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'declined')),
       requested_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -20,8 +21,11 @@ async function ensureBookingApprovalInfrastructure(db = pool) {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
+  await db.query(`ALTER TABLE appointment_booking_approvals ADD COLUMN IF NOT EXISTS approver_admin_id BIGINT REFERENCES staff_admin_accounts(id)`);
+  await db.query(`ALTER TABLE appointment_booking_approvals ALTER COLUMN approver_staff_id DROP NOT NULL`);
   await db.query(`CREATE INDEX IF NOT EXISTS idx_appointment_booking_approvals_status ON appointment_booking_approvals(status, requested_at)`);
   await db.query(`CREATE INDEX IF NOT EXISTS idx_appointment_booking_approvals_approver ON appointment_booking_approvals(approver_staff_id, status)`);
+  await db.query(`CREATE INDEX IF NOT EXISTS idx_appointment_booking_approvals_admin_approver ON appointment_booking_approvals(approver_admin_id, status)`);
 
   await db.query(`
     CREATE OR REPLACE FUNCTION create_client_booking_approval_hold()
@@ -33,6 +37,7 @@ async function ensureBookingApprovalInfrastructure(db = pool) {
       booking_client_name TEXT;
       observer_id BIGINT;
       required_approver_id BIGINT;
+      required_approver_admin_id BIGINT;
       dummy_count INTEGER;
       jp_count INTEGER;
     BEGIN
@@ -48,6 +53,7 @@ async function ensureBookingApprovalInfrastructure(db = pool) {
 
       observer_id := NULL;
       required_approver_id := NEW.staff_id;
+      required_approver_admin_id := NULL;
 
       IF LOWER(TRIM(COALESCE(booking_client_name, ''))) = 'dummy test' THEN
         SELECT COUNT(*)::int
@@ -60,20 +66,21 @@ async function ensureBookingApprovalInfrastructure(db = pool) {
           RAISE EXCEPTION 'Dummy Test approval blocked: expected exactly one active CRM Dummy Test profile';
         END IF;
 
-        SELECT COUNT(DISTINCT saa.staff_id)::int, MIN(saa.staff_id)
-          INTO jp_count, required_approver_id
+        SELECT COUNT(*)::int, MIN(saa.id)
+          INTO jp_count, required_approver_admin_id
           FROM staff_admin_accounts saa
-          JOIN staff st ON st.id = saa.staff_id
          WHERE LOWER(TRIM(saa.display_name)) = 'jean-pierre'
            AND saa.active = TRUE
            AND saa.business_role = 'business_admin'
            AND saa.calendar_scope = 'all_business'
            AND saa.service_scope = 'all_services'
-           AND st.status = 'active';
+           AND saa.normalized_whatsapp IS NOT NULL;
 
-        IF jp_count <> 1 OR required_approver_id IS NULL THEN
-          RAISE EXCEPTION 'Dummy Test approval blocked: expected exactly one active Jean-Pierre business_admin binding with all_business/all_services scope';
+        IF jp_count <> 1 OR required_approver_admin_id IS NULL THEN
+          RAISE EXCEPTION 'Dummy Test approval blocked: expected exactly one active Jean-Pierre business_admin account with all_business/all_services scope and WhatsApp identity';
         END IF;
+
+        required_approver_id := NULL;
       ELSIF LOWER(COALESCE(NEW.staff_name_snapshot, '')) = 'abigail' THEN
         SELECT id INTO observer_id
           FROM staff
@@ -84,8 +91,8 @@ async function ensureBookingApprovalInfrastructure(db = pool) {
       END IF;
 
       INSERT INTO appointment_booking_approvals
-        (appointment_id, approver_staff_id, observer_staff_id, status)
-      VALUES (NEW.appointment_id, required_approver_id, observer_id, 'pending')
+        (appointment_id, approver_staff_id, approver_admin_id, observer_staff_id, status)
+      VALUES (NEW.appointment_id, required_approver_id, required_approver_admin_id, observer_id, 'pending')
       ON CONFLICT (appointment_id) DO NOTHING;
       RETURN NEW;
     END;
