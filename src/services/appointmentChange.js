@@ -11,6 +11,7 @@ const {
 const logger = require("../lib/logger");
 
 let initialized = false;
+const APPOINTMENT_CHOICE_PAGE_SIZE = 8;
 
 async function ensureTable() {
   if (initialized) return;
@@ -37,6 +38,8 @@ function detectAction(text = "") { const v=String(text).toLowerCase(); if(/\b(ca
 function isAbort(text = "") { return /^(stop|never mind|nevermind|forget it|exit|0)$/i.test(String(text).trim()); }
 function isConfirmation(text = "") { return /^(yes|y|confirm|confirmed|correct|proceed|continue|ok|okay)$/i.test(String(text).trim()); }
 function fmtDateTime(v){return new Intl.DateTimeFormat('en-ZA',{timeZone:'Africa/Johannesburg',weekday:'short',day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(v));}
+function fmtTimeOnly(v){return new Intl.DateTimeFormat('en-ZA',{timeZone:'Africa/Johannesburg',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(v));}
+function fmtDateOnly(v){return new Intl.DateTimeFormat('en-ZA',{timeZone:'Africa/Johannesburg',weekday:'short',day:'2-digit',month:'short',year:'numeric'}).format(new Date(v));}
 function localDateOf(v){const p=new Intl.DateTimeFormat('en-CA',{timeZone:'Africa/Johannesburg',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date(v));const m=Object.fromEntries(p.map(x=>[x.type,x.value]));return `${m.year}-${m.month}-${m.day}`;}
 function latePolicy(startsAt){const hours=(new Date(startsAt).getTime()-Date.now())/3600000;return hours<24?"This change is within 24 hours of the appointment. Shiloh's late-cancellation policy may apply a 50% fee.":"Shiloh's 24-hour cancellation policy applies.";}
 function parseClock(value=''){const v=String(value).trim().toLowerCase();if(/^(morning|afternoon|evening)$/.test(v))return null;let m=v.match(/^(\d{1,2}):(\d{2})\s*(am|pm)?$/);if(m){let h=+m[1],min=+m[2];if(min>59)return null;if(m[3]){if(h<1||h>12)return null;if(m[3]==='pm'&&h!==12)h+=12;if(m[3]==='am'&&h===12)h=0;}if(h>23)return null;return{h,min};}m=v.match(/^(\d{1,2})\s*(am|pm)$/);if(m){let h=+m[1];if(h<1||h>12)return null;if(m[2]==='pm'&&h!==12)h+=12;if(m[2]==='am'&&h===12)h=0;return{h,min:0};}if(/^\d{1,2}$/.test(v)){const h=+v;return h<=23?{h,min:0}:null;}return null;}
@@ -63,11 +66,55 @@ async function upcomingForPhone(phone){const key=normalizePhone(phone);const r=a
  ORDER BY a.starts_at`,[key]);return r.rows;}
 async function appointmentForPhone(phone,id){const rows=await upcomingForPhone(phone);return rows.find(x=>Number(x.id)===Number(id))||null;}
 function summary(a){return [`*${a.service_name}*`,`📅 ${fmtDateTime(a.starts_at)}`,`👤 ${a.staff_name}`,`Booking #${a.id}`].join('\n');}
+function concise(value='',max=40){const text=String(value||'').trim().replace(/\s+/g,' ');return text.length<=max?text:`${text.slice(0,Math.max(1,max-1))}…`;}
 
-async function selectAppointment(phone,text,intent){const rows=await upcomingForPhone(phone);if(!rows.length)return{error:'none'};const idMatch=String(text||'').match(/#?(\d+)/);if(idMatch){const a=rows.find(x=>Number(x.id)===Number(idMatch[1]));if(a)return{appointment:a};}
- const d=extractDate(text);if(d){const matches=rows.filter(x=>localDateOf(x.starts_at)===d);if(matches.length===1)return{appointment:matches[0]};if(matches.length>1)return{error:'ambiguous_date',matches};}
- if(rows.length===1)return{appointment:rows[0]};return{error:'choose',matches:rows.slice(0,8)};}
-function choiceReply(rows){return ['I found more than one upcoming appointment. Please reply with the *booking number* you want to change:','',...rows.map(a=>`${summary(a)}\n`),'Your other bookings will remain unchanged.'].join('\n');}
+function appointmentChoiceInteractive(rows=[],action='reschedule',page=1){
+  const verb=action==='cancel'?'cancel':'reschedule';
+  const question=`Which booking would you like to ${verb}?`;
+  if(rows.length<=3){
+    return{
+      type:'button',
+      body:[question,'',...rows.map(a=>summary(a)), '', 'Your other bookings will remain unchanged.', `You can also type the booking number, for example *${rows[0]?.id||'123'}*.`].join('\n\n'),
+      buttons:rows.map(a=>({id:`client_change_${verb}_${a.id}`,title:`${fmtTimeOnly(a.starts_at)} · #${a.id}`.slice(0,20)})),
+    };
+  }
+  const totalPages=Math.max(1,Math.ceil(rows.length/APPOINTMENT_CHOICE_PAGE_SIZE));
+  const safePage=Math.min(Math.max(Number(page)||1,1),totalPages);
+  const start=(safePage-1)*APPOINTMENT_CHOICE_PAGE_SIZE;
+  const pageRows=rows.slice(start,start+APPOINTMENT_CHOICE_PAGE_SIZE).map(a=>({
+    id:`client_change_${verb}_${a.id}`,
+    title:`${fmtTimeOnly(a.starts_at)} · #${a.id}`.slice(0,24),
+    description:`${fmtDateOnly(a.starts_at)} • ${concise(a.staff_name,20)} • ${concise(a.service_name,28)}`.slice(0,72),
+  }));
+  if(safePage<totalPages)pageRows.push({id:`client_change_${verb}_page_${safePage+1}`,title:'More bookings →',description:`Page ${safePage+1} of ${totalPages}`});
+  else if(safePage>1)pageRows.push({id:`client_change_${verb}_page_1`,title:'← First page',description:`Page 1 of ${totalPages}`});
+  return{
+    type:'list',
+    body:`${question}\nChoose the correct appointment. Your other bookings will remain unchanged. You can also type its booking number.`,
+    buttonText:'Choose booking',
+    rows:pageRows,
+    sectionTitle:'Upcoming bookings',
+  };
+}
+
+async function selectAppointment(phone,text,intent){
+  const rows=await upcomingForPhone(phone);if(!rows.length)return{error:'none'};
+  const raw=String(text||'').trim();
+  const selectedButton=raw.match(/^client_change_(reschedule|cancel)_(\d+)$/i);
+  if(selectedButton){
+    if(selectedButton[1].toLowerCase()!==String(intent?.action||'').toLowerCase())return{error:'choose',matches:rows};
+    const a=rows.find(x=>Number(x.id)===Number(selectedButton[2]));
+    return a?{appointment:a}:{error:'choose',matches:rows};
+  }
+  const pageButton=raw.match(/^client_change_(reschedule|cancel)_page_(\d+)$/i);
+  if(pageButton){
+    if(pageButton[1].toLowerCase()!==String(intent?.action||'').toLowerCase())return{error:'choose',matches:rows};
+    return{error:'page',matches:rows,page:Number(pageButton[2])};
+  }
+  const idMatch=raw.match(/^#?(\d+)$/);if(idMatch){const a=rows.find(x=>Number(x.id)===Number(idMatch[1]));if(a)return{appointment:a};}
+  const d=extractDate(text);if(d){const matches=rows.filter(x=>localDateOf(x.starts_at)===d);if(matches.length===1)return{appointment:matches[0]};if(matches.length>1)return{error:'ambiguous_date',matches};}
+  if(rows.length===1)return{appointment:rows[0]};return{error:'choose',matches:rows};
+}
 
 function rescheduleDateChoice(a){
   const body = [
@@ -168,7 +215,7 @@ async function rescheduleCanonical(phone,a,date,time){
  }finally{db.release();}
 }
 
-async function processAppointmentChangeMessage(phone,text){try{const action=detectAction(text);let intent=await getIntent(phone);if(intent&&isAbort(text)){await clearIntent(phone);return{handled:true,reply:'No problem — I stopped that request. Your appointment is unchanged.'};}if(action&&intent&&intent.action!==action){await clearIntent(phone);intent=null;}if(!intent&&!action)return{handled:false};if(!intent){intent=await saveIntent(phone,{action,status:'selecting_appointment'});}if(intent.status==='selecting_appointment'){const selected=await selectAppointment(phone,text,intent);if(selected.error==='none'){await clearIntent(phone);return{handled:true,reply:'I can’t find an upcoming Shiloh appointment linked to this WhatsApp number.'};}if(selected.error==='choose'||selected.error==='ambiguous_date'){return{handled:true,reply:choiceReply(selected.matches)};}const a=selected.appointment;intent=await saveIntent(phone,{appointmentId:a.id,currentDate:localDateOf(a.starts_at),status:intent.action==='cancel'?'awaiting_confirmation':'collecting'});if(intent.action==='cancel')return{handled:true,reply:[`Please confirm the cancellation:`,summary(a),'',latePolicy(a.starts_at),'','Reply *YES* to cancel this booking, or *STOP* to leave it unchanged.'].join('\n')};const date=extractDate(text);const time=extractTime(text);if(date||time){intent=await saveIntent(phone,{preferredDate:date||null,preferredTime:time||null,status:'collecting'});}if(!intent.preferred_date)return rescheduleDateChoice(a);if(!intent.preferred_time)return{handled:true,reply:'What exact new time would you prefer? For example *14:00* or *2pm*.'};intent=await saveIntent(phone,{status:'awaiting_confirmation'});return{handled:true,reply:[`Please confirm this reschedule:`,summary(a),'',`➡️ New date: ${displayDate(intent.preferred_date)}`,`➡️ New time: ${intent.preferred_time}`,'',latePolicy(a.starts_at),'','Reply *YES* to reschedule, or *STOP* to leave it unchanged.'].join('\n')};}
+async function processAppointmentChangeMessage(phone,text){try{const action=detectAction(text);let intent=await getIntent(phone);if(intent&&isAbort(text)){await clearIntent(phone);return{handled:true,reply:'No problem — I stopped that request. Your appointment is unchanged.'};}if(action&&intent&&intent.action!==action){await clearIntent(phone);intent=null;}if(!intent&&!action)return{handled:false};if(!intent){intent=await saveIntent(phone,{action,status:'selecting_appointment'});}if(intent.status==='selecting_appointment'){const selected=await selectAppointment(phone,text,intent);if(selected.error==='none'){await clearIntent(phone);return{handled:true,reply:'I can’t find an upcoming Shiloh appointment linked to this WhatsApp number.'};}if(selected.error==='choose'||selected.error==='ambiguous_date'||selected.error==='page'){return{handled:true,interactive:appointmentChoiceInteractive(selected.matches,intent.action,selected.page||1)};}const a=selected.appointment;intent=await saveIntent(phone,{appointmentId:a.id,currentDate:localDateOf(a.starts_at),status:intent.action==='cancel'?'awaiting_confirmation':'collecting'});if(intent.action==='cancel')return{handled:true,reply:[`Please confirm the cancellation:`,summary(a),'',latePolicy(a.starts_at),'','Reply *YES* to cancel this booking, or *STOP* to leave it unchanged.'].join('\n')};const date=extractDate(text);const time=extractTime(text);if(date||time){intent=await saveIntent(phone,{preferredDate:date||null,preferredTime:time||null,status:'collecting'});}if(!intent.preferred_date)return rescheduleDateChoice(a);if(!intent.preferred_time)return{handled:true,reply:'What exact new time would you prefer? For example *14:00* or *2pm*.'};intent=await saveIntent(phone,{status:'awaiting_confirmation'});return{handled:true,reply:[`Please confirm this reschedule:`,summary(a),'',`➡️ New date: ${displayDate(intent.preferred_date)}`,`➡️ New time: ${intent.preferred_time}`,'',latePolicy(a.starts_at),'','Reply *YES* to reschedule, or *STOP* to leave it unchanged.'].join('\n')};}
  const a=await appointmentForPhone(phone,intent.appointment_id);if(!a){await clearIntent(phone);return{handled:true,reply:'That booking is no longer available to change. Please start again.'};}
  if(intent.status==='collecting'){let patch={};if(String(text || '').trim().toLowerCase()==='reschedule_date_other'){
   return{
@@ -179,4 +226,4 @@ async function processAppointmentChangeMessage(phone,text){try{const action=dete
  if(intent.status==='awaiting_confirmation'){if(!isConfirmation(text))return{handled:true,reply:'Please reply *YES* to confirm this change, or *STOP* to leave the appointment unchanged.'};if(intent.action==='cancel'){const result=await cancelCanonical(phone,a);await clearIntent(phone);if(result.status==='cancelled')return{handled:true,reply:[`✅ Your appointment has been cancelled.`,summary(a),'',latePolicy(a.starts_at),'','If you’d like to book another time, just reply *BOOK*. 🌿'].join('\n')};return{handled:true,reply:'That appointment was already cancelled or changed. No duplicate cancellation was made.'};}const result=await rescheduleCanonical(phone,a,intent.preferred_date,intent.preferred_time);if(result.status==='rescheduled'){await clearIntent(phone);return{handled:true,reply:[`✅ Your appointment has been rescheduled.`,`✨ ${a.service_name}`,`👤 ${a.staff_name}`,`📅 ${fmtDateTime(result.starts)}`,'','Your Shiloh CRM booking and Google Calendar event are synchronized. 🌿'].join('\n')};}return{handled:true,reply:result.reply||'I couldn’t safely reschedule that booking. Please choose another time.'};}
  return{handled:false};}catch(error){logger.error({err:error},'Canonical client appointment change failed');return{handled:true,reply:'I couldn’t safely complete that appointment change right now. Your current booking has not been intentionally changed. Please try again or contact the clinic team.'};}}
 
-module.exports={processAppointmentChangeMessage,getIntent,clearIntent,ensureTable,detectAction};
+module.exports={processAppointmentChangeMessage,getIntent,clearIntent,ensureTable,detectAction,appointmentChoiceInteractive};
