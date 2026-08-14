@@ -17,6 +17,12 @@ test('booking confirmation hides raw calendar URLs behind WhatsApp calendar butt
   assert.match(whatsapp, /type:\s*["']cta_url["']/);
 });
 
+test('calendar CTA cards use symmetric concise action copy', () => {
+  assert.match(confirmation, /Add to Google Calendar/);
+  assert.match(confirmation, /Add to Apple \/ Outlook/);
+  assert.doesNotMatch(confirmation, /Add this appointment to your phone or desktop calendar\./);
+});
+
 test('booking confirmation exposes deterministic Reschedule and Cancel booking reply buttons while keeping typed fallbacks', () => {
   assert.match(confirmation, /sendWhatsAppReplyButtons/);
   assert.match(confirmation, /client_reschedule_booking/);
