@@ -43,7 +43,7 @@ async function ensureBookingApprovalTable(db = pool) {
 }
 
 async function resolveObserverStaffId(db, staffName) {
-  // Abigail approves her own bookings. Christel is observer only and cannot approve for Abigail.
+  // Compatibility column: for Abigail bookings this stores Christel as the second authorized decision-maker.
   if (String(staffName || '').trim().toLowerCase() !== 'abigail') return null;
   const result = await db.query(`
     SELECT id
@@ -128,6 +128,27 @@ function approvalButtons(appointmentId) {
   ];
 }
 
+function isAuthorizedDecisionMaker(admin, context) {
+  if (!admin || !context) return false;
+  if (Number(context.approver_staff_id) === Number(admin.staff_id)) return true;
+  return Boolean(context.observer_staff_id)
+    && Number(context.observer_staff_id) === Number(admin.staff_id);
+}
+
+function approvalRequestBody(context) {
+  return [
+    '*Booking approval required*',
+    '',
+    `Client: ${context.client_name}`,
+    `Treatment: ${context.service_name}`,
+    `With: ${context.staff_name}`,
+    `Time: ${fmtDateTime(context.starts_at)}`,
+    '',
+    'This time is being held and will remain unavailable until an authorized approver approves or declines the request.',
+    context.observer_staff_id ? 'For Abigail bookings, either Abigail or Christel may make the first decision.' : null,
+  ].filter(Boolean).join('\n');
+}
+
 async function requestPractitionerApproval({ appointmentId }) {
   const context = await approvalContext(appointmentId);
   if (!context || context.status !== 'pending' || context.appointment_status === 'cancelled') {
@@ -143,17 +164,8 @@ async function requestPractitionerApproval({ appointmentId }) {
     return { sent: false, reason: 'approver_whatsapp_unavailable' };
   }
 
+  const body = approvalRequestBody(context);
   if (!context.approver_notified_at) {
-    const body = [
-      '*Booking approval required*',
-      '',
-      `Client: ${context.client_name}`,
-      `Treatment: ${context.service_name}`,
-      `With: ${context.staff_name}`,
-      `Time: ${fmtDateTime(context.starts_at)}`,
-      '',
-      'This time is being held and will remain unavailable until you approve or decline the request.',
-    ].join('\n');
     await sendWhatsAppReplyButtons(approver.normalized_whatsapp, body, approvalButtons(appointmentId));
     await pool.query(`UPDATE appointment_booking_approvals SET approver_notified_at = NOW(), updated_at = NOW() WHERE appointment_id = $1 AND status = 'pending'`, [appointmentId]);
   }
@@ -161,17 +173,12 @@ async function requestPractitionerApproval({ appointmentId }) {
   if (context.observer_staff_id && !context.observer_notified_at) {
     const observer = await adminContactForStaff(context.observer_staff_id);
     if (observer) {
-      await sendWhatsAppMessage(observer.normalized_whatsapp, [
-        '*Booking request — for awareness*',
-        '',
-        `${context.client_name} requested ${context.service_name} with Abigail for ${fmtDateTime(context.starts_at)}.`,
-        'Abigail is the required approver. You are being kept informed as Christel; no approval is required from you.',
-      ].join('\n'));
+      await sendWhatsAppReplyButtons(observer.normalized_whatsapp, body, approvalButtons(appointmentId));
       await pool.query(`UPDATE appointment_booking_approvals SET observer_notified_at = NOW(), updated_at = NOW() WHERE appointment_id = $1 AND status = 'pending'`, [appointmentId]);
     }
   }
 
-  return { sent: true, approver: context.approver_name, observer: context.observer_name || null };
+  return { sent: true, approver: context.approver_name, secondaryApprover: context.observer_name || null };
 }
 
 function parseApprovalDecision(value = '') {
@@ -196,15 +203,19 @@ async function resolveAdminByWhatsApp(sender, db = pool) {
   return result.rows[0] || null;
 }
 
-async function notifyObserverOutcome(context, decision) {
+async function notifyOtherDecisionMaker(context, decision, decidingAdmin) {
   if (!context?.observer_staff_id) return;
-  const observer = await adminContactForStaff(context.observer_staff_id);
-  if (!observer) return;
-  await sendWhatsAppMessage(observer.normalized_whatsapp, [
+  const otherStaffId = Number(decidingAdmin.staff_id) === Number(context.approver_staff_id)
+    ? context.observer_staff_id
+    : context.approver_staff_id;
+  const other = await adminContactForStaff(otherStaffId);
+  if (!other || Number(other.id) === Number(decidingAdmin.id)) return;
+  await sendWhatsAppMessage(other.normalized_whatsapp, [
     '*Abigail booking request update*',
     '',
     `${context.client_name} — ${context.service_name} — ${fmtDateTime(context.starts_at)}`,
-    `Abigail has ${decision === 'approved' ? 'approved' : 'declined'} the request.`,
+    `${decidingAdmin.display_name} has ${decision === 'approved' ? 'approved' : 'declined'} the request.`,
+    'The first valid decision is final for this request.',
   ].join('\n'));
 }
 
@@ -213,7 +224,7 @@ async function approveBookingRequest(admin, context) {
   try {
     await db.query('BEGIN');
     const locked = await db.query(`
-      SELECT aba.status, aba.approver_staff_id, a.status AS appointment_status
+      SELECT aba.status, aba.approver_staff_id, aba.observer_staff_id, a.status AS appointment_status
         FROM appointment_booking_approvals aba
         JOIN appointments a ON a.id = aba.appointment_id
        WHERE aba.appointment_id = $1
@@ -224,9 +235,9 @@ async function approveBookingRequest(admin, context) {
       await db.query('ROLLBACK');
       return { handled: true, reply: 'That booking approval request no longer exists.' };
     }
-    if (Number(row.approver_staff_id) !== Number(admin.staff_id)) {
+    if (!isAuthorizedDecisionMaker(admin, row)) {
       await db.query('ROLLBACK');
-      return { handled: true, reply: 'You are not the assigned practitioner for this booking request, so no decision was recorded.' };
+      return { handled: true, reply: 'You are not authorized to decide this booking request, so no decision was recorded.' };
     }
     if (row.status !== 'pending') {
       await db.query('ROLLBACK');
@@ -239,7 +250,7 @@ async function approveBookingRequest(admin, context) {
     }
 
     await db.query(`UPDATE appointment_booking_approvals SET status = 'approved', decided_at = NOW(), decided_by_admin_id = $2, updated_at = NOW() WHERE appointment_id = $1 AND status = 'pending'`, [context.appointment_id, admin.id]);
-    await db.query(`INSERT INTO crm_audit_events (action, entity_type, entity_id, metadata) VALUES ('client.booking_approval.approved', 'appointment', $1, $2::jsonb)`, [context.appointment_id, JSON.stringify({ approverStaffId: admin.staff_id, approverAdminId: admin.id })]);
+    await db.query(`INSERT INTO crm_audit_events (action, entity_type, entity_id, metadata) VALUES ('client.booking_approval.approved', 'appointment', $1, $2::jsonb)`, [context.appointment_id, JSON.stringify({ decisionMakerStaffId: admin.staff_id, decisionMakerAdminId: admin.id, decisionMakerName: admin.display_name })]);
     await db.query('COMMIT');
   } catch (error) {
     try { await db.query('ROLLBACK'); } catch (_) {}
@@ -249,13 +260,13 @@ async function approveBookingRequest(admin, context) {
   }
 
   const confirmation = await sendCustomerBookingConfirmationForAppointment(context.appointment_id);
-  try { await notifyObserverOutcome(context, 'approved'); } catch (error) { logger.warn({ err: error, appointmentId: context.appointment_id }, 'Booking approval observer outcome notification failed'); }
+  try { await notifyOtherDecisionMaker(context, 'approved', admin); } catch (error) { logger.warn({ err: error, appointmentId: context.appointment_id }, 'Booking approval peer outcome notification failed'); }
   return {
     handled: true,
     status: 'approved',
     reply: confirmation.sent
-      ? `Approved. Appointment #${context.appointment_id} is confirmed and the client confirmation has been sent.`
-      : `Approved. Appointment #${context.appointment_id} is confirmed. Client confirmation delivery status: ${confirmation.reason || 'not sent'}.`,
+      ? `Approved by ${admin.display_name}. Appointment #${context.appointment_id} is confirmed and the client confirmation has been sent.`
+      : `Approved by ${admin.display_name}. Appointment #${context.appointment_id} is confirmed. Client confirmation delivery status: ${confirmation.reason || 'not sent'}.`,
   };
 }
 
@@ -265,7 +276,7 @@ async function declineBookingRequest(admin, context) {
   try {
     await db.query('BEGIN');
     const locked = await db.query(`
-      SELECT aba.status, aba.approver_staff_id, a.status AS appointment_status,
+      SELECT aba.status, aba.approver_staff_id, aba.observer_staff_id, a.status AS appointment_status,
              (SELECT event_id FROM appointment_calendar_events ace WHERE ace.appointment_id = a.id AND ace.provider = 'google_calendar' LIMIT 1) AS shared_event_id
         FROM appointment_booking_approvals aba
         JOIN appointments a ON a.id = aba.appointment_id
@@ -277,9 +288,9 @@ async function declineBookingRequest(admin, context) {
       await db.query('ROLLBACK');
       return { handled: true, reply: 'That booking approval request no longer exists.' };
     }
-    if (Number(row.approver_staff_id) !== Number(admin.staff_id)) {
+    if (!isAuthorizedDecisionMaker(admin, row)) {
       await db.query('ROLLBACK');
-      return { handled: true, reply: 'You are not the assigned practitioner for this booking request, so no decision was recorded.' };
+      return { handled: true, reply: 'You are not authorized to decide this booking request, so no decision was recorded.' };
     }
     if (row.status !== 'pending') {
       await db.query('ROLLBACK');
@@ -289,9 +300,9 @@ async function declineBookingRequest(admin, context) {
     await db.query(`UPDATE appointment_booking_approvals SET status = 'declined', decided_at = NOW(), decided_by_admin_id = $2, updated_at = NOW() WHERE appointment_id = $1 AND status = 'pending'`, [context.appointment_id, admin.id]);
     if (row.appointment_status !== 'cancelled') {
       await db.query(`UPDATE appointments SET status = 'cancelled', updated_at = NOW() WHERE id = $1 AND status <> 'cancelled'`, [context.appointment_id]);
-      await db.query(`INSERT INTO appointment_status_history (appointment_id, from_status, to_status, changed_by, reason) VALUES ($1, $2, 'cancelled', $3, 'Assigned practitioner declined client booking request')`, [context.appointment_id, row.appointment_status, `admin:${admin.id}`]);
+      await db.query(`INSERT INTO appointment_status_history (appointment_id, from_status, to_status, changed_by, reason) VALUES ($1, $2, 'cancelled', $3, 'Authorized practitioner/supervisor declined client booking request')`, [context.appointment_id, row.appointment_status, `admin:${admin.id}`]);
     }
-    await db.query(`INSERT INTO crm_audit_events (action, entity_type, entity_id, metadata) VALUES ('client.booking_approval.declined', 'appointment', $1, $2::jsonb)`, [context.appointment_id, JSON.stringify({ approverStaffId: admin.staff_id, approverAdminId: admin.id })]);
+    await db.query(`INSERT INTO crm_audit_events (action, entity_type, entity_id, metadata) VALUES ('client.booking_approval.declined', 'appointment', $1, $2::jsonb)`, [context.appointment_id, JSON.stringify({ decisionMakerStaffId: admin.staff_id, decisionMakerAdminId: admin.id, decisionMakerName: admin.display_name })]);
     await db.query('COMMIT');
   } catch (error) {
     try { await db.query('ROLLBACK'); } catch (_) {}
@@ -320,9 +331,9 @@ async function declineBookingRequest(admin, context) {
       logger.error({ err: error, appointmentId: context.appointment_id }, 'Declined booking client notification failed');
     }
   }
-  try { await notifyObserverOutcome(context, 'declined'); } catch (error) { logger.warn({ err: error, appointmentId: context.appointment_id }, 'Booking decline observer outcome notification failed'); }
+  try { await notifyOtherDecisionMaker(context, 'declined', admin); } catch (error) { logger.warn({ err: error, appointmentId: context.appointment_id }, 'Booking decline peer outcome notification failed'); }
 
-  return { handled: true, status: 'declined', reply: `Declined. Appointment request #${context.appointment_id} was cancelled and the held time was released.` };
+  return { handled: true, status: 'declined', reply: `Declined by ${admin.display_name}. Appointment request #${context.appointment_id} was cancelled and the held time was released.` };
 }
 
 async function processClientBookingApprovalMessage(sender, text) {
@@ -330,11 +341,11 @@ async function processClientBookingApprovalMessage(sender, text) {
   if (!decision) return { handled: false };
   await ensureBookingApprovalTable();
   const admin = await resolveAdminByWhatsApp(sender);
-  if (!admin) return { handled: true, reply: 'This approval action is restricted to the assigned Shiloh practitioner.' };
+  if (!admin) return { handled: true, reply: 'This approval action is restricted to an authorized Shiloh practitioner or supervisor.' };
   const context = await approvalContext(decision.appointmentId);
   if (!context) return { handled: true, reply: 'That booking approval request no longer exists.' };
-  if (Number(context.approver_staff_id) !== Number(admin.staff_id)) {
-    return { handled: true, reply: 'You are not the assigned practitioner for this booking request, so no decision was recorded.' };
+  if (!isAuthorizedDecisionMaker(admin, context)) {
+    return { handled: true, reply: 'You are not authorized to decide this booking request, so no decision was recorded.' };
   }
   return decision.decision === 'approved'
     ? approveBookingRequest(admin, context)
@@ -347,6 +358,7 @@ module.exports = {
   approvalButtons,
   createPendingBookingApproval,
   ensureBookingApprovalTable,
+  isAuthorizedDecisionMaker,
   parseApprovalDecision,
   processClientBookingApprovalMessage,
   requestPractitionerApproval,
