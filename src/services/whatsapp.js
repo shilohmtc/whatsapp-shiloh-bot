@@ -208,22 +208,31 @@ async function sendWhatsAppList(to, body, buttonText, rows = [], sectionTitle = 
   }
 }
 
-async function sendWhatsAppTemplate(to, templateName, bodyParameters = [], languageCode = "en") {
+async function sendWhatsAppTemplate(to, templateName, bodyParameters = [], languageCode = "en", quickReplyPayloads = []) {
   if (!templateName) {
     throw new Error("WhatsApp template name is required");
   }
+  if (!Array.isArray(quickReplyPayloads) || quickReplyPayloads.length > 3) {
+    throw new Error("WhatsApp template quick replies require zero to three payloads");
+  }
 
-  const components = bodyParameters.length
-    ? [
-        {
-          type: "body",
-          parameters: bodyParameters.map((value) => ({
-            type: "text",
-            text: String(value),
-          })),
-        },
-      ]
-    : undefined;
+  const components = [];
+  if (bodyParameters.length) {
+    components.push({
+      type: "body",
+      parameters: bodyParameters.map((value) => ({ type: "text", text: String(value) })),
+    });
+  }
+  quickReplyPayloads.forEach((payload, index) => {
+    const safePayload = String(payload || "").trim();
+    if (!safePayload) throw new Error("WhatsApp template quick-reply payload is required");
+    components.push({
+      type: "button",
+      sub_type: "quick_reply",
+      index: String(index),
+      parameters: [{ type: "payload", payload: safePayload }],
+    });
+  });
 
   try {
     const response = await axios.post(
@@ -235,7 +244,7 @@ async function sendWhatsAppTemplate(to, templateName, bodyParameters = [], langu
         template: {
           name: templateName,
           language: { code: languageCode },
-          ...(components ? { components } : {}),
+          ...(components.length ? { components } : {}),
         },
       },
       requestConfig()
@@ -245,6 +254,7 @@ async function sendWhatsAppTemplate(to, templateName, bodyParameters = [], langu
       {
         messageId: response.data.messages?.[0]?.id || null,
         templateName,
+        quickReplyCount: quickReplyPayloads.length,
       },
       "WhatsApp template sent"
     );
