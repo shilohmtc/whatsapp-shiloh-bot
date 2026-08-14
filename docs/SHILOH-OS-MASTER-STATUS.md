@@ -137,3 +137,27 @@ Expected next acceptance sequence:
 ## Exact continuation state
 
 PR #203 is merged, CI-green and production-live. The previous policy-accepted final write failed because the Dummy Test trigger required JP to be clinic staff even though his authoritative admin migration explicitly permits `staff_id = NULL`. That model is corrected to admin-account authorization. **Next real action is one message from the same CRM Dummy Test conversation: `RETRY BOOKING`.** Do not restart service/date/time selection. If it creates the pending hold, stop before JP decides and capture both Dummy Test and JP screens. Do not recreate #561. Preserve all WAITING items fail-closed.
+
+## Latest operational reconciliation — appointment #564 / PR #205
+
+**This section supersedes the earlier Product-Critical Gate and Exact continuation instructions above.** Real Dummy Test WhatsApp evidence proves `RETRY BOOKING` succeeded and created canonical held appointment **#564**. The client received `Booking request received — #564`, explicit wording that the selected time is being held, `there is no automatic expiry`, and `Your appointment is not yet confirmed`. This closes the final-write retry gate and provides real human evidence for the basic pending-hold/no-expiry/not-confirmed contract.
+
+The same real screenshot exposed a new deterministic client-presentation defect: the pending message said `while Christel reviews the request`. For this controlled Dummy Test journey that is semantically wrong because Christel is the assigned MediHeel practitioner while **JP alone is the required approver**. Repository inspection proved authorization itself remained admin-account based after PR #203; the misleading text came from `bookingPolicy.stageCreatedBookingForApproval()` blindly interpolating `staff.staff_name_snapshot` and saying `the practitioner` in the no-expiry sentence.
+
+PR #205 corrects the presentation boundary only:
+- the client-visible reviewer is derived from the actual resolved approval notification's `approver` identity;
+- if notification identity cannot be surfaced, copy safely says `an authorized approver` rather than inventing the assigned practitioner as decision-maker;
+- the no-expiry sentence now says `an authorized approver explicitly approves or declines`;
+- no approval authorization, appointment ownership, practitioner assignment, held-slot semantics, Calendar truth or appointment #564 state is changed.
+
+Self-test-first PR #205 evidence:
+- regression-only commit `e340bbe7752e2954e32fa4476f2e4f63b4370675` failed CI #563 before implementation;
+- runtime commit `01c15f8e0657a9524f4bfb0f4cd9aacb3d783ed3` produced CI #564 failure only because the new source assertion required non-optional `notification.approver` while safe code used `notification?.approver`; runtime behavior was already correct;
+- final head `63048e1ac17db084d1dd3e0975f28cde57699cb2` passed CI #565;
+- squash merge `0fe9df17c32ba8503124a0f9e09936bdda612ab4` is production-live on Render deploy `dep-d9ve1glbedkc7382rng0`.
+
+### Current Product-Critical Gate
+
+🔵 **Appointment #564 is already held. Do not send `RETRY BOOKING` again, do not create another booking, and do not let JP decide yet.** The immediate evidence required is JP's side of this same appointment: confirm whether JP received actionable **Approve / Decline** controls for #564. This is the live Meta-delivery/sole-authority acceptance gate. If JP received nothing, preserve #564 unchanged and inspect notification evidence before any further state transition.
+
+After JP receipt is proven, verify the exact Christel/time slot is excluded while #564 remains pending. Only after sole-JP delivery and slot exclusion are accepted should JP press Approve. Then verify final Dummy Test confirmation plus both shared and Christel Google Calendar mirrors/client-mobile presentation. A JP decline test remains a separate later genuine request. Ordinary Marietjie/Christel/Abigail approval acceptance remains open afterward. Preserve every unrelated WAITING item fail-closed.
