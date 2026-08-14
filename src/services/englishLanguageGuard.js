@@ -1,7 +1,7 @@
 const OpenAI = require('openai');
 const logger = require('../lib/logger');
 
-const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+let client = null;
 const FAST_MODEL = process.env.OPENAI_FAST_MODEL || process.env.OPENAI_MODEL || 'gpt-5.6-luna';
 const ENGLISH_ONLY_REPLY = "Shiloh's WhatsApp service is available in English only. Please send your message in English and I'll be happy to help.";
 
@@ -11,6 +11,11 @@ const CLINIC_NAVIGATION_HINTS = Object.freeze([
   'lash', 'lashes', 'body', 'foot', 'feet', 'skin', 'treatment', 'treatments',
   'service', 'services', 'booking', 'bookings', 'appointment', 'appointments',
 ]);
+
+function classifierClient() {
+  if (!client) client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  return client;
+}
 
 function isEnglishCompatibleClinicNavigation(text='') {
   const value = String(text || '').trim().toLowerCase().replace(/\s+/g, ' ');
@@ -34,7 +39,7 @@ function needsLanguageCheck(text='') {
 async function guardEnglishOnly(text) {
   if(!needsLanguageCheck(text)) return { allowed:true };
   try {
-    const response=await client.responses.create({
+    const response=await classifierClient().responses.create({
       model:FAST_MODEL,
       input:String(text).slice(0,700),
       instructions:[
