@@ -3,6 +3,19 @@
 Updated: 2026-08-14
 Purpose: concise operational dashboard. Master is the detailed current ledger; do not redo completed work.
 
+## Canonical status system
+
+| State | Meaning |
+|---|---|
+| 🟢 VERIFIED | Completed with sufficient authoritative evidence. |
+| 🔵 ACTIVE | Work currently being executed. |
+| ⚪ READY | Actionable now, but not currently being executed. |
+| 🟠 WAITING | Requires human/provider/external/genuine-journey truth before advancing. |
+| 🔴 DEFECT / HOLD | Proven problem or unsafe state; fail closed until repaired and re-verified. |
+| ⏸️ DEFERRED | Deliberately postponed by explicit project decision. |
+
+**Rule:** State and evidence maturity are separate. `Code/CI + prod live`, PR/deploy references and test results belong in evidence/action text, not in State. Do not use legacy 🟡 or ad-hoc compound status labels in current rows. Legacy ⬜ maps to ⚪ READY.
+
 ## Mandatory execution checkpoint
 
 Before substantial engineering or any new controlled production mutation, always stop and state:
@@ -16,75 +29,78 @@ Read-only verification, diagnostics, reconciliation, status/document maintenance
 
 ## Current Product-Critical Gate
 
-🔵 **Highest-priority actionable Client Perspective item: ordinary approval acceptance.** Dummy Test JP approval (#564) and JP decline/release (#566) are REAL-ACCEPTED. Production ordinary rules still need genuine controlled evidence: Marietjie self; Christel self; Abigail approved by Abigail or Christel, first valid decision authoritative.
+⚪ **READY — ordinary approval acceptance.** Dummy Test JP approval (#564), JP decline/release (#566), reschedule/cancellation (#565), and Calendar contact presentation are VERIFIED. Production ordinary rules still need genuine controlled evidence: Marietjie self; Christel self; Abigail approved by Abigail or Christel, first valid decision authoritative.
 
-**Why this is next:** Dummy Test positive and negative approval paths are complete. Calendar staff-contact polish is already code/CI + production live and now waits only for the next genuine applicable Calendar journey. Ordinary production approval remains genuinely unaccepted and is not externally blocked. Reminder-template, attendance, payment and privacy work remains blocked or evidence-gated.
+**Why this is next:** ordinary approval remains genuinely unfinished and is not externally blocked. Reminder-template, genuine-journey presentation evidence, attendance, payment and privacy work are WAITING. Google Contacts is READY but lower priority.
 
-**Approval state:** **WAITING FOR USER APPROVAL TO PROCEED.** Do not start a new controlled booking or substantial engineering from this tracker state without explicit approval.
+**Approval state:** **WAITING FOR USER APPROVAL TO PROCEED WITH ORDINARY APPROVAL ACCEPTANCE.**
 
-Current application-code baseline: PR **#222** squash merge `5c856745f7ba4eb39fb363071a49418c09fd672e`. Functional deploy **`dep-d9vh9sm7bikc73c40avg`** was verified live with post-deploy `/health` 200. Subsequent documentation-only auto-deploys do not change the application-code baseline; verify Render directly for the exact current deploy ID.
-
-## Real-accepted client evidence
-
-- ✅ MediHeel presentation and practitioner truth: Christel only.
-- ✅ #564 positive Dummy Test JP approval, indefinite hold and canonical Calendar confirmation.
-- ✅ #565 canonical reschedule and later cancellation; #564 preserved.
-- ✅ Reminder/change coordination and destructive cancellation review UX.
-- ✅ #566 Dummy Test JP decline: indefinite hold → JP sole-approver request → explicit Decline → client not-confirmed outcome → no #566 Calendar event → exact Abigail/Bamboo 12:15 capacity offered again.
-- ✅ #564 independently remained unchanged during #566 verification and again after PR #222 deployment.
+Current application-code baseline: PR **#222** squash merge `5c856745f7ba4eb39fb363071a49418c09fd672e`. Functional deploy **`dep-d9vh9sm7bikc73c40avg`** was verified live with post-deploy `/health` 200. Documentation-only auto-deploys do not change the application-code baseline; verify Render directly for the exact current deploy ID.
 
 ## At-a-glance
 
-| ID | Workstream | State | Next evidence/action |
+| ID | Workstream | State | Evidence / next action |
 |---|---|---|---|
-| C1-APP-DUMMY+ | Dummy Test positive JP approval | 🟢 REAL-ACCEPTED | #564 complete; leave unchanged. |
-| C1-APP-DUMMY-DECLINE | Dummy Test JP decline | 🟢 REAL-ACCEPTED | #566 declined/released; do not recreate. |
-| C1-RESCHEDULE | Canonical reschedule lifecycle | 🟢 REAL-ACCEPTED | #565 accepted before later cancellation. |
-| C1-CANCEL | Canonical cancellation | 🟢 REAL-ACCEPTED | #565 cancelled; Calendar absent; #564 preserved. |
-| C1-DECLINE-CTA | Decline `Book another time` button | 🟡 CODE/CI + PROD LIVE | Observe on next genuine decline only. |
-| C1-POLICY-DISPLAY | Friendly policy updated date | 🟡 CODE/CI + PROD LIVE | Observe on next genuine policy presentation; internal `2026-08-11-v1` unchanged. |
-| C1-CALENDAR-CONTACT | Calendar staff contact presentation | 🟡 CODE/CI + PROD LIVE | Next genuine create/update: confirm Client + Mobile + WhatsApp + Service + Practitioner and native Location; do not rewrite #564 merely for proof. |
-| C1-APP-ORD | Ordinary approval rules | 🔵 ACTIVE NEXT / APPROVAL-GATED | Genuine controlled self/dual-authority evidence after explicit user approval. |
-| C1-RESCHEDULE-ACTIONS | Post-reschedule calendar/change controls | 🟡 CODE/CI + PROD LIVE | Future genuine reschedule delivery only. |
-| C1-REMINDER-TPL | Reminder native change buttons | 🟠 PROVIDER/TEMPLATE WAITING | Meta approval → env config → real delivery. |
-| GCONTACTS | CRM → Google Contacts | 🟠 NOT IMPLEMENTED | Separate explicit workstream; CRM authority. |
+| C1-APP-DUMMY+ | Dummy Test positive JP approval | 🟢 VERIFIED | #564 booking lifecycle accepted; preserve semantics. |
+| C1-APP-DUMMY-DECLINE | Dummy Test JP decline | 🟢 VERIFIED | #566 declined/released; do not recreate. |
+| C1-RESCHEDULE | Canonical reschedule lifecycle | 🟢 VERIFIED | #565 accepted before later cancellation. |
+| C1-CANCEL | Canonical cancellation | 🟢 VERIFIED | #565 cancelled; Calendar absent. |
+| C1-CALENDAR-CONTACT | Calendar staff contact presentation | 🟢 VERIFIED | PR #222 red #627 → green #628; #564 normalized in place and Calendar read-back verifies Mobile + WhatsApp + native Location. |
+| C1-APP-ORD | Ordinary approval rules | ⚪ READY | Highest-priority next controlled acceptance after explicit user approval. |
+| C1-DECLINE-CTA | Decline `Book another time` button | 🟠 WAITING | Code/CI/prod live; observe on next genuine decline only. |
+| C1-POLICY-DISPLAY | Friendly policy updated date | 🟠 WAITING | Code/CI/prod live; observe on next genuine policy presentation; internal `2026-08-11-v1` unchanged. |
+| C1-RESCHEDULE-ACTIONS | Post-reschedule calendar/change controls | 🟠 WAITING | Code/CI/prod live; future genuine reschedule delivery only. |
+| C1-REMINDER-TPL | Reminder native change buttons | 🟠 WAITING | Meta approval → explicit env config → real delivery. |
+| GCONTACTS | CRM → Google Contacts | ⚪ READY | Separate lower-priority workstream; not implemented; CRM remains authoritative. |
 | A1 | Attendance finalizations | 🟠 WAITING | Genuine Completed/No-show truth only. |
 | E1 | Ozow | 🟠 WAITING | Merchant config + explicit business rules. |
-| PRIV | Destructive privacy execution | 🟠 WAITING / FAIL-CLOSED | Authority + evidence required. |
+| PRIV | Destructive privacy execution | 🟠 WAITING | Fail-closed; authority + evidence required. |
 
-## PR #219 presentation evidence
+No current workstream is 🔴 DEFECT / HOLD or ⏸️ DEFERRED. Introduce those states only when authoritative project truth warrants them.
+
+## Verified client evidence
+
+- 🟢 MediHeel presentation and practitioner truth: Christel only.
+- 🟢 #564 positive Dummy Test JP approval and indefinite hold lifecycle.
+- 🟢 #565 canonical reschedule and later cancellation.
+- 🟢 #566 explicit JP decline, no Calendar event, released capacity proven available again.
+- 🟢 #564 Calendar presentation normalized after explicit approval without changing event identity, time, service, practitioner or booking state. Read-back verifies `+27 71 674 2646`, `https://wa.me/27716742646`, and native clinic Location.
+
+## Implementation evidence still waiting for genuine journey acceptance
+
+### PR #219
 
 - Declined-booking CTA uses **Book another time** with stable `BOOKING` payload and typed fallback.
 - Client policy display is **Policy updated: 11 August 2026**.
-- Internal immutable/audit policy version remains **2026-08-11-v1**; terms and explicit acceptance semantics unchanged.
+- Internal immutable/audit policy version remains `2026-08-11-v1`; terms and explicit acceptance semantics unchanged.
 - Self-test-first: red CI #617; final green CI #621; production live.
+- Lifecycle state remains 🟠 WAITING for next genuine applicable WhatsApp evidence.
 
-## PR #222 Calendar contact evidence
+### PR #222
 
-- Visible Calendar description keeps **Client, Mobile, WhatsApp, Service, Practitioner**.
-- WhatsApp uses `https://wa.me/<digits>` derived from client mobile.
-- Clinic is written to the native Google Calendar **Location** field.
-- Visible CRM appointment-number and source lines are removed.
-- Private sync metadata remains unchanged for appointment id/source/staff/service/mobile.
-- Creation and legitimate update/reschedule paths share the same polished contract.
-- Self-test-first: red CI **#627**, green CI **#628**.
-- PR #222 merged; functional Render deploy `dep-d9vh9sm7bikc73c40avg` was verified live and healthy before documentation reconciliation.
-- #564 was intentionally left untouched; REAL presentation acceptance waits for the next genuine Calendar create/update.
+- Calendar description contract: **Client, Mobile, WhatsApp, Service, Practitioner**.
+- WhatsApp: `https://wa.me/<digits>` derived from stored mobile.
+- Clinic: native Google Calendar **Location**.
+- Visible CRM appointment-number and source lines removed.
+- Private sync metadata preserved.
+- Creation and legitimate update/reschedule paths share the same contract.
+- Self-test-first: red CI #627; green CI #628; functional production deploy verified healthy.
+- Real Calendar presentation is now 🟢 VERIFIED through approved #564 normalization/read-back.
 
 ## Exact continuation
 
 - #561 cancelled historical — never recreate.
-- #564 confirmed 15 Aug 2026 10:45–12:15 Christel + MediHeel — leave unchanged.
+- #564 confirmed 15 Aug 2026 10:45–12:15 Christel + MediHeel — booking semantics preserved; Calendar presentation normalized and verified.
 - #565 cancelled — never recreate merely for proof.
 - #566 declined by JP; no Calendar event; held Abigail/Bamboo 12:15 slot proven released — never recreate merely for proof.
 
-**Authoritative current state:** PR #222 is the current application-code baseline; controlled appointment state above remains authoritative and #564 remains unchanged. Verify Render directly for the exact current deploy because documentation-only commits also auto-deploy.
+**Authoritative current state:** PR #222 is the application-code baseline; #564 Calendar presentation is normalized and verified; controlled appointment truth above remains authoritative. Verify Render directly for the exact current deploy because documentation-only commits also auto-deploy.
 
-**Highest-priority actionable item:** controlled ordinary approval acceptance, starting with one self-approval path and then Abigail's dual-authority/first-valid-decision rule.
+**Highest-priority actionable item:** ⚪ **READY — controlled ordinary approval acceptance**, starting with one self-approval path and then Abigail's dual-authority/first-valid-decision rule.
 
-**Why this is next:** ordinary approval is the highest-value genuinely unfinished acceptance item that is not externally blocked; Calendar contact polish is already production-live and its remaining acceptance is genuine-journey-gated.
+**Why this is next:** ordinary approval is the highest-value unfinished workstream that is actionable now. Competing provider/evidence items are WAITING; Google Contacts is lower-priority READY work.
 
-**Approval gate:** **WAITING FOR USER APPROVAL TO PROCEED.**
+**Approval gate:** **WAITING FOR USER APPROVAL TO PROCEED WITH ORDINARY APPROVAL ACCEPTANCE.**
 
 ## Guardrails
 
