@@ -28,7 +28,7 @@ const { startCustomerCareScheduler } = require("./src/services/customerCare");
 const { startBookingIntegrityScheduler } = require("./src/services/bookingIntegrityMonitor");
 const { ensureDemoClientPermissions } = require("./src/services/demoClientAccessBootstrap");
 const { ensureJeanPierreAdminCapabilities } = require("./src/services/jeanPierreAdminAccessBootstrap");
-const { ensureMarietjiePedicureOwnership } = require("./src/services/pedicureOwnershipBootstrap");
+const { ensureChristelMediHeelOwnership } = require("./src/services/pedicureOwnershipBootstrap");
 const { startMandatoryDemoCleanupScheduler } = require("./src/services/demoMandatoryCleanup");
 const { startAttendanceFinalizationReminderScheduler } = require("./src/services/attendanceFinalizationReminders");
 const { submitStaffFinalizationTemplate } = require("./src/services/staffFinalizationTemplateProvisioning");
@@ -103,8 +103,8 @@ async function start() {
   const jeanPierreAccess = await ensureJeanPierreAdminCapabilities();
   if (!jeanPierreAccess) throw new Error('Jean-Pierre business admin capability clone could not be initialized');
   logger.info({ configured: true, businessRole: jeanPierreAccess.business_role }, "Jean-Pierre business admin access verified");
-  const pedicureOwnership = await ensureMarietjiePedicureOwnership();
-  logger.info(pedicureOwnership, "Marietjie pedicure ownership verified");
+  const mediHeelOwnership = await ensureChristelMediHeelOwnership();
+  logger.info(mediHeelOwnership, "Christel MediHeel ownership verified");
   await provisionStaffFinalizationTemplateSafely();
   await provisionBookingConfirmationTemplateSafely();
   server = app.listen(PORT, () => {
