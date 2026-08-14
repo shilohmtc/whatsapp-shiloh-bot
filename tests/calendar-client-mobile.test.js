@@ -7,10 +7,19 @@ const calendarSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'servic
 const clientCommitSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'services', 'clientBookingCommit.js'), 'utf8');
 const adminBookingSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'services', 'adminBooking.js'), 'utf8');
 
-test('calendar appointment description includes client mobile without changing the title contract', () => {
+test('calendar appointment description keeps staff-useful mobile and WhatsApp contact details', () => {
   assert.match(calendarSource, /clientMobile/);
   assert.match(calendarSource, /Mobile:/);
+  assert.match(calendarSource, /WhatsApp:/);
+  assert.match(calendarSource, /https:\/\/wa\.me\//);
   assert.match(calendarSource, /bookingSummary\(\{clientName,serviceName,staffName\}\)/);
+});
+
+test('calendar appointment presentation uses native location and hides internal CRM/source metadata', () => {
+  assert.match(calendarSource, /location:/);
+  assert.doesNotMatch(calendarSource, /Shiloh CRM appointment #\$\{appointmentId\}/);
+  assert.doesNotMatch(calendarSource, /source\?`Source:/);
+  assert.doesNotMatch(calendarSource, /locationName\?`Location:/);
 });
 
 test('client WhatsApp booking carries the uniquely resolved WhatsApp identity into calendar creation', () => {
