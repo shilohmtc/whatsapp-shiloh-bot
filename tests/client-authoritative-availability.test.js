@@ -76,11 +76,26 @@ test('slot lists stay inside Meta limits and expose stable practitioner-bound ID
   assert.ok(first.rows.every((row) => !row.description || row.description.length <= 72));
 });
 
+test('new-booking availability copy is client-facing while preserving recheck semantics', () => {
+  const slots = [{
+    staff_id: 1,
+    staff_name: 'Marietjie',
+    service_name: 'HIFU',
+    starts_at: '2026-08-15T08:00:00.000Z',
+    ends_at: '2026-08-15T08:30:00.000Z',
+  }];
+  const intent = { service_text: 'HIFU', preferred_date: '2026-08-15', therapist_text: 'Marietjie' };
+  const view = slotsInteractive(intent, slots, 1);
+  assert.equal(view.rows[0].description, 'HIFU');
+  assert.match(view.body, /Choose an available time below/);
+  assert.match(view.body, /checked again before your booking is confirmed/);
+  assert.doesNotMatch(view.body, /CRM|calendar|authoritative|revalidation/i);
+  assert.doesNotMatch(view.rows[0].description, /authoritative/i);
+  assert.equal(view.sectionTitle, 'Available times');
+});
+
 test('slot IDs and pagination IDs parse deterministically', () => {
-  const id = slotId({
-    staff_id: 7,
-    starts_at: '2026-08-14T12:30:00.000Z',
-  });
+  const id = slotId({ staff_id: 7, starts_at: '2026-08-14T12:30:00.000Z' });
   const parsed = parseSlotSelection(id);
   assert.equal(parsed.staffId, 7);
   assert.equal(parsed.dateKey, '20260814');
