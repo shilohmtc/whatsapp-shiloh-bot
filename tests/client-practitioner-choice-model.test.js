@@ -36,7 +36,7 @@ test('booking entry presents the four client service families as a genuine Whats
   ]);
   assert.deepEqual(view.rows.map((row) => row.title), [
     'Beauty & Aesthetics',
-    'Massage',
+    'Massage Treatments',
     'Lymphatic Drainage',
     'Elim MediHeel Pedicures',
   ]);
