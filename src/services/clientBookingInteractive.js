@@ -35,10 +35,10 @@ function bookingDiscoveryInteractive() {
     ].join('\n'),
     buttonText: 'Choose service',
     rows: [
-      { id: 'client_family_beauty', title: 'Beauty & Aesthetics', description: 'Beauty and aesthetics treatments' },
-      { id: 'client_family_massage', title: 'Massage', description: 'Massage treatments' },
-      { id: 'client_family_lymphatic', title: 'Lymphatic Drainage', description: 'Lymphatic drainage treatments' },
-      { id: 'client_family_pedicure', title: 'Elim MediHeel Pedicures', description: 'Elim MediHeel pedicure treatments' },
+      { id: 'client_family_beauty', title: 'Beauty & Aesthetics', description: 'View beauty & aesthetics treatments' },
+      { id: 'client_family_massage', title: 'Massage Treatments', description: 'View massage treatments' },
+      { id: 'client_family_lymphatic', title: 'Lymphatic Drainage', description: 'View lymphatic drainage treatments' },
+      { id: 'client_family_pedicure', title: 'Elim MediHeel Pedicures', description: 'View pedicure treatments' },
     ],
     sectionTitle: 'Shiloh treatments',
   };
