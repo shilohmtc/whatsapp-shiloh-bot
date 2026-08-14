@@ -51,10 +51,15 @@ function inboundText(message){
   return null;
 }
 async function sendAdminResult(to,result){
-  if(result?.interactive?.type==="list") return sendWhatsAppList(to,result.interactive.body,result.interactive.buttonText||result.interactive.button,result.interactive.rows||result.interactive.sections?.[0]?.rows,result.interactive.sectionTitle||result.interactive.sections?.[0]?.title);
-  if(result?.interactive?.type==="button") return sendWhatsAppReplyButtons(to,result.interactive.body,result.interactive.buttons);
-  if(result?.interactive?.buttons) return sendWhatsAppReplyButtons(to,result.interactive.body,result.interactive.buttons);
-  return sendWhatsAppMessage(to,result?.reply||"Sorry, Shiloh could not render that response.");
+  let sent;
+  if(result?.interactive?.type==="list") sent=await sendWhatsAppList(to,result.interactive.body,result.interactive.buttonText||result.interactive.button,result.interactive.rows||result.interactive.sections?.[0]?.rows,result.interactive.sectionTitle||result.interactive.sections?.[0]?.title);
+  else if(result?.interactive?.type==="button") sent=await sendWhatsAppReplyButtons(to,result.interactive.body,result.interactive.buttons);
+  else if(result?.interactive?.buttons) sent=await sendWhatsAppReplyButtons(to,result.interactive.body,result.interactive.buttons);
+  else sent=await sendWhatsAppMessage(to,result?.reply||"Sorry, Shiloh could not render that response.");
+  if(typeof result?.postSend==="function"){
+    try{await result.postSend();}catch(error){logger.error({err:error,to:maskPhone(to)},"Supplemental WhatsApp post-send action failed");}
+  }
+  return sent;
 }
 exports.verifyWebhook = (req,res)=>{const mode=req.query["hub.mode"],token=req.query["hub.verify_token"],challenge=req.query["hub.challenge"];if(mode==="subscribe"&&token===process.env.VERIFY_TOKEN){(req.log||logger).info("WhatsApp webhook verified");return res.status(200).send(challenge);}(req.log||logger).warn("WhatsApp webhook verification rejected");return res.sendStatus(403);};
 exports.receiveWebhook=async(req,res)=>{const log=req.log||logger;try{const value=req.body.entry?.[0]?.changes?.[0]?.value;if(!value?.messages)return res.sendStatus(200);const message=value.messages[0];const from=message.from,text=inboundText(message);if(!text){log.info({messageType:message.type},"Ignoring unsupported or unknown WhatsApp message");return res.sendStatus(200);}if(!from){log.warn("Received WhatsApp message without sender");return res.sendStatus(200);}log.info({from:maskPhone(from),messageType:message.type},"Processing incoming WhatsApp message");try{
