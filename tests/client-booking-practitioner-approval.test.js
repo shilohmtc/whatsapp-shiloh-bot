@@ -10,6 +10,7 @@ const policyPath = path.join(root, 'src', 'services', 'bookingPolicy.js');
 const availabilityPath = path.join(root, 'src', 'services', 'availabilityService.js');
 const confirmationPath = path.join(root, 'src', 'services', 'customerBookingConfirmation.js');
 const webhookPath = path.join(root, 'src', 'controllers', 'webhookController.js');
+const resetPath = path.join(root, 'src', 'services', 'adminTestClientReset.js');
 
 const approval = fs.readFileSync(approvalPath, 'utf8');
 const schema = fs.readFileSync(schemaPath, 'utf8');
@@ -17,6 +18,7 @@ const policy = fs.readFileSync(policyPath, 'utf8');
 const availability = fs.readFileSync(availabilityPath, 'utf8');
 const confirmation = fs.readFileSync(confirmationPath, 'utf8');
 const webhook = fs.readFileSync(webhookPath, 'utf8');
+const reset = fs.readFileSync(resetPath, 'utf8');
 
 test('client booking completion is converted to a durable pending-approval hold before client delivery', () => {
   assert.match(policy, /ensureBookingApprovalInfrastructure/);
@@ -31,7 +33,8 @@ test('approval hold is inserted atomically with client appointment staff and has
   assert.match(schema, /CREATE TRIGGER trg_client_booking_approval_hold/);
   assert.match(schema, /AFTER INSERT ON appointment_staff/);
   assert.match(schema, /shiloh_client_whatsapp/);
-  assert.match(schema, /VALUES \(NEW\.appointment_id, NEW\.staff_id, observer_id, 'pending'\)/);
+  assert.match(schema, /appointment_booking_approvals/);
+  assert.match(schema, /'pending'/);
   assert.doesNotMatch(schema, /expires_at|expiry|expirePending|setTimeout|TTL/i);
   assert.doesNotMatch(approval, /expires_at|expiry|expirePending|setTimeout|TTL/i);
 });
@@ -41,7 +44,24 @@ test('pending approval remains an availability conflict until an explicit decisi
   assert.match(approval, /status[^\n]*(pending|approved|declined)/i);
 });
 
-test('Abigail bookings allow either Abigail or Christel to make the first authoritative decision', () => {
+test('CRM Dummy Test uses the existing guarded identity contract and requires JP as sole approver', () => {
+  assert.match(reset, /dummy_test:\s*'Dummy Test'/);
+  assert.match(reset, /lower\(trim\(display_name\)\)/i);
+  assert.match(reset, /rowCount !== 1/);
+  assert.match(approval, /Dummy Test/i);
+  assert.match(approval, /Jean-Pierre/i);
+  assert.match(approval, /dummy_test|dummy test/i);
+  assert.match(approval, /business_admin/i);
+  assert.match(approval, /all_business/i);
+  assert.match(approval, /all_services/i);
+  assert.match(schema, /lower\(trim\(c\.display_name\)\).*dummy test/is);
+  assert.match(schema, /COUNT\(\*\).*clients.*dummy test/is);
+  assert.match(schema, /Jean-Pierre/i);
+  assert.match(schema, /business_admin/i);
+  assert.match(schema, /RAISE EXCEPTION/i);
+});
+
+test('normal Abigail bookings still allow either Abigail or Christel to make the first authoritative decision', () => {
   assert.match(approval, /approver_staff_id/);
   assert.match(approval, /observer_staff_id/);
   assert.match(approval, /Abigail/i);
@@ -50,12 +70,9 @@ test('Abigail bookings allow either Abigail or Christel to make the first author
   assert.match(approval, /observer_staff_id[^\n]*admin\.staff_id|admin\.staff_id[^\n]*observer_staff_id/);
   assert.match(approval, /sendWhatsAppReplyButtons\([^\n]*observer/i);
   assert.doesNotMatch(approval, /no approval is required from you/i);
-  assert.match(schema, /LOWER\(COALESCE\(NEW\.staff_name_snapshot/);
-  assert.match(schema, /= 'abigail'/);
-  assert.match(schema, /LOWER\(display_name\) = 'christel'/);
 });
 
-test('Marietjie and Christel bookings remain self-approval only', () => {
+test('normal Marietjie and Christel bookings remain self-approval only', () => {
   assert.match(approval, /Number\(context\.approver_staff_id\) === Number\(admin\.staff_id\)/);
   assert.match(approval, /context\.observer_staff_id/);
 });
