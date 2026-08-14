@@ -35,6 +35,14 @@ test('lifecycle reminder claim pauses while the client has an active reschedule 
   assert.match(lifecycle, /aci\.action\s+IN\s*\('reschedule','cancel'\)/);
 });
 
+test('reminder greeting prefers one unambiguous active CRM client name before profile fallback', () => {
+  assert.match(lifecycle, /client_contacts/);
+  assert.match(lifecycle, /c\.display_name/);
+  assert.match(lifecycle, /c\.status='active'/);
+  assert.match(lifecycle, /HAVING COUNT\(DISTINCT c\.id\)=1/);
+  assert.match(lifecycle, /getProfile/);
+});
+
 test('client identity fails closed unless exactly one active canonical client matches the phone', () => {
   assert.match(reminder, /matched_clients AS/);
   assert.match(reminder, /SELECT DISTINCT c\.id/);
