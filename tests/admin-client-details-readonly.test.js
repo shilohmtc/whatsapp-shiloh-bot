@@ -10,7 +10,7 @@ test('client lookup keeps masked summary but exposes a separate read-only detail
   assert.match(lookupSource, /maskContact/);
   assert.match(lookupSource, /async function getClientDetails\(/);
   assert.match(lookupSource, /function formatClientDetailsReply\(/);
-  assert.match(lookupSource, /Mobile:/);
+  assert.match(lookupSource, /return "Mobile"/);
   assert.match(lookupSource, /This is a read-only client detail view/);
   assert.doesNotMatch(lookupSource, /\b(?:UPDATE|INSERT|DELETE)\s+(?:clients|client_contacts)\b/i);
 });
