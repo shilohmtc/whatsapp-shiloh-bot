@@ -153,12 +153,13 @@ async function customerName(phone){
 }
 
 async function processReminders() {
-  const reminderTemplate=process.env.WHATSAPP_REMINDER_TEMPLATE;
+  const reminderActionsTemplate=process.env.WHATSAPP_REMINDER_ACTIONS_TEMPLATE;
+  const reminderTemplate=reminderActionsTemplate||process.env.WHATSAPP_REMINDER_TEMPLATE;
   const followupTemplate=process.env.WHATSAPP_FOLLOWUP_TEMPLATE;
   if(!reminderTemplate&&!followupTemplate)return;
 
   if(reminderTemplate){
-    for(let i=0;i<20;i+=1){const appointment=await claimDueReminder();if(!appointment)break;try{const name=await customerName(appointment.phone);const formatted=formatAppointmentDate(appointment.appointment_at);const parts=formatted.split(", ");const time=parts[parts.length-1]||formatted;const date=parts.slice(0,-1).join(", ")||formatted;await sendWhatsAppTemplate(appointment.phone,reminderTemplate,[name,appointment.service_text,date,time],LANGUAGE_CODE);logger.info({appointmentId:appointment.appointment_id||appointment.id},"Customer appointment reminder sent");}catch(error){await undoClaim(appointment.id,"reminder_sent_at");logger.error({err:error,appointmentId:appointment.appointment_id||appointment.id},"Appointment reminder failed");break;}}
+    for(let i=0;i<20;i+=1){const appointment=await claimDueReminder();if(!appointment)break;try{const name=await customerName(appointment.phone);const formatted=formatAppointmentDate(appointment.appointment_at);const parts=formatted.split(", ");const time=parts[parts.length-1]||formatted;const date=parts.slice(0,-1).join(", ")||formatted;const quickReplyPayloads=reminderActionsTemplate?['client_reschedule_booking','client_cancel_booking']:[];await sendWhatsAppTemplate(appointment.phone,reminderTemplate,[name,appointment.service_text,date,time],LANGUAGE_CODE,quickReplyPayloads);logger.info({appointmentId:appointment.appointment_id||appointment.id,actionTemplate:Boolean(reminderActionsTemplate)},"Customer appointment reminder sent");}catch(error){await undoClaim(appointment.id,"reminder_sent_at");logger.error({err:error,appointmentId:appointment.appointment_id||appointment.id},"Appointment reminder failed");break;}}
   }
 
   if(followupTemplate){
@@ -167,6 +168,6 @@ async function processReminders() {
 }
 
 async function runScan(){if(running)return;running=true;try{await processReminders();}catch(error){logger.error({err:error},"Appointment lifecycle scan failed");}finally{running=false;}}
-function startAppointmentLifecycleScheduler(){if(timer)return;logger.info({scanMinutes:SCAN_MINUTES,reminderHours:REMINDER_HOURS,followupHours:FOLLOWUP_HOURS,reminderTemplateConfigured:Boolean(process.env.WHATSAPP_REMINDER_TEMPLATE),followupTemplateConfigured:Boolean(process.env.WHATSAPP_FOLLOWUP_TEMPLATE)},"Appointment lifecycle scheduler started");setTimeout(runScan,5000).unref();timer=setInterval(runScan,Math.max(SCAN_MINUTES,1)*60*1000);timer.unref();}
+function startAppointmentLifecycleScheduler(){if(timer)return;logger.info({scanMinutes:SCAN_MINUTES,reminderHours:REMINDER_HOURS,followupHours:FOLLOWUP_HOURS,reminderTemplateConfigured:Boolean(process.env.WHATSAPP_REMINDER_TEMPLATE),reminderActionsTemplateConfigured:Boolean(process.env.WHATSAPP_REMINDER_ACTIONS_TEMPLATE),followupTemplateConfigured:Boolean(process.env.WHATSAPP_FOLLOWUP_TEMPLATE)},"Appointment lifecycle scheduler started");setTimeout(runScan,5000).unref();timer=setInterval(runScan,Math.max(SCAN_MINUTES,1)*60*1000);timer.unref();}
 
 module.exports={ensureTable,createAppointment,listAppointments,updateAppointmentStatus,processReminders,startAppointmentLifecycleScheduler};
