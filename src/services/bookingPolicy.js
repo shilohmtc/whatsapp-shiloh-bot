@@ -3,6 +3,11 @@ const {
   commitAcceptedClientBooking,
   processAcceptedClientBookingMessage,
 } = require("./clientBookingCommit");
+const {
+  createPendingBookingApproval,
+  requestPractitionerApproval,
+} = require("./clientBookingApproval");
+const { ensureBookingApprovalInfrastructure } = require("./clientBookingApprovalSchema");
 const logger = require("../lib/logger");
 
 const POLICY_VERSION = "2026-08-11-v1";
@@ -39,6 +44,7 @@ let initialized = false;
 async function ensurePolicySchema() {
   if (initialized) return;
 
+  await ensureBookingApprovalInfrastructure();
   await pool.query(`ALTER TABLE booking_intents ADD COLUMN IF NOT EXISTS policy_version TEXT`);
   await pool.query(`ALTER TABLE booking_intents ADD COLUMN IF NOT EXISTS policy_accepted_at TIMESTAMPTZ`);
   await pool.query(`ALTER TABLE booking_intents ADD COLUMN IF NOT EXISTS policy_channel TEXT`);
@@ -166,9 +172,59 @@ async function declinePolicy(phone) {
   await pool.query("DELETE FROM booking_intents WHERE phone = $1", [phone]);
 }
 
+async function stageCreatedBookingForApproval(result) {
+  if (!result?.handled || result.status !== "created" || !result.appointmentId) return result;
+
+  const staffResult = await pool.query(`
+    SELECT ast.staff_id, ast.staff_name_snapshot
+      FROM appointment_staff ast
+     WHERE ast.appointment_id = $1
+     ORDER BY ast.position, ast.staff_id
+     LIMIT 1
+  `, [result.appointmentId]);
+  const staff = staffResult.rows[0] || null;
+  if (!staff) {
+    logger.error({ appointmentId: result.appointmentId }, "Client booking hold created without resolvable assigned practitioner");
+    return {
+      ...result,
+      status: "approval_setup_failed",
+      reply: `Your appointment request #${result.appointmentId} has been placed on hold, but I could not safely start practitioner approval. The time remains held and no final confirmation has been sent. Shiloh needs to review this request manually.`,
+    };
+  }
+
+  await createPendingBookingApproval(pool, {
+    appointmentId: result.appointmentId,
+    staffId: staff.staff_id,
+    staffName: staff.staff_name_snapshot,
+  });
+
+  let notification = { sent: false, reason: "not_attempted" };
+  try {
+    notification = await requestPractitionerApproval({ appointmentId: result.appointmentId });
+  } catch (error) {
+    logger.error({ err: error, appointmentId: result.appointmentId }, "Practitioner approval request notification failed; booking remains held");
+    notification = { sent: false, reason: "notification_failed" };
+  }
+
+  return {
+    ...result,
+    status: "pending_approval",
+    approvalNotification: notification,
+    reply: [
+      `*Booking request received — #${result.appointmentId}*`,
+      "",
+      `Your selected time is now being held while ${staff.staff_name_snapshot} reviews the request.`,
+      "The time will remain held until the practitioner explicitly approves or declines it; there is no automatic expiry.",
+      "",
+      "Your appointment is not yet confirmed. I’ll send the final confirmation and calendar links after approval. 🌿",
+    ].join("\n"),
+  };
+}
+
 async function finalizeAcceptedBooking(phone) {
   try {
-    return await commitAcceptedClientBooking(phone);
+    await ensureBookingApprovalInfrastructure();
+    return stageCreatedBookingForApproval(await commitAcceptedClientBooking(phone));
   } catch (error) {
     logger.error({ err: error }, "Canonical client booking commit failed after policy acceptance");
     return {
@@ -185,12 +241,11 @@ async function processBookingPolicyMessage(phone, text) {
     if (!intent) return { handled: false };
 
     if (intent.status === "policy_accepted") {
-      return processAcceptedClientBookingMessage(phone, text);
+      await ensureBookingApprovalInfrastructure();
+      return stageCreatedBookingForApproval(await processAcceptedClientBookingMessage(phone, text));
     }
 
     if (intent.status === "awaiting_confirmation") {
-      // Before policy acceptance begins, cancellation still belongs to the booking-intent
-      // state machine so it can clear the pending request without touching any appointment.
       if (isDecline(text)) return { handled: false };
       if (isEditRequest(text)) return { handled: false };
 
@@ -260,7 +315,9 @@ module.exports = {
   POLICY_VERSION,
   POLICY_TEXT,
   ensurePolicySchema,
+  finalizeAcceptedBooking,
   processBookingPolicyMessage,
   sanitizeBookingReply,
+  stageCreatedBookingForApproval,
   isExplicitAcceptance,
 };
