@@ -35,10 +35,10 @@ function bookingDiscoveryInteractive() {
     ].join('\n'),
     buttonText: 'Choose service',
     rows: [
-      { id: 'client_family_beauty', title: 'Beauty & Aesthetics', description: 'Beauty and aesthetics treatments' },
-      { id: 'client_family_massage', title: 'Massage', description: 'Massage treatments' },
-      { id: 'client_family_lymphatic', title: 'Lymphatic Drainage', description: 'Lymphatic drainage treatments' },
-      { id: 'client_family_pedicure', title: 'Elim MediHeel Pedicures', description: 'Elim MediHeel pedicure treatments' },
+      { id: 'client_family_beauty', title: 'Beauty & Aesthetics', description: 'View beauty & aesthetics treatments' },
+      { id: 'client_family_massage', title: 'Massage Treatments', description: 'View massage treatments' },
+      { id: 'client_family_lymphatic', title: 'Lymphatic Drainage', description: 'View lymphatic drainage treatments' },
+      { id: 'client_family_pedicure', title: 'Elim MediHeel Pedicures', description: 'View pedicure treatments' },
     ],
     sectionTitle: 'Shiloh treatments',
   };
@@ -86,11 +86,11 @@ function timeInteractive(intent) {
     type: 'button',
     body: [
       `*${intent.service_text}*`,
-      `Date: ${displayDate(intent.preferred_date)}`,
       `Practitioner: ${intent.therapist_text}`,
+      `Date: ${displayDate(intent.preferred_date)}`,
       '',
-      'What time of day would you prefer?',
-      'Choose below, or type an exact time such as *14:00* or *2pm*.',
+      'What time would you prefer?',
+      'Choose a time of day below, or type a specific time such as *10:30* or *2pm*.',
     ].join('\n'),
     buttons: [
       { id: 'client_time_morning', title: 'Morning' },
@@ -104,64 +104,34 @@ function confirmationInteractive(intent) {
   return {
     type: 'button',
     body: [
-      '*Please check your booking preferences*',
-      `Service: ${intent.service_text}`,
+      '*Please confirm your booking details*',
+      '',
+      `Treatment: ${intent.service_text}`,
       `Practitioner: ${intent.therapist_text}`,
       `Date: ${displayDate(intent.preferred_date)}`,
       `Time: ${intent.preferred_time}`,
       '',
-      'Nothing is booked yet. Confirm these details to continue to Shiloh’s Booking Policy & Terms, or change/cancel the request.',
+      'Would you like me to continue with this booking?',
     ].join('\n'),
     buttons: [
-      { id: 'client_booking_confirm', title: 'Confirm details' },
+      { id: 'client_booking_confirm', title: 'Yes, continue' },
       { id: 'client_booking_change', title: 'Change details' },
-      { id: 'client_booking_cancel', title: 'Cancel request' },
+      { id: 'client_booking_cancel', title: 'Cancel' },
     ],
   };
 }
 
 function decorateClientBookingResult(result) {
-  if (!result?.handled || !result.intent) return result;
+  if (!result?.handled) return result;
+  if (result.interactive) return result;
+  if (result.reply && /booking policy/i.test(result.reply)) return result;
   const intent = result.intent;
-
-  if (intent.status === 'collecting' && !intent.service_text) {
-    return { ...result, interactive: bookingDiscoveryInteractive() };
-  }
-
-  if (
-    ['collecting', 'awaiting_confirmation'].includes(intent.status) &&
-    intent.service_text &&
-    intent.service_verified !== false &&
-    !intent.therapist_text
-  ) {
-    return { ...result, interactive: practitionerRequiredInteractive(intent) };
-  }
-
-  if (
-    intent.status === 'collecting' &&
-    intent.service_text &&
-    intent.service_verified !== false &&
-    intent.therapist_text &&
-    !intent.preferred_date
-  ) {
-    return { ...result, interactive: dateInteractive(intent) };
-  }
-
-  if (
-    intent.status === 'collecting' &&
-    intent.service_text &&
-    intent.service_verified !== false &&
-    intent.therapist_text &&
-    intent.preferred_date &&
-    !intent.preferred_time
-  ) {
-    return { ...result, interactive: timeInteractive(intent) };
-  }
-
-  if (intent.status === 'awaiting_confirmation' && intent.therapist_text) {
-    return { ...result, interactive: confirmationInteractive(intent) };
-  }
-
+  if (!intent || intent.status !== 'collecting') return result;
+  if (!intent.service_text || intent.service_verified === false) return result;
+  if (!intent.therapist_text) return { ...result, reply: null, interactive: practitionerRequiredInteractive(intent) };
+  if (!intent.preferred_date) return { ...result, reply: null, interactive: dateInteractive(intent) };
+  if (!intent.preferred_time) return { ...result, reply: null, interactive: timeInteractive(intent) };
+  if (intent.confirmed !== true) return { ...result, reply: null, interactive: confirmationInteractive(intent) };
   return result;
 }
 
@@ -169,10 +139,10 @@ module.exports = {
   CLIENT_BOOKING_BUTTON_COMMANDS,
   bookingDiscoveryInteractive,
   commandForClientBookingButton,
-  dateInteractive,
-  timeInteractive,
   confirmationInteractive,
+  dateInteractive,
   decorateClientBookingResult,
   practitionerRequiredInteractive,
+  timeInteractive,
   treatmentTeamLines,
 };
