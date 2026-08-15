@@ -9,11 +9,11 @@ Operational truth is GitHub `main`, Render production, Shiloh CRM, Google Calend
 
 ## Current production baseline
 
-Current application baseline: **PR #244** squash merge `c6d09219519e621d2e34ae660e190b95d310c7bd`.
+Current application baseline: **PR #247** squash merge `c775ad0a4738a35f07b31a17831a1e63358291d8`.
 
-Render production deploy **`dep-da056au7bikc73ee1gsg`** is verified **live** on 2026-08-15 with `META_LIFECYCLE_PROVISION_ON_START=false` after the controlled one-shot submission of the new button-first appointment follow-up template.
+Render production deploy **`dep-da05b7jncjis738eh13g`** is verified **live** on 2026-08-15. `META_LIFECYCLE_PROVISION_ON_START=false` remains fail-closed. The pending follow-up-v2 template is not configured for production delivery.
 
-PR #241 post-confirmation client actions, PR #242 stale-session/navigation-priority repair, PR #243 button-first `My appointments`, and PR #244 follow-up-v2 provider readiness are all on `main`.
+PR #241 post-confirmation client actions, PR #242 stale-session/navigation-priority repair, PR #243 button-first `My appointments`, PR #244 follow-up-v2 provider readiness, PR #246 in-session button-first rating UX, and PR #247 five-rating template-send readiness are all on `main`.
 
 ## Execution protocol
 
@@ -73,7 +73,9 @@ Current provider truth:
 - `shiloh_booking_approval_outcome_v1` — **PENDING**;
 - `shiloh_appointment_followup_v2` — **PENDING**.
 
-PR #244 added `shiloh_appointment_followup_v2` as a UTILITY template with five quick-reply rating choices (`1`–`5`). Controlled one-shot deploy **`dep-da055pjvctds73b2vc7g`** skipped the six existing templates and submitted only `appointment_followup_actions`; Meta returned **PENDING**. The provisioning flag was immediately restored to false and final deploy **`dep-da056au7bikc73ee1gsg`** is live.
+PR #244 added `shiloh_appointment_followup_v2` as a UTILITY template with five quick-reply rating choices (`1`–`5`). Controlled one-shot deploy **`dep-da055pjvctds73b2vc7g`** skipped the six existing templates and submitted only `appointment_followup_actions`; Meta returned **PENDING**. The provisioning flag was immediately restored to false.
+
+PR #247 removed a local future-wiring mismatch: template sending now accepts the exact five quick-reply payloads required by follow-up-v2, while ordinary in-session reply buttons remain capped at three. This does **not** enable or send follow-up-v2 while it is pending.
 
 All seven templates remain fail-closed. Do not configure/enable production delivery until Meta reports the exact expected template APPROVED and production configuration exactly matches. Real WhatsApp delivery evidence remains required before the relevant lifecycle control is promoted to verified.
 
@@ -84,10 +86,10 @@ The **Meta Lifecycle Approval** condition-watch is enabled and covers all seven 
 - PR #241 post-confirmation actions — production-live.
 - PR #242 generic greeting / stale booking state escape and `Book another treatment` priority — production-live and real-handset verified.
 - PR #243 `My appointments` button-first actions — production-live and real-handset verified for the no-upcoming state.
+- PR #246 in-session customer-experience/rating UX — production-live: invalid/ambiguous `awaiting_rating` responses now render a five-choice WhatsApp list, positive ratings expose `Book another` + `Main menu`, and low-rating explanatory feedback remains free text.
 - Actual post-confirmation three-button row (`Book another`, `My appointments`, `Main menu`) is implemented but awaits the next genuine confirmed booking for direct handset evidence; never create a booking solely for proof.
-- `shiloh_appointment_followup_v2` has been submitted early so provider review runs in parallel with remaining UX engineering.
-
-The next button-first engineering gap is the **in-session customer-experience interaction**: invalid/ambiguous rating prompts should expose a finite selector rather than another memorized-number instruction, and a positive rating should expose useful next actions such as `Book another` / `Main menu`. Low-rating explanatory feedback remains free text.
+- PR #246 rating controls await the next genuine applicable `awaiting_rating` journey for handset evidence; do not manufacture a completed appointment merely for proof.
+- `shiloh_appointment_followup_v2` has been submitted early so provider review runs in parallel with real-journey acceptance.
 
 ## Google integration
 
@@ -100,6 +102,7 @@ The next button-first engineering gap is the **in-session customer-experience in
 - Ordinary practitioner approval combinations — 🟠 WAITING for genuine future evidence only.
 - Reminder/reschedule/cancel lifecycle delivery evidence — 🟠 WAITING for Meta approval + config + genuine delivery evidence.
 - Follow-up-v2 delivery — 🟠 WAITING for Meta approval + config + genuine delivery evidence.
+- In-session rating UX handset evidence — 🟠 WAITING for the next genuine applicable rating journey.
 - Google Contacts synchronization — ⚪ READY, lower priority.
 - Ozow — 🟠 WAITING for merchant configuration and explicit business rules; do not submit speculative payment templates.
 - Destructive privacy execution — 🟠 WAITING; fail closed pending authority/evidence.
@@ -119,15 +122,17 @@ The next button-first engineering gap is the **in-session customer-experience in
 - PR #241 post-confirmation UX complete.
 - PR #242 navigation-priority repair complete and handset accepted.
 - PR #243 button-first `My appointments` complete and handset accepted.
-- PR #244 button-first follow-up template readiness merged; `shiloh_appointment_followup_v2` submitted and PENDING.
-- Final production flag: `META_LIFECYCLE_PROVISION_ON_START=false` on `dep-da056au7bikc73ee1gsg`.
+- PR #244 follow-up-v2 provider readiness complete; template submitted and PENDING.
+- PR #246 button-first in-session rating UX production-live; genuine handset evidence pending.
+- PR #247 follow-up-v2 five-payload sender readiness production-live.
+- Final production flag: `META_LIFECYCLE_PROVISION_ON_START=false` on `dep-da05b7jncjis738eh13g`.
 - Seven lifecycle templates are PENDING at Meta.
 - GBP remains parked at last-authoritative 0 QPM.
 
-**Authoritative current state:** GitHub `main` includes PR #244; Render `dep-da056au7bikc73ee1gsg` is live with provisioning false; post-confirmation/navigation and `My appointments` button-first UX have real Dummy Test handset evidence; booking/staff templates are approved; seven foreseeable lifecycle templates are pending; #567 remains handset-evidence gated before cancellation.
+**Authoritative current state:** GitHub `main` includes PR #247; Render `dep-da05b7jncjis738eh13g` is live with provisioning false; post-confirmation/navigation and `My appointments` button-first UX have real Dummy Test handset evidence; in-session rating button-first UX is production-live but awaits a genuine applicable handset journey; booking/staff templates are approved; seven lifecycle templates are pending; #567 remains handset-evidence gated before cancellation.
 
 **Highest-priority state:** 🟠 **WAITING — Meta provider review of the seven submitted lifecycle templates.**
 
-**Highest-priority genuinely actionable item while Meta is blocked:** 🔵 **ACTIVE — continue button-first client UX consistency in the in-session customer-experience/rating flow without enabling the pending follow-up-v2 template.**
+**Highest-priority genuinely actionable item while Meta is blocked:** continue read-only button-first consistency audit and minor safe UX housekeeping; do not manufacture evidence-gated journeys. Google Contacts remains the next separate lower-priority READY workstream.
 
 **Authorization:** apply the new-chat authorization model, automatic-continuation rule, provider lead-time rule, and button-first rule. Evidence gates remain fail-closed.
