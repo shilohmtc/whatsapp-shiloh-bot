@@ -1,5 +1,9 @@
 const axios = require('axios');
 const { discoverWabaId } = require('./birthdayTemplateProvisioning');
+const {
+  TEMPLATE_NAME: REMINDER_TEMPLATE_NAME,
+  buildReminderActionTemplateDefinition,
+} = require('./reminderActionTemplateProvisioning');
 
 const GRAPH_VERSION = 'v23.0';
 const TEMPLATE_LANGUAGE = 'en';
@@ -7,14 +11,9 @@ const TEMPLATE_CATEGORY = 'UTILITY';
 
 const DEFINITIONS = Object.freeze({
   reminder_actions: {
-    name: 'shiloh_appointment_reminder_actions_v1',
+    name: REMINDER_TEMPLATE_NAME,
     env: 'WHATSAPP_REMINDER_ACTIONS_TEMPLATE',
-    body: 'Hi {{1}}, a reminder of your Shiloh appointment. 🌿\n\n✨ Service: {{2}}\n📅 Date: {{3}}\n🕐 Time: {{4}}\n\nNeed to make a change? Use an option below.',
-    example: [['Christel', 'HIFU', 'Friday, 21 August 2026', '10:00']],
-    buttons: [
-      { type: 'QUICK_REPLY', text: 'Reschedule' },
-      { type: 'QUICK_REPLY', text: 'Cancel booking' },
-    ],
+    build: buildReminderActionTemplateDefinition,
   },
   reschedule_confirmation: {
     name: 'shiloh_reschedule_confirmation_v1',
@@ -47,9 +46,13 @@ function graphConfig() {
 function buildDefinition(key) {
   const item = DEFINITIONS[key];
   if (!item) throw new Error(`Unknown lifecycle template: ${key}`);
-  const components = [{ type: 'BODY', text: item.body, example: { body_text: item.example } }];
-  if (item.buttons) components.push({ type: 'BUTTONS', buttons: item.buttons });
-  return { name: item.name, language: TEMPLATE_LANGUAGE, category: TEMPLATE_CATEGORY, components };
+  if (typeof item.build === 'function') return item.build();
+  return {
+    name: item.name,
+    language: TEMPLATE_LANGUAGE,
+    category: TEMPLATE_CATEGORY,
+    components: [{ type: 'BODY', text: item.body, example: { body_text: item.example } }],
+  };
 }
 
 function sanitize(template) {
@@ -61,6 +64,15 @@ function sanitize(template) {
     category: template.category || null,
     language: template.language || null,
   };
+}
+
+function isSafeToEnable(provider, configuredTemplateName, expectedTemplateName) {
+  return Boolean(
+    provider
+    && provider.status === 'APPROVED'
+    && provider.name === expectedTemplateName
+    && configuredTemplateName === expectedTemplateName
+  );
 }
 
 async function listProviderTemplates(wabaId) {
@@ -76,13 +88,15 @@ async function getClientLifecycleTemplateStatus() {
   if (!wabaId) return { ok: false, reason: 'waba_not_discovered', templates: [] };
   const providerTemplates = await listProviderTemplates(wabaId);
   const templates = Object.entries(DEFINITIONS).map(([key, item]) => {
-    const provider = providerTemplates.find((candidate) => candidate?.name === item.name) || null;
+    const rawProvider = providerTemplates.find((candidate) => candidate?.name === item.name) || null;
+    const provider = sanitize(rawProvider);
+    const configuredTemplateName = process.env[item.env] || null;
     return {
       key,
       templateName: item.name,
-      configuredTemplateName: process.env[item.env] || null,
-      provider: sanitize(provider),
-      safeToEnable: provider?.status === 'APPROVED' && process.env[item.env] === item.name,
+      configuredTemplateName,
+      provider,
+      safeToEnable: isSafeToEnable(provider, configuredTemplateName, item.name),
       definition: buildDefinition(key),
     };
   });
@@ -121,6 +135,7 @@ module.exports = {
   TEMPLATE_LANGUAGE,
   TEMPLATE_CATEGORY,
   buildDefinition,
+  isSafeToEnable,
   getClientLifecycleTemplateStatus,
   submitClientLifecycleTemplate,
 };
