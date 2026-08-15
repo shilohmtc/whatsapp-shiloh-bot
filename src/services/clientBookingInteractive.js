@@ -12,6 +12,9 @@ const CLIENT_BOOKING_BUTTON_COMMANDS = Object.freeze({
   client_booking_cancel: 'cancel',
   client_reschedule_booking: 'RESCHEDULE',
   client_cancel_booking: 'CANCEL',
+  client_postbook_book_another: 'booking',
+  client_postbook_my_appointments: 'my appointments',
+  client_postbook_main_menu: 'main menu',
 });
 
 function commandForClientBookingButton(id = '') {
@@ -122,6 +125,14 @@ function confirmationInteractive(intent) {
   };
 }
 
+function postConfirmationButtons() {
+  return [
+    { id: 'client_postbook_book_another', title: 'Book another' },
+    { id: 'client_postbook_my_appointments', title: 'My appointments' },
+    { id: 'client_postbook_main_menu', title: 'Main menu' },
+  ];
+}
+
 function decorateClientBookingResult(result) {
   if (!result?.handled || !result.intent) return result;
   const intent = result.intent;
@@ -174,6 +185,7 @@ module.exports = {
   dateInteractive,
   timeInteractive,
   confirmationInteractive,
+  postConfirmationButtons,
   decorateClientBookingResult,
   practitionerRequiredInteractive,
   treatmentTeamLines,
