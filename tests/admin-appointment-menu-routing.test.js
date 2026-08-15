@@ -5,10 +5,12 @@ const path = require('node:path');
 
 const byDatePath=path.join(__dirname,'..','src','services','adminAppointmentsByDate.js');
 const menuPath=path.join(__dirname,'..','src','services','adminAppointmentsMenu.js');
+const mobileMenuPath=path.join(__dirname,'..','src','services','adminMobileMenu.js');
 const buttonsPath=path.join(__dirname,'..','src','services','adminEarningsButtons.js');
 const webhookPath=path.join(__dirname,'..','src','controllers','webhookController.js');
 const source=fs.readFileSync(byDatePath,'utf8');
 const menu=fs.readFileSync(menuPath,'utf8');
+const mobileMenu=fs.readFileSync(mobileMenuPath,'utf8');
 const buttons=fs.readFileSync(buttonsPath,'utf8');
 const webhook=fs.readFileSync(webhookPath,'utf8');
 const { relativeCommand,lastWeekBounds }=require(byDatePath);
@@ -37,6 +39,10 @@ test('every advertised Appointments list action has a stable normalized route',(
   assert.doesNotMatch(menu,/id: 'today'/);
   assert.doesNotMatch(menu,/id: 'tomorrow'/);
   assert.doesNotMatch(menu,/Demo Client is isolated training data/);
+});
+
+test('literal Admin is a canonical top-level admin menu entry command',()=>{
+  assert.match(mobileMenu,/\['menu','admin menu','home','admin'\]\.includes\(v\)\|\|isGreeting\(raw\)/);
 });
 
 test('last week is a completed seven-day week',()=>{
