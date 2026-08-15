@@ -9,13 +9,18 @@ const DEFINITIONS = Object.freeze({
   reminder_actions: { name: REMINDER_TEMPLATE_NAME, env: 'WHATSAPP_REMINDER_ACTIONS_TEMPLATE', build: buildReminderActionTemplateDefinition },
   reschedule_confirmation: { name: 'shiloh_reschedule_confirmation_v1', env: 'WHATSAPP_RESCHEDULE_CONFIRMATION_TEMPLATE', body: 'Hi {{1}}, your Shiloh appointment has been rescheduled. 🌿\n\n✨ Service: {{2}}\n👤 With: {{3}}\n📅 New date: {{4}}\n🕐 New time: {{5}}\n\nReply RESCHEDULE or CANCEL if you need another change.', example: [['Christel', 'HIFU', 'Marietjie', 'Friday, 21 August 2026', '10:00']] },
   cancellation_confirmation: { name: 'shiloh_cancellation_confirmation_v1', env: 'WHATSAPP_CANCELLATION_CONFIRMATION_TEMPLATE', body: 'Hi {{1}}, your Shiloh appointment has been cancelled.\n\n✨ Service: {{2}}\n📅 Date: {{3}}\n🕐 Time: {{4}}\nBooking #{{5}}\n\nReply BOOK if you would like to make another appointment. 🌿', example: [['Christel', 'HIFU', 'Friday, 21 August 2026', '10:00', '567']] },
+  booking_approval_request: { name: 'shiloh_booking_approval_request_v1', env: 'WHATSAPP_BOOKING_APPROVAL_REQUEST_TEMPLATE', body: 'Booking approval required.\n\nClient: {{1}}\nTreatment: {{2}}\nWith: {{3}}\nTime: {{4}}\nBooking #{{5}}\n\nThis time is being held until an authorized approver approves or declines the request.', example: [['Pa Derik', 'MediHeel Pedicure', 'Christel', 'Friday, 21 August 2026 at 10:00', '567']], buttons: ['Approve', 'Decline'] },
+  booking_declined: { name: 'shiloh_booking_declined_v1', env: 'WHATSAPP_BOOKING_DECLINED_TEMPLATE', body: 'Hi {{1}}, your Shiloh booking request could not be confirmed.\n\n✨ Service: {{2}}\n📅 Requested time: {{3}}\nBooking #{{4}}\n\nThe held time has been released and nothing is booked. You can choose another available time whenever you are ready. 🌿', example: [['Pa Derik', 'MediHeel Pedicure', 'Friday, 21 August 2026 at 10:00', '567']], buttons: ['Book another time'] },
+  booking_approval_outcome: { name: 'shiloh_booking_approval_outcome_v1', env: 'WHATSAPP_BOOKING_APPROVAL_OUTCOME_TEMPLATE', body: 'Booking request update.\n\n{{1}} — {{2}} — {{3}}\n{{4}} has {{5}} the request.\nBooking #{{6}}\n\nThe first valid decision is final for this request.', example: [['Client Name', 'Treatment', 'Friday, 21 August 2026 at 10:00', 'Christel', 'approved', '567']] },
 });
 function graphUrl(path) { return `https://graph.facebook.com/${GRAPH_VERSION}/${String(path).replace(/^\//, '')}`; }
 function graphConfig() { return { headers: { Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`, 'Content-Type': 'application/json' }, timeout: 15000 }; }
 function buildDefinition(key) {
   const item = DEFINITIONS[key]; if (!item) throw new Error(`Unknown lifecycle template: ${key}`);
   if (typeof item.build === 'function') return item.build();
-  return { name: item.name, language: TEMPLATE_LANGUAGE, category: TEMPLATE_CATEGORY, components: [{ type: 'BODY', text: item.body, example: { body_text: item.example } }] };
+  const components = [{ type: 'BODY', text: item.body, example: { body_text: item.example } }];
+  if (item.buttons) components.push({ type: 'BUTTONS', buttons: item.buttons.map((text) => ({ type: 'QUICK_REPLY', text })) });
+  return { name: item.name, language: TEMPLATE_LANGUAGE, category: TEMPLATE_CATEGORY, components };
 }
 function sanitize(template) { return template ? { id: template.id || null, name: template.name || null, status: template.status || null, category: template.category || null, language: template.language || null } : null; }
 function isSafeToEnable(provider, configuredTemplateName, expectedTemplateName) { return Boolean(provider && provider.status === 'APPROVED' && provider.name === expectedTemplateName && configuredTemplateName === expectedTemplateName); }
