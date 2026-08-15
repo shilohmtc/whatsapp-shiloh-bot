@@ -4,9 +4,9 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const interactivePath = path.join(__dirname, '..', 'src', 'services', 'adminInteractiveMenu.js');
-const mobilePath = path.join(__dirname, '..', 'src', 'services', 'adminMobileMenu.js');
+const bookingUpdatePath = path.join(__dirname, '..', 'src', 'services', 'adminBookingUpdate.js');
 const interactiveSource = fs.readFileSync(interactivePath, 'utf8');
-const mobileSource = fs.readFileSync(mobilePath, 'utf8');
+const bookingUpdateSource = fs.readFileSync(bookingUpdatePath, 'utf8');
 const { actionForLabel } = require(interactivePath);
 
 test('Finalize past visits is a canonical action in the current Appointments section', () => {
@@ -16,12 +16,12 @@ test('Finalize past visits is a canonical action in the current Appointments sec
   assert.equal(action.command, 'Finalize past appointments');
 });
 
-test('Admin home/menu/greeting escape runs before stale guided booking flows', () => {
-  const escapeIndex = mobileSource.indexOf("if(['menu','admin menu','home'].includes(v)||isGreeting(raw))");
-  const staleFlowIndex = mobileSource.indexOf('const bookingUpdateFlow=await processAdminBookingUpdateMessage');
-  assert.ok(escapeIndex >= 0, 'admin escape handler is missing');
-  assert.ok(staleFlowIndex >= 0, 'booking update flow hook is missing');
-  assert.ok(escapeIndex < staleFlowIndex, 'stale guided flow can intercept Admin/Menu/Hi before the home escape');
+test('Admin/Menu/Hi escape clears a stale Manage booking session before numeric prompting', () => {
+  const escapeIndex = bookingUpdateSource.indexOf("if(['menu','admin menu','home','admin'].includes(n)");
+  const numericPromptIndex = bookingUpdateSource.indexOf("Please send the numeric Shiloh appointment number.");
+  assert.ok(escapeIndex >= 0, 'stale Manage booking escape is missing');
+  assert.ok(numericPromptIndex >= 0, 'numeric appointment prompt is missing');
+  assert.ok(escapeIndex < numericPromptIndex, 'stale Manage booking can still intercept Admin/Menu/Hi before escape');
 });
 
 test('section refresh fails closed when role-scoped menu has no interactive body', () => {
