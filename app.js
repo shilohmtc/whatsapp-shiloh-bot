@@ -37,6 +37,7 @@ const { startMandatoryDemoCleanupScheduler } = require("./src/services/demoManda
 const { startAttendanceFinalizationReminderScheduler } = require("./src/services/attendanceFinalizationReminders");
 const { submitStaffFinalizationTemplate } = require("./src/services/staffFinalizationTemplateProvisioning");
 const { submitBookingConfirmationTemplate } = require("./src/services/bookingConfirmationTemplateProvisioning");
+const { getClientLifecycleTemplateStatus, submitClientLifecycleTemplate } = require("./src/services/clientLifecycleTemplateProvisioning");
 
 const app = express();
 app.disable("x-powered-by");
@@ -99,6 +100,31 @@ async function provisionBookingConfirmationTemplateSafely() {
   }
 }
 
+async function provisionClientLifecycleTemplatesIfExplicitlyEnabled() {
+  if (String(process.env.META_LIFECYCLE_PROVISION_ON_START || '').toLowerCase() !== 'true') return;
+  try {
+    const before = await getClientLifecycleTemplateStatus();
+    if (!before?.ok) {
+      logger.warn({ reason: before?.reason || null }, "Client lifecycle template one-shot provisioning skipped");
+      return;
+    }
+    const keys = ['reminder_actions', 'reschedule_confirmation', 'cancellation_confirmation'];
+    const results = [];
+    for (const key of keys) {
+      const existing = before.templates.find((item) => item.key === key)?.provider;
+      if (existing) {
+        results.push({ key, submitted: false, reason: 'already_exists', providerStatus: existing.status || null });
+        continue;
+      }
+      const result = await submitClientLifecycleTemplate(key);
+      results.push({ key, submitted: result?.submitted === true, reason: result?.reason || null, providerStatus: result?.provider?.status || null });
+    }
+    logger.info({ results }, "Client lifecycle template one-shot provisioning completed");
+  } catch (error) {
+    logger.error({ err: error, metaError: error.response?.data?.error }, "Client lifecycle template one-shot provisioning failed");
+  }
+}
+
 const PORT = process.env.PORT || 3000;
 let server;
 async function start() {
@@ -111,6 +137,7 @@ async function start() {
   logger.info(mediHeelOwnership, "Christel MediHeel ownership verified");
   await provisionStaffFinalizationTemplateSafely();
   await provisionBookingConfirmationTemplateSafely();
+  await provisionClientLifecycleTemplatesIfExplicitlyEnabled();
   server = app.listen(PORT, () => {
     logger.info({ port: PORT }, "Shiloh started");
     startConversationSessionCleanupScheduler();
