@@ -4,7 +4,11 @@ const assert = require('node:assert/strict');
 const {
   DEFINITIONS,
   buildDefinition,
+  isSafeToEnable,
 } = require('../src/services/clientLifecycleTemplateProvisioning');
+const {
+  buildReminderActionTemplateDefinition,
+} = require('../src/services/reminderActionTemplateProvisioning');
 
 test('lifecycle package defines reminder, reschedule and cancellation templates', () => {
   assert.deepEqual(Object.keys(DEFINITIONS), [
@@ -24,6 +28,13 @@ test('all lifecycle definitions are English utility templates', () => {
   }
 });
 
+test('reminder actions uses the existing canonical reminder template definition', () => {
+  assert.deepEqual(
+    buildDefinition('reminder_actions'),
+    buildReminderActionTemplateDefinition()
+  );
+});
+
 test('reminder actions template preserves reschedule and cancellation quick replies', () => {
   const definition = buildDefinition('reminder_actions');
   const buttons = definition.components.find((component) => component.type === 'BUTTONS');
@@ -31,6 +42,17 @@ test('reminder actions template preserves reschedule and cancellation quick repl
     { type: 'QUICK_REPLY', text: 'Reschedule' },
     { type: 'QUICK_REPLY', text: 'Cancel booking' },
   ]);
+});
+
+test('provider status gate stays closed unless approval and configuration both exactly match', () => {
+  const expected = 'shiloh_reschedule_confirmation_v1';
+  assert.equal(isSafeToEnable(null, expected, expected), false);
+  assert.equal(isSafeToEnable({ name: expected, status: 'PENDING' }, expected, expected), false);
+  assert.equal(isSafeToEnable({ name: expected, status: 'REJECTED' }, expected, expected), false);
+  assert.equal(isSafeToEnable({ name: expected, status: 'APPROVED' }, null, expected), false);
+  assert.equal(isSafeToEnable({ name: expected, status: 'APPROVED' }, 'wrong_template', expected), false);
+  assert.equal(isSafeToEnable({ name: 'wrong_template', status: 'APPROVED' }, expected, expected), false);
+  assert.equal(isSafeToEnable({ name: expected, status: 'APPROVED' }, expected, expected), true);
 });
 
 test('unknown lifecycle template fails closed', () => {
