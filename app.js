@@ -10,7 +10,6 @@ const clientFamilyService = require("./src/services/clientServiceFamilyDiscovery
 const appointmentChangeService = require("./src/services/appointmentChange");
 
 validateEnv();
-
 const processClientServiceFamilyMessage = clientFamilyService.processClientServiceFamilyMessage;
 clientFamilyService.processClientServiceFamilyMessage = async (...args) => presentClientFamilyResult(await processClientServiceFamilyMessage(...args));
 const processAppointmentChangeMessage = appointmentChangeService.processAppointmentChangeMessage;
@@ -37,125 +36,39 @@ const { startMandatoryDemoCleanupScheduler } = require("./src/services/demoManda
 const { startAttendanceFinalizationReminderScheduler } = require("./src/services/attendanceFinalizationReminders");
 const { submitStaffFinalizationTemplate } = require("./src/services/staffFinalizationTemplateProvisioning");
 const { submitBookingConfirmationTemplate } = require("./src/services/bookingConfirmationTemplateProvisioning");
-const { getClientLifecycleTemplateStatus, submitClientLifecycleTemplate } = require("./src/services/clientLifecycleTemplateProvisioning");
+const { DEFINITIONS: CLIENT_LIFECYCLE_TEMPLATE_DEFINITIONS, getClientLifecycleTemplateStatus, submitClientLifecycleTemplate } = require("./src/services/clientLifecycleTemplateProvisioning");
 
 const app = express();
 app.disable("x-powered-by");
 app.use(express.json({ limit: "2mb" }));
 app.use(requestContext);
-app.use("/assets/service-images", express.static(path.join(__dirname, "public", "service-images"), {
-  maxAge: "30d",
-  immutable: true,
-}));
+app.use("/assets/service-images", express.static(path.join(__dirname, "public", "service-images"), { maxAge: "30d", immutable: true }));
 app.get("/", (req, res) => res.status(200).json({ service: "shiloh-whatsapp-bot", status: "running" }));
-app.get("/health", async (req, res) => {
-  const ok = await checkDatabase();
-  return res.status(ok ? 200 : 503).json({ status: ok ? "ok" : "degraded", database: ok ? "ok" : "unavailable", timestamp: new Date().toISOString() });
-});
-app.use("/audit-read", auditReadRoutes);
-app.use("/admin/privacy", privacyRoutes);
-app.use("/admin", adminRoutes);
-app.use("/calendar", calendarRoutes);
-app.use("/", serviceRoutes);
-app.use("/", walkinRoutes);
-app.use("/", bookRoutes);
-app.use("/", webhookRoutes);
-app.use((err, req, res, next) => {
-  const log = req.log || logger;
-  log.error({ err }, "Unhandled Express error");
-  if (res.headersSent) return next(err);
-  return res.status(500).json({ error: "Internal server error", requestId: req.id });
-});
+app.get("/health", async (req, res) => { const ok = await checkDatabase(); return res.status(ok ? 200 : 503).json({ status: ok ? "ok" : "degraded", database: ok ? "ok" : "unavailable", timestamp: new Date().toISOString() }); });
+app.use("/audit-read", auditReadRoutes); app.use("/admin/privacy", privacyRoutes); app.use("/admin", adminRoutes); app.use("/calendar", calendarRoutes); app.use("/", serviceRoutes); app.use("/", walkinRoutes); app.use("/", bookRoutes); app.use("/", webhookRoutes);
+app.use((err, req, res, next) => { const log = req.log || logger; log.error({ err }, "Unhandled Express error"); if (res.headersSent) return next(err); return res.status(500).json({ error: "Internal server error", requestId: req.id }); });
 
-async function provisionStaffFinalizationTemplateSafely() {
-  try {
-    const result = await submitStaffFinalizationTemplate();
-    logger.info({
-      ok: result?.ok === true,
-      submitted: result?.submitted === true,
-      reason: result?.reason || null,
-      templateName: result?.templateName || null,
-      providerStatus: result?.provider?.status || result?.template?.status || null,
-      providerCategory: result?.provider?.category || result?.template?.category || null,
-    }, "Staff finalization WhatsApp template provisioning checked");
-  } catch (error) {
-    logger.warn({ err: error }, "Staff finalization WhatsApp template provisioning failed; reminders remain fail-closed");
-  }
-}
-
-async function provisionBookingConfirmationTemplateSafely() {
-  try {
-    const result = await submitBookingConfirmationTemplate();
-    logger.info({
-      ok: result?.ok === true,
-      submitted: result?.submitted === true,
-      reason: result?.reason || null,
-      templateName: result?.templateName || null,
-      configuredTemplateName: result?.configuredTemplateName || null,
-      providerStatus: result?.provider?.status || result?.template?.status || null,
-      providerCategory: result?.provider?.category || result?.template?.category || null,
-    }, "Booking confirmation WhatsApp template provisioning checked");
-  } catch (error) {
-    logger.warn({ err: error }, "Booking confirmation WhatsApp template provisioning failed; plain-text confirmation remains active");
-  }
-}
-
+async function provisionStaffFinalizationTemplateSafely() { try { const result = await submitStaffFinalizationTemplate(); logger.info({ ok: result?.ok === true, submitted: result?.submitted === true, reason: result?.reason || null, templateName: result?.templateName || null, providerStatus: result?.provider?.status || result?.template?.status || null, providerCategory: result?.provider?.category || result?.template?.category || null }, "Staff finalization WhatsApp template provisioning checked"); } catch (error) { logger.warn({ err: error }, "Staff finalization WhatsApp template provisioning failed; reminders remain fail-closed"); } }
+async function provisionBookingConfirmationTemplateSafely() { try { const result = await submitBookingConfirmationTemplate(); logger.info({ ok: result?.ok === true, submitted: result?.submitted === true, reason: result?.reason || null, templateName: result?.templateName || null, configuredTemplateName: result?.configuredTemplateName || null, providerStatus: result?.provider?.status || result?.template?.status || null, providerCategory: result?.provider?.category || result?.template?.category || null }, "Booking confirmation WhatsApp template provisioning checked"); } catch (error) { logger.warn({ err: error }, "Booking confirmation WhatsApp template provisioning failed; plain-text confirmation remains active"); } }
 async function provisionClientLifecycleTemplatesIfExplicitlyEnabled() {
   if (String(process.env.META_LIFECYCLE_PROVISION_ON_START || '').toLowerCase() !== 'true') return;
   try {
     const before = await getClientLifecycleTemplateStatus();
-    if (!before?.ok) {
-      logger.warn({ reason: before?.reason || null }, "Client lifecycle template one-shot provisioning skipped");
-      return;
-    }
-    const keys = ['reminder_actions', 'reschedule_confirmation', 'cancellation_confirmation'];
-    const results = [];
-    for (const key of keys) {
-      const existing = before.templates.find((item) => item.key === key)?.provider;
-      if (existing) {
-        results.push({ key, submitted: false, reason: 'already_exists', providerStatus: existing.status || null });
-        continue;
-      }
-      const result = await submitClientLifecycleTemplate(key);
-      results.push({ key, submitted: result?.submitted === true, reason: result?.reason || null, providerStatus: result?.provider?.status || null });
-    }
+    if (!before?.ok) { logger.warn({ reason: before?.reason || null }, "Client lifecycle template one-shot provisioning skipped"); return; }
+    const keys = Object.keys(CLIENT_LIFECYCLE_TEMPLATE_DEFINITIONS); const results = [];
+    for (const key of keys) { const existing = before.templates.find((item) => item.key === key)?.provider; if (existing) { results.push({ key, submitted: false, reason: 'already_exists', providerStatus: existing.status || null }); continue; } const result = await submitClientLifecycleTemplate(key); results.push({ key, submitted: result?.submitted === true, reason: result?.reason || null, providerStatus: result?.provider?.status || null }); }
     logger.info({ results }, "Client lifecycle template one-shot provisioning completed");
-  } catch (error) {
-    logger.error({ err: error, metaError: error.response?.data?.error }, "Client lifecycle template one-shot provisioning failed");
-  }
+  } catch (error) { logger.error({ err: error, metaError: error.response?.data?.error }, "Client lifecycle template one-shot provisioning failed"); }
 }
 
-const PORT = process.env.PORT || 3000;
-let server;
+const PORT = process.env.PORT || 3000; let server;
 async function start() {
-  const demoAccess = await ensureDemoClientPermissions();
-  logger.info(demoAccess, "Controlled demo client production UI disabled");
-  const jeanPierreAccess = await ensureJeanPierreAdminCapabilities();
-  if (!jeanPierreAccess) throw new Error('Jean-Pierre business admin capability clone could not be initialized');
-  logger.info({ configured: true, businessRole: jeanPierreAccess.business_role }, "Jean-Pierre business admin access verified");
-  const mediHeelOwnership = await ensureChristelMediHeelOwnership();
-  logger.info(mediHeelOwnership, "Christel MediHeel ownership verified");
-  await provisionStaffFinalizationTemplateSafely();
-  await provisionBookingConfirmationTemplateSafely();
-  await provisionClientLifecycleTemplatesIfExplicitlyEnabled();
-  server = app.listen(PORT, () => {
-    logger.info({ port: PORT }, "Shiloh started");
-    startConversationSessionCleanupScheduler();
-    startTemporarySessionCleanupScheduler();
-    startGoogleBusinessProfileSyncScheduler();
-    startAppointmentLifecycleScheduler();
-    startCustomerCareScheduler();
-    startBookingIntegrityScheduler();
-    startMandatoryDemoCleanupScheduler();
-    startAttendanceFinalizationReminderScheduler();
-  });
+  const demoAccess = await ensureDemoClientPermissions(); logger.info(demoAccess, "Controlled demo client production UI disabled");
+  const jeanPierreAccess = await ensureJeanPierreAdminCapabilities(); if (!jeanPierreAccess) throw new Error('Jean-Pierre business admin capability clone could not be initialized'); logger.info({ configured: true, businessRole: jeanPierreAccess.business_role }, "Jean-Pierre business admin access verified");
+  const mediHeelOwnership = await ensureChristelMediHeelOwnership(); logger.info(mediHeelOwnership, "Christel MediHeel ownership verified");
+  await provisionStaffFinalizationTemplateSafely(); await provisionBookingConfirmationTemplateSafely(); await provisionClientLifecycleTemplatesIfExplicitlyEnabled();
+  server = app.listen(PORT, () => { logger.info({ port: PORT }, "Shiloh started"); startConversationSessionCleanupScheduler(); startTemporarySessionCleanupScheduler(); startGoogleBusinessProfileSyncScheduler(); startAppointmentLifecycleScheduler(); startCustomerCareScheduler(); startBookingIntegrityScheduler(); startMandatoryDemoCleanupScheduler(); startAttendanceFinalizationReminderScheduler(); });
 }
 start().catch((error) => { logger.fatal({ err: error }, "Shiloh failed during startup"); process.exit(1); });
-function shutdown(signal) {
-  logger.info({ signal }, "Shutting down Shiloh");
-  if (!server) return process.exit(0);
-  server.close(() => { logger.info("HTTP server closed"); process.exit(0); });
-  setTimeout(() => { logger.error("Forced shutdown after timeout"); process.exit(1); }, 10000).unref();
-}
-process.on("SIGTERM", () => shutdown("SIGTERM"));
-process.on("SIGINT", () => shutdown("SIGINT"));
+function shutdown(signal) { logger.info({ signal }, "Shutting down Shiloh"); if (!server) return process.exit(0); server.close(() => { logger.info("HTTP server closed"); process.exit(0); }); setTimeout(() => { logger.error("Forced shutdown after timeout"); process.exit(1); }, 10000).unref(); }
+process.on("SIGTERM", () => shutdown("SIGTERM")); process.on("SIGINT", () => shutdown("SIGINT"));
