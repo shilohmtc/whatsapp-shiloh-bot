@@ -212,8 +212,8 @@ async function sendWhatsAppTemplate(to, templateName, bodyParameters = [], langu
   if (!templateName) {
     throw new Error("WhatsApp template name is required");
   }
-  if (!Array.isArray(quickReplyPayloads) || quickReplyPayloads.length > 3) {
-    throw new Error("WhatsApp template quick replies require zero to three payloads");
+  if (!Array.isArray(quickReplyPayloads) || quickReplyPayloads.length > 5) {
+    throw new Error("WhatsApp template quick replies require zero to five payloads");
   }
 
   const components = [];
