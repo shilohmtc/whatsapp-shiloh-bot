@@ -8,12 +8,16 @@ const { presentClientFamilyResult } = require("./src/presentation/clientFamilyPr
 const { presentClientAppointmentChangeResult } = require("./src/presentation/clientAppointmentChangePresentation");
 const clientFamilyService = require("./src/services/clientServiceFamilyDiscovery");
 const appointmentChangeService = require("./src/services/appointmentChange");
+const clientIdentityService = require("./src/services/clientIdentityOnboarding");
+const clientDiscoveryService = require("./src/services/clientDiscoveryMenu");
+const { installClientNavigationPriority } = require("./src/services/clientNavigationPriority");
 
 validateEnv();
 const processClientServiceFamilyMessage = clientFamilyService.processClientServiceFamilyMessage;
 clientFamilyService.processClientServiceFamilyMessage = async (...args) => presentClientFamilyResult(await processClientServiceFamilyMessage(...args));
 const processAppointmentChangeMessage = appointmentChangeService.processAppointmentChangeMessage;
 appointmentChangeService.processAppointmentChangeMessage = async (...args) => presentClientAppointmentChangeResult(await processAppointmentChangeMessage(...args));
+installClientNavigationPriority({ identityService: clientIdentityService, discoveryService: clientDiscoveryService });
 
 const webhookRoutes = require("./src/routes/webhook");
 const adminRoutes = require("./src/routes/admin");
