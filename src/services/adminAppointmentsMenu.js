@@ -24,6 +24,11 @@ function appointmentsInteractive(admin) {
       title: isBusinessWide(admin) ? "Last week's clients" : 'My clients last week',
       description: 'View the previous Monday–Sunday',
     });
+    rows.push({
+      id: 'admin_action_pending_approvals',
+      title: 'Pending approvals',
+      description: 'Review held requests and safely resend approval',
+    });
   }
   if (has(admin, 'appointment:create')) {
     rows.push({
