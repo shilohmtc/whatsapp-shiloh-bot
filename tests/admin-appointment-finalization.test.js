@@ -25,6 +25,12 @@ test('visibility remains scoped to past non-final appointments', () => {
   assert.match(finalization, /calendar_scope === 'all_business'/);
 });
 
+test('finalization pagination reserves WhatsApp rows for More and Back controls', () => {
+  assert.match(finalization, /const PAGE_SIZE = 8;/);
+  assert.match(finalization, /if \(data\.hasNext\) rows\.push/);
+  assert.match(finalization, /rows\.push\(\{ id: 'appointments'/);
+});
+
 test('certification authority is practitioner-owned with Christel supervisory scope only', () => {
   assert.match(authority, /name === 'christel'/);
   assert.match(authority, /IN \('christel','abigail'\)/);
