@@ -7,13 +7,11 @@ Purpose: permanent current-state project-management source of truth. Historical 
 
 Operational truth is GitHub `main`, Render production, Shiloh CRM, Google Calendar and explicit real WhatsApp/human evidence. Never infer provider, attendance, approval, CRM or Calendar state.
 
-Current application-code baseline: **PR #227** squash merge `4253f3404afca8e8245e2a4f6413d0aedf5c599f`. Render production deploy **`dep-d9vvvgh42hec739k6k60`** was independently verified **live** on 2026-08-15 with fresh `/health` 200 responses.
+Current application-code baseline: **PR #229** squash merge `36bf3687c8393bbc03e9406367f8afcbf15fa080`. Render production deploy **`dep-da004j8u01pc73epn00g`** is verified **live** on 2026-08-15.
 
 Approval policy remains: Marietjie self; Christel self; Abigail may be approved by Abigail or Christel, first valid decision authoritative. Dummy Test uses JP admin account alone. Pending holds have no automatic expiry. MediHeel remains Christel only.
 
 ## Canonical project status taxonomy
-
-Use exactly these lifecycle states in current operational documentation:
 
 - 🟢 **VERIFIED** — completed with sufficient authoritative evidence.
 - 🔵 **ACTIVE** — work currently being executed.
@@ -35,27 +33,26 @@ Before beginning substantial engineering or any new controlled production mutati
 
 Read-only verification, diagnostics, reconciliation, documentation/status maintenance and clearly requested minor housekeeping may proceed without another approval gate.
 
-## Active operational gate — Attendance finalization
+## Attendance finalization — 🟢 VERIFIED for the 2026-08-14 reminder cohort
 
-### Attendance truth — 🟠 WAITING
+Real staff reminder evidence on 2026-08-14 identified **2 Shiloh visits for clinic date 2026-08-14 requiring finalization**. Attendance was never inferred.
 
-Real staff reminder evidence on 2026-08-14 showed **2 Shiloh visits for clinic date 2026-08-14 require finalization**. The reminder was sent at approximately 19:06 SAST as an end-of-day reminder, so its phrase `from today` was correct at send time.
+The real WhatsApp journey exposed and then verified repair of three production defects:
 
-**Critical rule:** attendance is never inferred. Neither visit may be marked **Completed** or **No-show** without explicit authorized human truth.
+- **PR #226** — stale Manage-booking state interception, missing Finalize-past-visits discoverability, and unsafe section refresh. Intentional red CI #635 → green CI #638.
+- **PR #227** — literal `Admin` failed to enter the canonical interactive Admin home. Intentional red CI #640 → green CI #642.
+- **PR #229** — Finalize-past-visits could render 11 WhatsApp rows (9 visits + More + Back), exceeding Meta's 10-row limit. Repaired to reserve navigation rows: 8 visits + More + Back = maximum 10. Green CI #648; production deploy `dep-da004j8u01pc73epn00g` live.
 
-### Admin finalization navigation — 🔵 ACTIVE real-WhatsApp verification
+Real WhatsApp production evidence then proved the complete workflow:
 
-A real Christel WhatsApp test exposed multiple Admin-navigation defects before attendance could be reviewed. These were repaired self-test-first:
+- `Admin → Appointments → Finalize past visits` opened successfully and displayed the authorized unresolved backlog.
+- **#562 — Zane Maree — Full Body Swedish — Abigail — 2026-08-14 15:00:** Christel explicitly confirmed **Completed**; Shiloh returned `Appointment #562 marked Completed`.
+- **#357 — Buhle Zulu — 2026-08-14 12:15:** Christel intentionally selected and subsequently explicitly confirmed **No-show**; Shiloh returned `Appointment #357 marked No-show`.
+- A duplicate #357 No-show interaction was rejected with no second update, proving fail-closed stale/duplicate-action handling.
 
-- **PR #226** — fixed stale Manage-booking state intercepting Admin/Menu/Hi; exposed **Finalize past visits** in the current Appointments section; made section refresh fail closed instead of dereferencing a missing interactive body.
-- Self-test-first evidence: intentional red **CI #635** → final green **CI #638**.
-- PR #226 merged as `d4f2c0c0a62e32c90de77fcfe47654c23ae7beaf`; Render deploy `dep-d9vvqd3ncjis738b4ldg` verified live/healthy.
-- A follow-up real WhatsApp test then proved literal **`Admin`** still fell through to the legacy text Admin assistant rather than opening the canonical interactive home.
-- **PR #227** repaired literal `Admin` as a canonical top-level Admin/home escape, including guided-state escape semantics.
-- Self-test-first evidence: intentional red **CI #640**; implementation then exposed one obsolete test expectation; after updating that expectation, full green **CI #642**.
-- PR #227 squash merged as `4253f3404afca8e8245e2a4f6413d0aedf5c599f`; Render deploy `dep-d9vvvgh42hec739k6k60` verified live with fresh `/health` 200.
+The two visits that triggered the 2026-08-14 reminder are therefore resolved with explicit human truth. Older unresolved historical visits remain visible in the backlog and **must not be bulk-finalized or inferred**; each remains human-truth-gated.
 
-**Next evidence step:** real WhatsApp only — send `Admin` → choose `Appointments` → choose `Finalize past visits`, then stop before selecting Completed/No-show and verify the pending visits shown. This is read-only workflow verification until an attendance decision is explicitly made.
+Direct connector-level CRM row read-back remains unavailable while the Render Postgres connector cannot negotiate the database's required SSL/TLS. Do not fabricate row-level read-back. The explicit real WhatsApp canonical-write confirmations are authoritative operational evidence for #562/#357.
 
 ## Real Client Perspective acceptance
 
@@ -63,7 +60,7 @@ A real Christel WhatsApp test exposed multiple Admin-navigation defects before a
 
 Confirmed Sat 15 Aug 2026, 10:45–12:15, Christel + MediHeel. Proven: indefinite hold, JP sole approval, held-slot exclusion, explicit approval, client confirmation and canonical Google Calendar event.
 
-Calendar presentation was explicitly normalized in place without changing event identity, date/time, service, practitioner or booking state. Verified presentation: Client, formatted Mobile, WhatsApp link, Service, Practitioner, and native clinic Location; visible CRM/source clutter removed.
+Calendar presentation was normalized in place without changing event identity, date/time, service, practitioner or booking state. Verified presentation: Client, formatted Mobile, WhatsApp link, Service, Practitioner, and native clinic Location; visible CRM/source clutter removed.
 
 ### #565 reschedule + cancellation — 🟢 VERIFIED
 
@@ -81,8 +78,8 @@ Calendar presentation was explicitly normalized in place without changing event 
 
 - PR #219 decline CTA / friendly policy-date polish — 🟠 **WAITING** for the next genuine applicable WhatsApp journey; do not manufacture a booking solely for proof.
 - PR #222 Calendar staff-contact presentation — 🟢 **VERIFIED** through code/CI/prod plus approved #564 normalization/read-back.
-- MediHeel/pedicure Calendar icon specificity — approved engineering remains unfinished in open PR #225; paused behind the higher-priority attendance operational issue. Resume from its existing self-test-first state; do not duplicate work.
-- Post-confirmation client UX package (**Book another treatment / My appointments / Main menu** plus natural-language equivalents) — explicitly approved, queued behind currently active higher-priority repair/acceptance work. Buttons are primary discoverability; natural language is fallback. Do not start in parallel with an unresolved higher-priority workstream.
+- MediHeel/pedicure Calendar icon specificity — ⚪ **READY**; approved engineering remains unfinished in open PR #225. Resume from its existing self-test-first state; do not duplicate work.
+- Post-confirmation client UX package (**Book another treatment / My appointments / Main menu** plus natural-language equivalents) — ⚪ **READY** and explicitly approved. Buttons are primary discoverability; natural language is fallback. Keep behind the already-started PR #225 until that work is closed.
 
 ## Provider/template and other gated items
 
@@ -96,7 +93,7 @@ Calendar presentation was explicitly normalized in place without changing event 
 
 Production ordinary approval rules still need genuine controlled evidence: Marietjie self-approval; Christel self-approval; Abigail approved by Abigail or Christel with first valid decision authoritative.
 
-Lifecycle state: ⚪ **READY**, but **not the current active item** while the real attendance-finalization workflow is being verified.
+Lifecycle state: ⚪ **READY**.
 
 ## Exact continuation state
 
@@ -104,13 +101,15 @@ Lifecycle state: ⚪ **READY**, but **not the current active item** while the re
 - #564 confirmed 15 Aug 2026 10:45–12:15 Christel + MediHeel — preserve booking semantics.
 - #565 cancelled — never recreate merely for proof.
 - #566 declined/released — never recreate merely for proof.
-- 2 real visits from 2026-08-14 require explicit attendance finalization; no attendance truth may be inferred.
-- PR #226 and #227 repair the Admin path required to reach Finalize past visits; #227 is current production code baseline.
+- #562 explicitly finalized **Completed** from real human truth.
+- #357 intentionally and explicitly finalized **No-show** from real human truth; duplicate replay safely rejected.
+- Older attendance backlog remains unresolved and human-truth-gated; do not infer or bulk-finalize.
+- PR #226/#227/#229 attendance Admin defect chain is repaired and real-WhatsApp verified.
 
-**Authoritative current state:** GitHub `main` application baseline is PR #227 / `4253f340...`; Render deploy `dep-d9vvvgh42hec739k6k60` is live and healthy; attendance decisions remain untouched and human-truth-gated.
+**Authoritative current state:** GitHub `main` application baseline is PR #229 / `36bf3687...`; Render deploy `dep-da004j8u01pc73epn00g` is live; the two 2026-08-14 reminder visits are explicitly finalized; older backlog remains fail-closed.
 
-**Highest-priority actionable item:** 🔵 **ACTIVE — real WhatsApp verification of `Admin → Appointments → Finalize past visits`**, stopping before any Completed/No-show decision.
+**Highest-priority genuinely actionable item:** ⚪ **READY — finish the already-started MediHeel/pedicure Calendar icon specificity PR #225** from its existing self-test-first red state.
 
-**Why this is next:** it closes the live staff-operational defect chain and is prerequisite to safely presenting the two pending 2026-08-14 visits for explicit human attendance truth. Ordinary approval is READY but lower priority until this operational issue is settled.
+**Why this is next:** the higher-priority attendance operational defect chain and the two genuine reminder finalizations are now closed. PR #225 was already approved and started before attendance work interrupted it, so finishing it avoids leaving half-completed engineering before beginning the separately approved post-confirmation UX package.
 
-**Approval state:** the read-only WhatsApp verification is already authorized. Any actual attendance decision requires explicit human truth; any newly discovered substantial defect requires a fresh engineering approval gate.
+**Approval state:** substantial engineering must still stop at the four-part checkpoint and obtain explicit approval before resuming PR #225. Read-only verification and reconciliation remain permitted.
