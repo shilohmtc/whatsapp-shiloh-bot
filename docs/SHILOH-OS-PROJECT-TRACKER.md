@@ -33,26 +33,33 @@ When an already-approved workstream is blocked only by a future authoritative co
 - **Evidence gates:** automation never overrides human truth, provider approval, genuine WhatsApp evidence, attendance, payment, privacy or other explicit fail-closed gates.
 - **Cadence:** use automation only when its available cadence is useful; if the platform's minimum cadence is slower than the expected wait, direct in-chat re-check is preferred.
 
+## Provider lead-time rule
+
+Identify the complete foreseeable WhatsApp template set during feature planning and submit externally approved template work early enough to run in parallel with engineering. Before declaring a template batch complete, check the current roadmap for any other foreseeable business-initiated WhatsApp message that would require provider approval. Do not submit speculative templates for flows whose business rules are not yet approved.
+
 ## Current Product-Critical Gate
 
 🟠 **WAITING — Meta lifecycle template review.**
 
-Current application baseline: **PR #236 / `44cdd7bf9ae2fbef03f4f93c8b6abab4bf9e2e90`**. Render deploy **`dep-da03ab1t0dsc738pm16g`** is live with `META_LIFECYCLE_PROVISION_ON_START=false`.
+Current application baseline: **PR #238 / `0d5f091fb37a7e49166096db1db65642e0d28bf9`** plus governance-only PR #239 on `main`. Render deploy **`dep-da03ub9t0dsc738r5h20`** is live with `META_LIFECYCLE_PROVISION_ON_START=false`.
 
-Provider truth from the controlled one-shot submission:
+Provider truth:
 - `shiloh_booking_confirmation_v1` — 🟢 APPROVED / UTILITY;
 - `shiloh_staff_finalization_v1` — 🟢 APPROVED / UTILITY;
 - `shiloh_appointment_reminder_actions_v1` — 🟠 PENDING;
 - `shiloh_reschedule_confirmation_v1` — 🟠 PENDING;
-- `shiloh_cancellation_confirmation_v1` — 🟠 PENDING.
+- `shiloh_cancellation_confirmation_v1` — 🟠 PENDING;
+- `shiloh_booking_approval_request_v1` — 🟠 PENDING;
+- `shiloh_booking_declined_v1` — 🟠 PENDING;
+- `shiloh_booking_approval_outcome_v1` — 🟠 PENDING.
 
-Do not enable the three pending lifecycle templates until Meta reports the exact expected templates APPROVED and production configuration exactly matches.
+Do not enable any of the six pending lifecycle templates until Meta reports the exact expected templates APPROVED and production configuration exactly matches.
 
 ## At-a-glance
 
 | ID | Workstream | State | Evidence / next action |
 |---|---|---|---|
-| META-LIFECYCLE | Reminder/reschedule/cancel template package | 🟠 WAITING | PR #234 merged; PR #236 merged. Controlled provider submission returned PENDING for all three. Keep fail-closed; read-only status checks only until APPROVED. |
+| META-LIFECYCLE | Foreseeable core lifecycle template package | 🟠 WAITING | PR #234 + #238 merged. Original reminder/reschedule/cancel templates remain PENDING. Second controlled one-shot submitted only booking approval request, booking declined and approval outcome; Meta returned PENDING. Final flag false. Condition-watch covers all six. |
 | META-BOOKING | Booking confirmation template | 🟢 VERIFIED | `shiloh_booking_confirmation_v1` provider-verified APPROVED / UTILITY. |
 | META-STAFF | Staff finalization template | 🟢 VERIFIED | `shiloh_staff_finalization_v1` provider-verified APPROVED / UTILITY. |
 | APP-RESILIENCE | Approval recovery / discoverability | 🟢 VERIFIED | PR #232 complete; Pending approvals + safe resend path production-live. |
@@ -66,11 +73,11 @@ Do not enable the three pending lifecycle templates until Meta reports the exact
 | C1-CANCEL | Canonical cancellation | 🟢 VERIFIED | #565 cancelled; never recreate merely for proof. |
 | C1-CALENDAR-CONTACT | Calendar staff contact presentation | 🟢 VERIFIED | PR #222 accepted. |
 | C1-CALENDAR-ICON | MediHeel/pedicure Calendar icon specificity | 🟢 VERIFIED | PR #225 accepted. |
-| C1-POSTBOOK-UX | Post-confirmation client actions | ⚪ READY | Book another treatment / My appointments / Main menu + natural-language equivalents. Can resume while Meta review is externally blocked, provided unapproved templates remain unused. |
+| C1-POSTBOOK-UX | Post-confirmation client actions | ⚪ READY | Book another treatment / My appointments / Main menu + natural-language equivalents. Can proceed while Meta review is externally blocked, provided unapproved templates remain unused. |
 | C1-APP-ORD | Ordinary approval rules | 🟠 WAITING | Genuine future evidence only; never manufacture appointments merely for proof. |
 | GCONTACTS | CRM → Google Contacts | ⚪ READY | Separate lower-priority workstream; CRM remains authoritative. |
 | GBP | Google Business Profile API | ⏸️ DEFERRED | Last authoritative quota 0 QPM. Revisit on Google follow-up approval email or quota change. |
-| E1 | Ozow | 🟠 WAITING | Merchant config + explicit business rules. |
+| E1 | Ozow | 🟠 WAITING | Merchant config + explicit business rules. Do not submit payment templates before semantics are approved. |
 | PRIV | Destructive privacy execution | 🟠 WAITING | Fail closed; authority + evidence required. |
 
 ## Exact continuation
@@ -83,14 +90,15 @@ Do not enable the three pending lifecycle templates until Meta reports the exact
 - #562 Completed and #357 No-show resolved.
 - PR #232 complete; do not redo.
 - PR #234 lifecycle template package complete and merged.
-- PR #236 explicit one-shot provisioning gate complete and merged.
-- Final production flag `META_LIFECYCLE_PROVISION_ON_START=false`.
-- Reminder-actions, reschedule confirmation and cancellation confirmation templates are PENDING at Meta.
+- PR #238 foreseeable template inventory complete and merged.
+- PR #239 automatic-continuation governance complete and merged.
+- Final production flag `META_LIFECYCLE_PROVISION_ON_START=false` on `dep-da03ub9t0dsc738r5h20`.
+- Six foreseeable core lifecycle templates are PENDING at Meta.
 - Google Business Profile API remains parked at last-authoritative 0 QPM.
 
-**Authoritative current state:** application baseline PR #236 / `44cdd7bf...`; Render `dep-da03ab1t0dsc738pm16g` live; booking/staff templates APPROVED; three client lifecycle templates PENDING; #567 confirmed but handset-evidence gated before cancellation.
+**Authoritative current state:** application baseline PR #238 / `0d5f091f...`; later governance PR #239 is also on `main`; Render `dep-da03ub9t0dsc738r5h20` live; booking/staff templates APPROVED; six core lifecycle templates PENDING; #567 confirmed but handset-evidence gated before cancellation.
 
-**Highest-priority state:** 🟠 **WAITING — Meta provider review of the three submitted lifecycle templates.**
+**Highest-priority state:** 🟠 **WAITING — Meta provider review of the six submitted lifecycle templates.**
 
 **Highest-priority genuinely actionable item while Meta is blocked:** ⚪ **READY — post-confirmation client UX package**, without enabling or depending on unapproved lifecycle templates.
 
