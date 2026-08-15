@@ -2,7 +2,8 @@ const { pool } = require('../db/pool');
 const { normalizePhone } = require('./clientIdentityOnboarding');
 const { canCertifyAppointment, certificationStaffIds, authorityDescription } = require('./attendanceFinalizationAuthority');
 
-const PAGE_SIZE = 9;
+// Reserve two of WhatsApp's 10 list rows for pagination and Back controls.
+const PAGE_SIZE = 8;
 const FINAL_STATUSES = new Set(['completed', 'no_show']);
 
 function key(sender) { return normalizePhone(sender); }
