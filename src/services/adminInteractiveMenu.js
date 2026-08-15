@@ -21,6 +21,7 @@ const ACTIONS = [
   { key: 'marietjie_earnings', labels: ['💰 Marietjie earnings', 'Marietjie earnings'], command: 'Marietjie earnings', description: 'Completed-only earnings report' },
   { key: 'booking', labels: ['Make a booking'], command: 'Make a booking', description: 'Create a guarded appointment' },
   { key: 'manage_booking', labels: ['Manage a booking'], command: 'Manage a booking', description: 'Change an existing appointment' },
+  { key: 'finalize', labels: ['Finalize past visits'], command: 'Finalize past appointments', description: 'Mark Completed or No-show explicitly' },
   { key: 'client', labels: ['Find a client', 'Find my client'], command: 'Find a client', description: 'Search authorized CRM clients' },
   { key: 'reset_chenique', labels: ['Reset Chenique profile'], command: 'Reset test client Chenique', description: 'Reset approved booking-test client' },
   { key: 'reset_juvan', labels: ['Reset Juvan profile'], command: 'Reset test client Juvan', description: 'Reset approved booking-test client' },
@@ -100,8 +101,9 @@ function enrichPrivilegedReportsMenu(result) {
   const jeanPierre = isJeanPierreBusinessAdmin(result.admin);
   const christel = isChristelOwnerAdmin(result.admin);
   const marietjie = isMarietjieAdmin(result.admin);
-  if (!jeanPierre && !christel && !marietjie) return result;
   let body = String(result.interactive.body);
+  if (result.admin?.permissions?.['booking:update'] === true && result.admin?.permissions?.['appointment:view'] === true && !/Finalize past visits/i.test(body)) body += '\n\n*Appointments*\n93️⃣ Finalize past visits';
+  if (!jeanPierre && !christel && !marietjie) return { ...result, interactive: { ...result.interactive, body } };
   if (jeanPierre && !/Christel earnings/i.test(body)) body += '\n\n*Reports*\n98️⃣ 💰 Christel earnings';
   if (!/Marietjie earnings/i.test(body)) body += '\n\n*Reports*\n99️⃣ 💰 Marietjie earnings';
   if ((jeanPierre || christel) && !/Reset Chenique profile/i.test(body)) body += '\n\n*Clients*\n96️⃣ Reset Chenique profile\n95️⃣ Reset Juvan profile\n94️⃣ Reset Dummy Test profile';
@@ -118,6 +120,7 @@ async function dispatchStableAction(sender, action) {
   if (action.key === 'today' || action.key === 'tomorrow') return processAdminAppointmentsByDateMessage(sender, action.command);
   if (action.key === 'walkin') return processAdminWalkinMessage(sender, action.command);
   if (action.key === 'help') return processAdminHelpMessage(sender, action.command);
+  if (action.key === 'finalize') return processAdminAppointmentFinalizationMessage(sender, action.command);
   if (action.key === 'abigail_earnings') return { handled: true, interactive: abigailEarningsButtons() };
   if (action.key === 'christel_earnings') return { handled: true, interactive: christelEarningsButtons() };
   if (action.key === 'marietjie_earnings') return { handled: true, interactive: marietjieEarningsButtons() };
@@ -140,7 +143,7 @@ async function processAdminInteractiveMenuMessage(sender, text) {
   const sectionMatch = raw.match(/^admin_section_(appointments|reports|clients|services|schedule|more)$/i);
   if (sectionMatch) {
     const menuResult = await getRoleScopedMenu(sender);
-    if (!menuResult?.handled) return menuResult || { handled: false };
+    if (!menuResult?.handled || !menuResult?.interactive?.body) return { handled: true, admin: menuResult?.admin, reply: 'Admin menu could not be refreshed safely. Send *Menu* to restart Admin.' };
     const section = SECTION_ORDER.find((value) => value.toLowerCase() === sectionMatch[1].toLowerCase());
     const interactive = sectionInteractive(section, menuResult.interactive.body);
     if (!interactive) return { handled: true, admin: menuResult.admin, reply: 'That admin section is not available for your account. Send *Menu* to refresh your options.' };
@@ -149,7 +152,7 @@ async function processAdminInteractiveMenuMessage(sender, text) {
   const action = actionForId(raw);
   if (action) {
     const menuResult = await getRoleScopedMenu(sender);
-    if (!menuResult?.handled) return menuResult || { handled: false };
+    if (!menuResult?.handled || !menuResult?.interactive?.body) return { handled: true, admin: menuResult?.admin, reply: 'Admin menu could not be refreshed safely. Send *Menu* to restart Admin.' };
     if (!isActionVisibleInMenu(action, menuResult.interactive.body)) return { handled: true, admin: menuResult.admin, reply: 'That admin action is not available for your account. Send *Menu* to refresh your options.' };
     return dispatchStableAction(sender, action);
   }
