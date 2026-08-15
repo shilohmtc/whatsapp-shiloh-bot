@@ -7,7 +7,7 @@ Purpose: permanent current-state project-management source of truth. Historical 
 
 Operational truth is GitHub `main`, Render production, Shiloh CRM, Google Calendar and explicit real WhatsApp/human evidence. Never infer provider, attendance, approval, CRM or Calendar state.
 
-Current application-code baseline: **PR #229** squash merge `36bf3687c8393bbc03e9406367f8afcbf15fa080`. Render production deploy **`dep-da004j8u01pc73epn00g`** is verified **live** on 2026-08-15.
+Current application-code baseline: **PR #225** squash merge `3fe028810902fe2b370f067e213f7c2633c89efb`. Render production deploy **`dep-da00cjad0e5s73a8thng`** is verified **live** on 2026-08-15 with fresh `/health` 200 responses.
 
 Approval policy remains: Marietjie self; Christel self; Abigail may be approved by Abigail or Christel, first valid decision authoritative. Dummy Test uses JP admin account alone. Pending holds have no automatic expiry. MediHeel remains Christel only.
 
@@ -41,7 +41,7 @@ The real WhatsApp journey exposed and then verified repair of three production d
 
 - **PR #226** — stale Manage-booking state interception, missing Finalize-past-visits discoverability, and unsafe section refresh. Intentional red CI #635 → green CI #638.
 - **PR #227** — literal `Admin` failed to enter the canonical interactive Admin home. Intentional red CI #640 → green CI #642.
-- **PR #229** — Finalize-past-visits could render 11 WhatsApp rows (9 visits + More + Back), exceeding Meta's 10-row limit. Repaired to reserve navigation rows: 8 visits + More + Back = maximum 10. Green CI #648; production deploy `dep-da004j8u01pc73epn00g` live.
+- **PR #229** — Finalize-past-visits could render 11 WhatsApp rows (9 visits + More + Back), exceeding Meta's 10-row limit. Repaired to reserve navigation rows: 8 visits + More + Back = maximum 10. Green CI #648; production deploy `dep-da004j8u01pc73epn00g` verified live.
 
 Real WhatsApp production evidence then proved the complete workflow:
 
@@ -60,7 +60,7 @@ Direct connector-level CRM row read-back remains unavailable while the Render Po
 
 Confirmed Sat 15 Aug 2026, 10:45–12:15, Christel + MediHeel. Proven: indefinite hold, JP sole approval, held-slot exclusion, explicit approval, client confirmation and canonical Google Calendar event.
 
-Calendar presentation was normalized in place without changing event identity, date/time, service, practitioner or booking state. Verified presentation: Client, formatted Mobile, WhatsApp link, Service, Practitioner, and native clinic Location; visible CRM/source clutter removed.
+Calendar presentation was normalized in place without changing event identity, date/time, service, practitioner or booking state. Verified presentation: Client, formatted Mobile, WhatsApp link, Service, Practitioner, and native clinic Location; visible CRM/source clutter removed. Its displayed Medi-Heel icon was also normalized to 🦶 during approved presentation housekeeping.
 
 ### #565 reschedule + cancellation — 🟢 VERIFIED
 
@@ -78,8 +78,8 @@ Calendar presentation was normalized in place without changing event identity, d
 
 - PR #219 decline CTA / friendly policy-date polish — 🟠 **WAITING** for the next genuine applicable WhatsApp journey; do not manufacture a booking solely for proof.
 - PR #222 Calendar staff-contact presentation — 🟢 **VERIFIED** through code/CI/prod plus approved #564 normalization/read-back.
-- MediHeel/pedicure Calendar icon specificity — ⚪ **READY**; approved engineering remains unfinished in open PR #225. Resume from its existing self-test-first state; do not duplicate work.
-- Post-confirmation client UX package (**Book another treatment / My appointments / Main menu** plus natural-language equivalents) — ⚪ **READY** and explicitly approved. Buttons are primary discoverability; natural language is fallback. Keep behind the already-started PR #225 until that work is closed.
+- PR #225 MediHeel/pedicure Calendar icon specificity — 🟢 **VERIFIED**. Self-test-first evidence: intentional red CI #634 → green CI #652. The classifier now gives pedicure/foot/heel/toe specificity precedence over generic massage, so `Medi-Heel Pedicure ... & Foot Massage` resolves to 🦶 while ordinary massage services remain 💆. Squash merge `3fe028810902fe2b370f067e213f7c2633c89efb`; Render deploy `dep-da00cjad0e5s73a8thng` verified live/healthy.
+- Post-confirmation client UX package (**Book another treatment / My appointments / Main menu** plus natural-language equivalents) — ⚪ **READY** and explicitly approved. Buttons are primary discoverability; natural language is fallback. This is now the highest-priority approved customer-experience workstream.
 
 ## Provider/template and other gated items
 
@@ -105,11 +105,12 @@ Lifecycle state: ⚪ **READY**.
 - #357 intentionally and explicitly finalized **No-show** from real human truth; duplicate replay safely rejected.
 - Older attendance backlog remains unresolved and human-truth-gated; do not infer or bulk-finalize.
 - PR #226/#227/#229 attendance Admin defect chain is repaired and real-WhatsApp verified.
+- PR #225 Calendar icon specificity is merged, green and production-live; do not redo it.
 
-**Authoritative current state:** GitHub `main` application baseline is PR #229 / `36bf3687...`; Render deploy `dep-da004j8u01pc73epn00g` is live; the two 2026-08-14 reminder visits are explicitly finalized; older backlog remains fail-closed.
+**Authoritative current state:** GitHub `main` application baseline is PR #225 / `3fe02881...`; Render deploy `dep-da00cjad0e5s73a8thng` is live and healthy; attendance reminder cohort is resolved; Calendar contact presentation and MediHeel icon specificity are verified.
 
-**Highest-priority genuinely actionable item:** ⚪ **READY — finish the already-started MediHeel/pedicure Calendar icon specificity PR #225** from its existing self-test-first red state.
+**Highest-priority genuinely actionable item:** ⚪ **READY — implement the already-approved post-confirmation client UX package: Book another treatment / My appointments / Main menu, with natural-language equivalents.**
 
-**Why this is next:** the higher-priority attendance operational defect chain and the two genuine reminder finalizations are now closed. PR #225 was already approved and started before attendance work interrupted it, so finishing it avoids leaving half-completed engineering before beginning the separately approved post-confirmation UX package.
+**Why this is next:** attendance's live operational defect chain is closed and PR #225 is now fully completed. The post-confirmation UX package was explicitly approved earlier, directly improves client discoverability and repeat-booking experience, and is the next unfinished approved customer-facing workstream. Ordinary approval and Google Contacts remain READY but lower priority.
 
-**Approval state:** substantial engineering must still stop at the four-part checkpoint and obtain explicit approval before resuming PR #225. Read-only verification and reconciliation remain permitted.
+**Approval state:** the post-confirmation UX package has prior explicit user approval, but under the execution protocol a fresh four-part checkpoint must still be presented before substantial implementation resumes. Read-only verification and reconciliation remain permitted.
