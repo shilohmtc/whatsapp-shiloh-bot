@@ -48,7 +48,7 @@ Two real visits from clinic date **2026-08-14** require explicit finalization. A
 | C1-RESCHEDULE | Canonical reschedule lifecycle | 🟢 VERIFIED | #565 accepted before later cancellation. |
 | C1-CANCEL | Canonical cancellation | 🟢 VERIFIED | #565 cancelled; never recreate merely for proof. |
 | C1-CALENDAR-CONTACT | Calendar staff contact presentation | 🟢 VERIFIED | PR #222 red #627 → green #628; #564 normalized/read back with Mobile + WhatsApp + native Location. |
-| C1-CALENDAR-ICON | MediHeel/pedicure Calendar icon specificity | 🔵 ACTIVE / PAUSED BEHIND A1 | PR #225 already open from approved self-test-first work; resume, do not duplicate, after attendance operational gate. |
+| C1-CALENDAR-ICON | MediHeel/pedicure Calendar icon specificity | ⚪ READY | PR #225 already open from approved self-test-first work; resume, do not duplicate, after attendance operational gate. |
 | C1-POSTBOOK-UX | Post-confirmation client actions | ⚪ READY | Explicitly approved: Book another treatment / My appointments / Main menu + natural-language fallbacks. Queued behind active higher-priority work. |
 | C1-APP-ORD | Ordinary approval rules | ⚪ READY | Marietjie self, Christel self, then Abigail dual-authority/first-valid-decision genuine acceptance. |
 | C1-DECLINE-CTA | Decline `Book another time` button | 🟠 WAITING | Implementation live; observe on next genuine decline only. |
