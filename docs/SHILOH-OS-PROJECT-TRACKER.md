@@ -20,24 +20,32 @@ At the start of each new Shiloh OS chat: read Master + Tracker on GitHub `main`,
 
 After that initial approval, continue the approved workstream for the remainder of the chat without repeated approval requests at ordinary engineering, PR, merge, deploy, controlled provider/configuration, verification, repair or housekeeping boundaries.
 
-Request fresh approval only for a material scope expansion, materially greater or unexpected destructive/irreversible risk, contradictory authoritative evidence that makes continuation unsafe, or an action that would violate an existing fail-closed/evidence gate. Human-truth/provider/external evidence gates always remain fail-closed; chat authorization never permits inferred evidence or manufactured appointments for proof.
-
-Read-only verification, diagnostics, reconciliation and minor documentation/status housekeeping may proceed as needed to establish the initial checkpoint.
+Request fresh approval only for material scope expansion, materially greater or unexpected destructive/irreversible risk, contradictory authoritative evidence that makes continuation unsafe, or an action that would violate an existing fail-closed/evidence gate. Human-truth/provider/external evidence gates always remain fail-closed; chat authorization never permits inferred evidence or manufactured appointments for proof.
 
 ## Current Product-Critical Gate
 
-🟢 **VERIFIED at code/CI/deploy level — booking approval recovery/discoverability.**
+🟠 **WAITING — Meta lifecycle template review.**
 
-PR #232 repaired the approval-delivery observability/recovery gap exposed by the Pa Derik / CRM #48 case. Current application baseline: **PR #232 / `f611b73f0310b9b493209492195bf91e61df20ea`**. Render deploy **`dep-da012qad0e5s73a9a1u0`** is live.
+Current application baseline: **PR #236 / `44cdd7bf9ae2fbef03f4f93c8b6abab4bf9e2e90`**. Render deploy **`dep-da03ab1t0dsc738pm16g`** is live with `META_LIFECYCLE_PROVISION_ON_START=false`.
 
-The real Pa Derik recovery action has **not** been executed. Existing booking truth remains untouched pending authoritative evidence.
+Provider truth from the controlled one-shot submission:
+- `shiloh_booking_confirmation_v1` — 🟢 APPROVED / UTILITY;
+- `shiloh_staff_finalization_v1` — 🟢 APPROVED / UTILITY;
+- `shiloh_appointment_reminder_actions_v1` — 🟠 PENDING;
+- `shiloh_reschedule_confirmation_v1` — 🟠 PENDING;
+- `shiloh_cancellation_confirmation_v1` — 🟠 PENDING.
+
+Do not enable the three pending lifecycle templates until Meta reports the exact expected templates APPROVED and production configuration exactly matches.
 
 ## At-a-glance
 
 | ID | Workstream | State | Evidence / next action |
 |---|---|---|---|
-| APP-RESILIENCE | Approval recovery / discoverability | 🟢 VERIFIED | PR #232; intentional red CI #656 (424 pass / 4 new fail) → green CI #661; merge `f611b73f...`; prod `dep-da012qad0e5s73a9a1u0` live. Adds Pending approvals + authorized pending-only resend + durable message-id/attempt audit. |
-| APP-PADERIK | Pa Derik CRM #48 recovery | ⚪ READY | Existing canonical Christel booking preserved. Verify authoritative state first; any recovery action must remain within active chat authorization and evidence gates. |
+| META-LIFECYCLE | Reminder/reschedule/cancel template package | 🟠 WAITING | PR #234 merged; PR #236 merged. Controlled provider submission returned PENDING for all three. Keep fail-closed; read-only status checks only until APPROVED. |
+| META-BOOKING | Booking confirmation template | 🟢 VERIFIED | `shiloh_booking_confirmation_v1` provider-verified APPROVED / UTILITY. |
+| META-STAFF | Staff finalization template | 🟢 VERIFIED | `shiloh_staff_finalization_v1` provider-verified APPROVED / UTILITY. |
+| APP-RESILIENCE | Approval recovery / discoverability | 🟢 VERIFIED | PR #232 complete; Pending approvals + safe resend path production-live. |
+| APP-PADERIK | Pa Derik #567 | 🟠 WAITING | Confirmed after Christel approval. Capture actual handset evidence first; then cancel #567 through the normal Shiloh cancellation workflow. Do not modify/cancel before evidence. |
 | A1-NAV | Attendance finalization Admin UX | 🟢 VERIFIED | PR #226/#227/#229 + real WhatsApp navigation/list/decision flow. |
 | A1-20260814 | 14 Aug reminder finalizations | 🟢 VERIFIED | #562 Completed; #357 No-show from explicit human truth + Shiloh confirmation. |
 | A1-HIST | Older attendance backlog | 🟠 WAITING | Each historical visit requires explicit authorized human truth; never infer/bulk-finalize. |
@@ -45,33 +53,14 @@ The real Pa Derik recovery action has **not** been executed. Existing booking tr
 | C1-APP-DUMMY-DECLINE | Dummy Test JP decline | 🟢 VERIFIED | #566 declined/released; do not recreate. |
 | C1-RESCHEDULE | Canonical reschedule lifecycle | 🟢 VERIFIED | #565 accepted before later cancellation. |
 | C1-CANCEL | Canonical cancellation | 🟢 VERIFIED | #565 cancelled; never recreate merely for proof. |
-| C1-CALENDAR-CONTACT | Calendar staff contact presentation | 🟢 VERIFIED | PR #222 + #564 normalized/read back with Mobile + WhatsApp + native Location. |
-| C1-CALENDAR-ICON | MediHeel/pedicure Calendar icon specificity | 🟢 VERIFIED | PR #225 red #634 → green #652; foot/pedicure specificity wins over generic massage. |
-| C1-POSTBOOK-UX | Post-confirmation client actions | ⚪ READY | Book another treatment / My appointments / Main menu + natural-language fallbacks. Resume only after current approval-recovery verification is closed. |
-| C1-APP-ORD | Ordinary approval rules | ⚪ READY | Marietjie self; Christel self; Abigail dual-authority/first-valid-decision genuine acceptance. |
-| C1-DECLINE-CTA | Decline `Book another time` button | 🟠 WAITING | Observe on next genuine decline only. |
-| C1-POLICY-DISPLAY | Friendly policy updated date | 🟠 WAITING | Observe on next genuine policy presentation. |
-| C1-RESCHEDULE-ACTIONS | Post-reschedule controls | 🟠 WAITING | Future genuine reschedule delivery only. |
-| C1-REMINDER-TPL | Reminder native change buttons | 🟠 WAITING | Provider/config/real-delivery evidence as applicable. |
+| C1-CALENDAR-CONTACT | Calendar staff contact presentation | 🟢 VERIFIED | PR #222 accepted. |
+| C1-CALENDAR-ICON | MediHeel/pedicure Calendar icon specificity | 🟢 VERIFIED | PR #225 accepted. |
+| C1-POSTBOOK-UX | Post-confirmation client actions | ⚪ READY | Book another treatment / My appointments / Main menu + natural-language equivalents. Can resume while Meta review is externally blocked, provided unapproved templates remain unused. |
+| C1-APP-ORD | Ordinary approval rules | 🟠 WAITING | Genuine future evidence only; never manufacture appointments merely for proof. |
 | GCONTACTS | CRM → Google Contacts | ⚪ READY | Separate lower-priority workstream; CRM remains authoritative. |
+| GBP | Google Business Profile API | ⏸️ DEFERRED | Last authoritative quota 0 QPM. Revisit on Google follow-up approval email or quota change. |
 | E1 | Ozow | 🟠 WAITING | Merchant config + explicit business rules. |
 | PRIV | Destructive privacy execution | 🟠 WAITING | Fail closed; authority + evidence required. |
-
-## Approval resilience evidence
-
-- Pa Derik / CRM #48 investigation found one canonical Calendar booking, not two successfully committed bookings.
-- Meta acceptance of the original approval message did not prove handset receipt/display.
-- PR #232 adds `Admin → Appointments → Pending approvals` for authorized requests.
-- Explicit resend is pending-only, keeps the same approval/decline authority, and does not create or mutate appointment truth.
-- Resend records `approver_notification_attempts`, `approver_message_id`, `last_approver_notification_attempt_at`, plus audit action `client.booking_approval.notification_attempted`.
-- Pa Derik was deliberately not resent during engineering.
-
-## Verified attendance evidence
-
-- #562 Completed and #357 No-show were finalized from explicit human truth.
-- Duplicate #357 replay failed closed.
-- Older attendance remains individually human-truth-gated.
-- Direct connector-level CRM row read-back remains unavailable due Render Postgres SSL/TLS negotiation; do not fabricate that evidence.
 
 ## Exact continuation
 
@@ -79,18 +68,22 @@ The real Pa Derik recovery action has **not** been executed. Existing booking tr
 - #564 confirmed — preserve booking semantics.
 - #565 cancelled — never recreate merely for proof.
 - #566 declined/released — never recreate merely for proof.
+- #567 confirmed after Christel approval — preserve until actual Pa Derik handset evidence is captured, then cancel normally.
 - #562 Completed and #357 No-show resolved.
-- PR #225 complete; do not redo.
-- PR #232 complete, merged and production-live.
-- Pa Derik / CRM #48 existing booking remains untouched.
+- PR #232 complete; do not redo.
+- PR #234 lifecycle template package complete and merged.
+- PR #236 explicit one-shot provisioning gate complete and merged.
+- Final production flag `META_LIFECYCLE_PROVISION_ON_START=false`.
+- Reminder-actions, reschedule confirmation and cancellation confirmation templates are PENDING at Meta.
+- Google Business Profile API remains parked at last-authoritative 0 QPM.
 
-**Authoritative current state:** application baseline PR #232 / `f611b73f...`; Render `dep-da012qad0e5s73a9a1u0` live; approval recovery/discoverability is production-live; Pa Derik's real resend remains unexecuted.
+**Authoritative current state:** application baseline PR #236 / `44cdd7bf...`; Render `dep-da03ab1t0dsc738pm16g` live; booking/staff templates APPROVED; three client lifecycle templates PENDING; #567 confirmed but handset-evidence gated before cancellation.
 
-**Highest-priority genuinely actionable item:** ⚪ **READY — read-only verify the applicable authoritative state before any Pa Derik recovery action.**
+**Highest-priority state:** 🟠 **WAITING — Meta provider review of the three submitted lifecycle templates.**
 
-**Why this is next:** it closes the real operational incident that triggered PR #232 without inventing booking truth.
+**Highest-priority genuinely actionable item while Meta is blocked:** ⚪ **READY — post-confirmation client UX package**, without enabling or depending on unapproved lifecycle templates.
 
-**Authorization:** apply the new-chat authorization model above; do not insert repeated ordinary approval gates after the initial chat authorization. Evidence gates remain fail-closed.
+**Authorization:** apply the new-chat authorization model above; evidence gates remain fail-closed.
 
 ## Guardrails
 
