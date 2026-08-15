@@ -20,15 +20,17 @@ Approval policy remains: Marietjie self; Christel self; Abigail may be approved 
 - 🔴 **DEFECT / HOLD** — a proven problem or unsafe state; fail closed until repaired and re-verified.
 - ⏸️ **DEFERRED** — deliberately postponed by explicit project decision.
 
-## Execution Protocol — mandatory checkpoint before substantial work
+## Execution Protocol — new-chat authorization model
 
-Before substantial engineering or any new controlled production mutation:
-1. state authoritative current state;
-2. identify the single highest-priority genuinely actionable item;
-3. explain why it is next;
-4. stop for explicit user approval.
+At the beginning of each new Shiloh OS chat, first read Master + Tracker on GitHub `main`, reconcile the applicable authoritative systems, state the authoritative current state, identify the single highest-priority genuinely actionable item, explain why it is next, and obtain explicit user approval before beginning substantial work.
 
-Read-only verification, diagnostics, reconciliation, documentation/status maintenance and minor housekeeping may proceed without another approval gate.
+Once that initial approval is given, it authorizes continued execution of the approved workstream for the remainder of that chat, including normal engineering, PRs, merges, deployments, controlled production/provider configuration, verification, repairs and housekeeping. Do not repeatedly request approval at ordinary implementation boundaries.
+
+Stop and request fresh approval only if the proposed action materially exceeds the approved workstream, introduces materially greater or unexpected destructive/irreversible risk, encounters contradictory authoritative evidence that makes continued execution unsafe, or would violate an existing fail-closed/evidence gate.
+
+Human-truth and external-evidence gates remain unchanged. Initial chat authorization never permits Shiloh to infer missing evidence, manufacture appointments for proof, override provider gates, or bypass explicit real-human evidence requirements.
+
+Read-only verification, diagnostics, reconciliation, documentation/status maintenance and minor housekeeping may proceed before the initial approval gate where needed to establish the authoritative checkpoint.
 
 ## Attendance finalization — 🟢 VERIFIED for the 2026-08-14 reminder cohort
 
@@ -107,8 +109,8 @@ Lifecycle state: ⚪ READY.
 
 **Authoritative current state:** GitHub `main` application baseline is PR #232 / `f611b73f...`; Render `dep-da012qad0e5s73a9a1u0` is live; approval recovery/discoverability code is production-live; Pa Derik's real recovery action remains unexecuted.
 
-**Highest-priority genuinely actionable item:** ⚪ **READY — perform a read-only check of the new Pending approvals surface for Christel, then, only if Pa Derik appears pending and the user explicitly approves the production mutation, resend that existing approval request.**
+**Highest-priority genuinely actionable item:** ⚪ **READY — perform a read-only check of the new Pending approvals surface for Christel, then, only if Pa Derik appears pending and the active chat authorization/workstream permits it, exercise the existing recovery path without manufacturing replacement booking truth.**
 
 **Why this is next:** the engineering defect is repaired, but the real operational problem that triggered it is not fully closed until the pending state is observed and—if still pending—the recovery action is exercised. This outranks returning to post-confirmation UX because it concerns an existing real booking and approval gate.
 
-**Approval state:** read-only verification of the Pending approvals surface may proceed without another gate. Any actual resend to Christel is a controlled production messaging mutation and requires explicit approval immediately before execution.
+**Authorization state:** apply the new-chat authorization model above. Evidence gates remain fail-closed regardless of chat authorization.
