@@ -7,7 +7,7 @@ Purpose: permanent current-state project-management source of truth. Historical 
 
 Operational truth is GitHub `main`, Render production, Shiloh CRM, Google Calendar, Meta/WhatsApp provider evidence and explicit real WhatsApp/human evidence. Never infer provider, attendance, approval, CRM or Calendar state.
 
-Current application-code baseline: **PR #238** squash merge `0d5f091fb37a7e49166096db1db65642e0d28bf9`, with later governance-only PR #239 on `main`. Render production deploy **`dep-da03ub9t0dsc738r5h20`** is verified **live** on 2026-08-15 with `META_LIFECYCLE_PROVISION_ON_START=false` after the second controlled one-shot Meta submission.
+Current application-code baseline: **PR #242** squash merge `bc77e701f4aa631f48fb720adfe47927d2279ac8`. Render production deploy **`dep-da04ct95efls73d2p66g`** is verified **live** on 2026-08-15. The post-confirmation UX from PR #241 and navigation-priority repair from PR #242 are production-live. `META_LIFECYCLE_PROVISION_ON_START=false` remains fail-closed.
 
 Approval policy remains: Marietjie self; Christel self; Abigail may be approved by Abigail or Christel, first valid decision authoritative. Dummy Test uses JP admin account alone. Pending holds have no automatic expiry. MediHeel remains Christel only.
 
@@ -48,6 +48,10 @@ Whenever a planned Shiloh feature may require externally approved WhatsApp templ
 
 Do not submit speculative templates for flows whose business rules or message semantics are not yet approved.
 
+## Button-first client UX rule
+
+Whenever the next sensible client actions are known and WhatsApp supports an appropriate interactive control, expose them as buttons or list actions. Natural-language commands remain equivalent fallbacks, not the primary discovery mechanism. Buttons must route into the same canonical deterministic handlers rather than duplicate booking/change logic. Do not force buttons where free text is genuinely needed. If platform interaction limits prevent every action from appearing at once, prioritize the highest-value next actions while preserving a safe menu/natural-language escape.
+
 ## Attendance finalization — 🟢 VERIFIED for the 2026-08-14 reminder cohort
 
 PR #226, #227 and #229 repaired the real WhatsApp/Admin defect chain. Real production evidence then proved:
@@ -61,7 +65,7 @@ Older unresolved historical visits remain 🟠 WAITING and must never be bulk-fi
 
 - **#564 Dummy Test positive JP approval — 🟢 VERIFIED.** Preserve confirmed booking semantics; Calendar presentation was normalized with Mobile + WhatsApp + Service + Practitioner + native Location and MediHeel 🦶 icon.
 - **#565 reschedule + cancellation — 🟢 VERIFIED.** Cancelled; never recreate merely for proof.
-- **#566 Dummy Test JP decline — 🟢 VERIFIED.** Declined/released; never recreate merely for proof.
+- **#566 Dummy Test JP decline — 🟢 VERIFIED.** Declined/released; never recreate.
 - **#561 historical test — cancelled.** Never recreate.
 - **#567 Pa Derik — confirmed test appointment.** Christel approval is complete. Preserve #567 until Pa Derik's actual handset evidence is captured; only then cancel #567 through the normal Shiloh cancellation workflow. Do not modify/cancel it merely for proof.
 
@@ -91,11 +95,11 @@ Current provider truth from the controlled one-shot submissions:
 - `shiloh_booking_declined_v1` — **PENDING**;
 - `shiloh_booking_approval_outcome_v1` — **PENDING**.
 
-The second controlled one-shot deploy **`dep-da03tq5g1s2s73c9buag`** submitted only the three genuinely missing templates (`booking_approval_request`, `booking_declined`, `booking_approval_outcome`) and skipped the original three as already existing. Meta returned **PENDING** for all three new submissions. The trigger was immediately reset; **`dep-da03ub9t0dsc738r5h20`** is live with `META_LIFECYCLE_PROVISION_ON_START=false`, and no repeat provisioning occurred on the false-state restart.
+The second controlled one-shot deploy **`dep-da03tq5g1s2s73c9buag`** submitted only the three genuinely missing templates (`booking_approval_request`, `booking_declined`, `booking_approval_outcome`) and skipped the original three as already existing. Meta returned **PENDING** for all three new submissions. The trigger was immediately reset; current production remains `META_LIFECYCLE_PROVISION_ON_START=false`, and no repeat provisioning occurs.
 
 All six remain fail-closed. Do not configure/enable their production delivery until Meta reports the exact expected template **APPROVED** and production configuration exactly matches. Real WhatsApp delivery evidence is still required before provider/evidence-gated lifecycle controls are promoted to verified.
 
-The Meta Lifecycle Approval condition-watch now covers all six exact template names and notifies only when all six are approved or when a rejection/action-required state appears.
+The Meta Lifecycle Approval condition-watch covers all six exact template names and notifies only when all six are approved or when a rejection/action-required state appears.
 
 ## Google integration status
 
@@ -108,7 +112,7 @@ The Meta Lifecycle Approval condition-watch now covers all six exact template na
 - PR #219 decline CTA / friendly policy-date polish — 🟠 WAITING for the next genuine applicable journey; do not manufacture a booking solely for proof.
 - PR #222 Calendar staff-contact presentation — 🟢 VERIFIED.
 - PR #225 MediHeel/pedicure Calendar icon specificity — 🟢 VERIFIED; foot/pedicure specificity wins over generic massage.
-- Post-confirmation client UX package (**Book another treatment / My appointments / Main menu** plus natural-language equivalents) — ⚪ READY and can proceed while Meta review is externally blocked, provided no unapproved template is enabled or assumed.
+- Post-confirmation client UX package — **🟢 production-live and handset-verified for `My appointments`, `Main menu`, `Book another treatment`, and generic greeting navigation.** PR #241 added the post-confirmation action buttons; PR #242 repaired routing priority. The actual confirmed-booking post-confirmation button row still awaits the next genuine confirmed booking for direct handset evidence; do not create a booking solely for proof.
 
 ## Provider/template and other gated items
 
@@ -139,17 +143,17 @@ Lifecycle state: 🟠 WAITING for genuine applicable journeys.
 - #562 Completed and #357 No-show are resolved from explicit human truth.
 - Older attendance backlog remains human-truth-gated.
 - PR #232 approval resilience complete; do not redo.
-- PR #234 lifecycle template package merged.
 - PR #238 complete foreseeable lifecycle-template inventory merged and production-live.
 - PR #239 automatic-continuation governance merged.
-- Final production flag `META_LIFECYCLE_PROVISION_ON_START=false` on live deploy `dep-da03ub9t0dsc738r5h20`.
+- PR #241 post-confirmation UX merged and production-live.
+- PR #242 navigation-priority repair merged and production-live on `dep-da04ct95efls73d2p66g`.
 - Six foreseeable core lifecycle templates are currently **PENDING** at Meta and must remain fail-closed.
 - GBP API remains parked at last-authoritative **0 QPM** pending Google follow-up evidence.
 
-**Authoritative current state:** GitHub `main` includes PR #238 application changes and PR #239 governance; Render `dep-da03ub9t0dsc738r5h20` is live with the provisioning flag false; booking/staff templates are APPROVED; all six foreseeable core lifecycle templates are PENDING; #567 is confirmed and evidence-gated before cancellation.
+**Authoritative current state:** GitHub `main` includes PR #242; Render `dep-da04ct95efls73d2p66g` is live; post-confirmation navigation routes have real Dummy Test handset acceptance; booking/staff templates are APPROVED; all six foreseeable core lifecycle templates remain PENDING; #567 is confirmed and evidence-gated before cancellation.
 
 **Highest-priority state:** 🟠 **WAITING — Meta review of the six submitted lifecycle templates.** Read-only provider-status checks may proceed automatically. Do not enable them until exact provider approval is proven.
 
-**Highest-priority genuinely actionable item while Meta is blocked:** ⚪ **READY — post-confirmation client UX package**, without enabling or depending on unapproved lifecycle templates.
+**Highest-priority genuinely actionable UX housekeeping:** apply the button-first rule consistently where a finite next-action set is currently presented as memorized command text, without altering canonical backend semantics or provider gates.
 
 **Authorization state:** apply the new-chat authorization model and automatic-continuation rule above. Evidence gates remain fail-closed regardless of chat authorization.
