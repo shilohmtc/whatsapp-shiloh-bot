@@ -6,6 +6,7 @@ const {
   sendWhatsAppCtaUrl,
   sendWhatsAppReplyButtons,
 } = require('./whatsapp');
+const { postConfirmationButtons } = require('./clientBookingInteractive');
 const { createAppointment: enrollAppointmentLifecycle } = require('./appointmentLifecycle');
 const logger = require('../lib/logger');
 
@@ -94,7 +95,7 @@ async function sendCustomerBookingConfirmation(data){
     claimed=await claimBookingConfirmation(appointmentId);
     if(!claimed)return {sent:false,reason:'already_sent_or_in_progress'};
 
-    let confirmationActions={googleCalendar:false,appleOutlook:false,changeButtons:false};
+    let confirmationActions={googleCalendar:false,appleOutlook:false,changeButtons:false,postConfirmationMenu:false};
     if(template){
       await sendWhatsAppTemplate(phone,template,[clientName||'there',serviceName,staffName,date,time,google,ics||google],process.env.WHATSAPP_TEMPLATE_LANGUAGE||'en');
       providerAccepted=true;
@@ -115,6 +116,9 @@ async function sendCustomerBookingConfirmation(data){
         {id:'client_cancel_booking',title:'Cancel booking'},
       ]),actionContext);
     }
+
+    const actionContext={appointmentId,clientId};
+    confirmationActions.postConfirmationMenu=await sendOptionalConfirmationAction('post_confirmation_menu',()=>sendWhatsAppReplyButtons(phone,'*What would you like to do next?*\nYou can also type *BOOK ANOTHER TREATMENT*, *MY APPOINTMENTS*, or *MAIN MENU*.',postConfirmationButtons()),actionContext);
 
     await markBookingConfirmationSent(appointmentId);
     await pool.query(`INSERT INTO crm_audit_events (action,entity_type,entity_id,metadata) VALUES ('customer.booking_confirmation_sent','appointment',$1,$2::jsonb)`,[appointmentId,JSON.stringify({clientId,calendarLinks:true,template:Boolean(template),lifecycleEnrolled:true,idempotentDelivery:true,confirmationActions})]);

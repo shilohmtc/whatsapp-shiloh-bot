@@ -9,9 +9,41 @@ let careRunning = false;
 
 function normalizePhone(value=''){return String(value||'').replace(/[^0-9]/g,'');}
 function clean(value=''){return String(value||'').trim().toLowerCase().replace(/\s+/g,' ');}
+function fmtDate(v){return new Intl.DateTimeFormat('en-ZA',{timeZone:'Africa/Johannesburg',weekday:'short',day:'2-digit',month:'short',year:'numeric'}).format(new Date(v));}
+function fmtTime(v){return new Intl.DateTimeFormat('en-ZA',{timeZone:'Africa/Johannesburg',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(v));}
+function isMyAppointmentsIntent(text=''){
+  const n=clean(text);
+  return /^(my appointments|appointments|my bookings|my booking|show my appointments|show my bookings|what appointments do i have|what bookings do i have|when is my appointment|when is my next appointment|next appointment|upcoming appointments|upcoming bookings)$/.test(n);
+}
 
 async function clientForPhone(phone){const r=await pool.query(`SELECT DISTINCT c.id,c.display_name,c.date_of_birth FROM clients c JOIN client_contacts cc ON cc.client_id=c.id WHERE cc.normalized_value=$1 AND cc.contact_type IN ('whatsapp','mobile','phone') AND c.status='active' ORDER BY c.id LIMIT 2`,[normalizePhone(phone)]);if(r.rowCount!==1)return null;return r.rows[0];}
 async function setBirthdayOptIn(clientId,enabled){await pool.query(`INSERT INTO client_customer_care_preferences(client_id,birthday_opt_in,updated_at) VALUES($1,$2,NOW()) ON CONFLICT(client_id) DO UPDATE SET birthday_opt_in=EXCLUDED.birthday_opt_in,updated_at=NOW()`,[clientId,enabled]);}
+
+async function listUpcomingAppointments(clientId){
+  const r=await pool.query(`
+    SELECT a.id,a.starts_at,a.ends_at,a.status,
+           COALESCE((SELECT string_agg(service_name_snapshot,' + ' ORDER BY position) FROM appointment_services WHERE appointment_id=a.id),a.title,'Shiloh appointment') AS service_name,
+           COALESCE((SELECT string_agg(staff_name_snapshot,' + ' ORDER BY position) FROM appointment_staff WHERE appointment_id=a.id),'Shiloh practitioner') AS staff_name
+      FROM appointments a
+     WHERE a.client_id=$1
+       AND a.status IN ('scheduled','confirmed')
+       AND a.ends_at >= NOW()
+     ORDER BY a.starts_at,a.id
+     LIMIT 10`,[clientId]);
+  return r.rows;
+}
+
+function appointmentsReply(client,rows=[]){
+  if(!rows.length){
+    return [`📅 *My appointments*`,'',`${client.display_name}, you don't currently have any upcoming scheduled or confirmed appointments in Shiloh.`,'','To book another treatment, send *BOOK* or *BOOK ANOTHER TREATMENT*.','To return to the start, send *MAIN MENU*.'].join('\n');
+  }
+  const lines=[`📅 *My appointments*`,''];
+  rows.forEach((a,index)=>{
+    lines.push(`*${index+1}. ${a.service_name}*`,`📅 ${fmtDate(a.starts_at)} at ${fmtTime(a.starts_at)}`,`👤 ${a.staff_name}`,`Status: ${a.status==='confirmed'?'Confirmed':'Scheduled'}`,'');
+  });
+  lines.push('To change a booking, send *RESCHEDULE* or *CANCEL*.','To book another treatment, send *BOOK ANOTHER TREATMENT*.','To return to the start, send *MAIN MENU*.');
+  return lines.join('\n');
+}
 
 async function syncCompletedLoyaltyVisits(){const inserted=await pool.query(`INSERT INTO loyalty_visits(client_id,appointment_id,qualified_at) SELECT a.client_id,a.id,COALESCE(a.ends_at,NOW()) FROM appointments a WHERE a.client_id IS NOT NULL AND a.status='completed' ON CONFLICT(appointment_id) DO NOTHING RETURNING client_id`);const clients=[...new Set(inserted.rows.map(r=>String(r.client_id)))];for(const clientId of clients){const c=await pool.query(`SELECT COUNT(*)::int AS n FROM loyalty_visits WHERE client_id=$1`,[clientId]);const n=Number(c.rows[0]?.n||0);for(let milestone=5;milestone<=n;milestone+=5){await pool.query(`INSERT INTO loyalty_rewards(client_id,milestone_visit_count,reward_percent,status) VALUES($1,$2,10,'available') ON CONFLICT(client_id,milestone_visit_count) DO NOTHING`,[clientId,milestone]);}}return{newVisits:inserted.rowCount,clientsUpdated:clients.length};}
 
@@ -20,11 +52,11 @@ async function loyaltyStatus(clientId){await syncCompletedLoyaltyVisits();const 
 async function processCustomerCareMessage(phone,text){
   const reminderConfirmation=await processAppointmentReminderConfirmationMessage(phone,text);
   if(reminderConfirmation.handled)return reminderConfirmation;
-  const n=clean(text);const birthdayOn=/^(birthday (messages|wishes) on|enable birthday (messages|wishes)|birthday on)$/.test(n);const birthdayOff=/^(birthday (messages|wishes) off|disable birthday (messages|wishes)|birthday off)$/.test(n);const loyalty=/^(loyalty|my loyalty|loyalty status|rewards|my rewards)$/.test(n);if(!birthdayOn&&!birthdayOff&&!loyalty)return{handled:false};const client=await clientForPhone(phone);if(!client)return{handled:true,reply:'I could not safely match this WhatsApp number to exactly one active Shiloh client profile. Please ask the clinic team to verify your profile.'};if(birthdayOn){await setBirthdayOptIn(client.id,true);return{handled:true,reply:`🎂 Birthday wishes are now *on* for ${client.display_name}. You can switch them off any time by sending *BIRTHDAY OFF*.`};}if(birthdayOff){await setBirthdayOptIn(client.id,false);return{handled:true,reply:'Birthday wishes are now *off*. 🌿'};}const status=await loyaltyStatus(client.id);const lines=[`🌿 *Shiloh Loyalty*`,``,`${client.display_name}, you currently have *${status.visits} qualifying completed visit${status.visits===1?'':'s'}* recorded in Shiloh.`];if(status.available>0)lines.push(`🎁 Available 10% reward${status.available===1?'':'s'}: *${status.available}*.`);else lines.push(`✨ Visits toward your next 10% reward: *${status.toward}/5*.`);lines.push('',`Rewards are based on qualifying visits recorded as completed in Shiloh.`);return{handled:true,reply:lines.join('\n')};}
+  const n=clean(text);const birthdayOn=/^(birthday (messages|wishes) on|enable birthday (messages|wishes)|birthday on)$/.test(n);const birthdayOff=/^(birthday (messages|wishes) off|disable birthday (messages|wishes)|birthday off)$/.test(n);const loyalty=/^(loyalty|my loyalty|loyalty status|rewards|my rewards)$/.test(n);const myAppointments=isMyAppointmentsIntent(n);if(!birthdayOn&&!birthdayOff&&!loyalty&&!myAppointments)return{handled:false};const client=await clientForPhone(phone);if(!client)return{handled:true,reply:'I could not safely match this WhatsApp number to exactly one active Shiloh client profile. Please ask the clinic team to verify your profile.'};if(myAppointments){const rows=await listUpcomingAppointments(client.id);return{handled:true,reply:appointmentsReply(client,rows),appointments:rows};}if(birthdayOn){await setBirthdayOptIn(client.id,true);return{handled:true,reply:`🎂 Birthday wishes are now *on* for ${client.display_name}. You can switch them off any time by sending *BIRTHDAY OFF*.`};}if(birthdayOff){await setBirthdayOptIn(client.id,false);return{handled:true,reply:'Birthday wishes are now *off*. 🌿'};}const status=await loyaltyStatus(client.id);const lines=[`🌿 *Shiloh Loyalty*`,``,`${client.display_name}, you currently have *${status.visits} qualifying completed visit${status.visits===1?'':'s'}* recorded in Shiloh.`];if(status.available>0)lines.push(`🎁 Available 10% reward${status.available===1?'':'s'}: *${status.available}*.`);else lines.push(`✨ Visits toward your next 10% reward: *${status.toward}/5*.`);lines.push('',`Rewards are based on qualifying visits recorded as completed in Shiloh.`);return{handled:true,reply:lines.join('\n')};}
 
 async function sendBirthdayMessages(){const template=process.env.WHATSAPP_BIRTHDAY_TEMPLATE;if(!template)return{enabled:false,sent:0};const now=new Date();const year=Number(new Intl.DateTimeFormat('en',{timeZone:'Africa/Johannesburg',year:'numeric'}).format(now));const md=new Intl.DateTimeFormat('en-CA',{timeZone:'Africa/Johannesburg',month:'2-digit',day:'2-digit'}).formatToParts(now);const m=Object.fromEntries(md.map(p=>[p.type,p.value]));const rows=await pool.query(`SELECT c.id,c.display_name,cc.normalized_value FROM clients c JOIN client_customer_care_preferences p ON p.client_id=c.id AND p.birthday_opt_in=TRUE JOIN LATERAL (SELECT normalized_value FROM client_contacts WHERE client_id=c.id AND contact_type IN ('whatsapp','mobile','phone') ORDER BY is_primary DESC,id LIMIT 1) cc ON TRUE LEFT JOIN birthday_message_deliveries d ON d.client_id=c.id AND d.birthday_year=$1 WHERE c.status='active' AND c.date_of_birth IS NOT NULL AND EXTRACT(MONTH FROM c.date_of_birth)=$2 AND EXTRACT(DAY FROM c.date_of_birth)=$3 AND d.id IS NULL`,[year,Number(m.month),Number(m.day)]);let sent=0;for(const row of rows.rows){try{await sendWhatsAppTemplate(row.normalized_value,template,[row.display_name||'there'],LANGUAGE_CODE);await pool.query(`INSERT INTO birthday_message_deliveries(client_id,birthday_year) VALUES($1,$2) ON CONFLICT DO NOTHING`,[row.id,year]);sent++;}catch(error){logger.error({err:error,clientId:row.id},'Birthday customer-care message failed');}}return{enabled:true,sent};}
 
 async function runCustomerCareScan(){if(careRunning)return;careRunning=true;try{const loyalty=await syncCompletedLoyaltyVisits();const birthdays=await sendBirthdayMessages();if(loyalty.newVisits||birthdays.sent)logger.info({loyalty,birthdays},'Customer care maintenance completed');}catch(error){logger.error({err:error},'Customer care maintenance failed');}finally{careRunning=false;}}
 function startCustomerCareScheduler(){if(careTimer)return;logger.info({birthdayTemplateConfigured:Boolean(process.env.WHATSAPP_BIRTHDAY_TEMPLATE),intervalHours:6},'Customer care scheduler started');setTimeout(runCustomerCareScan,15000).unref();careTimer=setInterval(runCustomerCareScan,6*60*60*1000);careTimer.unref();}
 
-module.exports={processCustomerCareMessage,syncCompletedLoyaltyVisits,sendBirthdayMessages,loyaltyStatus,startCustomerCareScheduler};
+module.exports={processCustomerCareMessage,syncCompletedLoyaltyVisits,sendBirthdayMessages,loyaltyStatus,startCustomerCareScheduler,isMyAppointmentsIntent,listUpcomingAppointments,appointmentsReply};
