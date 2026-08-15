@@ -32,6 +32,16 @@ Human-truth and external-evidence gates remain unchanged. Initial chat authoriza
 
 Read-only verification, diagnostics, reconciliation, documentation/status maintenance and minor housekeeping may proceed before the initial approval gate where needed to establish the authoritative checkpoint.
 
+### Automatic continuation across short external waits
+
+When an already-approved Shiloh OS workstream is blocked only by a future external condition—such as a Render deploy becoming live, GitHub CI completing, Meta/provider review changing state, or another authoritative provider dependency—the default is to preserve momentum rather than require the user to manually send `continue`.
+
+If the expected wait is only a few minutes and the chat remains active, re-check the authoritative system directly on the next active turn and continue immediately once the condition is satisfied.
+
+If the wait may be materially longer, create a scoped condition-watch automation for the exact dependency when useful. The automation must: (1) check only the authoritative condition needed to unblock the current workstream; (2) continue only the already-approved next safe steps when the success condition is proven; (3) remain fail-closed on failure, ambiguity, contradiction or unexpected state; (4) never broaden scope, infer missing evidence, or cross a human/provider evidence gate; and (5) notify and stop rather than improvise if the dependency fails or materially changes risk.
+
+Automation cadence must respect platform limits. When the available automation frequency is slower than the expected wait—for example, hourly automation for a deploy expected within minutes—direct in-chat re-check remains the preferred method.
+
 ## Attendance finalization — 🟢 VERIFIED for the 2026-08-14 reminder cohort
 
 PR #226, #227 and #229 repaired the real WhatsApp/Admin defect chain. Real production evidence then proved:

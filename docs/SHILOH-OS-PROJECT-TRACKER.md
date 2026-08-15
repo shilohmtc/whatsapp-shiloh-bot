@@ -22,6 +22,17 @@ After that initial approval, continue the approved workstream for the remainder 
 
 Request fresh approval only for material scope expansion, materially greater or unexpected destructive/irreversible risk, contradictory authoritative evidence that makes continuation unsafe, or an action that would violate an existing fail-closed/evidence gate. Human-truth/provider/external evidence gates always remain fail-closed; chat authorization never permits inferred evidence or manufactured appointments for proof.
 
+## Automatic continuation rule
+
+When an already-approved workstream is blocked only by a future authoritative condition, do not require a manual `continue` merely to resume the same approved sequence.
+
+- **Short waits (typically minutes):** directly re-check the authoritative system during the active chat and continue once success is proven.
+- **Longer waits:** when useful, create a condition-watch automation scoped to the exact dependency and already-approved continuation path.
+- **Success:** continue only the next safe steps already covered by the active workstream authorization.
+- **Failure / ambiguity / contradiction:** notify and stop; remain fail-closed and do not improvise or broaden scope.
+- **Evidence gates:** automation never overrides human truth, provider approval, genuine WhatsApp evidence, attendance, payment, privacy or other explicit fail-closed gates.
+- **Cadence:** use automation only when its available cadence is useful; if the platform's minimum cadence is slower than the expected wait, direct in-chat re-check is preferred.
+
 ## Current Product-Critical Gate
 
 🟠 **WAITING — Meta lifecycle template review.**
@@ -83,7 +94,7 @@ Do not enable the three pending lifecycle templates until Meta reports the exact
 
 **Highest-priority genuinely actionable item while Meta is blocked:** ⚪ **READY — post-confirmation client UX package**, without enabling or depending on unapproved lifecycle templates.
 
-**Authorization:** apply the new-chat authorization model above; evidence gates remain fail-closed.
+**Authorization:** apply the new-chat authorization model and automatic continuation rule above; evidence gates remain fail-closed.
 
 ## Guardrails
 
