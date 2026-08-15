@@ -12,6 +12,7 @@ const { getSummary: getReconciliationSummary, getRecommendations: getReconciliat
 const { createLifecycleAppointment, getLifecycleAppointments, patchLifecycleAppointment, runLifecycleScan, runControlledLifecycleTest } = require("../controllers/appointmentLifecycleController");
 const { getFeedback, getReviews, getCustomerSatisfaction, resolveCustomerFeedback } = require("../controllers/customerExperienceController");
 const { getStatus: getDatabaseStatus, getTables: getDatabaseTables, getSchema: getDatabaseSchema, getOverview: getDatabaseOverview, getMigrations: getDatabaseMigrations, applyMigrations: applyDatabaseMigrations } = require("../controllers/databaseController");
+const { getStatus: getLifecycleTemplateStatus, submitMissing: submitMissingLifecycleTemplates } = require("../controllers/clientLifecycleTemplateController");
 const router = express.Router();
 
 router.post("/test-command", testCommandAuth, runTestCommand);
@@ -37,6 +38,8 @@ router.get("/reconciliation/clients/canonicalization-audit", getCanonicalization
 router.post("/reconciliation/clients/canonicalize", canonicalizeReconciliationClients);
 router.get("/reconciliation/clients", getReconciliationCases); router.get("/reconciliation/clients/:id", getReconciliationCase);
 router.get("/appointments", getLifecycleAppointments); router.post("/appointments", createLifecycleAppointment); router.patch("/appointments/:id", patchLifecycleAppointment); router.post("/appointments/scan", runLifecycleScan); router.post("/appointments/test-lifecycle", runControlledLifecycleTest);
+router.get("/whatsapp/templates/lifecycle", getLifecycleTemplateStatus);
+router.post("/whatsapp/templates/lifecycle/submit-missing", submitMissingLifecycleTemplates);
 router.post("/whatsapp/templates/test", sendTemplateTest);
 router.get("/feedback", getFeedback); router.patch("/feedback/:id/resolve", resolveCustomerFeedback); router.get("/reviews", getReviews); router.get("/customer-satisfaction", getCustomerSatisfaction);
 router.get("/database/status", getDatabaseStatus); router.get("/database/tables", getDatabaseTables); router.get("/database/schema", getDatabaseSchema); router.get("/database/overview", getDatabaseOverview); router.get("/database/migrations", getDatabaseMigrations); router.post("/database/migrations/apply", applyDatabaseMigrations);
