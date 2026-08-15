@@ -22,7 +22,7 @@ test('guided lookup accepts a bare name, Find name, Find client name, or mobile 
 
 test('guided lookup remains permission scoped and exits cleanly', () => {
   assert.match(source, /filterClientsForAdminScope\(admin,found\.clients\)/);
-  assert.match(source, /\['menu','admin menu','home'\]\.includes\(v\)/);
+  assert.match(source, /\['menu','admin menu','home','admin'\]\.includes\(v\)/);
   assert.match(source, /v==='0'\|\|v==='back'\|\|v==='cancel'/);
   assert.match(source, /moreSessions\.delete\(k\)/);
 });
