@@ -6,8 +6,10 @@ const logger = require("./src/lib/logger");
 const requestContext = require("./src/middleware/requestContext");
 const { presentClientFamilyResult } = require("./src/presentation/clientFamilyPresentation");
 const { presentClientAppointmentChangeResult } = require("./src/presentation/clientAppointmentChangePresentation");
+const { presentCustomerExperienceResult } = require("./src/presentation/customerExperiencePresentation");
 const clientFamilyService = require("./src/services/clientServiceFamilyDiscovery");
 const appointmentChangeService = require("./src/services/appointmentChange");
+const customerExperienceService = require("./src/services/customerExperience");
 const clientIdentityService = require("./src/services/clientIdentityOnboarding");
 const clientDiscoveryService = require("./src/services/clientDiscoveryMenu");
 const { installClientNavigationPriority } = require("./src/services/clientNavigationPriority");
@@ -17,6 +19,8 @@ const processClientServiceFamilyMessage = clientFamilyService.processClientServi
 clientFamilyService.processClientServiceFamilyMessage = async (...args) => presentClientFamilyResult(await processClientServiceFamilyMessage(...args));
 const processAppointmentChangeMessage = appointmentChangeService.processAppointmentChangeMessage;
 appointmentChangeService.processAppointmentChangeMessage = async (...args) => presentClientAppointmentChangeResult(await processAppointmentChangeMessage(...args));
+const processCustomerExperienceMessage = customerExperienceService.processCustomerExperienceMessage;
+customerExperienceService.processCustomerExperienceMessage = async (...args) => presentCustomerExperienceResult(await processCustomerExperienceMessage(...args));
 installClientNavigationPriority({ identityService: clientIdentityService, discoveryService: clientDiscoveryService });
 
 const webhookRoutes = require("./src/routes/webhook");
