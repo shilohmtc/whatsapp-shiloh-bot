@@ -7,7 +7,7 @@ Purpose: permanent current-state project-management source of truth. Historical 
 
 Operational truth is GitHub `main`, Render production, Shiloh CRM, Google Calendar, Meta/WhatsApp provider evidence and explicit real WhatsApp/human evidence. Never infer provider, attendance, approval, CRM or Calendar state.
 
-Current application-code baseline: **PR #236** squash merge `44cdd7bf9ae2fbef03f4f93c8b6abab4bf9e2e90`. Render production deploy **`dep-da03ab1t0dsc738pm16g`** is verified **live** on 2026-08-15 with `META_LIFECYCLE_PROVISION_ON_START=false` after the approved one-shot provider submission.
+Current application-code baseline: **PR #238** squash merge `0d5f091fb37a7e49166096db1db65642e0d28bf9`, with later governance-only PR #239 on `main`. Render production deploy **`dep-da03ub9t0dsc738r5h20`** is verified **live** on 2026-08-15 with `META_LIFECYCLE_PROVISION_ON_START=false` after the second controlled one-shot Meta submission.
 
 Approval policy remains: Marietjie self; Christel self; Abigail may be approved by Abigail or Christel, first valid decision authoritative. Dummy Test uses JP admin account alone. Pending holds have no automatic expiry. MediHeel remains Christel only.
 
@@ -36,11 +36,17 @@ Read-only verification, diagnostics, reconciliation, documentation/status mainte
 
 When an already-approved Shiloh OS workstream is blocked only by a future external condition—such as a Render deploy becoming live, GitHub CI completing, Meta/provider review changing state, or another authoritative provider dependency—the default is to preserve momentum rather than require the user to manually send `continue`.
 
-If the expected wait is only a few minutes and the chat remains active, re-check the authoritative system directly on the next active turn and continue immediately once the condition is satisfied.
+If the expected wait is only a few minutes and the chat remains active, re-check the authoritative system directly and continue immediately once the condition is satisfied.
 
 If the wait may be materially longer, create a scoped condition-watch automation for the exact dependency when useful. The automation must: (1) check only the authoritative condition needed to unblock the current workstream; (2) continue only the already-approved next safe steps when the success condition is proven; (3) remain fail-closed on failure, ambiguity, contradiction or unexpected state; (4) never broaden scope, infer missing evidence, or cross a human/provider evidence gate; and (5) notify and stop rather than improvise if the dependency fails or materially changes risk.
 
 Automation cadence must respect platform limits. When the available automation frequency is slower than the expected wait—for example, hourly automation for a deploy expected within minutes—direct in-chat re-check remains the preferred method.
+
+## Provider lead-time rule
+
+Whenever a planned Shiloh feature may require externally approved WhatsApp templates, identify the complete foreseeable template set during feature planning and submit that provider work early enough to run in parallel with engineering. Do not wait until implementation reaches the send step. Before calling a template submission batch complete, explicitly ask whether any other foreseeable business-initiated WhatsApp message in the current roadmap would require provider approval.
+
+Do not submit speculative templates for flows whose business rules or message semantics are not yet approved.
 
 ## Attendance finalization — 🟢 VERIFIED for the 2026-08-14 reminder cohort
 
@@ -71,24 +77,25 @@ The original Pa Derik pending/recovery incident is no longer the current state: 
 
 - `shiloh_booking_confirmation_v1` — **APPROVED / UTILITY**.
 - `shiloh_staff_finalization_v1` — **APPROVED / UTILITY**.
+- Direct Meta UI evidence also shows `shiloh_birthday_wish_v1`, `shiloh_birthday_wish_v2`, `appointment_followup`, and `appointment_reminder` as Active. Do not infer production configuration from provider status alone.
 
-### Client lifecycle package — submitted, provider review pending
+### Foreseeable core lifecycle package — provider review pending
 
-PR #234 added a fail-closed lifecycle-template package and authenticated status/submission surface for:
-- `shiloh_appointment_reminder_actions_v1`;
-- `shiloh_reschedule_confirmation_v1`;
-- `shiloh_cancellation_confirmation_v1`.
+PR #234 introduced the fail-closed lifecycle package. PR #238 completed the foreseeable core inventory and made provisioning inventory-driven.
 
-PR #236 added an explicit one-shot startup provisioning gate because the available Render connector could not call the authenticated admin endpoint without exposing credentials. During controlled production deploy `dep-da039njvctds73b1laqg`, Meta returned **PENDING** for all three newly submitted templates. The trigger was then reset to `META_LIFECYCLE_PROVISION_ON_START=false`; final production deploy `dep-da03ab1t0dsc738pm16g` is live and no further startup submission occurs.
-
-Current provider truth:
+Current provider truth from the controlled one-shot submissions:
 - `shiloh_appointment_reminder_actions_v1` — **PENDING**;
 - `shiloh_reschedule_confirmation_v1` — **PENDING**;
-- `shiloh_cancellation_confirmation_v1` — **PENDING**.
+- `shiloh_cancellation_confirmation_v1` — **PENDING**;
+- `shiloh_booking_approval_request_v1` — **PENDING**;
+- `shiloh_booking_declined_v1` — **PENDING**;
+- `shiloh_booking_approval_outcome_v1` — **PENDING**.
 
-All three remain fail-closed. Do not configure/enable lifecycle delivery until Meta reports the exact expected template **APPROVED** and production configuration exactly matches. Real WhatsApp delivery evidence is still required before provider/evidence-gated lifecycle controls are promoted to verified.
+The second controlled one-shot deploy **`dep-da03tq5g1s2s73c9buag`** submitted only the three genuinely missing templates (`booking_approval_request`, `booking_declined`, `booking_approval_outcome`) and skipped the original three as already existing. Meta returned **PENDING** for all three new submissions. The trigger was immediately reset; **`dep-da03ub9t0dsc738r5h20`** is live with `META_LIFECYCLE_PROVISION_ON_START=false`, and no repeat provisioning occurred on the false-state restart.
 
-Birthday template status remains unproven in the current audit; do not infer approval from older evidence.
+All six remain fail-closed. Do not configure/enable their production delivery until Meta reports the exact expected template **APPROVED** and production configuration exactly matches. Real WhatsApp delivery evidence is still required before provider/evidence-gated lifecycle controls are promoted to verified.
+
+The Meta Lifecycle Approval condition-watch now covers all six exact template names and notifies only when all six are approved or when a rejection/action-required state appears.
 
 ## Google integration status
 
@@ -101,16 +108,19 @@ Birthday template status remains unproven in the current audit; do not infer app
 - PR #219 decline CTA / friendly policy-date polish — 🟠 WAITING for the next genuine applicable journey; do not manufacture a booking solely for proof.
 - PR #222 Calendar staff-contact presentation — 🟢 VERIFIED.
 - PR #225 MediHeel/pedicure Calendar icon specificity — 🟢 VERIFIED; foot/pedicure specificity wins over generic massage.
-- Post-confirmation client UX package (**Book another treatment / My appointments / Main menu** plus natural-language equivalents) — ⚪ READY, but remains behind the current Meta lifecycle/provider review gate.
+- Post-confirmation client UX package (**Book another treatment / My appointments / Main menu** plus natural-language equivalents) — ⚪ READY and can proceed while Meta review is externally blocked, provided no unapproved template is enabled or assumed.
 
 ## Provider/template and other gated items
 
 - Reminder native Reschedule/Cancel buttons — 🟠 WAITING for Meta approval + config + real-delivery evidence.
 - Reschedule confirmation lifecycle template — 🟠 WAITING for Meta approval + config + real-delivery evidence.
 - Cancellation confirmation lifecycle template — 🟠 WAITING for Meta approval + config + real-delivery evidence.
+- Practitioner approval-request template — 🟠 WAITING for Meta approval + config + real-delivery evidence.
+- Client decline template — 🟠 WAITING for Meta approval + config + real-delivery evidence.
+- Dual-authority approval outcome template — 🟠 WAITING for Meta approval + config + real-delivery evidence.
 - Google Contacts synchronization — ⚪ READY, lower priority; CRM remains authoritative.
 - Google Business Profile API — ⏸️ DEFERRED until Google approval/quota evidence changes from 0 QPM.
-- Ozow — 🟠 WAITING for merchant configuration and explicit business rules.
+- Ozow — 🟠 WAITING for merchant configuration and explicit business rules. Do not submit payment templates until those semantics are approved.
 - Destructive privacy execution — 🟠 WAITING; fail closed pending authority/evidence.
 
 ## Ordinary approval acceptance
@@ -130,14 +140,16 @@ Lifecycle state: 🟠 WAITING for genuine applicable journeys.
 - Older attendance backlog remains human-truth-gated.
 - PR #232 approval resilience complete; do not redo.
 - PR #234 lifecycle template package merged.
-- PR #236 one-shot Meta provisioning gate merged; final production flag is false.
-- Three lifecycle templates are currently **PENDING** at Meta and must remain fail-closed.
+- PR #238 complete foreseeable lifecycle-template inventory merged and production-live.
+- PR #239 automatic-continuation governance merged.
+- Final production flag `META_LIFECYCLE_PROVISION_ON_START=false` on live deploy `dep-da03ub9t0dsc738r5h20`.
+- Six foreseeable core lifecycle templates are currently **PENDING** at Meta and must remain fail-closed.
 - GBP API remains parked at last-authoritative **0 QPM** pending Google follow-up evidence.
 
-**Authoritative current state:** GitHub `main` application baseline is PR #236 / `44cdd7bf...`; Render `dep-da03ab1t0dsc738pm16g` is live; booking/staff templates are APPROVED; reminder-actions/reschedule/cancellation lifecycle templates are PENDING; #567 is confirmed and evidence-gated before cancellation.
+**Authoritative current state:** GitHub `main` includes PR #238 application changes and PR #239 governance; Render `dep-da03ub9t0dsc738r5h20` is live with the provisioning flag false; booking/staff templates are APPROVED; all six foreseeable core lifecycle templates are PENDING; #567 is confirmed and evidence-gated before cancellation.
 
-**Highest-priority genuinely actionable item:** 🟠 **WAITING — Meta review of the three newly submitted lifecycle templates.** While waiting, read-only provider-status checks may proceed. Do not enable them until exact provider approval is proven.
+**Highest-priority state:** 🟠 **WAITING — Meta review of the six submitted lifecycle templates.** Read-only provider-status checks may proceed automatically. Do not enable them until exact provider approval is proven.
 
-**Next non-provider-blocked product item:** ⚪ **READY — post-confirmation client UX package**, subject to preserving all current evidence gates and without using unapproved lifecycle templates.
+**Highest-priority genuinely actionable item while Meta is blocked:** ⚪ **READY — post-confirmation client UX package**, without enabling or depending on unapproved lifecycle templates.
 
-**Authorization state:** apply the new-chat authorization model above. Evidence gates remain fail-closed regardless of chat authorization.
+**Authorization state:** apply the new-chat authorization model and automatic-continuation rule above. Evidence gates remain fail-closed regardless of chat authorization.
