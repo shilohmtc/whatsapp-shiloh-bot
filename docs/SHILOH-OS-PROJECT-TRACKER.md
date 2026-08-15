@@ -28,9 +28,9 @@ Button-first UX: known finite client actions should use WhatsApp buttons/lists w
 
 ## Current production baseline
 
-**PR #244 / `c6d09219519e621d2e34ae660e190b95d310c7bd`** is on `main`.
+**PR #247 / `c775ad0a4738a35f07b31a17831a1e63358291d8`** is on `main`.
 
-Render **`dep-da056au7bikc73ee1gsg`** is live with `META_LIFECYCLE_PROVISION_ON_START=false`.
+Render **`dep-da05b7jncjis738eh13g`** is live with `META_LIFECYCLE_PROVISION_ON_START=false`.
 
 ## Current Meta/provider gate
 
@@ -55,7 +55,7 @@ Do not configure or enable any pending template until exact provider approval is
 
 | ID | Workstream | State | Evidence / next action |
 |---|---|---|---|
-| META-LIFECYCLE | Foreseeable lifecycle template package | 🟠 WAITING | Seven templates PENDING. PR #244 adds follow-up v2. Final provisioning flag false. Condition-watch covers all seven. |
+| META-LIFECYCLE | Foreseeable lifecycle template package | 🟠 WAITING | Seven templates PENDING. Follow-up v2 submitted. Final provisioning flag false. Condition-watch covers all seven. |
 | META-BOOKING | Booking confirmation template | 🟢 VERIFIED | `shiloh_booking_confirmation_v1` APPROVED / UTILITY. |
 | META-STAFF | Staff finalization template | 🟢 VERIFIED | `shiloh_staff_finalization_v1` APPROVED / UTILITY. |
 | APP-RESILIENCE | Approval recovery / discoverability | 🟢 VERIFIED | PR #232 complete; Pending approvals + safe resend production-live. |
@@ -64,8 +64,8 @@ Do not configure or enable any pending template until exact provider approval is
 | A1-HIST | Older attendance backlog | 🟠 WAITING | Explicit authorized human truth per visit; never infer/bulk-finalize. |
 | C1-POSTBOOK-UX | Post-confirmation client actions | 🟢 VERIFIED / one evidence nuance | `My appointments`, `Main menu`, `Book another treatment`, and greeting navigation handset-verified. Actual post-confirmation three-button row awaits next genuine confirmed booking. |
 | C1-BUTTON-FIRST-MYAPPTS | `My appointments` button-first UX | 🟢 VERIFIED | PR #243 live; Dummy Test handset shows `Book another` + `Main menu` buttons. |
-| C1-FOLLOWUP-V2 | Button-first appointment follow-up template | 🟠 WAITING | PR #244 merged. `shiloh_appointment_followup_v2` submitted with rating buttons 1–5; Meta PENDING. Do not configure yet. |
-| C1-BUTTON-FIRST-RATING | In-session rating UX | 🔵 ACTIVE | While provider review runs, make invalid/ambiguous rating prompts interactive and expose useful next actions after positive rating; low-rating feedback remains free text. |
+| C1-FOLLOWUP-V2 | Button-first appointment follow-up template | 🟠 WAITING | PR #244 merged. `shiloh_appointment_followup_v2` submitted with rating buttons 1–5; Meta PENDING. PR #247 prepares exact five-payload sender capacity; do not configure yet. |
+| C1-BUTTON-FIRST-RATING | In-session rating UX | 🟠 WAITING genuine evidence | PR #246 production-live. Invalid/ambiguous rating -> five-choice list; positive rating -> `Book another` + `Main menu`; low-rating feedback remains free text. Await next genuine applicable handset journey. |
 | C1-APP-ORD | Ordinary approval combinations | 🟠 WAITING | Genuine future evidence only; never manufacture appointments. |
 | GCONTACTS | CRM → Google Contacts | ⚪ READY | Lower priority; CRM remains authoritative. |
 | GBP | Google Business Profile API | ⏸️ DEFERRED | Last authoritative quota 0 QPM; revisit on Google follow-up email/quota change. |
@@ -87,15 +87,17 @@ Do not configure or enable any pending template until exact provider approval is
 - PR #242 navigation-priority repair complete and handset accepted.
 - PR #243 button-first `My appointments` complete and handset accepted.
 - PR #244 follow-up-v2 provider readiness complete; template submitted and PENDING.
-- Final production flag `META_LIFECYCLE_PROVISION_ON_START=false` on `dep-da056au7bikc73ee1gsg`.
+- PR #246 in-session rating UX production-live; genuine handset acceptance pending.
+- PR #247 five-payload follow-up template sender readiness production-live.
+- Final production flag `META_LIFECYCLE_PROVISION_ON_START=false` on `dep-da05b7jncjis738eh13g`.
 - Seven lifecycle templates are PENDING at Meta.
-- GBP remains parked at last-authoritative 0 QPM.
+- Google Business Profile API remains parked at last-authoritative 0 QPM.
 
-**Authoritative current state:** PR #244 is on `main`; Render `dep-da056au7bikc73ee1gsg` is live with provisioning false; post-confirmation/navigation and `My appointments` button-first UX have real Dummy Test handset evidence; booking/staff templates are approved; seven lifecycle templates are pending; #567 remains evidence-gated before cancellation.
+**Authoritative current state:** PR #247 is on `main`; Render `dep-da05b7jncjis738eh13g` is live with provisioning false; post-confirmation/navigation and `My appointments` button-first UX have real Dummy Test handset evidence; in-session rating UX is production-live but awaits a genuine rating journey; booking/staff templates are approved; seven lifecycle templates are pending; #567 remains evidence-gated before cancellation.
 
 **Highest-priority state:** 🟠 **WAITING — Meta review of the seven lifecycle templates.**
 
-**Highest-priority genuinely actionable item while Meta is blocked:** 🔵 **ACTIVE — in-session customer-experience/rating button-first UX**, without enabling the pending follow-up-v2 template.
+**Highest-priority genuinely actionable item while Meta is blocked:** continue read-only button-first consistency audit and minor safe UX housekeeping. Google Contacts remains the next separate lower-priority READY workstream.
 
 ## Guardrails
 
