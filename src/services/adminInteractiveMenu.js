@@ -6,6 +6,7 @@ const { processAdminWalkinMessage } = require('./adminWalkin');
 const { processJeanPierreControlPlaneMessage } = require('./jeanPierreAdminControlPlane');
 const { processAdminMarietjieEarningsMessage } = require('./adminMarietjieEarnings');
 const { processAdminTestClientResetMessage } = require('./adminTestClientReset');
+const { processAdminPendingBookingApprovalsMessage } = require('./adminPendingBookingApprovals');
 const { abigailEarningsButtons, christelEarningsButtons, marietjieEarningsButtons } = require('./adminEarningsButtons');
 
 const SECTION_ORDER = ['Appointments', 'Reports', 'Clients', 'Services', 'Schedule', 'More'];
@@ -21,6 +22,7 @@ const ACTIONS = [
   { key: 'marietjie_earnings', labels: ['💰 Marietjie earnings', 'Marietjie earnings'], command: 'Marietjie earnings', description: 'Completed-only earnings report' },
   { key: 'booking', labels: ['Make a booking'], command: 'Make a booking', description: 'Create a guarded appointment' },
   { key: 'manage_booking', labels: ['Manage a booking'], command: 'Manage a booking', description: 'Change an existing appointment' },
+  { key: 'pending_approvals', labels: ['Pending approvals', 'Pending booking approvals'], command: 'Pending approvals', description: 'Review held requests and safely resend approval' },
   { key: 'finalize', labels: ['Finalize past visits'], command: 'Finalize past appointments', description: 'Mark Completed or No-show explicitly' },
   { key: 'client', labels: ['Find a client', 'Find my client'], command: 'Find a client', description: 'Search authorized CRM clients' },
   { key: 'reset_chenique', labels: ['Reset Chenique profile'], command: 'Reset test client Chenique', description: 'Reset approved booking-test client' },
@@ -102,6 +104,7 @@ function enrichPrivilegedReportsMenu(result) {
   const christel = isChristelOwnerAdmin(result.admin);
   const marietjie = isMarietjieAdmin(result.admin);
   let body = String(result.interactive.body);
+  if (result.admin?.permissions?.['appointment:view'] === true && !/Pending approvals/i.test(body)) body += '\n\n*Appointments*\n92️⃣ Pending approvals';
   if (result.admin?.permissions?.['booking:update'] === true && result.admin?.permissions?.['appointment:view'] === true && !/Finalize past visits/i.test(body)) body += '\n\n*Appointments*\n93️⃣ Finalize past visits';
   if (!jeanPierre && !christel && !marietjie) return { ...result, interactive: { ...result.interactive, body } };
   if (jeanPierre && !/Christel earnings/i.test(body)) body += '\n\n*Reports*\n98️⃣ 💰 Christel earnings';
@@ -120,6 +123,7 @@ async function dispatchStableAction(sender, action) {
   if (action.key === 'today' || action.key === 'tomorrow') return processAdminAppointmentsByDateMessage(sender, action.command);
   if (action.key === 'walkin') return processAdminWalkinMessage(sender, action.command);
   if (action.key === 'help') return processAdminHelpMessage(sender, action.command);
+  if (action.key === 'pending_approvals') return processAdminPendingBookingApprovalsMessage(sender, action.command);
   if (action.key === 'finalize') return processAdminAppointmentFinalizationMessage(sender, action.command);
   if (action.key === 'abigail_earnings') return { handled: true, interactive: abigailEarningsButtons() };
   if (action.key === 'christel_earnings') return { handled: true, interactive: christelEarningsButtons() };
@@ -131,6 +135,8 @@ async function dispatchStableAction(sender, action) {
   return processAdminMobileMenuMessage(sender, action.command);
 }
 async function processAdminInteractiveMenuMessage(sender, text) {
+  const pendingApprovals = await processAdminPendingBookingApprovalsMessage(sender, text);
+  if (pendingApprovals.handled) return pendingApprovals;
   const finalization = await processAdminAppointmentFinalizationMessage(sender, text);
   if (finalization.handled) return finalization;
   const testClientReset = await processAdminTestClientResetMessage(sender, text);
