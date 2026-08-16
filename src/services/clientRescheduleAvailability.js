@@ -28,7 +28,16 @@ function explicitRescheduleDate(value=''){const match=clean(value).toLowerCase()
 function closedDateMessage(date,status){const reason=status?.holidayName?` (${status.holidayName})`:'';return `Shiloh is closed on ${displayDate(date)}${reason}. Your current appointment is unchanged. Please choose another date.`;}
 async function processClientRescheduleAvailabilityMessage(phone,text){
   const command=clean(text).toLowerCase();
-  if(/^(?:reschedule|cancel)(?:\s+appointment)?$/.test(command))return{handled:false};
+  if(/^(?:reschedule)(?:\s+appointment)?$/.test(command)){
+    const started=await processAppointmentChangeMessage(phone,'reschedule appointment');
+    const startedIntent=await getIntent(phone);
+    if(started?.handled&&startedIntent?.action==='reschedule'&&startedIntent?.status==='collecting'&&startedIntent?.appointment_id){
+      const startedAppointment=await appointmentContext(phone,startedIntent.appointment_id);
+      if(startedAppointment)return rescheduleDateChoice(startedAppointment);
+    }
+    return started;
+  }
+  if(/^(?:cancel)(?:\s+appointment)?$/.test(command))return{handled:false};
   const intent=await getIntent(phone);
   if(!intent||intent.action!=='reschedule'||!intent.appointment_id)return{handled:false};
   if(intent.status==='awaiting_confirmation'){
