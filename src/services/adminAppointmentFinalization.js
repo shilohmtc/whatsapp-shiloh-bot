@@ -2,7 +2,7 @@ const { pool } = require('../db/pool');
 const { normalizePhone } = require('./clientIdentityOnboarding');
 const { canCertifyAppointment, certificationStaffIds, authorityDescription } = require('./attendanceFinalizationAuthority');
 const { processAdminBookingUpdateMessage } = require('./adminBookingUpdate');
-const { processAdminAppointmentCancellationMessage } = require('./adminAppointmentCancellation');
+const { processAdminAppointmentCancellationMessage, hasPendingCancellationIntent } = require('./adminAppointmentCancellation');
 
 // Reserve two of WhatsApp's 10 list rows for pagination and Back controls.
 const PAGE_SIZE = 8;
@@ -100,6 +100,12 @@ function pendingListInteractive(data, admin = null) {
       : '*Visits awaiting finalization — 1–15 Aug 2026*\nThere are no visits in this approved historical window awaiting final status in your authorized certification scope.',
     buttonText: 'Review visits', rows, sectionTitle: 'Awaiting finalization',
   };
+}
+
+async function refreshedQueueInteractive(admin, successMessage) {
+  const data = await pendingPastAppointments(admin, 1);
+  const interactive = pendingListInteractive(data, admin);
+  return { ...interactive, body: `${successMessage}\n\n${interactive.body}` };
 }
 
 async function loadAuthorizedPendingAppointment(admin, appointmentId, db = pool, lock = false) {
@@ -208,11 +214,22 @@ async function processAdminAppointmentFinalizationMessage(sender, text) {
   const cancellationMatch = raw.match(/^finalize_cancelled_(\d+)$/i);
   const rescheduleMatch = raw.match(/^finalize_reschedule_(\d+)$/i);
   const isBack = normalized === 'finalize_back';
-  if (!isEntry && !pageMatch && !selectionMatch && !decisionMatch && !cancellationMatch && !rescheduleMatch && !isBack) return { handled: false };
+  const recognizedFinalizationAction = Boolean(isEntry || pageMatch || selectionMatch || decisionMatch || cancellationMatch || rescheduleMatch || isBack);
+  const pendingCancellation = recognizedFinalizationAction ? false : await hasPendingCancellationIntent(sender);
+  if (!recognizedFinalizationAction && !pendingCancellation) return { handled: false };
 
   const admin = await getAdmin(sender);
   if (!admin) return { handled: false };
   if (!has(admin, 'appointment:view')) return { handled: true, admin, reply: 'Your admin account does not currently have permission to view appointment finalization.' };
+
+  if (pendingCancellation) {
+    const cancellation = await processAdminAppointmentCancellationMessage(sender, raw);
+    if (cancellation.cancelledAppointmentId) {
+      const interactive = await refreshedQueueInteractive(admin, cancellation.reply);
+      return { handled: true, admin, interactive };
+    }
+    return { ...cancellation, admin };
+  }
 
   if (isEntry || pageMatch || isBack) {
     const page = pageMatch ? Number(pageMatch[1]) : 1;
@@ -252,12 +269,13 @@ async function processAdminAppointmentFinalizationMessage(sender, text) {
   if (result.status === 'certification_forbidden') return { handled: true, admin, reply: 'You can review this appointment, but attendance must be certified by its responsible practitioner or authorized supervisor.' };
   if (result.status !== 'updated') return { handled: true, admin, reply: 'That appointment changed or is outside the approved 1–15 Aug historical window or your authorized scope, so no status update was made.' };
   const label = targetStatus === 'completed' ? 'Completed' : 'No-show';
-  return { handled: true, admin, reply: `✅ Appointment #${appointmentId} marked *${label}*. Reporting integrity will now use this explicit canonical status.` };
+  const interactive = await refreshedQueueInteractive(admin, `✅ Appointment #${appointmentId} marked *${label}*. It has been removed from the finalization queue.`);
+  return { handled: true, admin, interactive };
 }
 
 module.exports = {
   FINAL_STATUSES, PAGE_SIZE, HISTORICAL_WINDOW_START, HISTORICAL_WINDOW_END,
-  pendingPastAppointments, pendingListInteractive, decisionInteractive, reviewOnlyInteractive,
+  pendingPastAppointments, pendingListInteractive, refreshedQueueInteractive, decisionInteractive, reviewOnlyInteractive,
   loadAuthorizedPendingAppointment, finalizeAppointment, startPastVisitReschedule, startPastVisitCancellation,
   processAdminAppointmentFinalizationMessage,
 };
