@@ -8,6 +8,8 @@ async function certificationStaffIds(admin, db = pool) {
   const name = normalizedName(admin?.display_name);
   if (!admin) return [];
 
+  // Christel is the sole attendance-finalization authority for both
+  // Christel and Abigail appointments.
   if (name === 'christel') {
     const result = await db.query(
       `SELECT id
@@ -19,7 +21,9 @@ async function certificationStaffIds(admin, db = pool) {
     return result.rows.map((row) => Number(row.id));
   }
 
-  if (name === 'abigail' || name === 'marietjie') {
+  // Marietjie is the sole attendance-finalization authority for her own
+  // appointments. Abigail deliberately has no certification authority.
+  if (name === 'marietjie') {
     return admin.staff_id ? [Number(admin.staff_id)] : [];
   }
 
@@ -46,7 +50,6 @@ async function canCertifyAppointment(admin, appointmentId, db = pool) {
 function authorityDescription(admin) {
   const name = normalizedName(admin?.display_name);
   if (name === 'christel') return 'Christel and Abigail appointments';
-  if (name === 'abigail') return 'Abigail appointments';
   if (name === 'marietjie') return 'Marietjie appointments';
   return 'review only';
 }
