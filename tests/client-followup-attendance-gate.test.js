@@ -21,7 +21,7 @@ test('followup delivery remains claimed transactionally and is retryable only on
 });
 
 test('explicit attendance finalization synchronizes canonical lifecycle status', () => {
-  assert.match(finalization, /FINAL_STATUSES = new Set\(\['completed', 'no_show'\]\)/);
+  assert.match(finalization, /FINAL_STATUSES = new Set\(\['completed', 'no_show', 'no_charge'\]\)/);
   assert.match(finalization, /UPDATE appointment_lifecycle SET status=\$1,updated_at=NOW\(\) WHERE appointment_id=\$2/);
   assert.match(finalization, /Explicit WhatsApp practitioner attendance certification/);
 });
