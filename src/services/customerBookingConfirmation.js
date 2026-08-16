@@ -156,4 +156,4 @@ async function sendCustomerBookingConfirmationForAppointment(appointmentId){
   return sendCustomerBookingConfirmation({appointmentId:a.id,clientId:a.client_id,clientName:a.client_name,serviceName:a.service_name,staffName:a.staff_name,locationName:a.location_name,startsAt:a.starts_at,endsAt:a.ends_at,source:a.source||'shiloh'});
 }
 
-module.exports={sendCustomerBookingConfirmation,sendCustomerBookingConfirmationForAppointment,googleCalendarUrl,claimBookingConfirmation,releaseBookingConfirmationClaim,markBookingConfirmationSent,ensureDeliveryTable,practitionerApprovalStatus};
+module.exports={sendCustomerBookingConfirmation,sendCustomerBookingConfirmationForAppointment,googleCalendarUrl,claimBookingConfirmation,releaseBookingConfirmationClaim,markBookingConfirmationSent,ensureDeliveryTable,ensureToken,practitionerApprovalStatus};
