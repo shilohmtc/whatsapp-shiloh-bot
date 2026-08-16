@@ -10,8 +10,9 @@ const authority = source('src/services/attendanceFinalizationAuthority.js');
 const appointmentsMenu = source('src/services/adminAppointmentsMenu.js');
 const interactiveMenu = source('src/services/adminInteractiveMenu.js');
 
-test('past finalization remains discoverable through authorized appointment admin UX', () => {
-  assert.match(appointmentsMenu, /has\(admin, 'booking:update'\) && has\(admin, 'appointment:view'\)/);
+test('past finalization remains discoverable only for authorized finalizers', () => {
+  assert.match(appointmentsMenu, /canAccessFinalization\(admin\) && has\(admin, 'booking:update'\) && has\(admin, 'appointment:view'\)/);
+  assert.match(appointmentsMenu, /\['christel', 'marietjie'\]\.includes/);
   assert.match(appointmentsMenu, /admin_appointment_finalize/);
   assert.match(appointmentsMenu, /Finalize past visits/);
   assert.match(finalization, /!has\(admin, 'appointment:view'\)/);
@@ -31,12 +32,13 @@ test('finalization pagination reserves WhatsApp rows for More and Back controls'
   assert.match(finalization, /rows\.push\(\{ id: 'appointments'/);
 });
 
-test('certification authority is practitioner-owned with Christel supervisory scope only', () => {
+test('certification authority is Christel for Christel and Abigail, and Marietjie for herself only', () => {
   assert.match(authority, /name === 'christel'/);
   assert.match(authority, /IN \('christel','abigail'\)/);
-  assert.match(authority, /name === 'abigail' \|\| name === 'marietjie'/);
+  assert.match(authority, /name === 'marietjie'/);
+  assert.doesNotMatch(authority, /name === 'abigail' \|\| name === 'marietjie'/);
+  assert.match(authority, /Abigail deliberately has no certification authority/);
   assert.match(authority, /return admin\.staff_id \? \[Number\(admin\.staff_id\)\] : \[\]/);
-  assert.match(authority, /return \[\];/);
   assert.match(authority, /staffIds\.every\(\(staffId\) => allowed\.includes\(staffId\)\)/);
   assert.match(finalization, /reviewOnlyInteractive/);
   assert.match(finalization, /canCertifyAppointment\(admin, appointment\.id, db\)/);
