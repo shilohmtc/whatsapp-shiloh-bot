@@ -1,6 +1,6 @@
 # Shiloh OS — Project Tracker
 
-Updated: 2026-08-15
+Updated: 2026-08-16
 Purpose: concise operational dashboard. Master is the detailed current ledger; do not redo completed work.
 
 ## Canonical status system
@@ -28,49 +28,89 @@ Button-first UX: known finite client actions should use WhatsApp buttons/lists w
 
 ## Current production baseline
 
-**PR #247 / `c775ad0a4738a35f07b31a17831a1e63358291d8`** is on `main`.
+GitHub `main` current application baseline: **`e2e3d943d7291819e4c8e65e68a4816147380549`**.
 
-Render **`dep-da05b7jncjis738eh13g`** is live with `META_LIFECYCLE_PROVISION_ON_START=false`.
+Render **`dep-da0rph5g1s2s73bp2i90`** is **LIVE** and healthy. `/health` returns 200. `META_LIFECYCLE_PROVISION_ON_START=false` remains fail-closed.
 
-## Current Meta/provider gate
+## Current Meta/provider state
 
-🟠 **WAITING — seven lifecycle templates under Meta review.**
+🟢 **Provider review gate resolved.** Direct Meta WhatsApp Manager evidence on 2026-08-16 shows the current lifecycle set **Active – Quality pending**; this is an active quality-rating state, not approval-review pending.
 
-Provider truth:
-- `shiloh_booking_confirmation_v1` — 🟢 APPROVED / UTILITY;
-- `shiloh_staff_finalization_v1` — 🟢 APPROVED / UTILITY;
-- `shiloh_appointment_reminder_actions_v1` — 🟠 PENDING;
-- `shiloh_reschedule_confirmation_v1` — 🟠 PENDING;
-- `shiloh_cancellation_confirmation_v1` — 🟠 PENDING;
-- `shiloh_booking_approval_request_v1` — 🟠 PENDING;
-- `shiloh_booking_declined_v1` — 🟠 PENDING;
-- `shiloh_booking_approval_outcome_v1` — 🟠 PENDING;
-- `shiloh_appointment_followup_v2` — 🟠 PENDING.
+Current provider-visible active templates include:
+- `shiloh_appointment_followup_v2` — Utility;
+- `shiloh_booking_approval_outcome_v1` — Utility;
+- `shiloh_booking_declined_v1` — Utility;
+- `shiloh_booking_approval_request_v1` — Utility;
+- `shiloh_cancellation_confirmation_v1` — Utility;
+- `shiloh_reschedule_confirmation_v1` — Utility;
+- `shiloh_appointment_reminder_actions_v1` — Utility;
+- `shiloh_booking_confirmation_v1` — Utility;
+- `shiloh_staff_finalization_v1` — Utility;
+- `shiloh_birthday_wish_v2` — Marketing;
+- `shiloh_birthday_wish_v1` — Marketing;
+- legacy `appointment_followup` — Utility.
 
-Controlled one-shot deploy `dep-da055pjvctds73b2vc7g` skipped the six existing templates and submitted only `shiloh_appointment_followup_v2`; Meta returned PENDING. Final provisioning flag is false. The Meta Lifecycle Approval condition-watch is enabled and covers all seven.
+Current-generation production wiring is enabled for booking confirmation, approval request/outcome/decline, reschedule confirmation, cancellation confirmation, reminder actions, follow-up v2, birthday v2 and staff finalization. Legacy variants are fallback/non-canonical where retained.
 
-Do not configure or enable any pending template until exact provider approval is proven and production configuration matches. Real WhatsApp delivery evidence remains required for promotion to verified.
+Provider-active/configured does **not** by itself prove real delivery. Each lifecycle route remains genuine-journey evidence-gated until its exact production send is naturally observed.
 
 ## At-a-glance
 
 | ID | Workstream | State | Evidence / next action |
 |---|---|---|---|
-| META-LIFECYCLE | Foreseeable lifecycle template package | 🟠 WAITING | Seven templates PENDING. Follow-up v2 submitted. Final provisioning flag false. Condition-watch covers all seven. |
-| META-BOOKING | Booking confirmation template | 🟢 VERIFIED | `shiloh_booking_confirmation_v1` APPROVED / UTILITY. |
-| META-STAFF | Staff finalization template | 🟢 VERIFIED | `shiloh_staff_finalization_v1` APPROVED / UTILITY. |
-| APP-RESILIENCE | Approval recovery / discoverability | 🟢 VERIFIED | PR #232 complete; Pending approvals + safe resend production-live. |
-| APP-PADERIK | Pa Derik #567 | 🟠 WAITING | Confirmed after Christel approval. Capture handset evidence first; then cancel normally. Do not modify/cancel before evidence. |
+| JUVAN-E2E | Juvan beginning-to-end controlled client acceptance | 🔵 ACTIVE | Clean reset/baseline established. Continue client-perspective booking through CRM, approval, Calendar, current templates, corrected reschedule/closed-day path and normal cancellation. |
+| META-LIFECYCLE | Current lifecycle template package | 🟢 CONFIGURED / 🟠 per-route evidence | Meta UI shows Active – Quality pending. Current generation is production-configured. Verify each send naturally; do not manufacture journeys. |
+| META-BOOKING | Booking confirmation template | 🟢 VERIFIED provider/config | `shiloh_booking_confirmation_v1` provider-reported APPROVED / UTILITY and configured in production. |
+| META-STAFF | Staff finalization template | 🟢 VERIFIED provider/config | `shiloh_staff_finalization_v1` provider-reported APPROVED / UTILITY. |
+| APP-RESILIENCE | Approval recovery / discoverability | 🟢 VERIFIED | Recovery/resend machinery remains; visible Pending approvals menu entry removed from normal Admin presentation. |
+| ADMIN-CLEANUP | Production Admin test cleanup | 🟢 VERIFIED | Chenique/Dummy reset clutter and Pending approvals menu entry removed; Juvan reset retained for Christel + Jean-Pierre as controlled fixture reset. |
+| APP-PADERIK | Pa Derik #567 | 🟠 WAITING normal cancellation | Real handset reschedule evidence captured. Appointment now Tue 18 Aug 2026 08:30–10:15 on Shiloh Bookings + primary Calendar. Leave unchanged until Pa Derik is available to cancel through Shiloh normally. |
+| C1-RESCHEDULE-UX | Closed-day + reschedule loop repair | 🟢 VERIFIED core UX | Pa Derik handset proves date → daypart → available time → explicit compare/confirm → success. Closed-day guard is production-live for booking and reschedule. |
+| C1-ACTION-HELPER | Post-reschedule supplemental action helper | 🟢 FIXED / 🟠 fresh natural evidence | Pa Derik exposed `ensureToken is not a function`; export fixed at `e2e3d943...`, live on Render. Re-prove naturally with Juvan; do not re-mutate #567 for proof. |
+| C1-POSTBOOK-UX | Post-confirmation client actions | 🟢 VERIFIED / one evidence nuance | Core navigation/button-first behaviour live. Current-generation post-confirmation/template action chain to be exercised in Juvan journey. |
+| C1-BUTTON-FIRST-RATING | In-session rating UX | 🟠 WAITING genuine evidence | Production-live; await next genuine applicable follow-up/rating journey. |
+| C1-FOLLOWUP-V2 | Button-first appointment follow-up template | 🟠 WAITING genuine delivery | `shiloh_appointment_followup_v2` active and production-configured; verify only after genuine completed-visit lifecycle timing. |
+| C1-REMINDER-ACTIONS | Actionable reminder template | 🟠 WAITING genuine delivery | `shiloh_appointment_reminder_actions_v1` active/configured; verify on a naturally due reminder. |
+| C1-CANCEL-TEMPLATE | Cancellation confirmation template | 🟠 WAITING genuine delivery | Active/configured. Verify during a genuine normal Shiloh cancellation, preferably Juvan or #567 when appropriate. |
+| C1-RESCHEDULE-TEMPLATE | Reschedule confirmation template | 🟠 WAITING post-normalization delivery | Active/configured. Pa Derik reschedule happened before current-generation normalization, so his handset success message is not sufficient proof of this exact template. |
+| C1-APP-ORD | Ordinary approval combinations | 🟠 WAITING | Genuine future evidence only; never manufacture appointments. |
+| BIRTHDAY-V2 | Canonical birthday template | 🟠 WAITING genuine eligibility | Active/configured as v2; obey CRM birthday + opt-in/business rules. Do not trigger artificially in Juvan test. |
 | A1-20260814 | 14 Aug reminder finalizations | 🟢 VERIFIED | #562 Completed; #357 No-show; duplicate replay rejected. |
 | A1-HIST | Older attendance backlog | 🟠 WAITING | Explicit authorized human truth per visit; never infer/bulk-finalize. |
-| C1-POSTBOOK-UX | Post-confirmation client actions | 🟢 VERIFIED / one evidence nuance | `My appointments`, `Main menu`, `Book another treatment`, and greeting navigation handset-verified. Actual post-confirmation three-button row awaits next genuine confirmed booking. |
-| C1-BUTTON-FIRST-MYAPPTS | `My appointments` button-first UX | 🟢 VERIFIED | PR #243 live; Dummy Test handset shows `Book another` + `Main menu` buttons. |
-| C1-FOLLOWUP-V2 | Button-first appointment follow-up template | 🟠 WAITING | PR #244 merged. `shiloh_appointment_followup_v2` submitted with rating buttons 1–5; Meta PENDING. PR #247 prepares exact five-payload sender capacity; do not configure yet. |
-| C1-BUTTON-FIRST-RATING | In-session rating UX | 🟠 WAITING genuine evidence | PR #246 production-live. Invalid/ambiguous rating -> five-choice list; positive rating -> `Book another` + `Main menu`; low-rating feedback remains free text. Await next genuine applicable handset journey. |
-| C1-APP-ORD | Ordinary approval combinations | 🟠 WAITING | Genuine future evidence only; never manufacture appointments. |
 | GCONTACTS | CRM → Google Contacts | ⚪ READY | Lower priority; CRM remains authoritative. |
 | GBP | Google Business Profile API | ⏸️ DEFERRED | Last authoritative quota 0 QPM; revisit on Google follow-up email/quota change. |
 | E1 | Ozow | 🟠 WAITING | Merchant config + approved business rules required. |
 | PRIV | Destructive privacy execution | 🟠 WAITING | Fail closed pending authority/evidence. |
+
+## Pa Derik #567 exact state
+
+- Confirmed booking was handset-proven earlier.
+- Corrected reschedule journey was handset-proven on 2026-08-16.
+- Appointment is now **Tue 18 Aug 2026, 08:30–10:15**, Full Body Swedish with Christel.
+- Google Calendar matches on **Shiloh — Bookings** and **primary**; no matching 17 Aug event was found in the checked window.
+- Reschedule preserved the old appointment until explicit `Confirm reschedule`.
+- Supplemental post-send action generation failed at that time with `ensureToken is not a function`; core CRM/Calendar mutation still succeeded.
+- Import/export defect fixed in `e2e3d943...`; live production deploy `dep-da0rph5g1s2s73bp2i90` is healthy.
+- Do not reschedule #567 again merely for evidence.
+- Remaining action: cancel #567 through normal Shiloh cancellation when Pa Derik is available.
+
+## Juvan exact acceptance scope
+
+Track the controlled journey across:
+1. client WhatsApp/provider behaviour;
+2. Render processing/log evidence;
+3. CRM identity/appointment state through guarded application truth;
+4. pending hold / practitioner approval state;
+5. Google Calendar shared/practitioner propagation;
+6. booking confirmation and current Meta lifecycle sends;
+7. post-confirmation button-first actions;
+8. corrected closed-day/reschedule UX;
+9. supplemental action helper after the `ensureToken` fix;
+10. normal cancellation and cancellation confirmation.
+
+Routine screenshots are not required. Use machine-visible authority where possible and request handset evidence only where UI/human truth cannot otherwise be established or where the user notices a discrepancy.
+
+Direct Render Postgres read-only querying remains unavailable because of the connector SSL/TLS handshake; do not infer DB state from that failure. Reconcile CRM through Shiloh application/audit/log evidence and correlated appointment/Calendar state until direct SQL becomes available.
 
 ## Exact continuation
 
@@ -78,27 +118,21 @@ Do not configure or enable any pending template until exact provider approval is
 - #564 confirmed — preserve booking semantics.
 - #565 cancelled — never recreate merely for proof.
 - #566 declined/released — never recreate merely for proof.
-- #567 confirmed — preserve until Pa Derik handset evidence, then cancel normally.
+- #567 rescheduled and authoritative at Tue 18 Aug 2026 08:30–10:15; cancellation deferred until Pa Derik available.
 - #562 Completed and #357 No-show resolved.
-- PR #232 complete; do not redo.
-- PR #238 foreseeable template inventory complete.
-- PR #239 automatic-continuation governance complete.
-- PR #241 post-confirmation UX complete.
-- PR #242 navigation-priority repair complete and handset accepted.
-- PR #243 button-first `My appointments` complete and handset accepted.
-- PR #244 follow-up-v2 provider readiness complete; template submitted and PENDING.
-- PR #246 in-session rating UX production-live; genuine handset acceptance pending.
-- PR #247 five-payload follow-up template sender readiness production-live.
-- Final production flag `META_LIFECYCLE_PROVISION_ON_START=false` on `dep-da05b7jncjis738eh13g`.
-- Seven lifecycle templates are PENDING at Meta.
+- Admin cleanup complete; Juvan is the only retained visible controlled reset.
+- Dummy Test calendar cleanup complete; no known 2026 Dummy Test events remain across checked calendars.
+- Seven-template Meta review gate is resolved; do not describe current lifecycle templates as pending review unless new provider evidence says so.
+- Current lifecycle template generation is production-configured; per-route genuine-delivery evidence remains separate.
+- Reschedule closed-day/loop repair complete and handset accepted for core UX.
+- Supplemental action-token defect fixed and deployed; fresh natural evidence pending.
+- Render final live deploy: `dep-da0rph5g1s2s73bp2i90` on `e2e3d943...`.
 - Google Business Profile API remains parked at last-authoritative 0 QPM.
 
-**Authoritative current state:** PR #247 is on `main`; Render `dep-da05b7jncjis738eh13g` is live with provisioning false; post-confirmation/navigation and `My appointments` button-first UX have real Dummy Test handset evidence; in-session rating UX is production-live but awaits a genuine rating journey; booking/staff templates are approved; seven lifecycle templates are pending; #567 remains evidence-gated before cancellation.
+**Authoritative current state:** `main` is reconciled to `e2e3d943...`; Render `dep-da0rph5g1s2s73bp2i90` is live and healthy; current-generation Meta lifecycle templates are active/configured; Pa Derik #567 is handset-verified through corrected reschedule and Calendar-synced at Tue 18 Aug 08:30–10:15; the supplemental action helper defect is fixed live; normal #567 cancellation is deferred until Pa Derik is available; Juvan E2E is the active controlled workstream.
 
-**Highest-priority state:** 🟠 **WAITING — Meta review of the seven lifecycle templates.**
-
-**Highest-priority genuinely actionable item while Meta is blocked:** continue read-only button-first consistency audit and minor safe UX housekeeping. Google Contacts remains the next separate lower-priority READY workstream.
+**Highest-priority genuinely actionable item:** 🔵 **Continue Juvan E2E acceptance from the clean baseline**, specifically exercising current template wiring and the repaired reschedule/closed-day/supplemental-action path before normal cancellation cleanup.
 
 ## Guardrails
 
-GitHub `main`, Render production, CRM, Google Calendar, Meta/provider evidence and explicit real WhatsApp/human evidence are authoritative. Preserve provider-template, historical attendance, payment, privacy, and #567 evidence gates fail-closed. Never recreate cancelled test appointments merely for proof.
+GitHub `main`, Render production, CRM, Google Calendar, Meta/provider evidence and explicit real WhatsApp/human evidence are authoritative. Preserve historical attendance, payment, privacy and genuine lifecycle-delivery gates fail-closed. Never recreate cancelled test appointments or mutate #567 merely for proof.
