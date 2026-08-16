@@ -7,22 +7,22 @@ const parserPath=path.join(__dirname,'..','src','services','adminClinicDateInput
 const bookingPath=path.join(__dirname,'..','src','services','adminMobileBookingFlow.js');
 const { parseClinicDateInput }=require(parserPath);
 const bookingSource=fs.readFileSync(bookingPath,'utf8');
-const NOW=new Date('2026-08-12T10:00:00Z');
+const NOW=new Date('2026-08-16T10:00:00Z');
 
-test('natural day-month input resolves in Johannesburg and preserves future intent',()=>{
-  assert.equal(parseClinicDateInput('13 Aug',{now:NOW}),'2026-08-13');
-  assert.equal(parseClinicDateInput('13 August',{now:NOW}),'2026-08-13');
-  assert.equal(parseClinicDateInput('13 Aug 2027',{now:NOW}),'2027-08-13');
-  assert.equal(parseClinicDateInput('2 Jan',{now:NOW}),'2027-01-02');
+test('natural day-month input stays in the current Johannesburg calendar year unless a year is explicit',()=>{
+  assert.equal(parseClinicDateInput('15 Aug',{now:NOW}),'2026-08-15');
+  assert.equal(parseClinicDateInput('15 August',{now:NOW}),'2026-08-15');
+  assert.equal(parseClinicDateInput('2 Jan',{now:NOW}),'2026-01-02');
+  assert.equal(parseClinicDateInput('15 Aug 2027',{now:NOW}),'2027-08-15');
 });
 
 test('relative and weekday dates are supported without weakening invalid-date checks',()=>{
-  assert.equal(parseClinicDateInput('today',{now:NOW}),'2026-08-12');
-  assert.equal(parseClinicDateInput('tomorrow',{now:NOW}),'2026-08-13');
-  assert.equal(parseClinicDateInput('Friday',{now:NOW}),'2026-08-14');
-  assert.equal(parseClinicDateInput('next Friday',{now:NOW}),'2026-08-21');
+  assert.equal(parseClinicDateInput('today',{now:NOW}),'2026-08-16');
+  assert.equal(parseClinicDateInput('tomorrow',{now:NOW}),'2026-08-17');
+  assert.equal(parseClinicDateInput('Monday',{now:NOW}),'2026-08-17');
+  assert.equal(parseClinicDateInput('next Monday',{now:NOW}),'2026-08-24');
   assert.equal(parseClinicDateInput('31 February',{now:NOW}),null);
-  assert.equal(parseClinicDateInput('13/08/2026',{now:NOW}),'2026-08-13');
+  assert.equal(parseClinicDateInput('15/08/2026',{now:NOW}),'2026-08-15');
 });
 
 test('guided admin booking uses the shared natural-date parser and client-friendly copy',()=>{
