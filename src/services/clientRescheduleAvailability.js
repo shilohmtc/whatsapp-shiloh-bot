@@ -1,7 +1,8 @@
 const { pool } = require('../db/pool');
 const { listAvailableSlots } = require('./availabilityService');
 const { findBookingEventByAppointmentId } = require('./googleBookingCalendar');
-const { getIntent, processAppointmentChangeMessage, rescheduleDateChoice } = require('./appointmentChange');
+const { getIntent, processAppointmentChangeMessage } = require('./appointmentChange');
+const { rescheduleDateChoice } = require('./rescheduleDateChoice');
 const { extractDate, displayDate } = require('./bookingIntent');
 const { getClinicDateStatus } = require('./clinicDateChoices');
 const { sendCustomerAppointmentActionsForAppointment } = require('./customerAppointmentActions');
