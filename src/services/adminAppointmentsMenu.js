@@ -32,7 +32,6 @@ function appointmentsInteractive(admin) {
     });
   }
 
-  // Diary views remain available for staff who previously checked Calendar directly.
   if (has(admin, 'appointment:view')) {
     rows.push({
       id: 'admin_appointment_today',
@@ -44,10 +43,14 @@ function appointmentsInteractive(admin) {
       title: isBusinessWide(admin) ? "Tomorrow's clients" : 'My clients tomorrow',
       description: 'View tomorrow’s appointments',
     });
+    rows.push({
+      id: 'admin_action_pending_approvals',
+      title: 'Pending approvals',
+      description: 'Review held requests and safely resend approval',
+    });
   }
 
-  // Availability remains an internal booking capability. It is intentionally not
-  // exposed as a separate menu task; Make/Manage booking must validate it in-flow.
+  // Availability remains internal to Make/Manage booking instead of a standalone task.
   rows.push({ id: 'menu', title: '← Back to Admin', description: 'Return to the main menu' });
 
   return {
