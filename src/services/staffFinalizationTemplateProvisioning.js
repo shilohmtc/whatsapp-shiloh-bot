@@ -3,9 +3,13 @@ const { discoverWabaId } = require('./birthdayTemplateProvisioning');
 
 const GRAPH_VERSION = 'v23.0';
 const TEMPLATE_NAME = 'shiloh_staff_finalization_v1';
+const ACTION_TEMPLATE_NAME = 'shiloh_staff_finalization_actions_v1';
 const TEMPLATE_LANGUAGE = 'en';
 const TEMPLATE_CATEGORY = 'UTILITY';
 const TEMPLATE_BODY = 'Hi {{1}}, {{2}} Shiloh visit(s) {{4}} for {{3}}. Please open Shiloh Admin > Appointments > Finalize past visits and record Completed or No-show. Attendance is never inferred automatically.';
+const ACTION_TEMPLATE_BODY = 'Hi {{1}}, you have {{2}} Shiloh visit(s) awaiting finalization. Review them in batches if needed and return later. Attendance is never inferred automatically.';
+const ACTION_BUTTON_TEXT = 'Finalize past visits';
+const ACTION_BUTTON_PAYLOAD = 'admin_action_finalize';
 
 function graphUrl(path) {
   return `https://graph.facebook.com/${GRAPH_VERSION}/${String(path).replace(/^\//, '')}`;
@@ -38,6 +42,25 @@ function buildStaffFinalizationTemplateDefinition() {
   };
 }
 
+function buildStaffFinalizationActionTemplateDefinition() {
+  return {
+    name: ACTION_TEMPLATE_NAME,
+    language: TEMPLATE_LANGUAGE,
+    category: TEMPLATE_CATEGORY,
+    components: [
+      {
+        type: 'BODY',
+        text: ACTION_TEMPLATE_BODY,
+        example: { body_text: [['Christel', '24']] },
+      },
+      {
+        type: 'BUTTONS',
+        buttons: [{ type: 'QUICK_REPLY', text: ACTION_BUTTON_TEXT }],
+      },
+    ],
+  };
+}
+
 async function listTemplates(wabaId) {
   const response = await axios.get(graphUrl(`${wabaId}/message_templates`), {
     ...graphConfig(),
@@ -57,33 +80,30 @@ function sanitizeTemplate(template) {
   };
 }
 
-async function getStaffFinalizationTemplateStatus() {
+async function statusFor(templateName, definition) {
   const wabaId = await discoverWabaId();
-  if (!wabaId) return { ok: false, reason: 'waba_not_discovered', templateName: TEMPLATE_NAME };
+  if (!wabaId) return { ok: false, reason: 'waba_not_discovered', templateName };
   const templates = await listTemplates(wabaId);
-  const target = (templates?.data || []).find((item) => item?.name === TEMPLATE_NAME) || null;
-  return {
-    ok: true,
-    wabaId,
-    templateName: TEMPLATE_NAME,
-    template: sanitizeTemplate(target),
-    definition: buildStaffFinalizationTemplateDefinition(),
-  };
+  const target = (templates?.data || []).find((item) => item?.name === templateName) || null;
+  return { ok: true, wabaId, templateName, template: sanitizeTemplate(target), definition };
 }
 
-async function submitStaffFinalizationTemplate() {
-  const status = await getStaffFinalizationTemplateStatus();
+async function getStaffFinalizationTemplateStatus() {
+  return statusFor(TEMPLATE_NAME, buildStaffFinalizationTemplateDefinition());
+}
+
+async function getStaffFinalizationActionTemplateStatus() {
+  return statusFor(ACTION_TEMPLATE_NAME, buildStaffFinalizationActionTemplateDefinition());
+}
+
+async function submitDefinition(status) {
   if (!status.ok) return status;
   if (status.template) return { ...status, submitted: false, reason: 'already_exists' };
-  const response = await axios.post(
-    graphUrl(`${status.wabaId}/message_templates`),
-    buildStaffFinalizationTemplateDefinition(),
-    graphConfig()
-  );
+  const response = await axios.post(graphUrl(`${status.wabaId}/message_templates`), status.definition, graphConfig());
   return {
     ok: true,
     wabaId: status.wabaId,
-    templateName: TEMPLATE_NAME,
+    templateName: status.templateName,
     submitted: true,
     provider: {
       id: response.data?.id || null,
@@ -93,12 +113,27 @@ async function submitStaffFinalizationTemplate() {
   };
 }
 
+async function submitStaffFinalizationTemplate() {
+  return submitDefinition(await getStaffFinalizationTemplateStatus());
+}
+
+async function submitStaffFinalizationActionTemplate() {
+  return submitDefinition(await getStaffFinalizationActionTemplateStatus());
+}
+
 module.exports = {
   TEMPLATE_NAME,
+  ACTION_TEMPLATE_NAME,
   TEMPLATE_LANGUAGE,
   TEMPLATE_CATEGORY,
   TEMPLATE_BODY,
+  ACTION_TEMPLATE_BODY,
+  ACTION_BUTTON_TEXT,
+  ACTION_BUTTON_PAYLOAD,
   buildStaffFinalizationTemplateDefinition,
+  buildStaffFinalizationActionTemplateDefinition,
   getStaffFinalizationTemplateStatus,
+  getStaffFinalizationActionTemplateStatus,
   submitStaffFinalizationTemplate,
+  submitStaffFinalizationActionTemplate,
 };
