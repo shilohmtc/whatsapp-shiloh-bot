@@ -17,10 +17,26 @@ function has(admin, permission) { return admin?.permissions?.[permission] === tr
 function isBusinessWide(admin) {
   return ['owner', 'business_admin'].includes(admin?.business_role) || admin?.calendar_scope === 'all_business';
 }
+function isChristel(admin) {
+  return String(admin?.display_name || '').trim().toLowerCase() === 'christel';
+}
 function formatDateTime(value) {
   return new Intl.DateTimeFormat('en-ZA', {
     timeZone: 'Africa/Johannesburg', weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false,
   }).format(new Date(value));
+}
+function money(value) {
+  if (value === null || value === undefined || value === '') return 'Not recorded';
+  return new Intl.NumberFormat('en-ZA', { style: 'currency', currency: 'ZAR', minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(Number(value));
+}
+function parseAdjustedPrice(value) {
+  let text = String(value || '').trim().replace(/^R\s*/i, '').replace(/\s+/g, '');
+  if (/^\d+,\d{1,2}$/.test(text)) text = text.replace(',', '.');
+  else text = text.replace(/,/g, '');
+  if (!/^\d+(?:\.\d{1,2})?$/.test(text)) return null;
+  const amount = Number(text);
+  if (!Number.isFinite(amount) || amount < 0 || amount > 9999999999.99) return null;
+  return Math.round(amount * 100) / 100;
 }
 
 async function getAdmin(sender) {
@@ -110,7 +126,7 @@ async function refreshedQueueInteractive(admin, successMessage) {
 
 async function loadAuthorizedPendingAppointment(admin, appointmentId, db = pool, lock = false) {
   const result = await db.query(
-    `SELECT a.id,a.client_id,a.starts_at,a.ends_at,a.status,a.total_price,
+    `SELECT a.id,a.client_id,a.starts_at,a.ends_at,a.status,a.total_price,a.financial_classification,a.pre_adjustment_total_price,
             COALESCE(c.display_name,a.source_client_name,'Unknown client') AS client_name,
             COALESCE((SELECT string_agg(DISTINCT aps.service_name_snapshot, ', ') FROM appointment_services aps WHERE aps.appointment_id=a.id AND aps.service_name_snapshot IS NOT NULL), '') AS services,
             COALESCE((SELECT string_agg(DISTINCT ast.staff_name_snapshot, ', ') FROM appointment_staff ast WHERE ast.appointment_id=a.id AND ast.staff_name_snapshot IS NOT NULL), '') AS staff
@@ -136,20 +152,26 @@ function appointmentDetails(appointment) {
   ].join('\n');
 }
 
-function decisionInteractive(appointment) {
+function decisionInteractive(appointment, admin = null) {
+  const rows = [
+    { id: `finalize_completed_${appointment.id}`, title: 'Completed', description: 'Client attended; finalize the visit' },
+    { id: `finalize_no_show_${appointment.id}`, title: 'No-show', description: 'Client did not attend; finalize as missed' },
+    { id: `finalize_cancelled_${appointment.id}`, title: 'Cancelled', description: 'Visit was cancelled; record the reason' },
+    { id: `finalize_no_charge_${appointment.id}`, title: 'No-Charge', description: 'Client attended; R0 charge and R0 earnings' },
+  ];
+  if (isChristel(admin)) {
+    rows.push({ id: `finalize_price_adjust_${appointment.id}`, title: 'Price adjustment', description: 'Client attended; set the final price' });
+  }
+  rows.push(
+    { id: `finalize_reschedule_${appointment.id}`, title: 'Reschedule', description: 'Move this unresolved visit to a future time' },
+    { id: 'finalize_back', title: 'Leave unresolved', description: 'Make no change and return to the list' }
+  );
   return {
     type: 'list',
     body: `${appointmentDetails(appointment)}\n\nWhat actually happened? Attendance cannot be inferred from elapsed time.`,
     buttonText: 'Choose outcome',
     sectionTitle: 'Visit outcome',
-    rows: [
-      { id: `finalize_completed_${appointment.id}`, title: 'Completed', description: 'Client attended; finalize the visit' },
-      { id: `finalize_no_show_${appointment.id}`, title: 'No-show', description: 'Client did not attend; finalize as missed' },
-      { id: `finalize_cancelled_${appointment.id}`, title: 'Cancelled', description: 'Visit was cancelled; record the reason' },
-      { id: `finalize_no_charge_${appointment.id}`, title: 'No-Charge', description: 'Client attended; R0 charge and R0 earnings' },
-      { id: `finalize_reschedule_${appointment.id}`, title: 'Reschedule', description: 'Move this unresolved visit to a future time' },
-      { id: 'finalize_back', title: 'Leave unresolved', description: 'Make no change and return to the list' },
-    ],
+    rows,
   };
 }
 
@@ -159,6 +181,58 @@ function reviewOnlyInteractive(appointment) {
     body: `${appointmentDetails(appointment)}\n\n🔒 Review only. Attendance must be certified by the responsible practitioner, or by Christel for Christel/Abigail appointments.`,
     buttons: [{ id: 'finalize_back', title: 'Back' }],
   };
+}
+
+function priceEntryInteractive(appointment, prefix = '') {
+  return {
+    type: 'button',
+    body: `${prefix ? `${prefix}\n\n` : ''}${appointmentDetails(appointment)}\n\nCurrent price: *${money(appointment.total_price)}*\n\nSend the final price in rand (for example: *550* or *R550.00*).\nFor a R0 visit, use *No-Charge* instead.`,
+    buttons: [{ id: 'finalize_price_back', title: '← Back' }],
+  };
+}
+
+function priceConfirmationInteractive(appointment, adjustedPrice) {
+  return {
+    type: 'button',
+    body: `${appointmentDetails(appointment)}\n\nCurrent price: *${money(appointment.total_price)}*\nAdjusted final price: *${money(adjustedPrice)}*\n\nThis will finalize the visit as *Completed*. The adjusted value will become the client charge and the treatment value used for practitioner earnings/reporting.`,
+    buttons: [
+      { id: 'finalize_price_confirm', title: 'Confirm price' },
+      { id: 'finalize_price_back', title: '← Back' },
+    ],
+  };
+}
+
+async function getPriceAdjustmentIntent(sender) {
+  const result = await pool.query(
+    `SELECT phone,appointment_id,adjusted_price,status
+       FROM admin_appointment_price_adjustment_intents
+      WHERE phone=$1`,
+    [key(sender)]
+  );
+  return result.rows[0] || null;
+}
+
+async function hasPendingPriceAdjustmentIntent(sender) {
+  return Boolean(await getPriceAdjustmentIntent(sender));
+}
+
+async function savePriceAdjustmentIntent(sender, appointmentId, adjustedPrice, status) {
+  const result = await pool.query(
+    `INSERT INTO admin_appointment_price_adjustment_intents (phone,appointment_id,adjusted_price,status,updated_at)
+     VALUES ($1,$2,$3,$4,NOW())
+     ON CONFLICT (phone) DO UPDATE
+       SET appointment_id=EXCLUDED.appointment_id,
+           adjusted_price=EXCLUDED.adjusted_price,
+           status=EXCLUDED.status,
+           updated_at=NOW()
+     RETURNING phone,appointment_id,adjusted_price,status`,
+    [key(sender), appointmentId, adjustedPrice, status]
+  );
+  return result.rows[0];
+}
+
+async function clearPriceAdjustmentIntent(sender) {
+  await pool.query(`DELETE FROM admin_appointment_price_adjustment_intents WHERE phone=$1`, [key(sender)]);
 }
 
 async function finalizeAppointment(admin, appointmentId, targetStatus) {
@@ -177,7 +251,7 @@ async function finalizeAppointment(admin, appointmentId, targetStatus) {
       `UPDATE appointments
           SET status=$1,
               financial_classification=$2,
-              pre_adjustment_total_price=CASE WHEN $2='no_charge' THEN total_price ELSE pre_adjustment_total_price END,
+              pre_adjustment_total_price=CASE WHEN $2='no_charge' THEN COALESCE(pre_adjustment_total_price,total_price) ELSE pre_adjustment_total_price END,
               total_price=CASE WHEN $2='no_charge' THEN 0 ELSE total_price END,
               updated_at=NOW()
         WHERE id=$3`,
@@ -194,6 +268,45 @@ async function finalizeAppointment(admin, appointmentId, targetStatus) {
     );
     await db.query('COMMIT');
     return { status: 'updated', appointment, targetStatus, canonicalStatus, financialClassification };
+  } catch (error) {
+    try { await db.query('ROLLBACK'); } catch (_) {}
+    throw error;
+  } finally { db.release(); }
+}
+
+async function finalizePriceAdjustedAppointment(admin, appointmentId, adjustedPrice) {
+  if (!isChristel(admin)) return { status: 'price_authority_forbidden' };
+  if (!Number.isFinite(Number(adjustedPrice)) || Number(adjustedPrice) <= 0) return { status: 'invalid_price' };
+  const db = await pool.connect();
+  try {
+    await db.query('BEGIN');
+    const appointment = await loadAuthorizedPendingAppointment(admin, appointmentId, db, true);
+    if (!appointment) { await db.query('ROLLBACK'); return { status: 'stale_or_forbidden' }; }
+    if (!(await canCertifyAppointment(admin, appointment.id, db))) { await db.query('ROLLBACK'); return { status: 'certification_forbidden' }; }
+
+    await db.query(
+      `UPDATE appointments
+          SET status='completed',
+              financial_classification='price_adjusted',
+              pre_adjustment_total_price=COALESCE(pre_adjustment_total_price,total_price),
+              total_price=$1,
+              updated_at=NOW()
+        WHERE id=$2`,
+      [adjustedPrice, appointment.id]
+    );
+    await db.query(
+      `INSERT INTO appointment_status_history (appointment_id,from_status,to_status,changed_by,reason)
+       VALUES ($1,$2,'completed',$3,$4)`,
+      [appointment.id, appointment.status, `admin:${admin.id}:${admin.display_name}`, `Explicit WhatsApp Christel price adjustment — ${money(appointment.total_price)} to ${money(adjustedPrice)}; attendance certified completed`]
+    );
+    await db.query(`UPDATE appointment_lifecycle SET status='completed',updated_at=NOW() WHERE appointment_id=$1`, [appointment.id]);
+    await db.query(
+      `INSERT INTO crm_audit_events (actor_admin_id,action,entity_type,entity_id,metadata)
+       VALUES ($1,'admin.appointment_price_adjusted_finalized','appointment',$2,$3::jsonb)`,
+      [admin.id, String(appointment.id), JSON.stringify({ fromStatus: appointment.status, toStatus: 'completed', startsAt: appointment.starts_at, explicitAdminDecision: true, certificationAuthority: authorityDescription(admin), priceAuthority: 'christel_discretion', financialClassification: 'price_adjusted', previousTotalPrice: appointment.total_price, adjustedTotalPrice: Number(adjustedPrice), clientCharge: Number(adjustedPrice), practitionerEarningsBasis: Number(adjustedPrice) })]
+    );
+    await db.query('COMMIT');
+    return { status: 'updated', appointment, adjustedPrice: Number(adjustedPrice) };
   } catch (error) {
     try { await db.query('ROLLBACK'); } catch (_) {}
     throw error;
@@ -220,10 +333,14 @@ async function processAdminAppointmentFinalizationMessage(sender, text) {
   const decisionMatch = raw.match(/^finalize_(completed|no_show|no_charge)_(\d+)$/i);
   const cancellationMatch = raw.match(/^finalize_cancelled_(\d+)$/i);
   const rescheduleMatch = raw.match(/^finalize_reschedule_(\d+)$/i);
+  const priceAdjustmentMatch = raw.match(/^finalize_price_adjust_(\d+)$/i);
+  const isPriceConfirm = normalized === 'finalize_price_confirm';
+  const isPriceBack = normalized === 'finalize_price_back';
   const isBack = normalized === 'finalize_back';
-  const recognizedFinalizationAction = Boolean(isEntry || pageMatch || selectionMatch || decisionMatch || cancellationMatch || rescheduleMatch || isBack);
+  const recognizedFinalizationAction = Boolean(isEntry || pageMatch || selectionMatch || decisionMatch || cancellationMatch || rescheduleMatch || priceAdjustmentMatch || isPriceConfirm || isPriceBack || isBack);
   const pendingCancellation = recognizedFinalizationAction ? false : await hasPendingCancellationIntent(sender);
-  if (!recognizedFinalizationAction && !pendingCancellation) return { handled: false };
+  const pendingPriceAdjustment = recognizedFinalizationAction || pendingCancellation ? false : await hasPendingPriceAdjustmentIntent(sender);
+  if (!recognizedFinalizationAction && !pendingCancellation && !pendingPriceAdjustment) return { handled: false };
 
   const admin = await getAdmin(sender);
   if (!admin) return { handled: false };
@@ -238,6 +355,58 @@ async function processAdminAppointmentFinalizationMessage(sender, text) {
     return { ...cancellation, admin };
   }
 
+  if (priceAdjustmentMatch) {
+    if (!isChristel(admin)) return { handled: true, admin, reply: 'Price adjustment is reserved for Christel’s discretion.' };
+    if (!has(admin, 'booking:update')) return { handled: true, admin, reply: 'Your admin account cannot adjust appointment prices.' };
+    const appointmentId = Number(priceAdjustmentMatch[1]);
+    const appointment = await loadAuthorizedPendingAppointment(admin, appointmentId);
+    if (!appointment) return { handled: true, admin, reply: 'That appointment changed or is outside the approved 1–15 Aug historical window or your authorized scope, so no price adjustment was started.' };
+    if (!(await canCertifyAppointment(admin, appointment.id))) return { handled: true, admin, reply: 'You can review this appointment, but its outcome cannot be certified from this account.' };
+    await savePriceAdjustmentIntent(sender, appointment.id, null, 'collecting_price');
+    return { handled: true, admin, interactive: priceEntryInteractive(appointment) };
+  }
+
+  if (pendingPriceAdjustment || isPriceConfirm || isPriceBack) {
+    const intent = await getPriceAdjustmentIntent(sender);
+    if (!intent) {
+      const data = await pendingPastAppointments(admin, 1);
+      return { handled: true, admin, interactive: pendingListInteractive(data, admin) };
+    }
+    if (!isChristel(admin) || !has(admin, 'booking:update')) {
+      await clearPriceAdjustmentIntent(sender);
+      return { handled: true, admin, reply: 'Price adjustment is reserved for Christel’s authorized admin account.' };
+    }
+    const appointment = await loadAuthorizedPendingAppointment(admin, Number(intent.appointment_id));
+    if (!appointment) {
+      await clearPriceAdjustmentIntent(sender);
+      return { handled: true, admin, reply: 'That appointment is no longer awaiting finalization, so the price-adjustment request was cleared.' };
+    }
+    if (!(await canCertifyAppointment(admin, appointment.id))) {
+      await clearPriceAdjustmentIntent(sender);
+      return { handled: true, admin, reply: 'This appointment is no longer within your certification authority, so the price-adjustment request was cleared.' };
+    }
+    if (isPriceBack) {
+      await clearPriceAdjustmentIntent(sender);
+      return { handled: true, admin, interactive: decisionInteractive(appointment, admin) };
+    }
+    if (intent.status === 'collecting_price') {
+      const adjustedPrice = parseAdjustedPrice(raw);
+      if (adjustedPrice === null) return { handled: true, admin, interactive: priceEntryInteractive(appointment, 'Please send a valid rand amount with no more than two decimal places.') };
+      if (adjustedPrice === 0) return { handled: true, admin, interactive: priceEntryInteractive(appointment, 'For R0, choose No-Charge so the financial outcome remains explicit.') };
+      await savePriceAdjustmentIntent(sender, appointment.id, adjustedPrice, 'awaiting_confirmation');
+      return { handled: true, admin, interactive: priceConfirmationInteractive(appointment, adjustedPrice) };
+    }
+    if (intent.status === 'awaiting_confirmation') {
+      if (!isPriceConfirm) return { handled: true, admin, interactive: priceConfirmationInteractive(appointment, Number(intent.adjusted_price)) };
+      const result = await finalizePriceAdjustedAppointment(admin, appointment.id, Number(intent.adjusted_price));
+      await clearPriceAdjustmentIntent(sender);
+      if (result.status === 'certification_forbidden' || result.status === 'price_authority_forbidden') return { handled: true, admin, reply: 'The price adjustment was not written because certification or price authority changed.' };
+      if (result.status !== 'updated') return { handled: true, admin, reply: 'The appointment changed before confirmation, so no price adjustment was written.' };
+      const interactive = await refreshedQueueInteractive(admin, `✅ Appointment #${appointment.id} finalized *Completed* at an adjusted price of *${money(result.adjustedPrice)}*. It has been removed from the finalization queue.`);
+      return { handled: true, admin, interactive };
+    }
+  }
+
   if (isEntry || pageMatch || isBack) {
     const page = pageMatch ? Number(pageMatch[1]) : 1;
     const data = await pendingPastAppointments(admin, page);
@@ -248,7 +417,7 @@ async function processAdminAppointmentFinalizationMessage(sender, text) {
     const appointment = await loadAuthorizedPendingAppointment(admin, Number(selectionMatch[1]));
     if (!appointment) return { handled: true, admin, reply: 'That appointment is no longer awaiting final status in the approved 1–15 Aug historical window or your authorized scope.' };
     const canCertify = has(admin, 'booking:update') && await canCertifyAppointment(admin, appointment.id);
-    return { handled: true, admin, interactive: canCertify ? decisionInteractive(appointment) : reviewOnlyInteractive(appointment) };
+    return { handled: true, admin, interactive: canCertify ? decisionInteractive(appointment, admin) : reviewOnlyInteractive(appointment) };
   }
 
   if (cancellationMatch) {
@@ -284,6 +453,9 @@ async function processAdminAppointmentFinalizationMessage(sender, text) {
 module.exports = {
   FINAL_STATUSES, PAGE_SIZE, HISTORICAL_WINDOW_START, HISTORICAL_WINDOW_END,
   pendingPastAppointments, pendingListInteractive, refreshedQueueInteractive, decisionInteractive, reviewOnlyInteractive,
-  loadAuthorizedPendingAppointment, finalizeAppointment, startPastVisitReschedule, startPastVisitCancellation,
+  loadAuthorizedPendingAppointment, finalizeAppointment, finalizePriceAdjustedAppointment,
+  priceEntryInteractive, priceConfirmationInteractive, parseAdjustedPrice,
+  getPriceAdjustmentIntent, hasPendingPriceAdjustmentIntent, clearPriceAdjustmentIntent,
+  startPastVisitReschedule, startPastVisitCancellation,
   processAdminAppointmentFinalizationMessage,
 };
