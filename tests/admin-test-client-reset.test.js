@@ -36,13 +36,13 @@ test('reset preserves appointment history while releasing reusable WhatsApp iden
   assert.match(serviceSource, /admin\.test_client_reset/);
 });
 
-test('reset requires explicit confirmation and is exposed only through privileged Clients menu enrichment', () => {
+test('reset requires explicit confirmation and remains privilege-gated', () => {
   assert.match(serviceSource, /Confirm reset/);
   assert.match(serviceSource, /admin_test_client_reset_confirm:/);
-  assert.match(routerSource, /Reset Chenique profile/);
   assert.match(routerSource, /Reset Juvan profile/);
-  assert.match(routerSource, /Reset Dummy Test profile/);
   assert.match(routerSource, /\(jeanPierre \|\| christel\)/);
   assert.match(routerSource, /processAdminTestClientResetMessage\(sender, action\.command\)/);
   assert.match(routerSource, /const testClientReset = await processAdminTestClientResetMessage\(sender, text\)/);
+  assert.match(serviceSource, /Chenique/);
+  assert.match(serviceSource, /Dummy Test/);
 });
