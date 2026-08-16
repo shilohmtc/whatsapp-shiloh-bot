@@ -62,14 +62,16 @@ test('attendance remains explicit while unresolved visits can be rescheduled wit
   assert.match(finalization, /FINAL_STATUSES = new Set\(\['completed', 'no_show', 'no_charge'\]\)/);
   assert.match(finalization, /title: 'Completed'/);
   assert.match(finalization, /title: 'No-show'/);
-  assert.match(finalization, /title: 'No-Charge'/);
+  assert.match(finalization, /title: 'No charge'/);
+  assert.match(finalization, /title: 'Service change'/);
+  assert.match(finalization, /title: 'Adjust price'/);
   assert.match(finalization, /title: 'Reschedule'/);
   assert.match(finalization, /title: 'Leave unresolved'/);
   assert.match(finalization, /finalize_reschedule_/);
   assert.match(finalization, /processAdminBookingUpdateMessage\(sender, 'Manage booking'\)/);
   assert.match(finalization, /processAdminBookingUpdateMessage\(sender, `manage_booking_select_\$\{appointmentId\}`\)/);
   assert.match(finalization, /processAdminBookingUpdateMessage\(sender, '3'\)/);
-  assert.match(finalization, /cannot be inferred from elapsed time/);
+  assert.match(finalization, /What actually happened with this visit\?/);
   assert.match(finalization, /explicitAdminDecision: true/);
 });
 
