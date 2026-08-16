@@ -9,6 +9,7 @@ const { presentClientAppointmentChangeResult } = require("./src/presentation/cli
 const { presentCustomerExperienceResult } = require("./src/presentation/customerExperiencePresentation");
 const clientFamilyService = require("./src/services/clientServiceFamilyDiscovery");
 const appointmentChangeService = require("./src/services/appointmentChange");
+const { decorateAppointmentChangeTemplate } = require("./src/services/appointmentChangeTemplateDelivery");
 const customerExperienceService = require("./src/services/customerExperience");
 const clientIdentityService = require("./src/services/clientIdentityOnboarding");
 const clientDiscoveryService = require("./src/services/clientDiscoveryMenu");
@@ -18,7 +19,12 @@ validateEnv();
 const processClientServiceFamilyMessage = clientFamilyService.processClientServiceFamilyMessage;
 clientFamilyService.processClientServiceFamilyMessage = async (...args) => presentClientFamilyResult(await processClientServiceFamilyMessage(...args));
 const processAppointmentChangeMessage = appointmentChangeService.processAppointmentChangeMessage;
-appointmentChangeService.processAppointmentChangeMessage = async (...args) => presentClientAppointmentChangeResult(await processAppointmentChangeMessage(...args));
+appointmentChangeService.processAppointmentChangeMessage = async (phone, text, ...rest) => {
+  const priorIntent = await appointmentChangeService.getIntent(phone);
+  const result = await processAppointmentChangeMessage(phone, text, ...rest);
+  const templated = await decorateAppointmentChangeTemplate(phone, priorIntent, result);
+  return presentClientAppointmentChangeResult(templated);
+};
 const processCustomerExperienceMessage = customerExperienceService.processCustomerExperienceMessage;
 customerExperienceService.processCustomerExperienceMessage = async (...args) => presentCustomerExperienceResult(await processCustomerExperienceMessage(...args));
 installClientNavigationPriority({ identityService: clientIdentityService, discoveryService: clientDiscoveryService });
