@@ -8,6 +8,31 @@ function isBusinessWide(admin) {
 
 function appointmentsInteractive(admin) {
   const rows = [];
+
+  // Daily operational actions come first so they are visible without scrolling.
+  if (has(admin, 'booking:update') && has(admin, 'appointment:view')) {
+    rows.push({
+      id: 'admin_appointment_finalize',
+      title: 'Finalize past visits',
+      description: 'Completed, No-show, Reschedule or leave unresolved',
+    });
+  }
+  if (has(admin, 'appointment:create') && has(admin, 'appointment:view')) {
+    rows.push({
+      id: 'admin_appointment_booking',
+      title: 'Make a booking',
+      description: 'Book using authoritative availability',
+    });
+  }
+  if (has(admin, 'booking:update') && has(admin, 'appointment:view')) {
+    rows.push({
+      id: 'admin_appointment_manage',
+      title: 'Manage a booking',
+      description: 'Reschedule or cancel an existing appointment',
+    });
+  }
+
+  // Diary views remain available for staff who previously checked Calendar directly.
   if (has(admin, 'appointment:view')) {
     rows.push({
       id: 'admin_appointment_today',
@@ -19,43 +44,10 @@ function appointmentsInteractive(admin) {
       title: isBusinessWide(admin) ? "Tomorrow's clients" : 'My clients tomorrow',
       description: 'View tomorrow’s appointments',
     });
-    rows.push({
-      id: 'admin_appointment_last_week',
-      title: isBusinessWide(admin) ? "Last week's clients" : 'My clients last week',
-      description: 'View the previous Monday–Sunday',
-    });
-    rows.push({
-      id: 'admin_action_pending_approvals',
-      title: 'Pending approvals',
-      description: 'Review held requests and safely resend approval',
-    });
   }
-  if (has(admin, 'appointment:create')) {
-    rows.push({
-      id: 'admin_appointment_availability',
-      title: 'Find an available time',
-      description: 'Check the authoritative diary',
-    });
-  }
-  if (has(admin, 'appointment:create') && has(admin, 'appointment:view')) {
-    rows.push({
-      id: 'admin_appointment_booking',
-      title: 'Make a booking',
-      description: 'Book from your authorized services',
-    });
-  }
-  if (has(admin, 'booking:update') && has(admin, 'appointment:view')) {
-    rows.push({
-      id: 'admin_appointment_manage',
-      title: 'Manage a booking',
-      description: 'Change an existing appointment',
-    });
-    rows.push({
-      id: 'admin_appointment_finalize',
-      title: 'Finalize past visits',
-      description: 'Mark Completed or No-show explicitly',
-    });
-  }
+
+  // Availability remains an internal booking capability. It is intentionally not
+  // exposed as a separate menu task; Make/Manage booking must validate it in-flow.
   rows.push({ id: 'menu', title: '← Back to Admin', description: 'Return to the main menu' });
 
   return {
