@@ -43,10 +43,15 @@ test('certification authority is practitioner-owned with Christel supervisory sc
   assert.match(finalization, /certification_forbidden/);
 });
 
-test('attendance is explicit and limited to completed or no-show', () => {
+test('attendance remains explicit while unresolved visits can be rescheduled without false attendance', () => {
   assert.match(finalization, /FINAL_STATUSES = new Set\(\['completed', 'no_show'\]\)/);
   assert.match(finalization, /title: 'Completed'/);
   assert.match(finalization, /title: 'No-show'/);
+  assert.match(finalization, /title: 'Reschedule'/);
+  assert.match(finalization, /title: 'Leave unresolved'/);
+  assert.match(finalization, /finalize_reschedule_/);
+  assert.match(finalization, /processAdminBookingUpdateMessage\(sender, 'Manage booking'\)/);
+  assert.match(finalization, /processAdminBookingUpdateMessage\(sender, '3'\)/);
   assert.match(finalization, /cannot be inferred from elapsed time/);
   assert.doesNotMatch(finalization, /SET status='completed'.*NOW\(\)/s);
 });
@@ -62,9 +67,9 @@ test('finalization revalidates authority under row lock and writes canonical his
   assert.match(finalization, /ROLLBACK/);
 });
 
-test('linked lifecycle state is synchronized without changing calendar or payment truth', () => {
+test('attendance finalization itself synchronizes lifecycle without directly mutating calendar or payment truth', () => {
   assert.match(finalization, /UPDATE appointment_lifecycle/);
-  assert.doesNotMatch(finalization, /createBookingEvent|updateBookingEvent|cancelBookingEvent/);
+  assert.doesNotMatch(finalization, /createBookingEvent|cancelBookingEvent/);
   assert.doesNotMatch(finalization, /payment|ozow|voucher/i);
 });
 
