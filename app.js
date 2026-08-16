@@ -49,6 +49,7 @@ const { ensureChristelMediHeelOwnership } = require("./src/services/pedicureOwne
 const { startMandatoryDemoCleanupScheduler } = require("./src/services/demoMandatoryCleanup");
 const { startAttendanceFinalizationReminderScheduler } = require("./src/services/attendanceFinalizationReminders");
 const { runConfiguredClientProvenanceAudit } = require("./src/services/clientProvenanceAudit");
+const { runApprovedHistoricalAttendanceReopen } = require("./src/services/historicalAttendanceReopen");
 const { submitStaffFinalizationTemplate } = require("./src/services/staffFinalizationTemplateProvisioning");
 const { submitBookingConfirmationTemplate } = require("./src/services/bookingConfirmationTemplateProvisioning");
 const { DEFINITIONS: CLIENT_LIFECYCLE_TEMPLATE_DEFINITIONS, getClientLifecycleTemplateStatus, submitClientLifecycleTemplate } = require("./src/services/clientLifecycleTemplateProvisioning");
@@ -78,6 +79,7 @@ async function provisionClientLifecycleTemplatesIfExplicitlyEnabled() {
 
 const PORT = process.env.PORT || 3000; let server;
 async function start() {
+  const attendanceReopen = await runApprovedHistoricalAttendanceReopen(); logger.info(attendanceReopen, "Approved historical attendance reopen checked");
   const demoAccess = await ensureDemoClientPermissions(); logger.info(demoAccess, "Controlled demo client production UI disabled");
   const jeanPierreAccess = await ensureJeanPierreAdminCapabilities(); if (!jeanPierreAccess) throw new Error('Jean-Pierre business admin capability clone could not be initialized'); logger.info({ configured: true, businessRole: jeanPierreAccess.business_role }, "Jean-Pierre business admin access verified");
   const mediHeelOwnership = await ensureChristelMediHeelOwnership(); logger.info(mediHeelOwnership, "Christel MediHeel ownership verified");
