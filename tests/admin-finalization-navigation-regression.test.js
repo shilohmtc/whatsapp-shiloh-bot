@@ -17,11 +17,11 @@ test('Finalize past visits is a canonical action in the current Appointments sec
 });
 
 test('Admin/Menu/Hi escape clears a stale Manage booking session before numeric prompting', () => {
-  const escapeIndex = bookingUpdateSource.indexOf("if(['menu','admin menu','home','admin'].includes(n)");
-  const numericPromptIndex = bookingUpdateSource.indexOf("Please send the numeric Shiloh appointment number.");
-  assert.ok(escapeIndex >= 0, 'stale Manage booking escape is missing');
+  const escapeMatch = bookingUpdateSource.match(/if\s*\(\s*\['menu',\s*'admin menu',\s*'home',\s*'admin'\]\.includes\(n\)/);
+  const numericPromptIndex = bookingUpdateSource.indexOf('Please send the numeric Shiloh appointment number.');
+  assert.ok(escapeMatch && Number.isInteger(escapeMatch.index), 'stale Manage booking escape is missing');
   assert.ok(numericPromptIndex >= 0, 'numeric appointment prompt is missing');
-  assert.ok(escapeIndex < numericPromptIndex, 'stale Manage booking can still intercept Admin/Menu/Hi before escape');
+  assert.ok(escapeMatch.index < numericPromptIndex, 'stale Manage booking can still intercept Admin/Menu/Hi before escape');
 });
 
 test('section refresh fails closed when role-scoped menu has no interactive body', () => {
