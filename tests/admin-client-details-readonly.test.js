@@ -6,7 +6,7 @@ const path = require('node:path');
 const lookupSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'services', 'adminClientLookup.js'), 'utf8');
 const menuSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'services', 'adminMobileMenu.js'), 'utf8');
 
-test('client lookup keeps masked summary but exposes a separate read-only details formatter', () => {
+test('client lookup retains masked ambiguity handling and a read-only full-details formatter', () => {
   assert.match(lookupSource, /maskContact/);
   assert.match(lookupSource, /async function getClientDetails\(/);
   assert.match(lookupSource, /function formatClientDetailsReply\(/);
@@ -23,8 +23,9 @@ test('client details request reuses the existing permission gate and scope filte
   assert.match(lookupSource, /queryType: "details"/);
 });
 
-test('single safe lookup advertises an explicit details request without unmasking the search result', () => {
-  assert.match(lookupSource, /Find client details/);
-  assert.match(lookupSource, /formatClientLookupReply/);
+test('a single authorized lookup returns full read-only details while ambiguous results stay masked', () => {
+  assert.match(lookupSource, /if \(clients\.length === 1\) return formatClientDetailsReply\(clients\[0\]\)/);
+  assert.match(lookupSource, /Refine the name or number to narrow the lookup/);
   assert.match(lookupSource, /maskContact/);
+  assert.match(lookupSource, /Mobile: \$\{value\}/);
 });
