@@ -17,7 +17,7 @@ test('historical finalization exposes No-Charge as a distinct attended outcome',
 test('No-Charge preserves attendance truth but forces financial truth to R0 atomically', () => {
   assert.match(finalization, /const canonicalStatus = isNoCharge \? 'completed' : targetStatus/);
   assert.match(finalization, /financial_classification=\$2/);
-  assert.match(finalization, /pre_adjustment_total_price=CASE WHEN \$2='no_charge' THEN total_price/);
+  assert.match(finalization, /pre_adjustment_total_price=CASE WHEN \$2='no_charge' THEN COALESCE\(pre_adjustment_total_price,total_price\)/);
   assert.match(finalization, /total_price=CASE WHEN \$2='no_charge' THEN 0 ELSE total_price END/);
   assert.match(finalization, /practitionerEarningsOverride: isNoCharge \? 0 : null/);
   assert.match(finalization, /clientCharge: isNoCharge \? 0/);
