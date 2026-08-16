@@ -6,11 +6,21 @@ function isBusinessWide(admin) {
   return ['owner', 'business_admin'].includes(admin?.business_role) || admin?.calendar_scope === 'all_business';
 }
 
+function normalizedAdminName(admin) {
+  return String(admin?.display_name || '').trim().toLowerCase();
+}
+
+function canAccessFinalization(admin) {
+  return ['christel', 'marietjie'].includes(normalizedAdminName(admin));
+}
+
 function appointmentsInteractive(admin) {
   const rows = [];
 
   // Daily operational actions come first so they are visible without scrolling.
-  if (has(admin, 'booking:update') && has(admin, 'appointment:view')) {
+  // Finalization authority is deliberately narrow: Christel finalizes Christel
+  // and Abigail visits; Marietjie finalizes only her own visits.
+  if (canAccessFinalization(admin) && has(admin, 'booking:update') && has(admin, 'appointment:view')) {
     rows.push({
       id: 'admin_appointment_finalize',
       title: 'Finalize past visits',
@@ -62,4 +72,4 @@ function appointmentsInteractive(admin) {
   };
 }
 
-module.exports = { appointmentsInteractive };
+module.exports = { appointmentsInteractive, canAccessFinalization };
