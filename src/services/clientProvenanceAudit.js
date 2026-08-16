@@ -41,7 +41,7 @@ async function getSimilaritySummary() {
     FROM clients c GROUP BY source,status ORDER BY source,status
   `);
   const suspicious = await pool.query(`
-    SELECT c.source, COUNT(*)::int AS clients
+    SELECT c.source, COUNT(*)::int AS clients, array_agg(c.id ORDER BY c.id) AS client_ids
     FROM clients c
     WHERE c.status='active'
       AND NOT EXISTS (SELECT 1 FROM client_contacts cc WHERE cc.client_id=c.id)
