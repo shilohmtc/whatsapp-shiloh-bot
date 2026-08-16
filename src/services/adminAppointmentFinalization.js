@@ -6,7 +6,7 @@ const { processAdminAppointmentCancellationMessage, hasPendingCancellationIntent
 
 // Reserve two of WhatsApp's 10 list rows for pagination and Back controls.
 const PAGE_SIZE = 8;
-const FINAL_STATUSES = new Set(['completed', 'no_show']);
+const FINAL_STATUSES = new Set(['completed', 'no_show', 'no_charge']);
 // Temporary historical reconciliation window approved for the current backlog.
 // Start is inclusive; end is exclusive so all of 15 Aug 2026 is included.
 const HISTORICAL_WINDOW_START = '2026-08-01T00:00:00+02:00';
@@ -110,7 +110,7 @@ async function refreshedQueueInteractive(admin, successMessage) {
 
 async function loadAuthorizedPendingAppointment(admin, appointmentId, db = pool, lock = false) {
   const result = await db.query(
-    `SELECT a.id,a.client_id,a.starts_at,a.ends_at,a.status,
+    `SELECT a.id,a.client_id,a.starts_at,a.ends_at,a.status,a.total_price,
             COALESCE(c.display_name,a.source_client_name,'Unknown client') AS client_name,
             COALESCE((SELECT string_agg(DISTINCT aps.service_name_snapshot, ', ') FROM appointment_services aps WHERE aps.appointment_id=a.id AND aps.service_name_snapshot IS NOT NULL), '') AS services,
             COALESCE((SELECT string_agg(DISTINCT ast.staff_name_snapshot, ', ') FROM appointment_staff ast WHERE ast.appointment_id=a.id AND ast.staff_name_snapshot IS NOT NULL), '') AS staff
@@ -146,6 +146,7 @@ function decisionInteractive(appointment) {
       { id: `finalize_completed_${appointment.id}`, title: 'Completed', description: 'Client attended; finalize the visit' },
       { id: `finalize_no_show_${appointment.id}`, title: 'No-show', description: 'Client did not attend; finalize as missed' },
       { id: `finalize_cancelled_${appointment.id}`, title: 'Cancelled', description: 'Visit was cancelled; record the reason' },
+      { id: `finalize_no_charge_${appointment.id}`, title: 'No-Charge', description: 'Client attended; R0 charge and R0 earnings' },
       { id: `finalize_reschedule_${appointment.id}`, title: 'Reschedule', description: 'Move this unresolved visit to a future time' },
       { id: 'finalize_back', title: 'Leave unresolved', description: 'Make no change and return to the list' },
     ],
@@ -169,18 +170,30 @@ async function finalizeAppointment(admin, appointmentId, targetStatus) {
     if (!appointment) { await db.query('ROLLBACK'); return { status: 'stale_or_forbidden' }; }
     if (!(await canCertifyAppointment(admin, appointment.id, db))) { await db.query('ROLLBACK'); return { status: 'certification_forbidden' }; }
 
-    await db.query(`UPDATE appointments SET status=$1,updated_at=NOW() WHERE id=$2`, [targetStatus, appointment.id]);
+    const isNoCharge = targetStatus === 'no_charge';
+    const canonicalStatus = isNoCharge ? 'completed' : targetStatus;
+    const financialClassification = isNoCharge ? 'no_charge' : 'standard';
+    await db.query(
+      `UPDATE appointments
+          SET status=$1,
+              financial_classification=$2,
+              pre_adjustment_total_price=CASE WHEN $2='no_charge' THEN total_price ELSE pre_adjustment_total_price END,
+              total_price=CASE WHEN $2='no_charge' THEN 0 ELSE total_price END,
+              updated_at=NOW()
+        WHERE id=$3`,
+      [canonicalStatus, financialClassification, appointment.id]
+    );
     await db.query(
       `INSERT INTO appointment_status_history (appointment_id,from_status,to_status,changed_by,reason) VALUES ($1,$2,$3,$4,$5)`,
-      [appointment.id, appointment.status, targetStatus, `admin:${admin.id}:${admin.display_name}`, 'Explicit WhatsApp practitioner attendance certification']
+      [appointment.id, appointment.status, canonicalStatus, `admin:${admin.id}:${admin.display_name}`, isNoCharge ? 'Explicit WhatsApp practitioner attendance certification — no-charge visit; client charge R0; practitioner earnings R0' : 'Explicit WhatsApp practitioner attendance certification']
     );
-    await db.query(`UPDATE appointment_lifecycle SET status=$1,updated_at=NOW() WHERE appointment_id=$2`, [targetStatus, appointment.id]);
+    await db.query(`UPDATE appointment_lifecycle SET status=$1,updated_at=NOW() WHERE appointment_id=$2`, [canonicalStatus, appointment.id]);
     await db.query(
       `INSERT INTO crm_audit_events (actor_admin_id,action,entity_type,entity_id,metadata) VALUES ($1,'admin.appointment_finalized','appointment',$2,$3::jsonb)`,
-      [admin.id, String(appointment.id), JSON.stringify({ fromStatus: appointment.status, toStatus: targetStatus, startsAt: appointment.starts_at, explicitAdminDecision: true, certificationAuthority: authorityDescription(admin) })]
+      [admin.id, String(appointment.id), JSON.stringify({ fromStatus: appointment.status, toStatus: canonicalStatus, outcome: targetStatus, startsAt: appointment.starts_at, explicitAdminDecision: true, certificationAuthority: authorityDescription(admin), financialClassification, previousTotalPrice: appointment.total_price, clientCharge: isNoCharge ? 0 : appointment.total_price, practitionerEarningsOverride: isNoCharge ? 0 : null })]
     );
     await db.query('COMMIT');
-    return { status: 'updated', appointment, targetStatus };
+    return { status: 'updated', appointment, targetStatus, canonicalStatus, financialClassification };
   } catch (error) {
     try { await db.query('ROLLBACK'); } catch (_) {}
     throw error;
@@ -188,9 +201,6 @@ async function finalizeAppointment(admin, appointmentId, targetStatus) {
 }
 
 async function startPastVisitReschedule(sender, appointmentId) {
-  // Reuse the canonical guarded admin booking-update state machine rather than
-  // creating a second mutation path. Enter through the exact appointment payload
-  // so the normal list-first Manage-booking UX cannot intercept this historical flow.
   await processAdminBookingUpdateMessage(sender, 'Manage booking');
   const selected = await processAdminBookingUpdateMessage(sender, `manage_booking_select_${appointmentId}`);
   if (!selected.handled) return selected;
@@ -198,9 +208,6 @@ async function startPastVisitReschedule(sender, appointmentId) {
 }
 
 async function startPastVisitCancellation(sender, appointmentId) {
-  // Reuse the canonical cancellation workflow so a cancellation always captures
-  // a reason, requires explicit confirmation, writes status history/audit truth,
-  // and synchronizes any linked Google Calendar event.
   return processAdminAppointmentCancellationMessage(sender, `Cancel appointment ${appointmentId}`);
 }
 
@@ -210,7 +217,7 @@ async function processAdminAppointmentFinalizationMessage(sender, text) {
   const isEntry = ['finalize past appointments', 'finalise past appointments', 'review final statuses'].includes(normalized);
   const pageMatch = raw.match(/^finalize_appts_page_(\d+)$/i);
   const selectionMatch = raw.match(/^finalize_appt_(\d+)$/i);
-  const decisionMatch = raw.match(/^finalize_(completed|no_show)_(\d+)$/i);
+  const decisionMatch = raw.match(/^finalize_(completed|no_show|no_charge)_(\d+)$/i);
   const cancellationMatch = raw.match(/^finalize_cancelled_(\d+)$/i);
   const rescheduleMatch = raw.match(/^finalize_reschedule_(\d+)$/i);
   const isBack = normalized === 'finalize_back';
@@ -268,8 +275,9 @@ async function processAdminAppointmentFinalizationMessage(sender, text) {
   const result = await finalizeAppointment(admin, appointmentId, targetStatus);
   if (result.status === 'certification_forbidden') return { handled: true, admin, reply: 'You can review this appointment, but attendance must be certified by its responsible practitioner or authorized supervisor.' };
   if (result.status !== 'updated') return { handled: true, admin, reply: 'That appointment changed or is outside the approved 1–15 Aug historical window or your authorized scope, so no status update was made.' };
-  const label = targetStatus === 'completed' ? 'Completed' : 'No-show';
-  const interactive = await refreshedQueueInteractive(admin, `✅ Appointment #${appointmentId} marked *${label}*. It has been removed from the finalization queue.`);
+  const label = targetStatus === 'completed' ? 'Completed' : targetStatus === 'no_show' ? 'No-show' : 'No-Charge';
+  const suffix = targetStatus === 'no_charge' ? ' Client charge and practitioner earnings are R0.' : '';
+  const interactive = await refreshedQueueInteractive(admin, `✅ Appointment #${appointmentId} marked *${label}*.${suffix} It has been removed from the finalization queue.`);
   return { handled: true, admin, interactive };
 }
 
