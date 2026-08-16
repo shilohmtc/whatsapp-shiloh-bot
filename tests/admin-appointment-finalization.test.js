@@ -79,7 +79,7 @@ test('historical finalization offers cancelled and reuses canonical reason-confi
   assert.match(finalization, /processAdminAppointmentCancellationMessage/);
   assert.match(finalization, /Cancel appointment \$\{appointmentId\}/);
   assert.match(finalization, /startPastVisitCancellation/);
-  assert.match(cancellation, /cancelledAppointmentId: appointment\.id/);
+  assert.match(cancellation, /cancelledAppointmentId:\s*appointment\.id/);
   assert.match(cancellation, /hasPendingCancellationIntent/);
 });
 
