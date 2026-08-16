@@ -27,5 +27,5 @@ test('a single authorized lookup returns full read-only details while ambiguous 
   assert.match(lookupSource, /if \(clients\.length === 1\) return formatClientDetailsReply\(clients\[0\]\)/);
   assert.match(lookupSource, /Refine the name or number to narrow the lookup/);
   assert.match(lookupSource, /maskContact/);
-  assert.match(lookupSource, /Mobile: \$\{value\}/);
+  assert.match(lookupSource, /contactLabel\(contact\)\}: \$\{value\}/);
 });
