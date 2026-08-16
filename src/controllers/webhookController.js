@@ -1,4 +1,4 @@
-const { sendWhatsAppMessage, sendWhatsAppReplyButtons, sendWhatsAppList } = require("../services/whatsapp");
+const { sendWhatsAppMessage, sendWhatsAppReplyButtons, sendWhatsAppList, sendWhatsAppTemplate } = require("../services/whatsapp");
 const { generateReply } = require("../services/ai");
 const { updateProfileFromMessage } = require("../services/profileExtractor");
 const { CLINIC_REDIRECT, evaluateClinicScope } = require("../services/scopeGuard");
@@ -56,7 +56,8 @@ function inboundText(message){
 }
 async function sendAdminResult(to,result){
   let sent;
-  if(result?.interactive?.type==="list") sent=await sendWhatsAppList(to,result.interactive.body,result.interactive.buttonText||result.interactive.button,result.interactive.rows||result.interactive.sections?.[0]?.rows,result.interactive.sectionTitle||result.interactive.sections?.[0]?.title);
+  if(result?.template?.name) sent=await sendWhatsAppTemplate(to,result.template.name,result.template.bodyParameters||[],result.template.language||process.env.WHATSAPP_TEMPLATE_LANGUAGE||'en',result.template.quickReplyPayloads||[]);
+  else if(result?.interactive?.type==="list") sent=await sendWhatsAppList(to,result.interactive.body,result.interactive.buttonText||result.interactive.button,result.interactive.rows||result.interactive.sections?.[0]?.rows,result.interactive.sectionTitle||result.interactive.sections?.[0]?.title);
   else if(result?.interactive?.type==="button") sent=await sendWhatsAppReplyButtons(to,result.interactive.body,result.interactive.buttons);
   else if(result?.interactive?.buttons) sent=await sendWhatsAppReplyButtons(to,result.interactive.body,result.interactive.buttons);
   else sent=await sendWhatsAppMessage(to,result?.reply||"Sorry, Shiloh could not render that response.");
