@@ -18,17 +18,29 @@ test('past finalization remains discoverable only for authorized finalizers', ()
   assert.match(finalization, /!has\(admin, 'appointment:view'\)/);
 });
 
-test('visibility remains scoped to past non-final appointments', () => {
+test('visibility remains scoped to the approved 1-15 Aug historical window and past non-final appointments', () => {
+  assert.match(finalization, /HISTORICAL_WINDOW_START = '2026-08-01T00:00:00\+02:00'/);
+  assert.match(finalization, /HISTORICAL_WINDOW_END = '2026-08-16T00:00:00\+02:00'/);
   assert.match(finalization, /a\.ends_at < NOW\(\)/);
+  assert.match(finalization, /a\.starts_at >= \$7::timestamptz/);
+  assert.match(finalization, /a\.starts_at < \$8::timestamptz/);
   assert.match(finalization, /a\.status NOT IN \('completed','cancelled','no_show'\)/);
   assert.match(finalization, /appointment_staff ast_scope/);
   assert.match(finalization, /staff_services ss_scope/);
   assert.match(finalization, /calendar_scope === 'all_business'/);
+  assert.match(finalization, /Visits awaiting finalization — 1–15 Aug 2026/);
+});
+
+test('single-appointment reload enforces the same approved historical window', () => {
+  assert.match(finalization, /a\.starts_at >= \$4::timestamptz/);
+  assert.match(finalization, /a\.starts_at < \$5::timestamptz/);
+  assert.match(finalization, /HISTORICAL_WINDOW_START, HISTORICAL_WINDOW_END/);
 });
 
 test('finalization pagination reserves WhatsApp rows for More and Back controls', () => {
   assert.match(finalization, /const PAGE_SIZE = 8;/);
   assert.match(finalization, /if \(data\.hasNext\) rows\.push/);
+  assert.match(finalization, /Show more visits from 1–15 Aug awaiting final status/);
   assert.match(finalization, /rows\.push\(\{ id: 'appointments'/);
 });
 
@@ -53,6 +65,7 @@ test('attendance remains explicit while unresolved visits can be rescheduled wit
   assert.match(finalization, /title: 'Leave unresolved'/);
   assert.match(finalization, /finalize_reschedule_/);
   assert.match(finalization, /processAdminBookingUpdateMessage\(sender, 'Manage booking'\)/);
+  assert.match(finalization, /processAdminBookingUpdateMessage\(sender, `manage_booking_select_\$\{appointmentId\}`\)/);
   assert.match(finalization, /processAdminBookingUpdateMessage\(sender, '3'\)/);
   assert.match(finalization, /cannot be inferred from elapsed time/);
   assert.doesNotMatch(finalization, /SET status='completed'.*NOW\(\)/s);
