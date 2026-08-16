@@ -27,8 +27,9 @@ test('relative and weekday dates are supported without weakening invalid-date ch
 
 test('guided admin booking uses the shared natural-date parser and client-friendly copy',()=>{
   assert.match(bookingSource,/parseClinicDateInput/);
-  assert.match(bookingSource,/13 Aug/);
+  assert.match(bookingSource,/15 Aug/);
   assert.match(bookingSource,/tomorrow/);
   assert.match(bookingSource,/Friday/);
+  assert.match(bookingSource,/Past dates are treated as historical manual entries/);
   assert.doesNotMatch(bookingSource,/const date=parseDate\(raw\)/);
 });
