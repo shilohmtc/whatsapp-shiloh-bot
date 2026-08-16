@@ -28,27 +28,14 @@ function formatDate(value) {
   if (!value) return null;
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return null;
-  return new Intl.DateTimeFormat("en-ZA", {
-    timeZone: "Africa/Johannesburg",
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  }).format(date);
+  return new Intl.DateTimeFormat("en-ZA", { timeZone: "Africa/Johannesburg", day: "2-digit", month: "2-digit", year: "numeric" }).format(date);
 }
 
 function formatDateTime(value) {
   if (!value) return null;
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return null;
-  return new Intl.DateTimeFormat("en-ZA", {
-    timeZone: "Africa/Johannesburg",
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).format(date);
+  return new Intl.DateTimeFormat("en-ZA", { timeZone: "Africa/Johannesburg", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }).format(date);
 }
 
 function contactLabel(contact = {}) {
@@ -61,35 +48,12 @@ function contactLabel(contact = {}) {
 async function getClientDetails(clientId) {
   if (!/^\d+$/.test(String(clientId)) || Number(clientId) <= 0) return null;
   const result = await pool.query(
-    `SELECT
-       c.id,
-       c.display_name,
-       c.date_of_birth,
-       c.status,
-       c.source,
-       COALESCE(
-         jsonb_agg(
-           DISTINCT jsonb_build_object(
-             'id', cc.id,
-             'type', cc.contact_type,
-             'value', cc.value,
-             'normalizedValue', cc.normalized_value,
-             'isPrimary', cc.is_primary,
-             'verifiedAt', cc.verified_at
-           )
-         ) FILTER (WHERE cc.id IS NOT NULL),
-         '[]'::jsonb
-       ) AS contacts,
+    `SELECT c.id, c.display_name, c.date_of_birth, c.status, c.source,
+       COALESCE(jsonb_agg(DISTINCT jsonb_build_object('id', cc.id, 'type', cc.contact_type, 'value', cc.value, 'normalizedValue', cc.normalized_value, 'isPrimary', cc.is_primary, 'verifiedAt', cc.verified_at)) FILTER (WHERE cc.id IS NOT NULL), '[]'::jsonb) AS contacts,
        (SELECT COUNT(*)::int FROM appointments a_count WHERE a_count.client_id = c.id) AS appointment_count,
-       (SELECT MAX(a_last.starts_at) FROM appointments a_last
-         WHERE a_last.client_id = c.id AND a_last.starts_at < NOW() AND a_last.status <> 'cancelled') AS last_appointment_at,
-       (SELECT MIN(a_next.starts_at) FROM appointments a_next
-         WHERE a_next.client_id = c.id AND a_next.starts_at >= NOW() AND a_next.status <> 'cancelled') AS next_appointment_at
-     FROM clients c
-     LEFT JOIN client_contacts cc ON cc.client_id = c.id
-     WHERE c.id = $1
-     GROUP BY c.id
-     LIMIT 1`,
+       (SELECT MAX(a_last.starts_at) FROM appointments a_last WHERE a_last.client_id = c.id AND a_last.starts_at < NOW() AND a_last.status <> 'cancelled') AS last_appointment_at,
+       (SELECT MIN(a_next.starts_at) FROM appointments a_next WHERE a_next.client_id = c.id AND a_next.starts_at >= NOW() AND a_next.status <> 'cancelled') AS next_appointment_at
+     FROM clients c LEFT JOIN client_contacts cc ON cc.client_id = c.id WHERE c.id = $1 GROUP BY c.id LIMIT 1`,
     [Number(clientId)]
   );
   return result.rows[0] || null;
@@ -98,156 +62,46 @@ async function getClientDetails(clientId) {
 async function findClients(query, limit = 10) {
   const cleaned = cleanQuery(query);
   if (!cleaned) return { queryType: "empty", clients: [] };
-
   const detailsMatch = cleaned.match(/^details\s+#?(\d+)$/i);
-  if (detailsMatch) {
-    const client = await getClientDetails(detailsMatch[1]);
-    return { queryType: "details", clients: client ? [client] : [] };
-  }
-
-  const phoneSearch = isPhoneLike(cleaned);
-  const values = [];
-  let predicate;
-
+  if (detailsMatch) { const client = await getClientDetails(detailsMatch[1]); return { queryType: "details", clients: client ? [client] : [] }; }
+  const phoneSearch = isPhoneLike(cleaned); const values = []; let predicate;
   if (phoneSearch) {
-    const digits = normalizePhone(cleaned);
-    const candidates = phoneCandidates(cleaned);
-    values.push(candidates);
-    const candidatesParam = `$${values.length}`;
-    if (digits.length >= 9) {
-      predicate = `EXISTS (
-        SELECT 1
-          FROM client_contacts cc_search
-         WHERE cc_search.client_id = c.id
-           AND cc_search.normalized_value = ANY(${candidatesParam}::text[])
-      )`;
-    } else {
-      values.push(digits);
-      const suffixParam = `$${values.length}`;
-      predicate = `EXISTS (
-        SELECT 1
-          FROM client_contacts cc_search
-         WHERE cc_search.client_id = c.id
-           AND cc_search.normalized_value IS NOT NULL
-           AND (cc_search.normalized_value = ANY(${candidatesParam}::text[]) OR cc_search.normalized_value LIKE '%' || ${suffixParam})
-      )`;
-    }
-  } else {
-    values.push(`%${cleaned}%`);
-    predicate = `c.display_name ILIKE $${values.length}`;
-  }
-
-  values.push(Math.max(1, Math.min(Number(limit) || 10, 10)));
-  const limitParam = `$${values.length}`;
-
+    const digits = normalizePhone(cleaned); const candidates = phoneCandidates(cleaned); values.push(candidates); const candidatesParam = `$${values.length}`;
+    if (digits.length >= 9) predicate = `EXISTS (SELECT 1 FROM client_contacts cc_search WHERE cc_search.client_id = c.id AND cc_search.normalized_value = ANY(${candidatesParam}::text[]))`;
+    else { values.push(digits); const suffixParam = `$${values.length}`; predicate = `EXISTS (SELECT 1 FROM client_contacts cc_search WHERE cc_search.client_id = c.id AND cc_search.normalized_value IS NOT NULL AND (cc_search.normalized_value = ANY(${candidatesParam}::text[]) OR cc_search.normalized_value LIKE '%' || ${suffixParam}))`; }
+  } else { values.push(`%${cleaned}%`); predicate = `c.display_name ILIKE $${values.length}`; }
+  values.push(Math.max(1, Math.min(Number(limit) || 10, 10))); const limitParam = `$${values.length}`;
   const result = await pool.query(
-    `SELECT
-       c.id,
-       c.display_name,
-       c.date_of_birth,
-       c.status,
-       c.source,
-       COALESCE(
-         jsonb_agg(
-           DISTINCT jsonb_build_object(
-             'id', cc.id,
-             'type', cc.contact_type,
-             'value', cc.value,
-             'normalizedValue', cc.normalized_value,
-             'isPrimary', cc.is_primary,
-             'verifiedAt', cc.verified_at
-           )
-         ) FILTER (WHERE cc.id IS NOT NULL),
-         '[]'::jsonb
-       ) AS contacts,
+    `SELECT c.id, c.display_name, c.date_of_birth, c.status, c.source,
+       COALESCE(jsonb_agg(DISTINCT jsonb_build_object('id', cc.id, 'type', cc.contact_type, 'value', cc.value, 'normalizedValue', cc.normalized_value, 'isPrimary', cc.is_primary, 'verifiedAt', cc.verified_at)) FILTER (WHERE cc.id IS NOT NULL), '[]'::jsonb) AS contacts,
        (SELECT COUNT(*)::int FROM appointments a_count WHERE a_count.client_id = c.id) AS appointment_count,
-       (SELECT MAX(a_last.starts_at) FROM appointments a_last
-         WHERE a_last.client_id = c.id AND a_last.starts_at < NOW() AND a_last.status <> 'cancelled') AS last_appointment_at,
-       (SELECT MIN(a_next.starts_at) FROM appointments a_next
-         WHERE a_next.client_id = c.id AND a_next.starts_at >= NOW() AND a_next.status <> 'cancelled') AS next_appointment_at
-     FROM clients c
-     LEFT JOIN client_contacts cc ON cc.client_id = c.id
-     WHERE ${predicate}
-     GROUP BY c.id
-     ORDER BY c.display_name NULLS LAST, c.id
-     LIMIT ${limitParam}`,
+       (SELECT MAX(a_last.starts_at) FROM appointments a_last WHERE a_last.client_id = c.id AND a_last.starts_at < NOW() AND a_last.status <> 'cancelled') AS last_appointment_at,
+       (SELECT MIN(a_next.starts_at) FROM appointments a_next WHERE a_next.client_id = c.id AND a_next.starts_at >= NOW() AND a_next.status <> 'cancelled') AS next_appointment_at
+     FROM clients c LEFT JOIN client_contacts cc ON cc.client_id = c.id WHERE ${predicate} GROUP BY c.id ORDER BY c.display_name NULLS LAST, c.id LIMIT ${limitParam}`,
     values
   );
-
   return { queryType: phoneSearch ? "phone" : "name", clients: result.rows };
 }
 
 function formatClientDetailsReply(client) {
   if (!client) return "That client detail view is unavailable. No client records were changed.";
-  const lines = [
-    "Client details",
-    `• ${client.display_name || "Unnamed client"} — CRM #${client.id}`,
-    `• Status: ${client.status || "unknown"}`,
-  ];
-  const dob = formatDate(client.date_of_birth);
-  if (dob) lines.push(`• DOB: ${dob}`);
+  const lines = ["Client details", `• ${client.display_name || "Unnamed client"} — CRM #${client.id}`, `• Status: ${client.status || "unknown"}`];
+  const dob = formatDate(client.date_of_birth); if (dob) lines.push(`• DOB: ${dob}`);
   const seen = new Set();
-  for (const contact of client.contacts || []) {
-    const value = String(contact.value || contact.normalizedValue || "").trim();
-    if (!value) continue;
-    const line = `• ${contactLabel(contact)}: ${value}`;
-    if (!seen.has(line)) {
-      seen.add(line);
-      lines.push(line);
-    }
-  }
+  for (const contact of client.contacts || []) { const value = String(contact.value || contact.normalizedValue || "").trim(); if (!value) continue; const line = `• ${contactLabel(contact)}: ${value}`; if (!seen.has(line)) { seen.add(line); lines.push(line); } }
   lines.push(`• Appointments on record: ${client.appointment_count || 0}`);
-  const next = formatDateTime(client.next_appointment_at);
-  const last = formatDateTime(client.last_appointment_at);
-  if (next) lines.push(`• Next appointment: ${next}`);
-  if (last) lines.push(`• Last appointment: ${last}`);
+  const next = formatDateTime(client.next_appointment_at); const last = formatDateTime(client.last_appointment_at); if (next) lines.push(`• Next appointment: ${next}`); if (last) lines.push(`• Last appointment: ${last}`);
   lines.push("", "This is a read-only client detail view. No client identity or contact records were changed.");
   return lines.join("\n");
 }
 
 function formatClientLookupReply(query, clients) {
-  const cleaned = cleanQuery(query);
-  const detailsMatch = cleaned.match(/^details\s+#?(\d+)$/i);
-  if (!clients.length) {
-    if (detailsMatch) return "That client detail view is unavailable in your authorized scope. No client records were changed.";
-    return `I couldn't find a canonical CRM client matching “${cleaned}”. No client records were changed.`;
-  }
-
-  if (clients.length === 1) {
-    const client = clients[0];
-    if (detailsMatch) return formatClientDetailsReply(client);
-    const contacts = (client.contacts || []).map((contact) => `${contact.type}: ${maskContact(contact.normalizedValue || contact.value)}`);
-    const lines = [
-      "Client found",
-      `• ${client.display_name || "Unnamed client"} — CRM #${client.id}`,
-      `• Status: ${client.status || "unknown"}`,
-    ];
-    const dob = formatDate(client.date_of_birth);
-    if (dob) lines.push(`• DOB: ${dob}`);
-    if (contacts.length) lines.push(`• Contact: ${contacts.join(", ")}`);
-    lines.push(`• Appointments on record: ${client.appointment_count || 0}`);
-    const next = formatDateTime(client.next_appointment_at);
-    const last = formatDateTime(client.last_appointment_at);
-    if (next) lines.push(`• Next appointment: ${next}`);
-    if (last) lines.push(`• Last appointment: ${last}`);
-    lines.push("", `To view authorized contact details, send *Find client details #${client.id}*.`);
-    lines.push("", "This is a read-only lookup. No client identity or contact records were changed.");
-    return lines.join("\n");
-  }
-
-  const lines = [
-    `I found ${clients.length} possible canonical CRM clients matching “${cleaned}”.`,
-    "I won't choose or merge a client automatically.",
-    "",
-  ];
-  for (const client of clients) {
-    const dob = formatDate(client.date_of_birth);
-    const primary = (client.contacts || []).find((contact) => contact.isPrimary) || (client.contacts || [])[0];
-    const contact = primary ? ` — ${maskContact(primary.normalizedValue || primary.value)}` : "";
-    lines.push(`• CRM #${client.id}: ${client.display_name || "Unnamed client"}${dob ? ` — DOB ${dob}` : ""}${contact}`);
-  }
-  lines.push("", "Refine the name or number to narrow the lookup.");
-  return lines.join("\n");
+  const cleaned = cleanQuery(query); const detailsMatch = cleaned.match(/^details\s+#?(\d+)$/i);
+  if (!clients.length) { if (detailsMatch) return "That client detail view is unavailable in your authorized scope. No client records were changed."; return `I couldn't find a canonical CRM client matching “${cleaned}”. No client records were changed.`; }
+  if (clients.length === 1) return formatClientDetailsReply(clients[0]);
+  const lines = [`I found ${clients.length} possible canonical CRM clients matching “${cleaned}”.`, "I won't choose or merge a client automatically.", ""];
+  for (const client of clients) { const dob = formatDate(client.date_of_birth); const primary = (client.contacts || []).find((contact) => contact.isPrimary) || (client.contacts || [])[0]; const contact = primary ? ` — ${maskContact(primary.normalizedValue || primary.value)}` : ""; lines.push(`• CRM #${client.id}: ${client.display_name || "Unnamed client"}${dob ? ` — DOB ${dob}` : ""}${contact}`); }
+  lines.push("", "Refine the name or number to narrow the lookup."); return lines.join("\n");
 }
 
 module.exports = { findClients, getClientDetails, formatClientLookupReply, formatClientDetailsReply };
