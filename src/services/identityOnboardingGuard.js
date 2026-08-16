@@ -143,6 +143,32 @@ async function startImportedClientClaim(phone, client) {
   );
 }
 
+async function persistVerifiedWhatsAppClaim(phone, clientId) {
+  const key = normalizePhone(phone);
+  const result = await pool.query(
+    `UPDATE client_contacts cc
+        SET contact_type='whatsapp', verified_at=COALESCE(cc.verified_at,NOW()), updated_at=NOW()
+      WHERE cc.client_id=$2
+        AND cc.normalized_value=$1
+        AND cc.contact_type='mobile'
+        AND NOT EXISTS (
+          SELECT 1 FROM client_contacts existing
+           WHERE existing.normalized_value=$1
+             AND existing.contact_type='whatsapp'
+             AND existing.id<>cc.id
+        )
+      RETURNING cc.id`,
+    [key, clientId]
+  );
+  if (result.rowCount === 1) return true;
+  const existing = await pool.query(
+    `SELECT 1 FROM client_contacts
+      WHERE client_id=$2 AND normalized_value=$1 AND contact_type='whatsapp' LIMIT 1`,
+    [key, clientId]
+  );
+  return existing.rowCount === 1;
+}
+
 async function forceMatchedClientNameConfirmation(phone, clientId) {
   const key = normalizePhone(phone);
   const result = await pool.query(
@@ -203,6 +229,13 @@ async function guardActiveNameConfirmation(phone, text) {
       };
     }
 
+    const linked = await persistVerifiedWhatsAppClaim(phone, client.client_id);
+    if (!linked) {
+      return {
+        handled: true,
+        reply: "I matched the name, but I couldn't safely verify this WhatsApp link. I won't change or merge any client records automatically. Please contact the clinic team so we can verify the profile safely.",
+      };
+    }
     await pool.query(
       `UPDATE client_onboarding_sessions
           SET pending_name=$3, updated_at=NOW()
