@@ -59,9 +59,10 @@ test('certification authority is Christel for Christel and Abigail, and Marietji
 });
 
 test('attendance remains explicit while unresolved visits can be rescheduled without false attendance', () => {
-  assert.match(finalization, /FINAL_STATUSES = new Set\(\['completed', 'no_show'\]\)/);
+  assert.match(finalization, /FINAL_STATUSES = new Set\(\['completed', 'no_show', 'no_charge'\]\)/);
   assert.match(finalization, /title: 'Completed'/);
   assert.match(finalization, /title: 'No-show'/);
+  assert.match(finalization, /title: 'No-Charge'/);
   assert.match(finalization, /title: 'Reschedule'/);
   assert.match(finalization, /title: 'Leave unresolved'/);
   assert.match(finalization, /finalize_reschedule_/);
@@ -82,7 +83,7 @@ test('historical finalization offers cancelled and reuses canonical reason-confi
   assert.match(cancellation, /hasPendingCancellationIntent/);
 });
 
-test('completed no-show and cancelled visits refresh the queue after mutation so finalized rows disappear immediately', () => {
+test('terminal historical outcomes refresh the queue after mutation so finalized rows disappear immediately', () => {
   assert.match(finalization, /async function refreshedQueueInteractive/);
   assert.match(finalization, /pendingPastAppointments\(admin, 1\)/);
   assert.match(finalization, /It has been removed from the finalization queue/);
@@ -96,7 +97,7 @@ test('finalization revalidates authority under row lock and writes canonical his
   assert.match(finalization, /BEGIN/);
   assert.match(finalization, /FOR UPDATE OF a/);
   assert.match(finalization, /canCertifyAppointment\(admin, appointment\.id, db\)/);
-  assert.match(finalization, /UPDATE appointments SET status=\$1/);
+  assert.match(finalization, /UPDATE appointments[\s\S]*SET status=/);
   assert.match(finalization, /INSERT INTO appointment_status_history/);
   assert.match(finalization, /admin\.appointment_finalized/);
   assert.match(finalization, /COMMIT/);
