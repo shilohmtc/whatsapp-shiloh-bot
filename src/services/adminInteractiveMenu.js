@@ -10,6 +10,7 @@ const { processAdminPendingBookingApprovalsMessage } = require('./adminPendingBo
 const { abigailEarningsButtons, christelEarningsButtons, marietjieEarningsButtons } = require('./adminEarningsButtons');
 
 const SECTION_ORDER = ['Appointments', 'Reports', 'Clients', 'Services', 'Schedule', 'More'];
+const APPOINTMENT_PRIORITY = ['finalize', 'booking', 'manage_booking', 'today', 'tomorrow'];
 
 const ACTIONS = [
   { key: 'today', labels: ["Today's clients", 'My clients today'], command: 'today', description: 'View today’s appointments' },
@@ -20,9 +21,9 @@ const ACTIONS = [
   { key: 'christel_earnings', labels: ['💰 Christel earnings', 'Christel earnings'], command: 'Christel earnings', description: 'Completed-only earnings report' },
   { key: 'abigail_earnings', labels: ['💰 Abigail earnings', 'Abigail earnings'], command: 'Abigail earnings', description: 'Completed-only earnings report' },
   { key: 'marietjie_earnings', labels: ['💰 Marietjie earnings', 'Marietjie earnings'], command: 'Marietjie earnings', description: 'Completed-only earnings report' },
-  { key: 'booking', labels: ['Make a booking'], command: 'Make a booking', description: 'Create a guarded appointment' },
-  { key: 'manage_booking', labels: ['Manage a booking'], command: 'Manage a booking', description: 'Change an existing appointment' },
-  { key: 'finalize', labels: ['Finalize past visits'], command: 'Finalize past appointments', description: 'Mark Completed or No-show explicitly' },
+  { key: 'booking', labels: ['Make a booking'], command: 'Make a booking', description: 'Book using authoritative availability' },
+  { key: 'manage_booking', labels: ['Manage a booking'], command: 'Manage a booking', description: 'Reschedule or cancel an existing appointment' },
+  { key: 'finalize', labels: ['Finalize past visits'], command: 'Finalize past appointments', description: 'Completed, No-show, Reschedule or leave unresolved' },
   { key: 'client', labels: ['Find a client', 'Find my client'], command: 'Find a client', description: 'Search authorized CRM clients' },
   { key: 'reset_juvan', labels: ['Reset Juvan profile'], command: 'Reset test client Juvan', description: 'Reset dedicated booking-test client' },
   { key: 'walkin', labels: ['Add a walk-in'], command: 'Add a walk-in', description: 'Register a walk-in client' },
@@ -40,7 +41,19 @@ function parseVisibleMenu(body = '') { const sections = new Map(); let currentSe
 function isActionVisibleInMenu(action, body = '') { if (!action?.key) return false; for (const entries of parseVisibleMenu(body).values()) if (entries.some((entry) => entry.action.key === action.key)) return true; return false; }
 function compactMenuBody(body = '') { const compact = []; let insertedPrompt = false; for (const line of String(body).split('\n')) { const trimmed = line.trim(); if (/^\*(Appointments|Reports|Clients|Services|Schedule|More)\*$/.test(trimmed) || /^\d+️⃣\s+/u.test(trimmed)) continue; if (/^Use the real \*/.test(trimmed)) { if (!insertedPrompt) compact.push('Choose a section below.'); insertedPrompt = true; continue; } compact.push(line); } while (compact.length && !compact[compact.length - 1].trim()) compact.pop(); return compact.join('\n').replace(/\n{3,}/g, '\n\n'); }
 function topLevelInteractive(body) { const sections = parseVisibleMenu(body); return { type: 'list', body: compactMenuBody(body), buttonText: 'Admin menu', rows: SECTION_ORDER.filter((section) => (sections.get(section) || []).length > 0).map((section) => ({ id: `admin_section_${section.toLowerCase()}`, title: section, description: `Open ${section.toLowerCase()} admin actions` })), sectionTitle: 'Shiloh Admin' }; }
-function sectionInteractive(section, body) { const entries = parseVisibleMenu(body).get(section) || []; if (!entries.length) return null; const rows = entries.map(({ action, title }) => ({ id: `admin_action_${action.key}`, title: title.length <= 24 ? title : title.slice(0, 24), description: action.description })); rows.push({ id: 'menu', title: '← Back to Admin', description: 'Return to the main admin menu' }); return { type: 'list', body: `*${section}*\nChoose what you want to do.`, buttonText: section.length <= 20 ? section : 'Open options', rows, sectionTitle: section }; }
+function sectionInteractive(section, body) {
+  let entries = parseVisibleMenu(body).get(section) || [];
+  if (!entries.length) return null;
+  if (section === 'Appointments') {
+    // Availability is checked inside Make/Manage booking; it is not a separate staff task.
+    entries = entries
+      .filter(({ action }) => action.key !== 'availability' && action.key !== 'demo_client')
+      .sort((a, b) => APPOINTMENT_PRIORITY.indexOf(a.action.key) - APPOINTMENT_PRIORITY.indexOf(b.action.key));
+  }
+  const rows = entries.map(({ action, title }) => ({ id: `admin_action_${action.key}`, title: title.length <= 24 ? title : title.slice(0, 24), description: action.description }));
+  rows.push({ id: 'menu', title: '← Back to Admin', description: 'Return to the main admin menu' });
+  return { type: 'list', body: `*${section}*\nChoose what you want to do.`, buttonText: section.length <= 20 ? section : 'Open options', rows, sectionTitle: section };
+}
 function normalizedAdminName(admin) { return String(admin?.display_name || '').trim().toLowerCase(); }
 function isJeanPierreBusinessAdmin(admin) { return normalizedAdminName(admin) === 'jean-pierre' && admin?.business_role === 'business_admin' && admin?.calendar_scope === 'all_business' && admin?.service_scope === 'all_services'; }
 function isChristelOwnerAdmin(admin) { return normalizedAdminName(admin) === 'christel' && ['owner', 'business_admin'].includes(admin?.business_role) && admin?.calendar_scope === 'all_business'; }
