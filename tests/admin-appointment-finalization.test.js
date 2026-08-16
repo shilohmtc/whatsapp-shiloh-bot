@@ -71,6 +71,14 @@ test('attendance remains explicit while unresolved visits can be rescheduled wit
   assert.doesNotMatch(finalization, /SET status='completed'.*NOW\(\)/s);
 });
 
+test('historical finalization offers cancelled and reuses canonical reason-confirmation cancellation flow', () => {
+  assert.match(finalization, /title: 'Cancelled'/);
+  assert.match(finalization, /finalize_cancelled_/);
+  assert.match(finalization, /processAdminAppointmentCancellationMessage/);
+  assert.match(finalization, /Cancel appointment \$\{appointmentId\}/);
+  assert.match(finalization, /startPastVisitCancellation/);
+});
+
 test('finalization revalidates authority under row lock and writes canonical history plus audit atomically', () => {
   assert.match(finalization, /BEGIN/);
   assert.match(finalization, /FOR UPDATE OF a/);
