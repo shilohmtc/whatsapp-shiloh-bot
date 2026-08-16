@@ -2,6 +2,7 @@ const { pool } = require('../db/pool');
 const { listAvailableSlots } = require('./availabilityService');
 const { getIntent, extractDate, extractTime, processBookingMessage, displayDate, verifyService } = require('./bookingIntent');
 const { decorateClientBookingResult } = require('./clientBookingInteractive');
+const { getClinicDateStatus, getNextOpenClinicDates } = require('./clinicDateChoices');
 
 const SLOT_PAGE_SIZE = 9;
 const TZ = 'Africa/Johannesburg';
@@ -20,6 +21,7 @@ function localDateKey(value) {
 function slotId(slot) { const time = localTimeParts(slot.starts_at); return `client_slot_${slot.staff_id}_${localDateKey(slot.starts_at)}_${time.hh}${time.mm}`; }
 function isFutureSlot(slot, now = new Date()) { return new Date(slot.starts_at).getTime() > now.getTime(); }
 function daypartForSlot(slot) { const hour = Number(localTimeParts(slot.starts_at).hh); if (hour < 12) return 'morning'; if (hour < 17) return 'afternoon'; return 'evening'; }
+function explicitBookingDate(value = '') { const match=clean(value).toLowerCase().match(/^client_date_(\d{4}-\d{2}-\d{2})$/);return match?.[1]||null; }
 
 async function resolveService(intent) {
   const verification = await verifyService(clean(intent.service_text));
@@ -70,6 +72,14 @@ function noSlotsReply(intent, daypart = null) { const qualifier = daypart ? ` in
 function parseSlotSelection(value = '') { const match = clean(value).toLowerCase().match(/^client_slot_(\d+)_(\d{8})_(\d{4})$/); return match ? { staffId: Number(match[1]), dateKey: match[2], hhmm: match[3] } : null; }
 function parseSlotPage(value = '') { const match = clean(value).toLowerCase().match(/^client_slots_page_(\d+)(?:_(morning|afternoon|evening))?$/); return match ? { page: Number(match[1]), daypart: match[2] || null } : null; }
 
+async function closedDateInteractive(intent,date,status){
+  const openDates=await getNextOpenClinicDates({count:2});
+  const reason=status?.holidayName?` (${status.holidayName})`:'';
+  const buttons=openDates.map((choice)=>({id:`client_date_${choice.date}`,title:choice.title.slice(0,20)}));
+  buttons.push({id:'client_date_other',title:'Choose another date'});
+  return{type:'button',body:[`Shiloh is closed on ${displayDate(date)}${reason}.`,'Nothing has been booked.','',`Please choose another open clinic day for *${intent.service_text}*, or type a different date.`].join('\n'),buttons:buttons.slice(0,3)};
+}
+
 async function revalidateSelectedSlot(intent, selection) {
   const service = await resolveService(intent); if (!service) return null; const staff = await resolveEligibleStaff(service.id, null); const practitioner = staff.find((row) => Number(row.id) === Number(selection.staffId)); if (!practitioner) return null;
   if (clean(intent.therapist_text) && clean(intent.therapist_text).toLowerCase() !== 'any available therapist' && clean(practitioner.display_name).toLowerCase() !== clean(intent.therapist_text).toLowerCase()) return null;
@@ -86,9 +96,16 @@ async function acceptSlot(sender, intent, selection) {
 
 async function processClientAvailabilityMessage(sender, text) {
   const value = clean(text); const intent = await getIntent(sender); if (!intent || intent.status !== 'collecting' || !intent.service_text || intent.service_verified === false) return { handled: false };
+  if(value.toLowerCase()==='client_date_other')return{handled:true,intent,reply:'Please type another date, for example next Friday or 21 August.'};
   const selection = parseSlotSelection(value); if (selection && intent.preferred_date && !intent.preferred_time) return acceptSlot(sender, intent, selection);
   const page = parseSlotPage(value); if (page && intent.preferred_date && !intent.preferred_time) { const availability = await authoritativeSlotsForIntent(intent, { daypart: page.daypart }); if (!availability.slots.length) return { handled: true, reply: noSlotsReply(intent, page.daypart) }; return { handled: true, intent, interactive: slotsInteractive(intent, availability.slots, page.page, { daypart: page.daypart }) }; }
-  if (!intent.preferred_date) { const date = extractDate(value); if (!date) return { handled: false }; const staged = await processBookingMessage(sender, value); if (!staged?.handled || !staged.intent?.preferred_date || staged.intent.preferred_time) return { handled: false }; const availability = await authoritativeSlotsForIntent(staged.intent); if (!availability.slots.length) return { handled: true, intent: staged.intent, reply: noSlotsReply(staged.intent) }; return { handled: true, intent: staged.intent, interactive: slotsInteractive(staged.intent, availability.slots, 1) }; }
+  if (!intent.preferred_date) {
+    const date = explicitBookingDate(value)||extractDate(value); if (!date) return { handled: false };
+    const clinicDate=await getClinicDateStatus({date});
+    if(!clinicDate.covered)return{handled:true,intent,interactive:await closedDateInteractive(intent,date,clinicDate)};
+    const staged = await processBookingMessage(sender, explicitBookingDate(value)?date:value); if (!staged?.handled || !staged.intent?.preferred_date || staged.intent.preferred_time) return { handled: false };
+    const availability = await authoritativeSlotsForIntent(staged.intent); if (!availability.slots.length) return { handled: true, intent: staged.intent, reply: noSlotsReply(staged.intent) }; return { handled: true, intent: staged.intent, interactive: slotsInteractive(staged.intent, availability.slots, 1) };
+  }
   if (!intent.preferred_time) {
     const requestedTime = extractTime(value); if (!requestedTime) return { handled: false };
     if (/^(morning|afternoon|evening)$/.test(requestedTime)) { const availability = await authoritativeSlotsForIntent(intent, { daypart: requestedTime }); if (!availability.slots.length) return { handled: true, intent, reply: noSlotsReply(intent, requestedTime) }; return { handled: true, intent, interactive: slotsInteractive(intent, availability.slots, 1, { daypart: requestedTime }) }; }
