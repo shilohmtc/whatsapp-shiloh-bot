@@ -6,6 +6,10 @@ const { processAdminBookingUpdateMessage } = require('./adminBookingUpdate');
 // Reserve two of WhatsApp's 10 list rows for pagination and Back controls.
 const PAGE_SIZE = 8;
 const FINAL_STATUSES = new Set(['completed', 'no_show']);
+// Temporary historical reconciliation window approved for the current backlog.
+// Start is inclusive; end is exclusive so all of 15 Aug 2026 is included.
+const HISTORICAL_WINDOW_START = '2026-08-01T00:00:00+02:00';
+const HISTORICAL_WINDOW_END = '2026-08-16T00:00:00+02:00';
 
 function key(sender) { return normalizePhone(sender); }
 function has(admin, permission) { return admin?.permissions?.[permission] === true; }
@@ -58,6 +62,8 @@ async function pendingPastAppointments(admin, page = 1) {
        LEFT JOIN appointment_services aps ON aps.appointment_id=a.id
        LEFT JOIN appointment_staff ast ON ast.appointment_id=a.id
       WHERE a.ends_at < NOW()
+        AND a.starts_at >= $7::timestamptz
+        AND a.starts_at < $8::timestamptz
         AND a.status NOT IN ('completed','cancelled','no_show')
         AND ${scopeSql('a')}
         AND ($5::boolean = FALSE OR (
@@ -72,7 +78,7 @@ async function pendingPastAppointments(admin, page = 1) {
       GROUP BY a.id,a.starts_at,a.ends_at,a.status,c.display_name,a.source_client_name
       ORDER BY a.starts_at DESC,a.id DESC
       LIMIT $3 OFFSET $4`,
-    [isBusinessWide(admin), admin.staff_id, PAGE_SIZE + 1, offset, certifiableOnly, certifiableStaff]
+    [isBusinessWide(admin), admin.staff_id, PAGE_SIZE + 1, offset, certifiableOnly, certifiableStaff, HISTORICAL_WINDOW_START, HISTORICAL_WINDOW_END]
   );
   return { rows: result.rows.slice(0, PAGE_SIZE), page: safePage, hasNext: result.rows.length > PAGE_SIZE };
 }
@@ -83,14 +89,14 @@ function pendingListInteractive(data, admin = null) {
     title: `#${row.id} ${String(row.client_name || 'Client').slice(0, 14)}`.slice(0, 24),
     description: `${formatDateTime(row.starts_at)} · ${String(row.services || row.staff || row.status).slice(0, 42)}`.slice(0, 72),
   }));
-  if (data.hasNext) rows.push({ id: `finalize_appts_page_${data.page + 1}`, title: 'More appointments', description: 'Show older appointments awaiting final status' });
+  if (data.hasNext) rows.push({ id: `finalize_appts_page_${data.page + 1}`, title: 'More appointments', description: 'Show more visits from 1–15 Aug awaiting final status' });
   rows.push({ id: 'appointments', title: '← Back', description: 'Return to Appointments' });
   const authority = admin ? authorityDescription(admin) : null;
   return {
     type: 'list',
     body: data.rows.length
-      ? `*Visits awaiting finalization — ${data.rows.length}${data.hasNext ? '+' : ''}*\nChoose a visit and record what actually happened.${authority ? `\nYou can certify: ${authority}.` : ''}`
-      : '*Visits awaiting finalization*\nThere are no past visits awaiting final status in your authorized certification scope.',
+      ? `*Visits awaiting finalization — 1–15 Aug 2026*\nChoose a visit and record what actually happened.${authority ? `\nYou can certify: ${authority}.` : ''}`
+      : '*Visits awaiting finalization — 1–15 Aug 2026*\nThere are no visits in this approved historical window awaiting final status in your authorized certification scope.',
     buttonText: 'Review visits', rows, sectionTitle: 'Awaiting finalization',
   };
 }
@@ -105,10 +111,12 @@ async function loadAuthorizedPendingAppointment(admin, appointmentId, db = pool,
        LEFT JOIN clients c ON c.id=a.client_id
       WHERE a.id=$3
         AND a.ends_at < NOW()
+        AND a.starts_at >= $4::timestamptz
+        AND a.starts_at < $5::timestamptz
         AND a.status NOT IN ('completed','cancelled','no_show')
         AND ${scopeSql('a')}
       ${lock ? 'FOR UPDATE OF a' : ''}`,
-    [isBusinessWide(admin), admin.staff_id, appointmentId]
+    [isBusinessWide(admin), admin.staff_id, appointmentId, HISTORICAL_WINDOW_START, HISTORICAL_WINDOW_END]
   );
   return result.rows[0] || null;
 }
@@ -173,10 +181,10 @@ async function finalizeAppointment(admin, appointmentId, targetStatus) {
 
 async function startPastVisitReschedule(sender, appointmentId) {
   // Reuse the canonical guarded admin booking-update state machine rather than
-  // creating a second mutation path. The existing appointment remains unchanged
-  // until a valid future time passes clinic, practitioner, CRM and Calendar checks.
+  // creating a second mutation path. Enter through the exact appointment payload
+  // so the normal list-first Manage-booking UX cannot intercept this historical flow.
   await processAdminBookingUpdateMessage(sender, 'Manage booking');
-  const selected = await processAdminBookingUpdateMessage(sender, String(appointmentId));
+  const selected = await processAdminBookingUpdateMessage(sender, `manage_booking_select_${appointmentId}`);
   if (!selected.handled) return selected;
   return processAdminBookingUpdateMessage(sender, '3');
 }
@@ -204,7 +212,7 @@ async function processAdminAppointmentFinalizationMessage(sender, text) {
 
   if (selectionMatch) {
     const appointment = await loadAuthorizedPendingAppointment(admin, Number(selectionMatch[1]));
-    if (!appointment) return { handled: true, admin, reply: 'That appointment is no longer awaiting final status in your authorized scope.' };
+    if (!appointment) return { handled: true, admin, reply: 'That appointment is no longer awaiting final status in the approved 1–15 Aug historical window or your authorized scope.' };
     const canCertify = has(admin, 'booking:update') && await canCertifyAppointment(admin, appointment.id);
     return { handled: true, admin, interactive: canCertify ? decisionInteractive(appointment) : reviewOnlyInteractive(appointment) };
   }
@@ -213,7 +221,7 @@ async function processAdminAppointmentFinalizationMessage(sender, text) {
     if (!has(admin, 'booking:update')) return { handled: true, admin, reply: 'Your admin account can review this appointment but cannot reschedule it.' };
     const appointmentId = Number(rescheduleMatch[1]);
     const appointment = await loadAuthorizedPendingAppointment(admin, appointmentId);
-    if (!appointment) return { handled: true, admin, reply: 'That appointment changed or is outside your authorized scope, so no reschedule was started.' };
+    if (!appointment) return { handled: true, admin, reply: 'That appointment changed or is outside the approved 1–15 Aug historical window or your authorized scope, so no reschedule was started.' };
     if (!(await canCertifyAppointment(admin, appointment.id))) return { handled: true, admin, reply: 'You can review this appointment, but its outcome must be handled by the responsible practitioner or authorized supervisor.' };
     return startPastVisitReschedule(sender, appointmentId);
   }
@@ -223,12 +231,13 @@ async function processAdminAppointmentFinalizationMessage(sender, text) {
   const appointmentId = Number(decisionMatch[2]);
   const result = await finalizeAppointment(admin, appointmentId, targetStatus);
   if (result.status === 'certification_forbidden') return { handled: true, admin, reply: 'You can review this appointment, but attendance must be certified by its responsible practitioner or authorized supervisor.' };
-  if (result.status !== 'updated') return { handled: true, admin, reply: 'That appointment changed or is outside your authorized scope, so no status update was made.' };
+  if (result.status !== 'updated') return { handled: true, admin, reply: 'That appointment changed or is outside the approved 1–15 Aug historical window or your authorized scope, so no status update was made.' };
   const label = targetStatus === 'completed' ? 'Completed' : 'No-show';
   return { handled: true, admin, reply: `✅ Appointment #${appointmentId} marked *${label}*. Reporting integrity will now use this explicit canonical status.` };
 }
 
 module.exports = {
-  FINAL_STATUSES, PAGE_SIZE, pendingPastAppointments, pendingListInteractive, decisionInteractive, reviewOnlyInteractive,
+  FINAL_STATUSES, PAGE_SIZE, HISTORICAL_WINDOW_START, HISTORICAL_WINDOW_END,
+  pendingPastAppointments, pendingListInteractive, decisionInteractive, reviewOnlyInteractive,
   loadAuthorizedPendingAppointment, finalizeAppointment, startPastVisitReschedule, processAdminAppointmentFinalizationMessage,
 };
