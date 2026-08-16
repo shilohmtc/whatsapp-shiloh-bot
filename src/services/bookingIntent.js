@@ -153,19 +153,10 @@ function resolveWrittenDate(day, monthName, yearText, now = new Date()) {
   let year = yearText ? Number(yearText) : today.year;
   if (year < 100) year += 2000;
 
-  let iso = validIsoFromParts(Number(day), month, year);
-  if (!iso) return null;
-
-  if (!yearText) {
-    const candidate = dateFromLocalParts({ year, month, day: Number(day) });
-    const base = currentClinicDate(now);
-    if (candidate < base) {
-      year += 1;
-      iso = validIsoFromParts(Number(day), month, year);
-    }
-  }
-
-  return iso;
+  // A yearless written date is anchored to the current clinic calendar year.
+  // Never silently roll an already-passed date into next year; callers that
+  // require a future date must reject the past date or ask for an explicit year.
+  return validIsoFromParts(Number(day), month, year);
 }
 
 function extractDate(text = "", now = new Date()) {
