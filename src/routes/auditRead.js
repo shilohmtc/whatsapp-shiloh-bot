@@ -4,7 +4,6 @@ const { getPostCanonicalizationAudit } = require("../services/canonicalizationAu
 const { getCatalogueParityAudit } = require("../services/catalogueParityAudit");
 const { getGoldieExitAudit } = require("../services/goldieExitAudit");
 const { getReportingIntegrityAudit } = require("../services/reportingIntegrityAudit");
-const { getHistoricalFinalizationAudit } = require("../services/historicalFinalizationAudit");
 const { getBirthdayTemplateStatus, TEMPLATE_BODY } = require("../services/birthdayTemplateProvisioning");
 
 const router = express.Router();
@@ -38,20 +37,6 @@ router.get("/goldie-exit/status", async (req, res) => {
   } catch (error) {
     (req.log || console).error?.({ err: error }, "Failed to build Goldie exit audit");
     return res.status(500).json({ error: "Could not build Goldie exit audit", requestId: req.id });
-  }
-});
-
-// Temporary sanitized, read-only historical finalization completeness audit.
-// Returns appointment IDs, clinic dates, status, practitioner names and finalizer classification only.
-// Never returns client identity/contact data and performs no mutation or outbound messaging.
-router.get("/historical-finalization/status", async (req, res) => {
-  try {
-    const report = await getHistoricalFinalizationAudit();
-    res.set("Cache-Control", "no-store");
-    return res.status(200).json({ report, requestId: req.id });
-  } catch (error) {
-    (req.log || console).error?.({ err: error }, "Failed to build sanitized historical finalization audit");
-    return res.status(500).json({ error: "Could not build historical finalization audit", requestId: req.id });
   }
 });
 
