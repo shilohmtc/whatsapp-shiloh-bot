@@ -6,11 +6,13 @@ const path = require('node:path');
 const byDatePath=path.join(__dirname,'..','src','services','adminAppointmentsByDate.js');
 const menuPath=path.join(__dirname,'..','src','services','adminAppointmentsMenu.js');
 const mobileMenuPath=path.join(__dirname,'..','src','services','adminMobileMenu.js');
+const interactiveMenuPath=path.join(__dirname,'..','src','services','adminInteractiveMenu.js');
 const buttonsPath=path.join(__dirname,'..','src','services','adminEarningsButtons.js');
 const webhookPath=path.join(__dirname,'..','src','controllers','webhookController.js');
 const source=fs.readFileSync(byDatePath,'utf8');
 const menu=fs.readFileSync(menuPath,'utf8');
 const mobileMenu=fs.readFileSync(mobileMenuPath,'utf8');
+const interactiveMenu=fs.readFileSync(interactiveMenuPath,'utf8');
 const buttons=fs.readFileSync(buttonsPath,'utf8');
 const webhook=fs.readFileSync(webhookPath,'utf8');
 const { relativeCommand,lastWeekBounds }=require(byDatePath);
@@ -27,18 +29,19 @@ test('today tomorrow and last-week stable IDs normalize deterministically',()=>{
   assert.equal(relativeCommand("Tomorrow's clients"),'tomorrow');
 });
 
-test('every advertised Appointments list action has a stable normalized route',()=>{
-  const ids=[
-    'admin_appointment_today','admin_appointment_tomorrow','admin_appointment_last_week',
-    'admin_appointment_availability','admin_appointment_booking','admin_appointment_manage','admin_appointment_finalize',
-  ];
-  for(const id of ids){
+test('visible Appointments list prioritizes operational actions and hides standalone availability',()=>{
+  const visibleIds=['admin_appointment_finalize','admin_appointment_booking','admin_appointment_manage','admin_appointment_today','admin_appointment_tomorrow'];
+  for(const id of visibleIds){
     assert.match(menu,new RegExp(`id: '${id}'`));
     assert.ok(commandForAdminButton(id),`${id} must normalize at webhook ingress`);
   }
+  assert.doesNotMatch(menu,/id: 'admin_appointment_availability'/);
+  assert.ok(menu.indexOf('admin_appointment_finalize') < menu.indexOf('admin_appointment_booking'));
+  assert.ok(menu.indexOf('admin_appointment_booking') < menu.indexOf('admin_appointment_manage'));
+  assert.match(interactiveMenu,/APPOINTMENT_PRIORITY = \['finalize', 'booking', 'manage_booking', 'today', 'tomorrow'\]/);
+  assert.match(interactiveMenu,/action\.key !== 'availability'/);
   assert.doesNotMatch(menu,/id: 'today'/);
   assert.doesNotMatch(menu,/id: 'tomorrow'/);
-  assert.doesNotMatch(menu,/Demo Client is isolated training data/);
 });
 
 test('literal Admin is a canonical top-level admin menu entry command',()=>{
