@@ -6,6 +6,7 @@ const path = require('node:path');
 const root = path.resolve(__dirname, '..');
 const source = (p) => fs.readFileSync(path.join(root, p), 'utf8');
 const finalization = source('src/services/adminAppointmentFinalization.js');
+const cancellation = source('src/services/adminAppointmentCancellation.js');
 const authority = source('src/services/attendanceFinalizationAuthority.js');
 const appointmentsMenu = source('src/services/adminAppointmentsMenu.js');
 const interactiveMenu = source('src/services/adminInteractiveMenu.js');
@@ -77,6 +78,18 @@ test('historical finalization offers cancelled and reuses canonical reason-confi
   assert.match(finalization, /processAdminAppointmentCancellationMessage/);
   assert.match(finalization, /Cancel appointment \$\{appointmentId\}/);
   assert.match(finalization, /startPastVisitCancellation/);
+  assert.match(cancellation, /cancelledAppointmentId: appointment\.id/);
+  assert.match(cancellation, /hasPendingCancellationIntent/);
+});
+
+test('completed no-show and cancelled visits refresh the queue after mutation so finalized rows disappear immediately', () => {
+  assert.match(finalization, /async function refreshedQueueInteractive/);
+  assert.match(finalization, /pendingPastAppointments\(admin, 1\)/);
+  assert.match(finalization, /It has been removed from the finalization queue/);
+  assert.match(finalization, /hasPendingCancellationIntent\(sender\)/);
+  assert.match(finalization, /cancellation\.cancelledAppointmentId/);
+  assert.match(finalization, /refreshedQueueInteractive\(admin, cancellation\.reply\)/);
+  assert.match(finalization, /refreshedQueueInteractive\(admin, `✅ Appointment #\$\{appointmentId\} marked/);
 });
 
 test('finalization revalidates authority under row lock and writes canonical history plus audit atomically', () => {
