@@ -16,16 +16,18 @@ test('admin guided booking routes past dates into historical manual entry instea
   assert.match(flow, /futureBias:false/);
 });
 
-test('historical booking writes CRM only and does not create past calendar events or client messages', () => {
+test('historical booking writes CRM and calendar truth without sending a client notification', () => {
   const historical = source('src/services/adminHistoricalBooking.js');
   assert.match(historical, /shiloh_admin_historical_manual/);
   assert.match(historical, /admin\.historical_booking_created/);
   assert.match(historical, /customerMessageSent: false/);
-  assert.match(historical, /sharedGoogleCalendarChecked: false/);
-  assert.match(historical, /practitionerGoogleCalendarChecked: false/);
-  assert.doesNotMatch(historical, /createBookingEvent/);
-  assert.doesNotMatch(historical, /createPractitionerBookingEvent/);
+  assert.match(historical, /sharedGoogleCalendarCreated:/);
+  assert.match(historical, /practitionerGoogleCalendarCreated:/);
+  assert.match(historical, /createBookingEvent/);
+  assert.match(historical, /createPractitionerBookingEvent/);
+  assert.match(historical, /appointment_calendar_events/);
   assert.doesNotMatch(historical, /sendWhatsAppMessage/);
+  assert.match(historical, /remains unresolved\/scheduled/);
 });
 
 test('historical manual booking remains guarded by clinic schedule eligibility and CRM conflict checks', () => {
