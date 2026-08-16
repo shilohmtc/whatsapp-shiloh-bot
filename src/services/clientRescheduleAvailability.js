@@ -26,19 +26,25 @@ function keepAppointmentReply(a){const name=clean(a.client_name);return[`${name?
 function polishAppointmentChangeResult(result){if(!result?.reply)return result;return{...result,reply:String(result.reply).replace('✅ Your appointment has been rescheduled.','✅ Appointment rescheduled').replace('Your Shiloh CRM booking and Google Calendar event are synchronized. 🌿','We look forward to seeing you. 🌿')};}
 function explicitRescheduleDate(value=''){const match=clean(value).toLowerCase().match(/^reschedule_date_(\d{4}-\d{2}-\d{2})$/);return match?.[1]||null;}
 function closedDateMessage(date,status){const reason=status?.holidayName?` (${status.holidayName})`:'';return `Shiloh is closed on ${displayDate(date)}${reason}. Your current appointment is unchanged. Please choose another date.`;}
+async function clinicAwareStartResult(phone,result){
+  const startedIntent=await getIntent(phone);
+  if(result?.handled&&startedIntent?.action==='reschedule'&&startedIntent?.status==='collecting'&&startedIntent?.appointment_id){
+    const startedAppointment=await appointmentContext(phone,startedIntent.appointment_id);
+    if(startedAppointment)return rescheduleDateChoice(startedAppointment);
+  }
+  return result;
+}
 async function processClientRescheduleAvailabilityMessage(phone,text){
   const command=clean(text).toLowerCase();
   if(/^(?:reschedule)(?:\s+appointment)?$/.test(command)){
-    const started=await processAppointmentChangeMessage(phone,'reschedule appointment');
-    const startedIntent=await getIntent(phone);
-    if(started?.handled&&startedIntent?.action==='reschedule'&&startedIntent?.status==='collecting'&&startedIntent?.appointment_id){
-      const startedAppointment=await appointmentContext(phone,startedIntent.appointment_id);
-      if(startedAppointment)return rescheduleDateChoice(startedAppointment);
-    }
-    return started;
+    return clinicAwareStartResult(phone,await processAppointmentChangeMessage(phone,'reschedule appointment'));
   }
   if(/^(?:cancel)(?:\s+appointment)?$/.test(command))return{handled:false};
-  const intent=await getIntent(phone);
+  let intent=await getIntent(phone);
+  if(intent?.action==='reschedule'&&intent?.status==='selecting_appointment'){
+    const selected=await processAppointmentChangeMessage(phone,text);
+    return clinicAwareStartResult(phone,selected);
+  }
   if(!intent||intent.action!=='reschedule'||!intent.appointment_id)return{handled:false};
   if(intent.status==='awaiting_confirmation'){
     const a=await appointmentContext(phone,intent.appointment_id);
