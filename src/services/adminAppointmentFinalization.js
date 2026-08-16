@@ -2,6 +2,7 @@ const { pool } = require('../db/pool');
 const { normalizePhone } = require('./clientIdentityOnboarding');
 const { canCertifyAppointment, certificationStaffIds, authorityDescription } = require('./attendanceFinalizationAuthority');
 const { processAdminBookingUpdateMessage } = require('./adminBookingUpdate');
+const { processAdminAppointmentCancellationMessage } = require('./adminAppointmentCancellation');
 
 // Reserve two of WhatsApp's 10 list rows for pagination and Back controls.
 const PAGE_SIZE = 8;
@@ -138,6 +139,7 @@ function decisionInteractive(appointment) {
     rows: [
       { id: `finalize_completed_${appointment.id}`, title: 'Completed', description: 'Client attended; finalize the visit' },
       { id: `finalize_no_show_${appointment.id}`, title: 'No-show', description: 'Client did not attend; finalize as missed' },
+      { id: `finalize_cancelled_${appointment.id}`, title: 'Cancelled', description: 'Visit was cancelled; record the reason' },
       { id: `finalize_reschedule_${appointment.id}`, title: 'Reschedule', description: 'Move this unresolved visit to a future time' },
       { id: 'finalize_back', title: 'Leave unresolved', description: 'Make no change and return to the list' },
     ],
@@ -189,6 +191,13 @@ async function startPastVisitReschedule(sender, appointmentId) {
   return processAdminBookingUpdateMessage(sender, '3');
 }
 
+async function startPastVisitCancellation(sender, appointmentId) {
+  // Reuse the canonical cancellation workflow so a cancellation always captures
+  // a reason, requires explicit confirmation, writes status history/audit truth,
+  // and synchronizes any linked Google Calendar event.
+  return processAdminAppointmentCancellationMessage(sender, `Cancel appointment ${appointmentId}`);
+}
+
 async function processAdminAppointmentFinalizationMessage(sender, text) {
   const raw = String(text || '').trim();
   const normalized = raw.toLowerCase().replace(/\s+/g, ' ');
@@ -196,9 +205,10 @@ async function processAdminAppointmentFinalizationMessage(sender, text) {
   const pageMatch = raw.match(/^finalize_appts_page_(\d+)$/i);
   const selectionMatch = raw.match(/^finalize_appt_(\d+)$/i);
   const decisionMatch = raw.match(/^finalize_(completed|no_show)_(\d+)$/i);
+  const cancellationMatch = raw.match(/^finalize_cancelled_(\d+)$/i);
   const rescheduleMatch = raw.match(/^finalize_reschedule_(\d+)$/i);
   const isBack = normalized === 'finalize_back';
-  if (!isEntry && !pageMatch && !selectionMatch && !decisionMatch && !rescheduleMatch && !isBack) return { handled: false };
+  if (!isEntry && !pageMatch && !selectionMatch && !decisionMatch && !cancellationMatch && !rescheduleMatch && !isBack) return { handled: false };
 
   const admin = await getAdmin(sender);
   if (!admin) return { handled: false };
@@ -215,6 +225,15 @@ async function processAdminAppointmentFinalizationMessage(sender, text) {
     if (!appointment) return { handled: true, admin, reply: 'That appointment is no longer awaiting final status in the approved 1–15 Aug historical window or your authorized scope.' };
     const canCertify = has(admin, 'booking:update') && await canCertifyAppointment(admin, appointment.id);
     return { handled: true, admin, interactive: canCertify ? decisionInteractive(appointment) : reviewOnlyInteractive(appointment) };
+  }
+
+  if (cancellationMatch) {
+    if (!has(admin, 'booking:update')) return { handled: true, admin, reply: 'Your admin account can review this appointment but cannot cancel it.' };
+    const appointmentId = Number(cancellationMatch[1]);
+    const appointment = await loadAuthorizedPendingAppointment(admin, appointmentId);
+    if (!appointment) return { handled: true, admin, reply: 'That appointment changed or is outside the approved 1–15 Aug historical window or your authorized scope, so no cancellation was started.' };
+    if (!(await canCertifyAppointment(admin, appointment.id))) return { handled: true, admin, reply: 'You can review this appointment, but its outcome must be handled by the responsible practitioner or authorized supervisor.' };
+    return startPastVisitCancellation(sender, appointmentId);
   }
 
   if (rescheduleMatch) {
@@ -239,5 +258,6 @@ async function processAdminAppointmentFinalizationMessage(sender, text) {
 module.exports = {
   FINAL_STATUSES, PAGE_SIZE, HISTORICAL_WINDOW_START, HISTORICAL_WINDOW_END,
   pendingPastAppointments, pendingListInteractive, decisionInteractive, reviewOnlyInteractive,
-  loadAuthorizedPendingAppointment, finalizeAppointment, startPastVisitReschedule, processAdminAppointmentFinalizationMessage,
+  loadAuthorizedPendingAppointment, finalizeAppointment, startPastVisitReschedule, startPastVisitCancellation,
+  processAdminAppointmentFinalizationMessage,
 };
