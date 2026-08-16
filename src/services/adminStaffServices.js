@@ -26,23 +26,22 @@ async function processAdminStaffServicesMessage(sender,text){
       LEFT JOIN services s ON s.id=ss.service_id AND s.status='active'
       LEFT JOIN service_categories sc ON sc.id=s.category_id
      WHERE st.status='active'
-       AND (COALESCE(st.client_bookable,FALSE)=TRUE OR st.scheduling_type='freelance')
+       AND COALESCE(st.client_bookable,FALSE)=TRUE
        ${scope}
      GROUP BY st.id,st.display_name,st.scheduling_type
-     ORDER BY CASE WHEN st.scheduling_type='freelance' THEN 1 ELSE 0 END, st.display_name
+     ORDER BY st.display_name
   `,args);
 
   const lines=[businessWide(admin)?'*Services per staff member*':'*My Shiloh services*',''];
   for(const staff of r.rows){
-    const suffix=staff.scheduling_type==='freelance'?' — internal overflow only':'';
-    lines.push(`*${staff.display_name}${suffix}*`);
+    lines.push(`*${staff.display_name}*`);
     const grouped=new Map();
     for(const item of staff.services||[]){if(!item?.service)continue;const category=item.category||'Other';if(!grouped.has(category))grouped.set(category,[]);grouped.get(category).push(item);}
     if(!grouped.size){lines.push('• No active services assigned','');continue;}
     for(const [category,services] of grouped){lines.push(`${category}:`);for(const item of services){let price='';if(item.price!=null)price=item.variable_price?` — from R${Number(item.price).toFixed(0)}`:` — R${Number(item.price).toFixed(0)}`;lines.push(`• ${item.service}${price}`);}}
     lines.push('');
   }
-  if(businessWide(admin))lines.push('Freelancers are internal overflow only and are not available for direct client bookings.');
+  if(businessWide(admin))lines.push('This list shows active practitioners available through the normal Shiloh booking catalogue.');
   else lines.push('This list is limited to services assigned to your practitioner profile.');
   return {handled:true,admin,reply:lines.join('\n').trim()};
 }
