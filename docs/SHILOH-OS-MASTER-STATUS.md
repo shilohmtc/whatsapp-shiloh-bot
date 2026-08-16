@@ -1,163 +1,148 @@
 # Shiloh OS — Master Project Status
 
-Updated: 2026-08-16
+Updated: 2026-08-16 19:26 SAST
 Purpose: permanent current-state source of truth. Historical implementation detail remains in Git history; do not redo accepted work.
 
-## Authority
+## Authority and continuation protocol
 
-Operational truth is GitHub `main`, Render production, Shiloh CRM, Google Calendar, Meta/WhatsApp provider evidence, and explicit real WhatsApp/human evidence. Never infer provider, attendance, approval, CRM, Calendar, or handset state.
+Operational truth is GitHub `main`, Render production, Shiloh CRM/Postgres, Google Calendar, Meta/WhatsApp provider evidence, and explicit real WhatsApp/human evidence. Never infer provider, attendance, approval, CRM, Calendar, or handset state.
+
+At the beginning of each new Shiloh OS chat: read this Master + `docs/SHILOH-OS-PROJECT-TRACKER.md` on `main` first, verify applicable production/provider state, then give the four-part checkpoint: (1) authoritative current state, (2) highest-priority continuation item, (3) why it is next, (4) remaining approval/evidence/provider gate. Obtain explicit approval before the first new substantial controlled action. After that initial approval, continue the approved workstream automatically through ordinary engineering/deploy/verification/housekeeping boundaries. Stop only for material scope/risk expansion, contradictory authority, or an existing fail-closed human/provider/evidence gate.
+
+Permanent governance remains: provider lead-time early in feature planning; known finite client/admin choices are button/list-first when practical; natural language remains fallback into the same canonical handlers; no speculative provider submissions; no manufactured appointments/evidence.
 
 ## Current production baseline
 
-Current application baseline: **`f6612e632f2d5db6018af1601e6aba1727ab5fec`** (`Improve imported-client first WhatsApp verification`) on GitHub `main`.
+Application baseline before this documentation reconciliation: **`03c11fade6e2b37e627bfc33c2d47368363ef308`** (`Provision and schedule historical finalization shortcut`) on GitHub `main` and verified **live** in Render on 2026-08-16. CI for that application commit completed successfully. This Master/Tracker reconciliation itself is documentation-only and will advance `main` without changing runtime semantics.
 
-Render production for this baseline is verified live and healthy on 2026-08-16; `/health` returns 200. `META_LIFECYCLE_PROVISION_ON_START=false` remains fail-closed.
+Render startup evidence for `03c11fade...` confirmed the ordinary staff-finalization template `shiloh_staff_finalization_v1` as **APPROVED / UTILITY**. It also submitted the new shortcut template `shiloh_staff_finalization_actions_v1`, which was **PENDING / UTILITY** at the last authoritative check. The historical shortcut scheduler is live but fail-closed until provider approval is proven.
 
-Current-generation production template configuration is active for booking confirmation, booking approval request/outcome/decline, reschedule confirmation, cancellation confirmation, reminder actions, follow-up v2, birthday v2 and staff finalization. Legacy reminder/follow-up names remain fallback-only where retained; current action templates take precedence to avoid duplicate sends.
+## Admin polish — 🟢 IMPLEMENTED / production-live
 
-## Execution protocol
+The normal WhatsApp Admin surface has been simplified and made button/list-first where practical.
 
-At the beginning of each new Shiloh OS chat: read Master + Tracker on `main`, reconcile applicable authoritative systems, state the authoritative current state, identify the single highest-priority genuinely actionable item and why it is next, then obtain explicit user approval before substantial work.
+### Appointments
+Visible priority is:
+1. **Finalize past visits**
+2. **Make a booking**
+3. **Manage a booking**
+4. Today's clients
+5. Tomorrow's clients
 
-After that initial approval, continue the approved workstream for the remainder of the chat without repeated approval requests at ordinary engineering, PR, merge, deploy, controlled provider/configuration, verification, repair, or housekeeping boundaries.
+`Find an available time` is not an everyday standalone option; Make a booking checks authoritative availability as part of the booking flow. Walk-in is removed from normal navigation. Finalize past visits supports Completed, No-show, Reschedule, or leaving unresolved rather than forcing a false attendance outcome.
 
-Request fresh approval only for material scope expansion, materially greater or unexpected destructive/irreversible risk, contradictory authoritative evidence that makes continuation unsafe, or an action that would violate an existing fail-closed/evidence gate.
+### Reports
+Top-level Reports is simplified around **Today's report** and **Earnings**. Earnings uses role-aware drill-down when multiple authorized reports exist and goes directly to the sole report when only one is authorized. Earnings remain completed-only; unresolved historical attendance therefore keeps affected reporting provisional rather than silently counting visits.
 
-Human-truth and provider/external evidence gates always remain fail-closed. Never manufacture appointments merely for proof.
+### Clients / More
+Visible dummy-test clutter was removed. Juvan remains the single retained controlled CRM regression reset for Christel/Jean-Pierre while acceptance testing still requires it. `Client details` is a read-only full authorized CRM view and was moved to **More**. `Calendar integrity` and generic `Help` are removed from normal More navigation; integrity capability remains available diagnostically rather than as everyday staff UX.
 
-### Automatic continuation
+Pieter and Savanna were removed from normal operational staff/service surfaces. Historical records/capability are not rewritten merely to make menus cleaner.
 
-If an already-approved workstream is blocked only by a short external condition, re-check the authoritative system directly and continue when success is proven. For longer waits, use a narrowly scoped condition-watch automation when useful. Failure, ambiguity, contradiction, or evidence-gated state must stop fail-closed.
+### Services and pricing
+Christel controls the shared Christel/Abigail pricing because Abigail works for Christel and their service pricing is intentionally the same. Marietjie controls pricing for her own services. Service selection is list/button-first where practical rather than requiring staff to type a service name.
 
-## Permanent provider lead-time rule
+### Schedule governance
+Generic schedule administration was replaced with business-role semantics:
+- **Abigail:** Request leave / time off. A request remains Pending and must not affect booking availability until Christel approves it.
+- **Christel:** Leave requests + own availability/time off + controlled clinic closures where applicable.
+- **Marietjie:** own availability/time off; no Christel approval dependency because Marietjie is an independent room renter.
+- Fixed Staff hours are configuration, not everyday WhatsApp Admin controls.
+- Freelancer availability is removed from normal Schedule navigation.
+- Existing appointment conflicts must be surfaced before Abigail leave approval; approval must never silently cancel/reschedule clients.
+- Approved/confirmed unavailability feeds the same authoritative availability layer used by booking/reschedule; no parallel leave calendar.
 
-Whenever a planned Shiloh feature may require externally approved WhatsApp templates, identify the complete foreseeable template set during feature planning and submit required provider work early enough to run in parallel with engineering. Do not wait until implementation reaches the send step. Do not submit speculative templates for undefined business semantics.
+Migration `056_staff_leave_approval_workflow.sql` and role-aware Schedule services/tests are present on `main`.
 
-## Permanent button-first client UX rule
+## Attendance finalization authority — 🟢 IMPLEMENTED
 
-Whenever the next sensible client actions are known and WhatsApp supports an appropriate interactive control, expose them as buttons or list actions. Natural-language commands remain equivalent fallbacks, not the primary discovery mechanism. Buttons/lists must route into the same canonical deterministic handlers rather than duplicate booking/change logic. Do not force buttons where free text is genuinely needed.
+Canonical certification authority is now:
+- **Christel:** finalizes Christel + Abigail appointments only.
+- **Marietjie:** finalizes Marietjie appointments only.
+- **Abigail:** does not finalize appointments.
+- Other admins do not gain attendance-certification authority merely from broad Admin visibility.
 
-## Admin / controlled-test cleanup
+This is enforced server-side at finalization time, not only hidden in menus. Attendance reminders are likewise restricted to Christel and Marietjie and use certification-compatible practitioner ownership.
 
-Production Admin UX was cleaned on 2026-08-16. Visible Chenique/Dummy Test reset entries and the Pending approvals menu entry were removed from the normal privileged menu presentation. The underlying approval-recovery processor remains available so proven recovery capability was not destroyed.
+## Historical attendance 2026-08-01 through 2026-08-15 — 🔵 HUMAN FINAL REVIEW ACTIVE
 
-**Reset Juvan profile** remains visible for Christel and Jean-Pierre as the single retained controlled CRM regression reset. This is a test-fixture function, not ordinary CRM functionality, and should be retired later if/when an automated fixture mechanism supersedes it.
+A read-only production audit first established **53 appointments** in this date window: 31 already finalized, 4 cancelled, 17 unresolved and correctly routable, plus one unresolved exception (#558) mapped historically to `SHILOH MTC`.
 
-All known Dummy Test calendar events were removed from the Shiloh Bookings and primary calendars; post-cleanup search returned no Dummy Test events on Shiloh Bookings, primary, Marietjie or Abigail calendars for 2026.
+With explicit approval, the **31 previously finalized Completed/No-show visits were deliberately reopened** so Christel and Marietjie can perform the final human attendance certification through the polished Admin workflow. The prior outcomes were not erased: audit/history provenance was preserved and a new history event records the deliberate reopening. The 4 cancelled visits were left untouched. The 17 already-unresolved visits were left unresolved.
 
-## CRM provenance / imported-client first WhatsApp verification
+Therefore the controlled historical review now contains **48 properly routable unresolved visits**: the 31 reopened + 17 already awaiting finalization. Christel receives only the Christel/Abigail subset; Marietjie receives only her own subset. Reporting/earnings for these visits remains provisional until the authorized practitioner finalizers certify them.
 
-CRM numbers are canonical Shiloh client IDs, not proof of WhatsApp registration. The controlled Goldie migration legitimately promoted qualifying historical clients into canonical CRM records with `source=goldie_import`.
+The 31 reopened appointment IDs are:
+`327, 328, 329, 330, 331, 334, 336, 337, 338, 339, 340, 341, 342, 343, 344, 345, 346, 347, 349, 350, 351, 352, 357, 485, 486, 553, 554, 556, 557, 559, 562`.
 
-Read-only provenance audit on 2026-08-16 established:
-- CRM48 = Pa Derik; legitimate `goldie_import`, created through controlled `create_new_promotion`; keep.
-- CRM473 = legitimate `goldie_import`, same controlled promotion mechanism, with historical appointment history; keep.
-- CRM1 is the only stronger orphan-like review candidate found by the audit (active, no contacts, no appointments, no completed onboarding); do not delete without a final identity/supersession check.
+Earlier unresolved production audit routing was Christel 8 (`353, 548, 355, 356, 487, 359, 551, 564`) and Marietjie 9 (`326, 332, 333, 335, 555, 348, 354, 550, 358`). Those visits remain part of the current 48-visit human review unless subsequently finalized by the authorized practitioner after this reconciliation.
 
-Pa Derik handset evidence exposed a first-contact identity UX defect: an imported mobile match was treated too much like a previously verified WhatsApp identity, exact-name matching rejected `Derik` against `Pa Derik`, and natural `2 oct 64 male` input did not retain the DOB.
+### #558 — 🔴 FAIL-CLOSED historical exception
 
-Commit **`f6612e63...`** fixes this production path. Imported Goldie clients with a unique matching mobile contact but no verified WhatsApp contact now enter an existing-profile claim/verification flow rather than an automatic `Welcome back`. Safe non-identity prefixes (`Pa`, `Mr`, `Mrs`, `Ms`, `Miss`, `Dr`) are ignored for compatibility matching while unsafe partial-name matching remains rejected. Successful unique number + compatible-name verification promotes the existing mobile contact to verified WhatsApp on the same CRM ID; ambiguous/conflicting identity remains fail-closed for clinic verification. Natural DOB/gender parsing accepts forms such as `2 oct 64 male` and safely expands two-digit years with validity/age bounds. No duplicate CRM client is created by this claim flow.
+Appointment **#558 on 2026-08-06** remains unresolved with historical practitioner mapping `SHILOH MTC`. It must not be silently assigned to Christel or Marietjie. Establish who actually performed the visit from authoritative appointment/service/history or human evidence before any practitioner correction/finalization.
 
-Fresh real-human evidence for a never-before-verified imported client remains a natural future acceptance item; do not reset Pa Derik or another real client merely to manufacture proof.
+## Historical finalization shortcut — 🟠 PROVIDER GATE
 
-## Booking / approval core
+A proactive, role-aware WhatsApp shortcut has been implemented for Christel and Marietjie:
+- recipient-specific pending count;
+- one **Finalize past visits** button;
+- button opens that recipient's authorized finalization queue directly;
+- idempotent send ledger;
+- failed WhatsApp delivery is released for retry rather than falsely marked sent;
+- ordinary **Admin → Appointments → Finalize past visits** remains canonical and available regardless of proactive delivery.
 
-Booking → staff approval core pipeline is production-verified, including Pending approvals recovery/resend and Christel approval of #567.
+The new Meta Utility template is **`shiloh_staff_finalization_actions_v1`**. Last authoritative provider evidence at 2026-08-16 ~17:22 UTC: submission succeeded and status was **PENDING**. Do not send or claim availability until a fresh provider check proves **APPROVED**. This gate is independent of the already-approved `shiloh_staff_finalization_v1` template.
 
-Approval policy remains: Marietjie self; Christel self; Abigail may be approved by Abigail or Christel, first valid decision authoritative. Dummy Test historical policy used JP admin account alone; Dummy Test production UI has been cleaned and must not be recreated merely for proof. Pending holds have no automatic expiry. MediHeel remains Christel only.
+## Pa Derik #567 — evidence captured; normal cancellation remains deferred
 
-### Pa Derik #567 — 🟠 WAITING final normal cancellation
+Real handset evidence for Pa Derik's reschedule was captured. The corrected core journey is proven: clinic-aware date selection → valid open date → daypart → authoritative slot → current/proposed comparison → explicit Confirm reschedule / Keep appointment → success.
 
-#567 has supplied real handset evidence and exercised the corrected reschedule UX. The appointment is authoritative at **Tuesday, 18 August 2026, 08:30–10:15**, Full Body Swedish with Christel, synchronized on Shiloh — Bookings and primary Google Calendar.
+The Sunday/relative-date defect is fixed: a closed Sunday must not be offered as a usable reschedule date; closed dates are rejected before availability search; stale candidate state clears when choosing another date. Supplemental `ensureToken` post-send defect was separately fixed after the core mutation had succeeded.
 
-Verified handset flow: clinic-aware date selection → Tuesday 18 August → morning → authoritative available-times list → 08:30 → current-vs-proposed comparison with `Nothing has changed yet` → `Confirm reschedule` / `Keep appointment` → explicit confirmation → success.
+#567 remains authoritative at **Tuesday 18 August 2026, 08:30–10:15**, Full Body Swedish with Christel. Do not mutate it merely for proof. Normal Shiloh cancellation remains appropriate only when Pa Derik is available for that genuine action.
 
-The earlier defect where a closed Sunday could be offered through relative-date UI and `Choose another date` could retain stale candidate state is fixed. Booking and reschedule date choices are clinic-calendar-aware; closed dates are rejected before daypart search; candidate state clears on another-date navigation; explicit exits are provided.
+## CRM provenance / imported-client identity
 
-During Pa Derik's reschedule, a supplemental post-send defect (`ensureToken is not a function`) affected calendar/action-link sending after the core CRM/Calendar mutation succeeded. Commit **`e2e3d943...`** exported the helper and fixed the defect. Fresh natural post-fix evidence may be collected through Juvan or another genuine journey; do not re-mutate #567 merely for proof.
+CRM IDs are canonical Shiloh IDs, not proof of bot registration. CRM48 (Pa Derik) and CRM473 are legitimate controlled Goldie-imported canonical clients and must not be removed merely because they did not originate through first-time bot registration. CRM1 remains the stronger orphan-like read-only review candidate; do not delete without identity/supersession proof.
 
-Remaining #567 action: normal Shiloh cancellation when Pa Derik is available. Do not delete directly from Calendar or DB.
+Imported Goldie clients with a unique matching mobile but no verified WhatsApp contact now enter an existing-profile claim/verification path rather than being treated as already verified. Safe title prefixes are tolerated; ambiguous/conflicting identity remains fail-closed. Natural first-contact acceptance remains evidence-gated; do not reset a real imported client merely to manufacture proof.
 
-## Meta / WhatsApp templates
+## Meta / WhatsApp template state
 
-Direct Meta WhatsApp Manager evidence on 2026-08-16 shows the lifecycle templates **Active – Quality pending**; this is active quality-rating state, not approval-review pending. The former seven-template review gate is resolved.
+Earlier direct Meta evidence established the existing lifecycle templates as active/current-generation production wiring, with genuine per-route delivery evidence still separate. Canonical lifecycle names include booking confirmation, booking approval request/outcome/decline, reschedule confirmation, cancellation confirmation, reminder actions, follow-up v2, birthday v2, and `shiloh_staff_finalization_v1`.
 
-Canonical production generation:
-- `shiloh_booking_confirmation_v1` → confirmed client booking;
-- `shiloh_booking_approval_request_v1` → practitioner/staff approval request;
-- `shiloh_booking_approval_outcome_v1` → secondary approver outcome where applicable;
-- `shiloh_booking_declined_v1` → client decline notification;
-- `shiloh_reschedule_confirmation_v1` → successful reschedule;
-- `shiloh_cancellation_confirmation_v1` → successful cancellation;
-- `shiloh_appointment_reminder_actions_v1` → reminder with Reschedule/Cancel actions;
-- `shiloh_appointment_followup_v2` → follow-up with rating actions 1–5;
-- `shiloh_birthday_wish_v2` → canonical birthday sender;
-- `shiloh_staff_finalization_v1` → staff finalization.
+**New exception:** `shiloh_staff_finalization_actions_v1` is a newly submitted proactive shortcut template and was still **PENDING** at the last authoritative provider check. Do not generalize the earlier resolved lifecycle review gate to this new template.
 
-Legacy birthday v1 and legacy follow-up are not canonical current senders. Provider-active/configured does not equal end-to-end delivery verified; genuine applicable delivery evidence remains required per route. Birthday v2 must obey genuine CRM birthday + opt-in/business rules and must not be artificially triggered.
+All provider/human-evidence gates remain fail-closed. Provider-configured or provider-active does not equal handset delivery proof.
 
-## Juvan controlled acceptance journey — 🔵 ACTIVE
+## Juvan controlled acceptance — 🔵 AVAILABLE, no longer the immediate priority
 
-Juvan is the retained controlled CRM regression client. His reset was completed through Christel's Admin flow and no 2026 Juvan events were found on Shiloh Bookings, primary, Marietjie or Abigail calendars at baseline.
+Juvan remains the retained controlled CRM/client regression identity and can be used for beginning-to-end client-perspective booking acceptance across WhatsApp/provider behaviour, Render, CRM, approval/hold, Calendar, post-confirmation UX, corrected reschedule/closed-day behaviour and cancellation. Routine screenshots are not required; request screenshots only for UI/human truth or when the user sees something unexpected.
 
-Approved scope: beginning-to-end client-perspective booking tracked across WhatsApp/provider evidence, Render processing, CRM/canonical identity and appointment state, staff approval/hold state, Google Calendar, confirmation, post-confirmation actions, corrected reschedule/closed-day behaviour, cancellation and naturally applicable lifecycle templates.
+However, the immediate operational priority moved ahead of Juvan: the 1–15 August attendance backlog has deliberately been reopened for Christel/Marietjie final certification and the proactive shortcut is waiting on its Meta approval gate. Do not lose Juvan scope; resume it after the attendance/provider continuation point unless the user reprioritizes.
 
-Routine screenshots are not required. Machine-visible authoritative evidence should be used wherever available; handset screenshots are required only when human/UI truth cannot otherwise be established or the user observes unexpected behaviour.
+## Other standing gates
 
-## Client UX / button-first workstream
+- Genuine per-route lifecycle delivery evidence remains natural-journey gated where not already observed.
+- Birthday v2 requires genuine eligible CRM birthday/opt-in conditions; never artificially trigger.
+- Google Business Profile API remains deferred at last-authoritative 0 QPM until Google evidence changes.
+- Google Contacts sync remains lower priority; CRM is authoritative.
+- Ozow remains waiting for merchant configuration and explicit business rules; do not submit speculative payment templates.
+- Destructive privacy execution remains fail-closed pending authority/evidence.
 
-- **Post-confirmation client UX package is 🟢 COMPLETE / production-live:** `Book another treatment`, `My appointments`, and `Main menu` are available as button-first actions, with natural-language equivalents such as `I want to make another booking`, `book another treatment`, and `another appointment` routed into the same canonical handlers. The former note that this package was paused behind Meta/Google verification is historical and must not be carried forward as an active blocker.
-- Generic greeting / stale booking state escape and `Book another treatment` priority are production-live and handset verified.
-- `My appointments` button-first actions are production-live and handset verified for the no-upcoming state.
-- In-session customer-experience/rating UX is production-live: invalid/ambiguous `awaiting_rating` responses render a five-choice list, positive ratings expose `Book another` + `Main menu`, and low-rating explanatory feedback remains free text.
-- Reschedule date selection is clinic-calendar-aware and has real Pa Derik handset evidence through date → daypart → authoritative slot → explicit confirmation → success.
-- Reminder-actions delivery, follow-up-v2 delivery/rating and current-generation reschedule/cancel template delivery remain genuine-journey evidence items where not yet naturally observed. These delivery gates do not reopen the completed post-confirmation navigation package.
+## Exact new-chat continuation state
 
-## Attendance
+- Runtime application commit `03c11fade...` was verified live; CI passed. Documentation reconciliation commits after it do not change runtime semantics.
+- Admin polish is substantially complete.
+- Finalization authority: Christel → Christel+Abigail; Marietjie → Marietjie; Abigail → none.
+- 31 historical finalizations from 1–15 Aug were reopened with history preserved; combined routable human-review backlog is 48 visits before any subsequent practitioner action.
+- 4 cancelled visits remain untouched.
+- #558 remains fail-closed pending practitioner evidence.
+- `shiloh_staff_finalization_actions_v1` was PENDING at last provider check; proactive shortcut must not send until APPROVED.
+- Ordinary Admin → Appointments → Finalize past visits is already usable by Christel/Marietjie.
+- Pa Derik reschedule evidence is captured; Sunday/loop defect is fixed; #567 awaits normal cancellation only when genuinely appropriate.
+- Juvan controlled E2E remains available after the immediate attendance/provider checkpoint.
 
-The 2026-08-14 finalization cohort is 🟢 VERIFIED: #562 Zane Maree = Completed; #357 Buhle Zulu = No-show; duplicate #357 replay rejected.
+**Authoritative current state:** runtime `03c11fade...` is production-live/CI-green; Admin polish and role-scoped attendance certification are implemented; the 1–15 August historical attendance cohort has been deliberately reopened for Christel/Marietjie final human review; #558 is the sole known unroutable historical exception; the new proactive finalization button template is provider-PENDING at last check and therefore fail-closed.
 
-Older historical attendance remains 🟠 WAITING and individually human-truth gated. Never infer or bulk-finalize.
-
-## Google integration
-
-- Google Calendar integration is operational through existing OAuth credentials, but operation alone does not prove OAuth consent-screen verification approval.
-- Google Business Profile API access remains ⏸️ DEFERRED. Last authoritative Google Cloud Console evidence on 2026-08-15 showed Business Information API enabled but **0 QPM**. Revisit when Google sends a follow-up approval email or quota changes.
-- Google Contacts synchronization remains lower priority; CRM remains authoritative.
-
-## Other gated items
-
-- Ordinary practitioner approval combinations — 🟠 WAITING for genuine future evidence only.
-- Current-generation reminder/reschedule/cancel lifecycle template delivery evidence — 🟠 WAITING for genuine delivery evidence where not yet observed.
-- Follow-up-v2 delivery — 🟠 WAITING for a genuine completed-visit journey.
-- In-session rating UX handset evidence — 🟠 WAITING for the next genuine applicable rating journey.
-- Imported-client first-WhatsApp claim flow — 🟠 WAITING for natural first contact from another legitimate, never-before-verified Goldie-imported client; do not manufacture evidence.
-- Birthday v2 delivery — 🟠 WAITING for a genuine eligible CRM birthday/opt-in condition.
-- CRM1 provenance/supersession review — ⚪ READY, read-only; do not delete without proof.
-- Google Contacts synchronization — ⚪ READY, lower priority.
-- Ozow — 🟠 WAITING for merchant configuration and explicit business rules; do not submit speculative payment templates.
-- Destructive privacy execution — 🟠 WAITING; fail closed pending authority/evidence.
-
-## Exact continuation state
-
-- #561 cancelled historical — never recreate.
-- #564 confirmed — preserve booking semantics.
-- #565 cancelled — never recreate merely for proof.
-- #566 declined/released — never recreate merely for proof.
-- #567 rescheduled and authoritative at Tue 18 Aug 2026 08:30–10:15; leave unchanged until normal cancellation when Pa Derik is available.
-- #562 Completed and #357 No-show resolved.
-- Older attendance backlog remains human-truth gated.
-- Admin cleanup complete; keep only Juvan controlled reset visible among test resets.
-- CRM48 and CRM473 are legitimate Goldie-imported canonical clients; CRM1 remains review-only pending identity/supersession proof.
-- Imported-client first-WhatsApp verification repair is live at `f6612e63...`; natural human acceptance remains evidence-gated.
-- Meta seven-template provider-review gate resolved; current lifecycle generation is production-configured; genuine per-route delivery evidence remains separate.
-- Post-confirmation client UX package is complete; do not reclassify it as paused behind Meta/Google verification.
-- Reschedule closed-day/loop-state repair complete and handset accepted for core UX.
-- Supplemental appointment action helper defect fixed at `e2e3d943...`; fresh natural post-fix delivery evidence remains pending.
-- GBP remains parked at last-authoritative 0 QPM.
-
-**Authoritative current state:** GitHub `main` application baseline is `f6612e63...`; production is live/healthy; imported-client first-WhatsApp verification has been repaired without merging/recreating CRM records; CRM48/CRM473 are legitimate Goldie imports and CRM1 remains review-only; current-generation Meta lifecycle templates are active/configured; Pa Derik #567 is authoritative at Tue 18 Aug 08:30–10:15 and awaits normal cancellation when available; the post-confirmation client UX package is complete; Juvan controlled E2E remains the active acceptance workstream.
-
-**Highest-priority genuinely actionable item:** 🔵 **Continue Juvan beginning-to-end controlled client acceptance from the clean baseline**, exercising the completed post-confirmation UX, current template wiring and repaired reschedule/closed-day/supplemental-action path. Imported-client claim proof waits for a natural eligible Goldie client and must not block Juvan.
-
-**Authorization:** the current chat/workstream is already approved under the automatic-continuation rule. Continue ordinary engineering/deploy/verification automatically; stop only at a genuine human/provider evidence gate, unexpected destructive risk, contradictory authority, or material scope expansion.
+**Highest-priority genuinely actionable item for the new chat:** first re-check production health and Meta status for **`shiloh_staff_finalization_actions_v1`**. If Meta proves APPROVED, verify the role-aware Christel/Marietjie shortcut can proceed and then track their real historical finalization progress/evidence. If it remains PENDING, do not block ordinary Admin finalization; keep the shortcut gated and continue only with safe actionable work chosen from the Tracker.
