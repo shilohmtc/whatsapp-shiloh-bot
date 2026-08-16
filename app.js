@@ -49,6 +49,7 @@ const { ensureChristelMediHeelOwnership } = require("./src/services/pedicureOwne
 const { startMandatoryDemoCleanupScheduler } = require("./src/services/demoMandatoryCleanup");
 const { startAttendanceFinalizationReminderScheduler } = require("./src/services/attendanceFinalizationReminders");
 const { startHistoricalFinalizationPromptScheduler } = require("./src/services/historicalFinalizationPrompt");
+const { ensureHistoricalFinalizationFinancialSchema } = require("./src/services/historicalFinalizationFinancialBootstrap");
 const { runConfiguredClientProvenanceAudit } = require("./src/services/clientProvenanceAudit");
 const { submitStaffFinalizationTemplate, submitStaffFinalizationActionTemplate } = require("./src/services/staffFinalizationTemplateProvisioning");
 const { submitBookingConfirmationTemplate } = require("./src/services/bookingConfirmationTemplateProvisioning");
@@ -83,6 +84,7 @@ async function start() {
   const demoAccess = await ensureDemoClientPermissions(); logger.info(demoAccess, "Controlled demo client production UI disabled");
   const jeanPierreAccess = await ensureJeanPierreAdminCapabilities(); if (!jeanPierreAccess) throw new Error('Jean-Pierre business admin capability clone could not be initialized'); logger.info({ configured: true, businessRole: jeanPierreAccess.business_role }, "Jean-Pierre business admin access verified");
   const mediHeelOwnership = await ensureChristelMediHeelOwnership(); logger.info(mediHeelOwnership, "Christel MediHeel ownership verified");
+  await ensureHistoricalFinalizationFinancialSchema(); logger.info({ initialized: true }, "Historical finalization financial schema verified");
   try { await runConfiguredClientProvenanceAudit(logger); } catch (error) { logger.error({ err: error }, "Read-only CRM provenance audit failed"); }
   await provisionStaffFinalizationTemplateSafely(); await provisionStaffFinalizationActionTemplateSafely(); await provisionBookingConfirmationTemplateSafely(); await provisionClientLifecycleTemplatesIfExplicitlyEnabled();
   server = app.listen(PORT, () => { logger.info({ port: PORT }, "Shiloh started"); startConversationSessionCleanupScheduler(); startTemporarySessionCleanupScheduler(); startGoogleBusinessProfileSyncScheduler(); startAppointmentLifecycleScheduler(); startCustomerCareScheduler(); startBookingIntegrityScheduler(); startMandatoryDemoCleanupScheduler(); startAttendanceFinalizationReminderScheduler(); startHistoricalFinalizationPromptScheduler(); });
