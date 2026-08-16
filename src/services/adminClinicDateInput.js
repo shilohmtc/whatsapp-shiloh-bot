@@ -47,7 +47,7 @@ function addDays(iso, days) {
   return d.toISOString().slice(0, 10);
 }
 
-function parseClinicDateInput(value, { now = new Date(), futureBias = true } = {}) {
+function parseClinicDateInput(value, { now = new Date() } = {}) {
   const raw = clean(value);
   const today = johannesburgToday(now);
   if (!raw) return null;
@@ -62,11 +62,8 @@ function parseClinicDateInput(value, { now = new Date(), futureBias = true } = {
     const day = Number(match[1]);
     const month = MONTHS[match[2]];
     if (!month) return null;
-    let year = match[3] ? Number(match[3]) : Number(today.slice(0, 4));
-    let candidate = isoDate(year, month, day);
-    if (!candidate) return null;
-    if (!match[3] && futureBias && candidate < today) candidate = isoDate(year + 1, month, day);
-    return candidate;
+    const year = match[3] ? Number(match[3]) : Number(today.slice(0, 4));
+    return isoDate(year, month, day);
   }
 
   match = raw.match(/^(next\s+)?([a-z]+)$/);
