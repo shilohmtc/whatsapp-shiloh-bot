@@ -1,6 +1,7 @@
 const { pool } = require('../db/pool');
 const { normalizePhone } = require('./clientIdentityOnboarding');
 const { canCertifyAppointment, certificationStaffIds, authorityDescription } = require('./attendanceFinalizationAuthority');
+const { processAdminBookingUpdateMessage } = require('./adminBookingUpdate');
 
 // Reserve two of WhatsApp's 10 list rows for pagination and Back controls.
 const PAGE_SIZE = 8;
@@ -122,12 +123,15 @@ function appointmentDetails(appointment) {
 
 function decisionInteractive(appointment) {
   return {
-    type: 'button',
+    type: 'list',
     body: `${appointmentDetails(appointment)}\n\nWhat actually happened? Attendance cannot be inferred from elapsed time.`,
-    buttons: [
-      { id: `finalize_completed_${appointment.id}`, title: 'Completed' },
-      { id: `finalize_no_show_${appointment.id}`, title: 'No-show' },
-      { id: 'finalize_back', title: 'Back' },
+    buttonText: 'Choose outcome',
+    sectionTitle: 'Visit outcome',
+    rows: [
+      { id: `finalize_completed_${appointment.id}`, title: 'Completed', description: 'Client attended; finalize the visit' },
+      { id: `finalize_no_show_${appointment.id}`, title: 'No-show', description: 'Client did not attend; finalize as missed' },
+      { id: `finalize_reschedule_${appointment.id}`, title: 'Reschedule', description: 'Move this unresolved visit to a future time' },
+      { id: 'finalize_back', title: 'Leave unresolved', description: 'Make no change and return to the list' },
     ],
   };
 }
@@ -167,6 +171,16 @@ async function finalizeAppointment(admin, appointmentId, targetStatus) {
   } finally { db.release(); }
 }
 
+async function startPastVisitReschedule(sender, appointmentId) {
+  // Reuse the canonical guarded admin booking-update state machine rather than
+  // creating a second mutation path. The existing appointment remains unchanged
+  // until a valid future time passes clinic, practitioner, CRM and Calendar checks.
+  await processAdminBookingUpdateMessage(sender, 'Manage booking');
+  const selected = await processAdminBookingUpdateMessage(sender, String(appointmentId));
+  if (!selected.handled) return selected;
+  return processAdminBookingUpdateMessage(sender, '3');
+}
+
 async function processAdminAppointmentFinalizationMessage(sender, text) {
   const raw = String(text || '').trim();
   const normalized = raw.toLowerCase().replace(/\s+/g, ' ');
@@ -174,8 +188,9 @@ async function processAdminAppointmentFinalizationMessage(sender, text) {
   const pageMatch = raw.match(/^finalize_appts_page_(\d+)$/i);
   const selectionMatch = raw.match(/^finalize_appt_(\d+)$/i);
   const decisionMatch = raw.match(/^finalize_(completed|no_show)_(\d+)$/i);
+  const rescheduleMatch = raw.match(/^finalize_reschedule_(\d+)$/i);
   const isBack = normalized === 'finalize_back';
-  if (!isEntry && !pageMatch && !selectionMatch && !decisionMatch && !isBack) return { handled: false };
+  if (!isEntry && !pageMatch && !selectionMatch && !decisionMatch && !rescheduleMatch && !isBack) return { handled: false };
 
   const admin = await getAdmin(sender);
   if (!admin) return { handled: false };
@@ -194,6 +209,15 @@ async function processAdminAppointmentFinalizationMessage(sender, text) {
     return { handled: true, admin, interactive: canCertify ? decisionInteractive(appointment) : reviewOnlyInteractive(appointment) };
   }
 
+  if (rescheduleMatch) {
+    if (!has(admin, 'booking:update')) return { handled: true, admin, reply: 'Your admin account can review this appointment but cannot reschedule it.' };
+    const appointmentId = Number(rescheduleMatch[1]);
+    const appointment = await loadAuthorizedPendingAppointment(admin, appointmentId);
+    if (!appointment) return { handled: true, admin, reply: 'That appointment changed or is outside your authorized scope, so no reschedule was started.' };
+    if (!(await canCertifyAppointment(admin, appointment.id))) return { handled: true, admin, reply: 'You can review this appointment, but its outcome must be handled by the responsible practitioner or authorized supervisor.' };
+    return startPastVisitReschedule(sender, appointmentId);
+  }
+
   if (!has(admin, 'booking:update')) return { handled: true, admin, reply: 'Your admin account can review this appointment but cannot certify attendance.' };
   const targetStatus = decisionMatch[1].toLowerCase();
   const appointmentId = Number(decisionMatch[2]);
@@ -206,5 +230,5 @@ async function processAdminAppointmentFinalizationMessage(sender, text) {
 
 module.exports = {
   FINAL_STATUSES, PAGE_SIZE, pendingPastAppointments, pendingListInteractive, decisionInteractive, reviewOnlyInteractive,
-  loadAuthorizedPendingAppointment, finalizeAppointment, processAdminAppointmentFinalizationMessage,
+  loadAuthorizedPendingAppointment, finalizeAppointment, startPastVisitReschedule, processAdminAppointmentFinalizationMessage,
 };
