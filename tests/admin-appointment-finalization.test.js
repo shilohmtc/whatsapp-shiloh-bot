@@ -70,7 +70,7 @@ test('attendance remains explicit while unresolved visits can be rescheduled wit
   assert.match(finalization, /processAdminBookingUpdateMessage\(sender, `manage_booking_select_\$\{appointmentId\}`\)/);
   assert.match(finalization, /processAdminBookingUpdateMessage\(sender, '3'\)/);
   assert.match(finalization, /cannot be inferred from elapsed time/);
-  assert.doesNotMatch(finalization, /SET status='completed'.*NOW\(\)/s);
+  assert.match(finalization, /explicitAdminDecision: true/);
 });
 
 test('historical finalization offers cancelled and reuses canonical reason-confirmation cancellation flow', () => {
