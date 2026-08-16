@@ -73,7 +73,7 @@ function reminderWindow(now = new Date()) {
 }
 
 async function reminderRecipients() {
-  const result = await pool.query(`SELECT saa.id AS admin_id, saa.normalized_whatsapp, saa.display_name, saa.staff_id, lower(trim(saa.display_name)) AS admin_name FROM staff_admin_accounts saa WHERE saa.active=TRUE AND lower(trim(saa.display_name)) IN ('christel','abigail','marietjie') ORDER BY saa.id`);
+  const result = await pool.query(`SELECT saa.id AS admin_id, saa.normalized_whatsapp, saa.display_name, saa.staff_id, lower(trim(saa.display_name)) AS admin_name FROM staff_admin_accounts saa WHERE saa.active=TRUE AND lower(trim(saa.display_name)) IN ('christel','marietjie') ORDER BY saa.id`);
   return result.rows;
 }
 
@@ -85,7 +85,6 @@ async function activeStaffIdsByName(names) {
 async function pendingCountForAuthority(admin, clinicDate, staffMap) {
   let allowed = [];
   if (admin.admin_name === 'christel') allowed = [staffMap.get('christel'), staffMap.get('abigail')].filter(Boolean);
-  if (admin.admin_name === 'abigail') allowed = [staffMap.get('abigail')].filter(Boolean);
   if (admin.admin_name === 'marietjie') allowed = [staffMap.get('marietjie')].filter(Boolean);
   if (!allowed.length) return 0;
   const result = await pool.query(`SELECT COUNT(*)::int AS count FROM (SELECT a.id FROM appointments a JOIN appointment_staff ast ON ast.appointment_id=a.id WHERE (a.ends_at AT TIME ZONE 'Africa/Johannesburg')::date=$1::date AND a.ends_at < NOW() AND a.status NOT IN ('completed','cancelled','no_show') GROUP BY a.id HAVING COUNT(*) FILTER (WHERE ast.staff_id IS NOT NULL) > 0 AND BOOL_AND(ast.staff_id = ANY($2::bigint[]))) pending`, [clinicDate, allowed]);
