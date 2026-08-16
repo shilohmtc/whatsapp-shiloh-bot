@@ -91,6 +91,10 @@ async function getIntent(phone) {
   return result.rows[0] || null;
 }
 
+async function hasPendingCancellationIntent(sender) {
+  return Boolean(await getIntent(normalizePhone(sender)));
+}
+
 async function clearIntent(phone) {
   await ensureTable();
   await pool.query(`DELETE FROM admin_appointment_cancellation_intents WHERE phone=$1`, [phone]);
@@ -294,7 +298,11 @@ async function processAdminAppointmentCancellationMessage(sender, text) {
           ? "\nShared Google Calendar: synced."
           : "\n⚠️ CRM cancellation succeeded, but Google Calendar sync needs attention.")
         : "";
-      return { handled: true, reply: `✅ Appointment #${appointment.id} cancelled.\nReason: ${intent.reason}${calendarLine}` };
+      return {
+        handled: true,
+        cancelledAppointmentId: appointment.id,
+        reply: `✅ Appointment #${appointment.id} cancelled.\nReason: ${intent.reason}${calendarLine}`,
+      };
     }
     if (result.status === "already_cancelled") return { handled: true, reply: `Appointment #${appointment.id} was already cancelled.` };
     if (result.status === "conflict") return { handled: true, reply: `Appointment #${appointment.id} changed before cancellation. No cancellation was written.` };
@@ -305,4 +313,4 @@ async function processAdminAppointmentCancellationMessage(sender, text) {
   return { handled: false };
 }
 
-module.exports = { processAdminAppointmentCancellationMessage, ensureTable };
+module.exports = { processAdminAppointmentCancellationMessage, hasPendingCancellationIntent, ensureTable };
