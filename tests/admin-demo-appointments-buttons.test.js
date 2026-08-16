@@ -20,7 +20,7 @@ test('legacy Demo Client control remains normalized for regression infrastructur
   assert.match(menuSource,/if\(has\(admin,'demo:client'\)\)buttons\.push/);
 });
 
-test('production Appointments panels do not expose Demo Client even if a stale permission copy exists',()=>{
+test('production Appointments panels do not expose Demo Client or standalone availability',()=>{
   for (const admin of [
     { display_name:'Abigail', business_role:'employee_practitioner', calendar_scope:'own_appointments', permissions:commonPermissions },
     { display_name:'Marietjie', business_role:'tenant_practitioner', calendar_scope:'own_services', permissions:commonPermissions },
@@ -31,7 +31,8 @@ test('production Appointments panels do not expose Demo Client even if a stale p
     assert.equal(panel.sectionTitle,'Appointments');
     assert.equal(panel.rows.some(row=>/demo/i.test(row.id)||/Demo Client/i.test(row.title)),false);
     assert.ok(panel.rows.some(row=>row.id==='admin_appointment_booking'));
-    assert.ok(panel.rows.some(row=>row.id==='admin_appointment_availability'));
+    assert.equal(panel.rows.some(row=>row.id==='admin_appointment_availability'), false);
+    assert.ok(panel.rows.some(row=>row.id==='admin_action_pending_approvals'));
     assert.ok(panel.rows.length <= 10);
   }
 });
