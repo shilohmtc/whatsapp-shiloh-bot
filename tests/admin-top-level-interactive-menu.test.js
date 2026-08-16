@@ -13,13 +13,12 @@ const christelMenu = `*Shiloh Admin 🌿*\nWelcome back, Christel 👋\n\nWhat w
 
 const practitionerMenu = `*Shiloh Admin 🌿*\nWelcome back, Abigail 👋\nPractitioner access — your diary and assigned client work only.\n\nWhat would you like to do?\n\n*Appointments*\n1️⃣ My clients today\n2️⃣ My clients tomorrow\n3️⃣ Find an available time\n\n*Reports*\n4️⃣ My report today\n\n*Clients*\n5️⃣ Find my client\n\n*Services*\n6️⃣ My services\n\n*More*\n7️⃣ Help\n\nUse the real *Appointments* button below for appointment actions, or reply with a number/option name.`;
 
-test('top-level Admin UI is a real WhatsApp list of stable sections, not numbered actions', () => {
+test('top-level Admin UI exposes only polished operational sections', () => {
   const interactive = topLevelInteractive(christelMenu);
   assert.equal(interactive.type, 'list');
   assert.deepEqual(interactive.rows.map((row) => row.id), [
     'admin_section_appointments',
     'admin_section_reports',
-    'admin_section_clients',
     'admin_section_services',
     'admin_section_schedule',
     'admin_section_more',
@@ -28,16 +27,22 @@ test('top-level Admin UI is a real WhatsApp list of stable sections, not numbere
   assert.match(interactive.body, /Choose a section below\./);
 });
 
-test('visible actions remain role/scoped: practitioner menu cannot invent owner-only actions', () => {
+test('client lookup is secondary under More while Help and diagnostics stay hidden', () => {
   const sections = parseVisibleMenu(practitionerMenu);
   const report = sectionInteractive('Reports', practitionerMenu);
   const more = sectionInteractive('More', practitionerMenu);
   assert.deepEqual(report.rows.map((row) => row.id), ['admin_action_today_report', 'menu']);
-  assert.deepEqual(more.rows.map((row) => row.id), ['admin_action_help', 'menu']);
+  assert.deepEqual(more.rows.map((row) => row.id), ['admin_action_client', 'menu']);
   assert.equal(sections.get('Reports').length, 1);
-  assert.equal(sections.get('More').length, 1);
+  assert.equal(sections.get('More').length, 1); // raw legacy menu still contains Help; presentation filters it.
+  assert.equal(more.rows[0].title, 'Client details');
   assert.ok(!source.includes('Savanna'));
   assert.ok(!source.includes('Pieter'));
+});
+
+test('Reports collapses individual earnings entries into a role-aware Earnings action', () => {
+  const report = sectionInteractive('Reports', christelMenu);
+  assert.deepEqual(report.rows.map((row) => row.id), ['admin_action_today_report', 'admin_action_earnings', 'menu']);
 });
 
 test('every advertised stable action ID maps to an explicit guarded command', () => {
