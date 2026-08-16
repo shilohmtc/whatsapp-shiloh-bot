@@ -91,7 +91,8 @@ test('normal Abigail bookings still allow either Abigail or Christel to make the
   assert.match(approval, /Christel/i);
   assert.match(approval, /isAuthorizedDecisionMaker|authorizedDecisionMaker/i);
   assert.match(approval, /observer_staff_id[^\n]*admin\.staff_id|admin\.staff_id[^\n]*observer_staff_id/);
-  assert.match(approval, /sendWhatsAppReplyButtons\([^\n]*observer/i);
+  assert.match(approval, /observerStaffId|observer_staff_id/);
+  assert.match(approval, /sendApprovalRequest/);
   assert.doesNotMatch(approval, /no approval is required from you/i);
 });
 
