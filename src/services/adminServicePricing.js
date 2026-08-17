@@ -7,7 +7,8 @@ function key(sender){return normalizePhone(sender);}
 function norm(v=''){return String(v||'').trim().toLowerCase().replace(/\s+/g,' ');}
 function canManagePricing(admin){return admin?.permissions?.['service:pricing']===true;}
 function adminName(admin){return norm(admin?.display_name);}
-function pricingOwner(admin){const name=adminName(admin);if(name.startsWith('christel'))return'christel';if(name.startsWith('marietjie'))return'marietjie';return null;}
+function isJeanPierreBusinessAdmin(admin){return adminName(admin)==='jean-pierre'&&admin?.business_role==='business_admin'&&admin?.calendar_scope==='all_business'&&admin?.service_scope==='all_services';}
+function pricingOwner(admin){const name=adminName(admin);if(name.startsWith('christel')||isJeanPierreBusinessAdmin(admin))return'christel';if(name.startsWith('marietjie'))return'marietjie';return null;}
 async function adminFor(sender){const r=await pool.query(`SELECT id,staff_id,display_name,role,permissions,service_scope,business_role,calendar_scope FROM staff_admin_accounts WHERE normalized_whatsapp=$1 AND active=TRUE`,[key(sender)]);return r.rows[0]||null;}
 async function allowedServices(admin){const owner=pricingOwner(admin);if(!owner)return[];const practitionerNames=owner==='christel'?['christel','abigail']:['marietjie'];const r=await pool.query(`
  SELECT DISTINCT s.id,s.name,s.price,s.variable_price,sc.name category
@@ -34,7 +35,7 @@ async function processAdminServicePricingMessage(sender,text){
  const raw=String(text||'').trim(),n=norm(raw),k=key(sender);let session=sessions.get(k);
  const start=['manage services & pricing','service pricing','manage pricing','pricing','my services & pricing','services & pricing'].includes(n);
  if(start){
-   if(!canManagePricing(admin)||!pricingOwner(admin))return{handled:true,admin,reply:'Pricing changes are restricted to Christel for the shared Christel/Abigail catalogue and Marietjie for her own services.'};
+   if(!canManagePricing(admin)||!pricingOwner(admin))return{handled:true,admin,reply:'Pricing changes are restricted to Christel/Jean-Pierre for the shared Christel/Abigail catalogue and Marietjie for her own services.'};
    const services=await allowedServices(admin);if(!services.length)return{handled:true,admin,reply:'No active services are available in your authorized pricing catalogue.'};
    sessions.set(k,{step:'service_list',services,offset:0});return{handled:true,admin,interactive:serviceList(services,0)};
  }
@@ -65,4 +66,4 @@ async function processAdminServicePricingMessage(sender,text){
  return{handled:true,admin,reply:'Choose one of the pricing options shown above, or send *Back* to exit.'};
 }
 
-module.exports={processAdminServicePricingMessage,allowedServices,pricingOwner,parsePrice,serviceList,serviceActions,confirmation};
+module.exports={processAdminServicePricingMessage,allowedServices,pricingOwner,isJeanPierreBusinessAdmin,parsePrice,serviceList,serviceActions,confirmation};
