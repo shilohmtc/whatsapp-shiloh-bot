@@ -20,7 +20,16 @@ async function getPublicServiceCatalogue() {
               AND st.resource_type = 'practitioner'
               AND st.client_bookable = TRUE
          )
-       ORDER BY sc.display_order NULLS LAST, s.display_order, s.name
+       ORDER BY
+         CASE
+           WHEN sc.name IN ('Massage', 'Massage Treatments') THEN 0
+           WHEN sc.name = 'Pedicures & Foot Care' THEN 1
+           ELSE 2
+         END,
+         sc.display_order NULLS LAST,
+         sc.name,
+         s.display_order,
+         s.name
     `);
 
     return result.rows.map((row) => ({
