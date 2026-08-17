@@ -13,7 +13,7 @@ test('SQT client query strips numbering for presentation and sorts by the cleane
 
   assert.ok(start >= 0 && end > start, 'SQT query must remain present');
   assert.match(sqtQuery, /REGEXP_REPLACE\(s\.name,[\s\S]*AS name/);
-  assert.match(sqtQuery, /ORDER BY LOWER\(REGEXP_REPLACE\(s\.name,/);
+  assert.match(sqtQuery, /ORDER BY name, s\.id/);
   assert.doesNotMatch(sqtQuery, /UPDATE\s+services|INSERT\s+INTO\s+services|DELETE\s+FROM\s+services/i);
 });
 
