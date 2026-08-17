@@ -160,7 +160,7 @@ async function listSqtBioMicroneedlingServices() {
        AND st.status = 'active'
        AND st.resource_type = 'practitioner'
        AND st.client_bookable = TRUE
-     ORDER BY LOWER(REGEXP_REPLACE(s.name, '^[[:space:]]*[0-9]+[.][[:space:]]*', '')), s.id
+     ORDER BY name, s.id
   `);
   return result.rows;
 }
