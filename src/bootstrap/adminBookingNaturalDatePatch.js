@@ -1,4 +1,5 @@
 const Module = require('node:module');
+const nextAvailable = require('../services/adminBookingNextAvailable');
 
 const MONTHS = new Map([
   ['jan',1],['january',1],['feb',2],['february',2],['mar',3],['march',3],['apr',4],['april',4],
@@ -49,6 +50,7 @@ function expandAdminBookingDateInput(value) {
 const originalLoad = Module._load;
 Module._load = function patchedLoad(request, parent, isMain) {
   const exported = originalLoad.apply(this, arguments);
+
   if (typeof request === 'string' && /(?:^|\/)adminBookingUpdate(?:\.js)?$/.test(request) && exported && typeof exported.processAdminBookingUpdateMessage === 'function' && !exported.__naturalDatePatched) {
     const original = exported.processAdminBookingUpdateMessage;
     exported.processAdminBookingUpdateMessage = async function naturalDateBookingUpdate(sender, text, ...rest) {
@@ -56,6 +58,26 @@ Module._load = function patchedLoad(request, parent, isMain) {
     };
     Object.defineProperty(exported, '__naturalDatePatched', { value: true });
   }
+
+  if (typeof request === 'string' && /(?:^|\/)adminBookingUpdateStateless(?:\.js)?$/.test(request) && exported && !exported.__nextAvailablePatched) {
+    if (typeof exported.scopeAdminBookingInteractive === 'function') {
+      const originalScope = exported.scopeAdminBookingInteractive;
+      exported.scopeAdminBookingInteractive = function nextAvailableScopedResult(result) {
+        return nextAvailable.scopeImmediateTimeActions(originalScope(result));
+      };
+    }
+    if (typeof exported.processStatelessAdminBookingUpdateMessage === 'function') {
+      const originalStateless = exported.processStatelessAdminBookingUpdateMessage;
+      exported.processStatelessAdminBookingUpdateMessage = async function nextAvailableStateless(sender, text, ...rest) {
+        const bookingUpdate = require('../services/adminBookingUpdate');
+        const immediate = await nextAvailable.processImmediateTimeAction(sender, text, bookingUpdate.processAdminBookingUpdateMessage);
+        if (immediate?.handled) return immediate;
+        return originalStateless(sender, text, ...rest);
+      };
+    }
+    Object.defineProperty(exported, '__nextAvailablePatched', { value: true });
+  }
+
   return exported;
 };
 
