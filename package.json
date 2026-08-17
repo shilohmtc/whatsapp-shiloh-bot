@@ -8,8 +8,8 @@
     "node": "24.14.1"
   },
   "scripts": {
-    "start": "node app.js",
-    "dev": "nodemon app.js",
+    "start": "node -r ./src/bootstrap/adminBookingNaturalDatePatch.js app.js",
+    "dev": "nodemon --exec \"node -r ./src/bootstrap/adminBookingNaturalDatePatch.js\" app.js",
     "db:migrate": "node scripts/migrate.js",
     "maintenance": "node scripts/maintenance.js",
     "test": "node --test tests/*.test.js"
