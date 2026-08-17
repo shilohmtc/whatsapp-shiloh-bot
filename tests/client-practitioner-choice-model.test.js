@@ -46,7 +46,7 @@ test('booking entry presents the four client service families as a genuine Whats
 test('Our practitioners chooser labels the three client-facing roles without exposing owner or employee status', () => {
   assert.equal(clientFacingPractitionerLabel('Christel'), 'Christel · Massage');
   assert.equal(clientFacingPractitionerLabel('Abigail'), 'Abigail · Massage');
-  assert.equal(clientFacingPractitionerLabel('Marietjie'), 'Marietjie · Esthetician');
+  assert.equal(clientFacingPractitionerLabel('Marietjie'), 'Marietjie · Aesthetic');
   const labels = [clientFacingPractitionerLabel('Christel'), clientFacingPractitionerLabel('Abigail'), clientFacingPractitionerLabel('Marietjie')].join(' ');
   assert.doesNotMatch(labels, /owner|employee/i);
 });
