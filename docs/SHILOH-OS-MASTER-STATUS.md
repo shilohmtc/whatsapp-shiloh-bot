@@ -1,53 +1,52 @@
 # Shiloh OS — Master Project Status
 
-Updated: 2026-08-17 16:19 SAST
+Updated: 2026-08-17 18:58 SAST
 Purpose: permanent current-state source of truth. Historical implementation detail remains in Git history; do not redo accepted work.
 
 ## Authority and continuation protocol
 
 Operational truth is GitHub `main`, Render production, Shiloh CRM/Postgres, Google Calendar, Meta/WhatsApp provider evidence, and explicit real WhatsApp/human evidence. Never infer provider, attendance, approval, CRM, Calendar, or handset state.
 
-At the beginning of each new Shiloh OS chat: read this Master + `docs/SHILOH-OS-PROJECT-TRACKER.md` + `docs/SHILOH-OS-RECONCILIATION-2026-08-16-LATE.md` on `main` first, verify applicable production/provider state, then give the four-part checkpoint: (1) authoritative current state, (2) highest-priority continuation item, (3) why it is next, (4) remaining approval/evidence/provider gate. Obtain explicit approval before the first new substantial controlled action. After that initial approval, continue the approved workstream automatically through ordinary engineering/deploy/verification/housekeeping boundaries. Stop only for material scope/risk expansion, contradictory authority, or an existing fail-closed human/provider/evidence gate.
+At the beginning of each new Shiloh OS chat: read this Master + `docs/SHILOH-OS-PROJECT-TRACKER.md` + the latest reconciliation, currently `docs/SHILOH-OS-RECONCILIATION-2026-08-17-PHASE1.md`, on `main`; verify applicable production/provider state; then give the four-part checkpoint: (1) authoritative current state, (2) highest-priority continuation item, (3) why it is next, (4) remaining approval/evidence/provider gate. Obtain explicit approval before the first new substantial controlled action. After that initial approval, continue the approved workstream automatically through ordinary engineering/deploy/verification/housekeeping boundaries. Stop only for material scope/risk expansion, contradictory authority, or an existing fail-closed human/provider/evidence gate.
 
-Permanent governance remains: provider lead-time early in feature planning; known finite client/admin choices are button/list-first when practical; natural language remains fallback into the same canonical handlers; no speculative provider submissions; no manufactured appointments/evidence.
+Permanent governance remains: provider lead-time early in feature planning; known finite client/admin choices are button/list-first when practical; natural language remains fallback into the same canonical handlers; no speculative provider submissions; no manufactured appointments/evidence; no duplicate public service source of truth.
 
 ## Current production / deployment baseline
 
-GitHub `main` is currently **`9ec976c202852a0f01e4b9b735f00abcdc85bbfd`** (PR #278, `Show start times clearly for manual admin bookings`). PR #278 CI passed before merge.
+GitHub and Render are converged through **`5d8b2c2350a554656cc416ecbe289f9374e3305a`** (PR #280, `Build Phase 1 Shiloh public service catalogue`). PR #280 passed the full non-mutating CI suite before merge. Render auto-deployed the exact merge commit as **`dep-da1jqoe1egvs73aagcug`** and reported it LIVE. The new runtime started successfully and `/health` returned HTTP 200.
 
-Fresh Render reconciliation at 16:19 SAST found production **live at `4e64ba9b7a9c8ac0c44b74698edf2e1a43a95d30`** (PR #276, `Add confirmation before admin booking changes`). Render service `shiloh-whatsapp-bot` is active, on `main`, with auto-deploy enabled. Therefore GitHub and production are temporarily **not converged**: PR #277 (`2bc06e2977289ff5e304921cc3255fc006014e2d`, confirmed reschedule commit-path repair) and PR #278 (`9ec976c...`, manual start-time picker presentation) are merged on `main` but were not yet shown live by Render at the reconciliation check.
+The earlier #277 confirmed-reschedule commit-path repair and #278 start-time-first Admin manual booking presentation are contained in the current live lineage. Their previous deployment-convergence gate is closed. Do not reopen #272–#279 without new evidence.
 
-Do not claim #277 or #278 production-live until Render proves a deployment containing them. The last production-live runtime commit is #276 / `4e64ba9...`; the latest desired runtime state is `9ec976c...`.
-
-Provider state was not freshly re-proven during this reconciliation. Latest authoritative provider evidence remains:
+Fresh production startup evidence on 17 August reported:
 - `shiloh_staff_finalization_v1` — **APPROVED / UTILITY**.
-- `shiloh_staff_finalization_actions_v1` — **PENDING / UTILITY**.
+- `shiloh_staff_finalization_actions_v1` — **APPROVED / UTILITY**.
 - `shiloh_booking_confirmation_v1` — **APPROVED / UTILITY**.
 
-The proactive historical Finalize shortcut therefore remains fail-closed on the action-template provider gate. Ordinary **Admin → Appointments → Finalize past visits** remains available.
+This supersedes the older PENDING state for `shiloh_staff_finalization_actions_v1`. Provider approval does not itself prove a handset send or justify manufactured operational messaging; existing authorization, idempotency and genuine-use rules remain in force.
 
-## Admin polish — 🟢 IMPLEMENTED; latest booking refinements awaiting Render convergence
+## Public Shiloh service catalogue — 🟢 VERIFIED LIVE
 
-The normal WhatsApp Admin surface remains button/list-first where practical. Appointments priority remains **Finalize past visits → Make a booking → Manage a booking → Today's clients → Tomorrow's clients**. `Find an available time` is integrated into Make a booking; Walk-in remains removed from normal navigation.
+`/book` is now the Shiloh-owned public service catalogue and booking entry surface. It replaces Goldie as the intended public catalogue direction without copying Goldie into a second database.
 
-Historical finalization exposes **Completed, No-show, Cancelled, No charge, Service change, Adjust price, Reschedule, Leave unresolved**. Service change records the actual treatment performed, preserves original-service history, supports optional final-price adjustment including R0, and finalizes through the canonical completed path.
+The page is a read-only projection of canonical Shiloh CRM catalogue data. A service is publicly exposed only when:
+- the service is active;
+- at least one mapped staff member is active;
+- that staff member is a practitioner; and
+- that practitioner is client-bookable.
 
-Reports remain **Today's report + Earnings** with role-aware access and completed-only accounting. `Client details` remains in More; Calendar integrity remains diagnostic rather than everyday UX. Christel controls shared Christel/Abigail pricing; Marietjie controls her own. Schedule governance remains Abigail request/Christel approval, Christel own/clinic controls, and Marietjie independent own availability.
+The page renders canonical category, service name, duration, price, customer description and booking note. Each **Book this treatment** action hands the exact canonical service name to the official Shiloh WhatsApp journey. The webpage never claims a slot is available; practitioner/date/time availability remains authoritative only inside the existing booking engine.
 
-### Admin booking / manage-booking refinement lineage — 🟢 MERGED / 🟠 production convergence
+Phase 1 ships with an approved real Shiloh reception photograph as the primary hero image. Promotional posters are excluded from the permanent catalogue. Additional approved clinic/category/treatment photography can be added progressively without changing the catalogue data model.
 
-The 17 August continuation after the earlier client/catalogue work materially improved Admin booking and rescheduling:
-- #272 `a659aa9068d955e39d9da5fa1d3e219dbace9aee` — next-available reschedule UX.
-- #273 `4e426bcfe609ef1388bdcda1027e0ebe13910931` — direct same-day time changes.
-- #274 `ef5658fc98663e5a4a4aedfbd26f7b2da7fee0e7` — direct date + time rescheduling.
-- #275 `57e75005a9060219c993f2387710d0e907cec108` — durable typed reschedule context across restarts.
-- #276 `4e64ba9b7a9c8ac0c44b74698edf2e1a43a95d30` — explicit confirmation before Admin booking changes; this is the latest commit freshly verified live on Render.
-- #277 `2bc06e2977289ff5e304921cc3255fc006014e2d` — confirmed reschedule commit-path repair; merged on `main`, not yet proven live at 16:19.
-- #278 `9ec976c202852a0f01e4b9b735f00abcdc85bbfd` — Admin/manual booking start-time-first presentation; merged on `main`, CI passed, not yet proven live at 16:19.
+The established public landing-page compatibility contract remains visible: **`Your appointment starts with Shiloh.`** and **`Continue with Shiloh on WhatsApp`**. The final Phase 1 branch head `105cce9...` passed CI run #918 before merge.
 
-PR #278 does **not** weaken availability. The existing authoritative `listAvailableSlots(... intervalMinutes: 15)` candidate generation remains intact. It changes the WhatsApp row from a treatment-window-first title such as `08:30–10:15` to primary start time **`08:30`** with description **`Ends 10:15 · available start`**, plus guidance that the full treatment must fit the practitioner diary and clinic schedule. It adds no appointment mutation, override, or double-booking path. Thus a quarter-hour start is shown only when the full service window is authoritatively available.
+## Admin booking and manage-booking — 🟢 IMPLEMENTED / LIVE
 
-Do not redo #272–#278. The immediate technical gate is deployment convergence and then normal production/handset evidence for the corrected confirmed-change path and start-time presentation.
+The normal WhatsApp Admin surface remains button/list-first where practical. Appointments priority remains **Finalize past visits → Make a booking → Manage a booking → Today's clients → Tomorrow's clients**. `Find an available time` is integrated into Make a booking.
+
+The accepted Admin reschedule lineage includes next-available choices, same-day direct time, explicit date+time input, restart-safe typed context, review-before-write confirmation, corrected confirmed commit, and start-time-first manual booking presentation. Canonical 15-minute candidate generation, clinic hours, practitioner schedule, CRM conflicts and configured Calendar conflicts remain authoritative. Presentation does not create an override or double-booking path.
+
+Historical manual bookings remain supported: canonical CRM + configured Calendar synchronization, no ordinary client booking notification, and unresolved status for later authorized attendance certification.
 
 ## Attendance finalization authority — 🟢 IMPLEMENTED
 
@@ -55,37 +54,29 @@ Canonical certification authority remains:
 - **Christel:** finalizes Christel + Abigail appointments only.
 - **Marietjie:** finalizes Marietjie appointments only.
 - **Abigail:** does not finalize appointments.
-- Other admins do not gain attendance-certification authority merely from broad Admin visibility.
+- Broad Admin visibility does not grant attendance-certification authority.
 
-This is enforced server-side at finalization time. Attendance reminders remain restricted to Christel and Marietjie and certification-compatible practitioner ownership.
-
-## Historical manual bookings — 🟢 IMPLEMENTED
-
-Historical manual bookings create the canonical CRM appointment and synchronize configured Google Calendar paths while suppressing ordinary client booking notification. Historical appointments remain unresolved/scheduled for later authorized certification. Existing clinic/practitioner/service/conflict validation remains in force. Runtime lineage includes `0e75f73d058b09a502994c22193981afda3bf660`. Do not redo this work.
+Historical finalization exposes Completed, No-show, Cancelled, No charge, Service change, Adjust price, Reschedule and Leave unresolved. Service/price changes preserve original history and finalize through canonical guarded paths.
 
 ## Historical attendance 2026-08-01 through 2026-08-15 — 🔵 HUMAN FINAL REVIEW ACTIVE
 
-The read-only production audit established **53 appointments**: 31 finalized, 4 cancelled, 17 unresolved/routable, plus one unresolved exception #558 mapped historically to `SHILOH MTC`. With approval, the 31 prior Completed/No-show visits were reopened for final human certification with audit/history preserved; the 4 cancelled visits remained untouched and the 17 already-unresolved visits remained unresolved.
+The earlier read-only production audit established 53 appointments: 31 finalized, 4 cancelled, 17 unresolved/routable, plus one unresolved exception #558 mapped historically to `SHILOH MTC`. With approval, the 31 prior Completed/No-show visits were reopened for final human certification with audit/history preserved; cancelled visits were not reopened.
 
-Immediately after reopening there were **48 properly routable unresolved visits**. That is historical checkpoint evidence, not a guaranteed current count. Re-query before quoting current remaining totals.
-
-Reopened IDs: `327, 328, 329, 330, 331, 334, 336, 337, 338, 339, 340, 341, 342, 343, 344, 345, 346, 347, 349, 350, 351, 352, 357, 485, 486, 553, 554, 556, 557, 559, 562`.
-
-Earlier unresolved routing evidence: Christel `353, 548, 355, 356, 487, 359, 551, 564`; Marietjie `326, 332, 333, 335, 555, 348, 354, 550, 358`.
+The immediate post-reopen checkpoint was 48 routable unresolved visits. That is historical evidence only. Re-query before quoting a current total.
 
 ### #558 — 🔴 FAIL-CLOSED historical exception
 
-Appointment **#558 on 2026-08-06** remains unresolved with historical practitioner `SHILOH MTC`. Never silently assign it to Christel or Marietjie. Establish the real practitioner from authoritative appointment/service/history or human evidence before correction/finalization.
+Appointment **#558 on 2026-08-06** remains unresolved with historical practitioner `SHILOH MTC`. Never silently assign it to Christel or Marietjie. Establish the real practitioner from authoritative history or explicit human evidence before correction/finalization.
 
-## Historical finalization shortcut — 🟠 PROVIDER GATE
+## Historical finalization shortcut — 🟢 PROVIDER APPROVED / operational evidence rules remain
 
-The proactive role-aware Finalize shortcut is implemented with recipient-specific count, direct authorized queue action, idempotent send ledger, and retry-safe failed delivery. Ordinary Admin finalization remains canonical regardless of proactive delivery.
+The proactive role-aware Finalize shortcut is implemented with recipient-specific count, direct authorized queue action, idempotent send ledger and retry-safe failed delivery. Fresh production startup evidence now shows `shiloh_staff_finalization_actions_v1` **APPROVED / UTILITY**.
 
-Latest authoritative provider evidence still has **`shiloh_staff_finalization_actions_v1` PENDING / UTILITY**. Do not send or claim proactive shortcut availability until a fresh provider check proves APPROVED.
+Do not translate provider approval into fabricated handset evidence. Use the shortcut only under its existing authorized-recipient and genuine operational conditions. Ordinary **Admin → Appointments → Finalize past visits** remains canonical.
 
 ## Universal client entry / lifecycle / discovery — 🟢 VERIFIED; do not redo
 
-The 17 August universal welcome, registered/legacy Book appointment routing, eligible-practitioner DISTINCT ordering, booking/cancellation action-button parity, practitioner directory, category ordering/count polish, and SQT BioMicroneedling virtual-family presentation were handset-proven and remain completed.
+The universal welcome, registered/legacy Book appointment routing, eligible-practitioner ordering, booking/cancellation action-button parity, practitioner directory, category ordering/count polish and SQT BioMicroneedling virtual-family presentation remain completed.
 
 Canonical presentation remains:
 - Christel · Massage — Massage Practitioner
@@ -96,17 +87,19 @@ Canonical presentation remains:
 
 Do not consolidate/rename underlying CRM records merely to reproduce presentation.
 
-## Pa Derik #567 — evidence captured; normal cancellation deferred
+## Pa Derik #567 — evidence captured; do not mutate for proof
 
-Real handset reschedule evidence is captured. The corrected client journey proved clinic-aware date selection, closed-day rejection, authoritative slot selection, comparison, explicit confirmation and success. #567 remains authoritative at **Tuesday 18 August 2026, 08:30–10:15**, Full Body Swedish with Christel. Do not mutate it merely for proof. Normal cancellation remains appropriate only as a genuine action.
+Real handset reschedule evidence proved clinic-aware date selection, closed-day rejection, authoritative slot selection, comparison, explicit confirmation and success. The last authoritative state recorded for #567 is **Tuesday 18 August 2026, 08:30–10:15**, Full Body Swedish with Christel. Re-query if current state is needed; do not mutate it merely for evidence.
 
 ## CRM provenance / imported-client identity
 
-CRM48 (Pa Derik) and CRM473 remain legitimate controlled Goldie-imported canonical clients. CRM IDs are not proof of bot registration. CRM1 remains the stronger orphan-like read-only review candidate; do not delete without identity/supersession proof. Unique unverified imported mobiles use the existing-profile claim/verification path; ambiguity remains fail-closed.
+CRM48 (Pa Derik) and CRM473 remain legitimate controlled Goldie-imported canonical clients. CRM IDs are not proof of bot registration. CRM1 remains an orphan-like read-only review candidate; do not delete without identity/supersession proof. Unique unverified imported mobiles use the existing-profile claim/verification path; ambiguity remains fail-closed.
 
-## Other standing gates
+## Standing gates
 
-- Genuine per-route lifecycle delivery evidence remains natural-journey gated where not already observed.
+- Historical attendance remains explicit human truth.
+- #558 remains fail-closed.
+- Genuine per-route lifecycle evidence remains natural-journey gated where not already observed.
 - Follow-up/rating delivery remains genuine completed-visit timing gated.
 - Birthday v2 requires genuine eligible CRM birthday/opt-in conditions.
 - Google Business Profile API remains deferred at last-authoritative 0 QPM.
@@ -116,17 +109,18 @@ CRM48 (Pa Derik) and CRM473 remain legitimate controlled Goldie-imported canonic
 
 ## Exact new-chat continuation state
 
-- GitHub `main`: **`9ec976c...`** (#278).
-- Fresh Render live commit at 16:19 SAST: **`4e64ba9...`** (#276). Auto-deploy is enabled, but #277/#278 are not yet proven live. Do not conflate merged with deployed.
-- #277 fixes the confirmed reschedule commit path; #278 presents authoritative quarter-hour start times clearly without introducing override/double-booking behaviour.
+- GitHub + Render runtime: **`5d8b2c2350a554656cc416ecbe289f9374e3305a`** (#280) is production-live.
+- `/book` is the live Shiloh-owned CRM-backed public service catalogue and WhatsApp booking entry surface.
+- Only active services with an active client-bookable practitioner can appear publicly.
+- Phase 1 uses the approved Shiloh reception photograph; additional category/treatment imagery is a presentation evolution, not a catalogue-data rewrite.
+- #277/#278 deployment convergence is resolved and must not be treated as outstanding.
+- `shiloh_staff_finalization_actions_v1` is now freshly evidenced **APPROVED / UTILITY**.
 - Historical attendance remains human-controlled; live remaining count must be re-queried before quoting.
 - #558 remains fail-closed.
-- `shiloh_staff_finalization_actions_v1` remains PENDING at the latest authoritative provider check; no proactive send until fresh APPROVED evidence.
-- Pa Derik #567 remains Tue 18 Aug 08:30–10:15 and must not be mutated merely for proof.
-- Completed client welcome/lifecycle/directory/SQT work remains completed and must not be reopened without new evidence.
+- Completed client welcome/lifecycle/directory/SQT work remains completed.
 
-**Authoritative current state:** source is ahead of production by #277/#278; Render is healthy/live at #276 but deployment convergence is incomplete. Existing human/provider gates remain unchanged.
+**Authoritative current state:** source and production are converged through Phase 1 public catalogue launch. Provider action-template approval is refreshed. Human-truth gates remain separate.
 
-**Highest-priority continuation item:** verify Render converges to a commit containing #277 and #278; then verify the Admin confirmed-reschedule commit path and start-time-first picker through normal controlled use. In parallel only where relevant, re-check the Meta finalization-actions template and historical-finalization progress before making any new provider/count claim.
+**Highest-priority continuation item:** business review of the live `/book` experience, followed by approved presentation refinements and progressive clinic/category/treatment photography. Preserve canonical Shiloh CRM as the sole service source of truth.
 
-**Remaining gate:** deployment evidence first; handset/human evidence for UI behaviour second. Provider and attendance truth remain fail-closed and must not be inferred.
+**Remaining gate:** no engineering gate blocks Phase 1. Future material commercial/service-rule changes require explicit business approval; attendance/#558/genuine-journey truth remains fail-closed.
