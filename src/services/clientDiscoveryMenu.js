@@ -6,6 +6,8 @@ const { decorateClientBookingResult } = require('./clientBookingInteractive');
 
 const SERVICE_PAGE_SIZE = 9;
 const CATEGORY_PAGE_SIZE = 9;
+const SQT_CLIENT_CATEGORY_ID = 'sqt_biomicroneedling';
+const SQT_CLIENT_CATEGORY_NAME = 'SQT BioMicroneedling';
 
 function clean(value = '') {
   return String(value || '').trim().replace(/\s+/g, ' ');
@@ -32,6 +34,47 @@ function clientHomeInteractive() {
   };
 }
 
+function isSqtBioMicroneedlingCategory(name = '') {
+  return /^\d+\.\s*SQT BioMicroneedling$/i.test(clean(name));
+}
+
+function categoryPriority(name = '') {
+  const value = clean(name).toLowerCase();
+  if (value === 'massage') return 0;
+  if (value === 'pedicures & foot care') return 1;
+  return 2;
+}
+
+function groupClientCategories(rows = []) {
+  const grouped = [];
+  let sqtCount = 0;
+
+  for (const row of rows) {
+    if (isSqtBioMicroneedlingCategory(row.name)) {
+      sqtCount += Number(row.service_count) || 0;
+      continue;
+    }
+    grouped.push(row);
+  }
+
+  if (sqtCount > 0) {
+    grouped.push({
+      id: SQT_CLIENT_CATEGORY_ID,
+      name: SQT_CLIENT_CATEGORY_NAME,
+      display_order: null,
+      service_count: sqtCount,
+    });
+  }
+
+  return grouped.sort((a, b) => {
+    const priorityDiff = categoryPriority(a.name) - categoryPriority(b.name);
+    if (priorityDiff) return priorityDiff;
+    const nameDiff = clean(a.name).toLowerCase().localeCompare(clean(b.name).toLowerCase());
+    if (nameDiff) return nameDiff;
+    return String(a.id).localeCompare(String(b.id));
+  });
+}
+
 async function listClientBookableCategories() {
   const result = await pool.query(`
     SELECT COALESCE(sc.id, 0) AS id,
@@ -55,7 +98,7 @@ async function listClientBookableCategories() {
               LOWER(COALESCE(sc.name, 'Services')),
               COALESCE(sc.id, 0)
   `);
-  return result.rows;
+  return groupClientCategories(result.rows);
 }
 
 async function listClientBookableServices() {
@@ -96,6 +139,27 @@ async function listServicesForCategory(categoryId) {
        AND st.client_bookable = TRUE
      ORDER BY s.display_order NULLS LAST, s.name, s.id
   `, [Number(categoryId)]);
+  return result.rows;
+}
+
+async function listSqtBioMicroneedlingServices() {
+  const result = await pool.query(`
+    SELECT DISTINCT s.id, s.name, s.duration_minutes, s.processing_time_minutes,
+           s.extra_time_minutes, s.price, s.display_price,
+           COALESCE(sc.id, 0) AS category_id,
+           COALESCE(sc.name, 'Services') AS category_name,
+           sc.display_order AS category_order, s.display_order
+      FROM services s
+      JOIN staff_services ss ON ss.service_id = s.id
+      JOIN staff st ON st.id = ss.staff_id
+      LEFT JOIN service_categories sc ON sc.id = s.category_id
+     WHERE LOWER(REGEXP_REPLACE(COALESCE(sc.name, ''), '^[[:space:]]*[0-9]+[.][[:space:]]*', '')) = 'sqt biomicroneedling'
+       AND s.status = 'active'
+       AND st.status = 'active'
+       AND st.resource_type = 'practitioner'
+       AND st.client_bookable = TRUE
+     ORDER BY s.display_order NULLS LAST, s.name, s.id
+  `);
   return result.rows;
 }
 
@@ -200,15 +264,21 @@ function servicePageInteractive(rows = [], page = 1, options = {}) {
   }));
 
   const categoryId = options.categoryId == null ? null : Number(options.categoryId);
+  const categoryToken = clean(options.categoryToken);
+  const categoryPageId = (targetPage) => {
+    if (categoryToken) return `client_category_${categoryToken}_page_${targetPage}`;
+    if (categoryId != null) return `client_category_${categoryId}_page_${targetPage}`;
+    return `client_services_page_${targetPage}`;
+  };
   if (safePage < totalPages) {
     pageRows.push({
-      id: categoryId == null ? `client_services_page_${safePage + 1}` : `client_category_${categoryId}_page_${safePage + 1}`,
+      id: categoryPageId(safePage + 1),
       title: 'More services →',
       description: `Page ${safePage + 1} of ${totalPages}`,
     });
   } else if (safePage > 1) {
     pageRows.push({
-      id: categoryId == null ? 'client_services_page_1' : `client_category_${categoryId}_page_1`,
+      id: categoryPageId(1),
       title: '← First page',
       description: `Page 1 of ${totalPages}`,
     });
@@ -384,6 +454,35 @@ async function processClientDiscoveryMessage(sender, text) {
     return { handled: true, interactive: categoryPageInteractive(categories, Number(categoryPageMatch[1])) };
   }
 
+  const sqtCategoryPageMatch = value.match(/^client_category_sqt_biomicroneedling_page_(\d+)$/);
+  if (sqtCategoryPageMatch) {
+    const services = await listSqtBioMicroneedlingServices();
+    if (!services.length) {
+      return { handled: true, reply: 'SQT BioMicroneedling no longer has active client-bookable treatments. Send *Services* to refresh.' };
+    }
+    return {
+      handled: true,
+      interactive: servicePageInteractive(services, Number(sqtCategoryPageMatch[1]), {
+        categoryToken: SQT_CLIENT_CATEGORY_ID,
+        categoryName: SQT_CLIENT_CATEGORY_NAME,
+      }),
+    };
+  }
+
+  if (value === `client_category_${SQT_CLIENT_CATEGORY_ID}`) {
+    const services = await listSqtBioMicroneedlingServices();
+    if (!services.length) {
+      return { handled: true, reply: 'SQT BioMicroneedling no longer has active client-bookable treatments. Send *Services* to refresh.' };
+    }
+    return {
+      handled: true,
+      interactive: servicePageInteractive(services, 1, {
+        categoryToken: SQT_CLIENT_CATEGORY_ID,
+        categoryName: SQT_CLIENT_CATEGORY_NAME,
+      }),
+    };
+  }
+
   const categoryServicePageMatch = value.match(/^client_category_(\d+)_page_(\d+)$/);
   if (categoryServicePageMatch) {
     const categoryId = Number(categoryServicePageMatch[1]);
@@ -513,15 +612,20 @@ async function processClientDiscoveryMessage(sender, text) {
 module.exports = {
   CATEGORY_PAGE_SIZE,
   SERVICE_PAGE_SIZE,
+  SQT_CLIENT_CATEGORY_ID,
+  SQT_CLIENT_CATEGORY_NAME,
   categoryPageInteractive,
   clientHomeInteractive,
   eligiblePractitionersInteractive,
+  groupClientCategories,
   isHomeCommand,
+  isSqtBioMicroneedlingCategory,
   listClientBookableCategories,
   listClientBookableServices,
   listEligiblePractitionersForService,
   listServicesForCategory,
   listServicesForPractitioner,
+  listSqtBioMicroneedlingServices,
   practitionerServicePageInteractive,
   practitionersInteractive,
   processClientDiscoveryMessage,
