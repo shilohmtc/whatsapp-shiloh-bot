@@ -11,15 +11,7 @@ test('service booking handoff preselects the canonical service name', () => {
 });
 
 test('catalogue renders canonical service metadata grouped by category', () => {
-  const html = renderCatalogue('+27823269871', [{
-    id: 1,
-    name: 'Full Body Swedish',
-    category: 'Massage',
-    duration: '90 min',
-    price: 'R590',
-    description: 'A relaxing full body massage.',
-    bookingNote: '',
-  }]);
+  const html = renderCatalogue('+27823269871', [{ id: 1, name: 'Full Body Swedish', category: 'Massage', duration: '90 min', price: 'R590', description: 'A relaxing full body massage.', bookingNote: '' }]);
   assert.match(html, /Massage/);
   assert.match(html, /Full Body Swedish/);
   assert.match(html, /90 min/);
@@ -39,6 +31,6 @@ test('public page uses only committed Phase 1 image references and does not clai
   const html = renderBookingPage('+27823269871', []);
   assert.match(html, /\/assets\/booking\/reception\.svg/);
   assert.doesNotMatch(html, /treatment-room\.webp|consultation-room\.webp|pedicure-lounge\.webp|clinic-collage\.webp/);
-  assert.match(html, /Availability is confirmed only after Shiloh completes the appointment flow/);
+  assert.match(html, /Availability is confirmed when Shiloh completes your booking/);
   assert.doesNotMatch(html, /available today|available now/i);
 });
