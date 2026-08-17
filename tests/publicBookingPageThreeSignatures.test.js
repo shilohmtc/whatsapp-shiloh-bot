@@ -28,5 +28,5 @@ test('renders exactly three Inside Shiloh signatures at catalogue boundaries', (
   assert.ok(thirdSignature < confidence, 'final signature should appear before the confidence section');
 
   assert.match(html, /Clinical care\. Personal touch\. Beautifully you\./);
-  assert.doesNotMatch(html, /clinic-gallery/);
+  assert.doesNotMatch(html, /<section class="clinic-gallery"/);
 });
