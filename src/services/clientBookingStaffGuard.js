@@ -18,6 +18,13 @@ function clientFacingPractitionerLabel(name = '') {
   }
 }
 
+function clientFacingPractitionerRole(name = '') {
+  const value = clean(name).toLowerCase();
+  if (value.startsWith('marietjie')) return 'Aesthetic Practitioner';
+  if (value.startsWith('christel') || value.startsWith('abigail')) return 'Massage Practitioner';
+  return 'Shiloh Practitioner';
+}
+
 async function findRequestedStaff(text) {
   const value = normalize(text);
   if (!value) return null;
@@ -56,6 +63,7 @@ async function listClientBookableStaff() {
   return result.rows.map((row) => ({
     ...row,
     display_name: clientFacingPractitionerLabel(row.display_name),
+    client_role: clientFacingPractitionerRole(row.display_name),
   }));
 }
 
@@ -95,6 +103,7 @@ async function guardClientFreelancerBooking(text) {
 
 module.exports = {
   clientFacingPractitionerLabel,
+  clientFacingPractitionerRole,
   guardClientFreelancerBooking,
   findRequestedStaff,
   listClientBookableStaff,
