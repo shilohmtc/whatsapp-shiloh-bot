@@ -27,7 +27,7 @@ test('typed reschedule context survives Render restarts for thirty minutes', () 
   assert.match(sessionSource, /admin_booking_time_input_sessions/);
   assert.match(sessionSource, /30 \* 60 \* 1000/);
   assert.match(sessionSource, /ON CONFLICT \(phone\) DO UPDATE/);
-  assert.match(sessionSource, /expires_at > NOW\(\)/);
+  assert.match(sessionSource, /expires_at\s*>\s*NOW\(\)/);
   assert.doesNotMatch(source, /activeTimeBookingBySender/);
 });
 
