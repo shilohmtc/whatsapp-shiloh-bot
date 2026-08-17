@@ -1,4 +1,5 @@
 const { pool } = require('../db/pool');
+const { processClientIdentityMessage, REGISTRATION_START_PROMPT } = require('./clientIdentityOnboarding');
 
 const UNIVERSAL_WELCOME_VERSION = 'v2';
 const UNIVERSAL_WELCOME_ATTRIBUTE = 'whatsapp_universal_welcome_v2_sent_at';
@@ -56,6 +57,18 @@ function buildRegisteredClientPrompt() {
   ].join('\n');
 }
 
+function buildNewClientPrompt() {
+  return [
+    '🌿 *It looks like you’re new to Shiloh.*',
+    '',
+    'Before I can make or manage appointments for you, I’ll help you complete a quick registration.',
+    '',
+    '*Let’s get you registered.*',
+    '',
+    REGISTRATION_START_PROMPT,
+  ].join('\n');
+}
+
 function buildTransitionWelcome() {
   return `${buildUniversalWelcome()}\n\n${buildRegisteredClientPrompt()}`;
 }
@@ -75,9 +88,27 @@ function registeredClientInteractive() {
   };
 }
 
-async function resolveExistingClient(phone) {
+let welcomeSchemaPromise = null;
+async function ensureWelcomeSchema() {
+  if (!welcomeSchemaPromise) {
+    welcomeSchemaPromise = pool.query(`
+      CREATE TABLE IF NOT EXISTS client_whatsapp_welcome_deliveries (
+        phone TEXT NOT NULL,
+        welcome_version TEXT NOT NULL,
+        sent_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (phone, welcome_version)
+      )
+    `).catch((error) => {
+      welcomeSchemaPromise = null;
+      throw error;
+    });
+  }
+  return welcomeSchemaPromise;
+}
+
+async function resolveClientState(phone) {
   const normalized = normalizePhone(phone);
-  if (!normalized) return null;
+  if (!normalized) return { status: 'none', clients: [] };
   const result = await pool.query(
     `SELECT DISTINCT c.id,
             c.display_name,
@@ -92,31 +123,92 @@ async function resolveExistingClient(phone) {
       ORDER BY c.id`,
     [normalized]
   );
-  if (result.rowCount !== 1) return null;
-  return result.rows[0];
+  if (!result.rowCount) return { status: 'none', clients: [] };
+  if (result.rowCount > 1) return { status: 'ambiguous', clients: result.rows };
+  return { status: 'unique', client: result.rows[0], clients: result.rows };
 }
 
-async function markUniversalWelcomeSent(clientId) {
-  await pool.query(
-    `UPDATE clients
-        SET custom_attributes = COALESCE(custom_attributes, '{}'::jsonb)
-            || jsonb_build_object('${UNIVERSAL_WELCOME_ATTRIBUTE}', NOW()::text),
-            updated_at = NOW()
-      WHERE id = $1
-        AND COALESCE(custom_attributes->>'${UNIVERSAL_WELCOME_ATTRIBUTE}', '') = ''`,
-    [clientId]
+async function welcomeAlreadyDelivered(phone) {
+  await ensureWelcomeSchema();
+  const result = await pool.query(
+    `SELECT 1
+       FROM client_whatsapp_welcome_deliveries
+      WHERE phone = $1
+        AND welcome_version = $2
+      LIMIT 1`,
+    [normalizePhone(phone), UNIVERSAL_WELCOME_VERSION]
   );
+  return result.rowCount > 0;
+}
+
+async function pendingOnboardingSession(phone) {
+  const result = await pool.query(
+    `SELECT state
+       FROM client_onboarding_sessions
+      WHERE phone = $1
+        AND state <> 'complete'
+      LIMIT 1`,
+    [normalizePhone(phone)]
+  );
+  return result.rowCount > 0;
+}
+
+async function markUniversalWelcomeSent(phone, clientId = null) {
+  await ensureWelcomeSchema();
+  const normalized = normalizePhone(phone);
+  await pool.query(
+    `INSERT INTO client_whatsapp_welcome_deliveries (phone, welcome_version, sent_at)
+     VALUES ($1, $2, NOW())
+     ON CONFLICT (phone, welcome_version) DO NOTHING`,
+    [normalized, UNIVERSAL_WELCOME_VERSION]
+  );
+  if (clientId) {
+    await pool.query(
+      `UPDATE clients
+          SET custom_attributes = COALESCE(custom_attributes, '{}'::jsonb)
+              || jsonb_build_object('${UNIVERSAL_WELCOME_ATTRIBUTE}', NOW()::text),
+              updated_at = NOW()
+        WHERE id = $1
+          AND COALESCE(custom_attributes->>'${UNIVERSAL_WELCOME_ATTRIBUTE}', '') = ''`,
+      [clientId]
+    );
+  }
 }
 
 async function processClientTransitionWelcome(phone, text) {
   if (!isGreetingOnly(text)) return { handled: false };
-  const client = await resolveExistingClient(phone);
-  if (!client || !profileComplete(client) || client.universal_welcome_sent_at) return { handled: false };
+
+  const clientState = await resolveClientState(phone);
+  if (clientState.status === 'ambiguous') return { handled: false };
+
+  if (await welcomeAlreadyDelivered(phone)) {
+    if (clientState.status === 'none' && await pendingOnboardingSession(phone)) {
+      return {
+        handled: true,
+        reply: '🌿 We’ve already started your Shiloh registration. Please send your *first name, surname, date of birth and gender* so I can continue.',
+      };
+    }
+    return { handled: false };
+  }
+
+  if (clientState.status === 'unique') {
+    const client = clientState.client;
+    if (!profileComplete(client)) return { handled: false };
+    return {
+      handled: true,
+      interactive: registeredClientInteractive(),
+      client,
+      postSend: async () => markUniversalWelcomeSent(phone, client.id),
+    };
+  }
+
+  const identity = await processClientIdentityMessage(phone, text);
+  if (!identity.handled || identity.identityStatus !== 'unknown') return identity;
   return {
     handled: true,
-    interactive: registeredClientInteractive(),
-    client,
-    postSend: async () => markUniversalWelcomeSent(client.id),
+    reply: `${buildUniversalWelcome()}\n\n${buildNewClientPrompt()}`,
+    identityStatus: 'unknown',
+    postSend: async () => markUniversalWelcomeSent(phone),
   };
 }
 
@@ -128,6 +220,7 @@ module.exports = {
   profileComplete,
   buildUniversalWelcome,
   buildRegisteredClientPrompt,
+  buildNewClientPrompt,
   buildTransitionWelcome,
   registeredClientInteractive,
   processClientTransitionWelcome,
