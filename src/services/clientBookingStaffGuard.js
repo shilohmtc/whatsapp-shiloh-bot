@@ -13,7 +13,7 @@ function clientFacingPractitionerLabel(name = '') {
   switch (value.toLowerCase()) {
     case 'christel': return 'Christel · Massage';
     case 'abigail': return 'Abigail · Massage';
-    case 'marietjie': return 'Marietjie · Aesthetic';
+    case 'marietjie': return 'Marietjie · Esthetician';
     default: return value;
   }
 }
