@@ -14,6 +14,8 @@ const customerExperienceService = require("./src/services/customerExperience");
 const clientIdentityService = require("./src/services/clientIdentityOnboarding");
 const clientDiscoveryService = require("./src/services/clientDiscoveryMenu");
 const { installClientNavigationPriority } = require("./src/services/clientNavigationPriority");
+const adminAssistantService = require("./src/services/adminAssistant");
+const { activateSportsPackage } = require("./src/services/clientDiscoveryPackages");
 
 validateEnv();
 const processClientServiceFamilyMessage = clientFamilyService.processClientServiceFamilyMessage;
@@ -28,6 +30,19 @@ appointmentChangeService.processAppointmentChangeMessage = async (phone, text, .
 const processCustomerExperienceMessage = customerExperienceService.processCustomerExperienceMessage;
 customerExperienceService.processCustomerExperienceMessage = async (...args) => presentCustomerExperienceResult(await processCustomerExperienceMessage(...args));
 installClientNavigationPriority({ identityService: clientIdentityService, discoveryService: clientDiscoveryService });
+
+// Package activation is an explicit business-admin command. Delegate it before the
+// generic Admin assistant fallback claims unknown Admin text, while leaving all other
+// Admin commands on their established path.
+const processAdminAssistantMessage = adminAssistantService.processAdminAssistantMessage;
+adminAssistantService.processAdminAssistantMessage = async (sender, text, ...rest) => {
+  const activation = String(text || '').trim().match(/^(?:activate|grant)\s+sports massage(?:\s+monthly)?\s+package\s+(?:for|to)\s+(.+)$/i);
+  if (activation) {
+    const result = await activateSportsPackage(sender, activation[1]);
+    if (result?.handled) return result;
+  }
+  return processAdminAssistantMessage(sender, text, ...rest);
+};
 
 const webhookRoutes = require("./src/routes/webhook");
 const adminRoutes = require("./src/routes/admin");
@@ -46,6 +61,7 @@ const { startBookingIntegrityScheduler } = require("./src/services/bookingIntegr
 const { ensureDemoClientPermissions } = require("./src/services/demoClientAccessBootstrap");
 const { ensureJeanPierreAdminCapabilities } = require("./src/services/jeanPierreAdminAccessBootstrap");
 const { ensureChristelMediHeelOwnership } = require("./src/services/pedicureOwnershipBootstrap");
+const { ensureMassagePackageSchema } = require("./src/services/massagePackageBootstrap");
 const { startMandatoryDemoCleanupScheduler } = require("./src/services/demoMandatoryCleanup");
 const { startAttendanceFinalizationReminderScheduler } = require("./src/services/attendanceFinalizationReminders");
 const { startHistoricalFinalizationPromptScheduler } = require("./src/services/historicalFinalizationPrompt");
@@ -81,6 +97,7 @@ async function provisionClientLifecycleTemplatesIfExplicitlyEnabled() {
 
 const PORT = process.env.PORT || 3000; let server;
 async function start() {
+  const packageSchema = await ensureMassagePackageSchema(); logger.info(packageSchema, "Massage package schema verified");
   const demoAccess = await ensureDemoClientPermissions(); logger.info(demoAccess, "Controlled demo client production UI disabled");
   const jeanPierreAccess = await ensureJeanPierreAdminCapabilities(); if (!jeanPierreAccess) throw new Error('Jean-Pierre business admin capability clone could not be initialized'); logger.info({ configured: true, businessRole: jeanPierreAccess.business_role }, "Jean-Pierre business admin access verified");
   const mediHeelOwnership = await ensureChristelMediHeelOwnership(); logger.info(mediHeelOwnership, "Christel MediHeel ownership verified");
