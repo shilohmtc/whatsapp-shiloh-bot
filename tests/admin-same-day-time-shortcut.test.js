@@ -6,9 +6,9 @@ const path = require('node:path');
 const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'bootstrap', 'adminBookingNaturalDatePatch.js'), 'utf8');
 
 test('admin booking time shortcut accepts HH:MM after Change date/time', () => {
-  assert.match(source, /manage_change_time_\\d\+/);
+  assert.ok(source.includes("raw.match(/^manage_change_time_(\\d+)$/i)"));
   assert.match(source, /activeTimeBookingBySender/);
-  assert.match(source, /(?:\[01\]\?\\d|2\[0-3\]):\[0-5\]\\d/);
+  assert.ok(source.includes("(?:[01]?\\d|2[0-3]):[0-5]\\d"));
   assert.match(source, /SELECT starts_at FROM appointments/);
   assert.match(source, /Africa\/Johannesburg/);
   assert.match(source, /manage_quick_reschedule_slot_/);
