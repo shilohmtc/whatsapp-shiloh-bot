@@ -9,6 +9,7 @@ const { getNextOpenClinicDates, shortDateTitle } = require('./clinicDateChoices'
 const sessions = new Map();
 const SLOT_PAGE_SIZE = 8;
 const MANAGE_LIST_SIZE = 9;
+const SERVICE_PAGE_SIZE = 7;
 
 function key(sender) { return normalizePhone(sender); }
 function norm(v = '') { return String(v || '').trim().toLowerCase().replace(/\s+/g, ' '); }
@@ -18,6 +19,8 @@ function formatTime(v) { return new Intl.DateTimeFormat('en-ZA', { timeZone: 'Af
 function formatManageDate(v) { return new Intl.DateTimeFormat('en-ZA', { timeZone: 'Africa/Johannesburg', weekday: 'short', day: '2-digit', month: 'short' }).format(new Date(v)); }
 function parseLocal(v = '') { const m = String(v).trim().match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})\s+(\d{1,2}):(\d{2})$/); if (!m) return null; const [, d, mo, y, h, mi] = m; const iso = `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}T${String(h).padStart(2, '0')}:${mi}:00+02:00`; const dt = new Date(iso); return Number.isNaN(dt.getTime()) ? null : dt; }
 function parseDateOnly(v = '') { const m = String(v).trim().match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/); if (!m) return null; const [, d, mo, y] = m; const iso = `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`; const probe = new Date(`${iso}T12:00:00+02:00`); return Number.isNaN(probe.getTime()) ? null : iso; }
+function serviceTitle(v = '') { const s = String(v || '').trim(); return s.length <= 24 ? s : `${s.slice(0, 21).trim()}…`; }
+function money(v) { const n = Number(v); return Number.isFinite(n) ? `R${n.toFixed(2)}` : 'Price on request'; }
 
 async function adminFor(sender) {
   const r = await pool.query(`SELECT id,staff_id,display_name,role,permissions FROM staff_admin_accounts WHERE normalized_whatsapp=$1 AND active=TRUE`, [key(sender)]);
@@ -131,6 +134,66 @@ function manageInteractive(a) {
   };
 }
 
+async function eligibleReplacementServices(a) {
+  if (!a || a.services.length !== 1 || !a.services[0].service_id) return [];
+  const r = await pool.query(`
+    SELECT DISTINCT s.id,s.name,s.duration_minutes,s.processing_time_minutes,s.extra_time_minutes,
+           s.price,s.variable_price,s.display_price
+      FROM services s
+     WHERE s.status='active'
+       AND s.id<>$2
+       AND COALESCE(s.external_source,'')<>'shiloh_package'
+       AND NOT EXISTS (
+         SELECT 1 FROM service_packages sp
+          WHERE sp.session_service_id=s.id AND sp.status='active'
+       )
+       AND NOT EXISTS (
+         SELECT 1 FROM appointment_staff ast
+          WHERE ast.appointment_id=$1
+            AND ast.staff_id IS NOT NULL
+            AND NOT EXISTS (
+              SELECT 1 FROM staff_services ss
+               WHERE ss.staff_id=ast.staff_id AND ss.service_id=s.id
+            )
+       )
+     ORDER BY s.name,s.id`, [a.id, a.services[0].service_id]);
+  return r.rows;
+}
+
+function replacementServiceInteractive(a, services, page = 1) {
+  const totalPages = Math.max(1, Math.ceil(services.length / SERVICE_PAGE_SIZE));
+  const safePage = Math.min(Math.max(Number(page) || 1, 1), totalPages);
+  const start = (safePage - 1) * SERVICE_PAGE_SIZE;
+  const pageRows = services.slice(start, start + SERVICE_PAGE_SIZE).map((service) => {
+    const minutes = Number(service.duration_minutes || 0) + Number(service.processing_time_minutes || 0) + Number(service.extra_time_minutes || 0);
+    const price = service.display_price || (service.variable_price ? 'Variable price' : money(service.price));
+    return {
+      id: `manage_service_pick_${service.id}`,
+      title: serviceTitle(service.name),
+      description: `${minutes || '?'} min · ${price}`.slice(0, 72),
+    };
+  });
+  if (safePage > 1) pageRows.push({ id: `manage_service_page_${safePage - 1}`, title: '← Previous', description: 'Show previous services' });
+  if (safePage < totalPages) pageRows.push({ id: `manage_service_page_${safePage + 1}`, title: 'More services →', description: 'Show more eligible services' });
+  pageRows.push({ id: 'manage_booking_menu', title: '← Back', description: 'Return to booking changes' });
+  const current = a.services[0]?.name || a.services[0]?.service_name_snapshot || 'current service';
+  const staff = a.staff.map((x) => x.display_name || x.staff_name_snapshot).join(' + ') || 'assigned practitioner';
+  if (!services.length) {
+    return {
+      type: 'button',
+      body: `${appointmentSummary(a)}\n\nThere are no other active services currently authorized for ${staff}. The booked service remains *${current}*.`,
+      buttons: [{ id: 'manage_booking_menu', title: 'Back' }],
+    };
+  }
+  return {
+    type: 'list',
+    body: `${appointmentSummary(a)}\n\nChoose the replacement service for *${staff}*. The current service (*${current}*) is excluded. Availability and duration are re-checked before anything is saved.`,
+    buttonText: 'Choose service',
+    sectionTitle: `Eligible services ${safePage}/${totalPages}`.slice(0, 24),
+    rows: pageRows,
+  };
+}
+
 async function validateWindow(a, staffId, staffName, startsAt, endsAt) {
   const clinic = await checkClinicHours({ locationId: a.location_id, startsAt, endsAt });
   if (!clinic.covered) return 'That time falls outside clinic hours.';
@@ -237,7 +300,12 @@ async function processAdminBookingUpdateMessage(sender, text) {
   if (n === 'manage_booking_menu') { sessions.set(k, { step: 'menu', appointmentId: a.id }); return { handled: true, admin, interactive: manageInteractive(a) }; }
 
   if (s.step === 'menu') {
-    if (['1', 'change service', 'manage_change_service'].includes(n)) { if (a.services.length !== 1) return { handled: true, admin, reply: 'This is a multi-service booking. For safety, service replacement is currently limited to single-service bookings. You can still change practitioner, time, or booked price.' }; sessions.set(k, { step: 'service', appointmentId: a.id }); return { handled: true, admin, reply: 'Send the exact new service name.' }; }
+    if (['1', 'change service', 'manage_change_service'].includes(n)) {
+      if (a.services.length !== 1) return { handled: true, admin, reply: 'This is a multi-service booking. For safety, service replacement is currently limited to single-service bookings. You can still change practitioner, time, or booked price.' };
+      const services = await eligibleReplacementServices(a);
+      sessions.set(k, { step: 'service', appointmentId: a.id });
+      return { handled: true, admin, interactive: replacementServiceInteractive(a, services, 1) };
+    }
     if (['2', 'change practitioner', 'manage_change_practitioner'].includes(n)) { sessions.set(k, { step: 'staff', appointmentId: a.id }); return { handled: true, admin, reply: 'Send the exact practitioner name.' }; }
     if (['3', 'change date / time', 'change date/time', 'manage_change_time'].includes(n)) { sessions.set(k, { step: 'time_date', appointmentId: a.id }); return { handled: true, admin, interactive: await dateChoiceInteractive(a) }; }
     if (['4', 'change booked price', 'change price', 'manage_change_price'].includes(n)) { sessions.set(k, { step: 'price', appointmentId: a.id }); return { handled: true, admin, reply: 'Send the new booked price, for example *650* or *R650*.' }; }
@@ -255,15 +323,26 @@ async function processAdminBookingUpdateMessage(sender, text) {
   if (s.step === 'time_manual') { const starts = parseLocal(raw); if (!starts) return { handled: true, admin, reply: 'Use *DD/MM/YYYY HH:MM*, for example *18/08/2026 09:00*.' }; const applied = await applyReschedule(admin, a, starts); if (applied.reply) return { handled: true, admin, reply: applied.reply }; sessions.set(k, { step: 'menu', appointmentId: a.id }); return { handled: true, admin, interactive: { ...manageInteractive(applied.after), body: `✅ Date/time updated and Google Calendar synchronized.\n\n${manageInteractive(applied.after).body}` } }; }
 
   if (s.step === 'service') {
-    const r = await pool.query(`SELECT id,name,duration_minutes,processing_time_minutes,extra_time_minutes,price FROM services WHERE status='active' AND LOWER(name)=LOWER($1)`, [raw]);
-    if (r.rowCount !== 1) return { handled: true, admin, reply: 'Send the exact name of one active canonical service.' };
-    const service = r.rows[0];
-    for (const st of a.staff) { const ok = await pool.query(`SELECT 1 FROM staff_services WHERE staff_id=$1 AND service_id=$2`, [st.staff_id, service.id]); if (!ok.rowCount) return { handled: true, admin, reply: `${st.display_name || st.staff_name_snapshot} is not authorized for ${service.name}. Choose another service or change practitioner first.` }; }
+    const services = await eligibleReplacementServices(a);
+    const servicePageMatch = raw.match(/^manage_service_page_(\d+)$/i);
+    if (servicePageMatch) return { handled: true, admin, interactive: replacementServiceInteractive(a, services, Number(servicePageMatch[1])) };
+    const servicePickMatch = raw.match(/^manage_service_pick_(\d+)$/i);
+    let service = servicePickMatch
+      ? services.find((row) => Number(row.id) === Number(servicePickMatch[1]))
+      : services.find((row) => norm(row.name) === n);
+    if (!service) {
+      return {
+        handled: true,
+        admin,
+        interactive: replacementServiceInteractive(a, services, 1),
+        reply: 'Choose one of the eligible services shown, or type its exact service name.',
+      };
+    }
     const minutes = Number(service.duration_minutes || 0) + Number(service.processing_time_minutes || 0) + Number(service.extra_time_minutes || 0);
     const starts = new Date(a.starts_at); const ends = new Date(starts.getTime() + minutes * 60000);
-    if (a.staff.length === 1) { const problem = await validateWindow(a, a.staff[0].staff_id, a.staff[0].display_name || a.staff[0].staff_name_snapshot, starts, ends); if (problem) return { handled: true, admin, reply: problem }; }
+    if (a.staff.length === 1) { const problem = await validateWindow(a, a.staff[0].staff_id, a.staff[0].display_name || a.staff[0].staff_name_snapshot, starts, ends); if (problem) return { handled: true, admin, reply: `${problem}\n\nNo service change was saved. Choose another eligible service.` }; }
     await transaction(async (db) => { await db.query(`UPDATE appointment_services SET service_id=$1,service_name_snapshot=$2,duration_minutes_snapshot=$3,price_snapshot=$4 WHERE id=$5`, [service.id, service.name, service.duration_minutes, service.price, a.services[0].id]); await db.query(`UPDATE appointments SET ends_at=$1,title=$2,updated_at=NOW() WHERE id=$3`, [ends, service.name, a.id]); });
-    const after = await loadAppointment(admin, a.id); await syncCalendar(after); await audit(admin, a.id, 'appointment.service_updated', { from: a.services[0].name || a.services[0].service_name_snapshot, to: service.name }); sessions.set(k, { step: 'menu', appointmentId: a.id });
+    const after = await loadAppointment(admin, a.id); await syncCalendar(after); await audit(admin, a.id, 'appointment.service_updated', { from: a.services[0].name || a.services[0].service_name_snapshot, to: service.name, selectedFromInteractiveList: Boolean(servicePickMatch) }); sessions.set(k, { step: 'menu', appointmentId: a.id });
     return { handled: true, admin, interactive: { ...manageInteractive(after), body: `✅ Service changed to *${service.name}* and the Google Calendar event was updated.\n\n${manageInteractive(after).body}` } };
   }
 
@@ -292,4 +371,4 @@ async function processAdminBookingUpdateMessage(sender, text) {
   return { handled: false };
 }
 
-module.exports = { manageInteractive, upcomingAppointmentsInteractive, dateChoiceInteractive, slotsInteractive, processAdminBookingUpdateMessage };
+module.exports = { manageInteractive, upcomingAppointmentsInteractive, eligibleReplacementServices, replacementServiceInteractive, dateChoiceInteractive, slotsInteractive, processAdminBookingUpdateMessage };
