@@ -1,9 +1,15 @@
+const path = require('path');
 const express = require('express');
 const { resolveWhatsAppNumber } = require('../services/publicWhatsApp');
 const { getPublicServiceCatalogue } = require('../services/publicServiceCatalogue');
 const { renderBookingPage } = require('../services/publicBookingPage');
 
 const router = express.Router();
+
+router.use('/assets/booking', express.static(path.join(__dirname, '..', '..', 'public', 'assets', 'booking'), {
+  maxAge: '30d',
+  immutable: true,
+}));
 
 router.get('/book', async (req, res) => {
   const [number, catalogue] = await Promise.all([
