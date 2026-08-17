@@ -34,10 +34,43 @@ test('registered clients receive a clear already-registered branch and guided ac
   assert.match(reply, /no need to register again/i);
   assert.match(reply, /How would you like to proceed/i);
   assert.equal(interactive.type, 'list');
+  assert.match(interactive.body, /already registered with Shiloh/i);
+  assert.match(interactive.body, /no need to register again/i);
   assert.deepEqual(
     interactive.rows.map((row) => row.id),
     ['client_book_now', 'client_browse_services', 'client_practitioners', 'main menu']
   );
+});
+
+test('registered-client interactive body stays within Meta limit and excludes long welcome copy', () => {
+  const universal = transition.buildUniversalWelcome();
+  const interactive = transition.registeredClientInteractive();
+
+  assert.equal(transition.WHATSAPP_INTERACTIVE_BODY_MAX, 1024);
+  assert.ok(
+    interactive.body.length <= transition.WHATSAPP_INTERACTIVE_BODY_MAX,
+    `interactive body must be <= ${transition.WHATSAPP_INTERACTIVE_BODY_MAX} characters`
+  );
+  assert.equal(interactive.body, transition.buildRegisteredClientPrompt());
+  assert.notEqual(interactive.body, transition.buildTransitionWelcome());
+  assert.doesNotMatch(interactive.body, /Welcome to Shiloh/i);
+  assert.ok(
+    universal.length > transition.WHATSAPP_INTERACTIVE_BODY_MAX,
+    'approved universal welcome should remain plain text rather than be embedded in an interactive body'
+  );
+});
+
+test('registered-client delivery sends compact list before marking the welcome delivered', () => {
+  const postSendIndex = serviceSource.indexOf('function registeredClientPostSend');
+  const listIndex = serviceSource.indexOf('await sendWhatsAppList(', postSendIndex);
+  const markIndex = serviceSource.indexOf('await markUniversalWelcomeSent(phone, clientId);', postSendIndex);
+  const registeredBranchIndex = serviceSource.indexOf("if (clientState.status === 'unique')");
+  const plainReplyIndex = serviceSource.indexOf('reply: buildUniversalWelcome()', registeredBranchIndex);
+
+  assert.ok(postSendIndex >= 0, 'registered post-send sequencer must exist');
+  assert.ok(listIndex > postSendIndex, 'compact interactive list must be sent in post-send sequencing');
+  assert.ok(markIndex > listIndex, 'delivery ledger must be marked only after the interactive list succeeds');
+  assert.ok(plainReplyIndex > registeredBranchIndex, 'registered clients must receive the long universal welcome as plain text first');
 });
 
 test('new clients receive the same universal welcome before registration', () => {
