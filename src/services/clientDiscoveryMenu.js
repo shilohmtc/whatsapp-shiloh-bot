@@ -115,7 +115,13 @@ async function listServicesForPractitioner(practitionerId) {
 
 async function listEligiblePractitionersForService(serviceId) {
   const result = await pool.query(`
-    SELECT DISTINCT st.id, st.display_name
+    SELECT DISTINCT st.id, st.display_name,
+           CASE LOWER(st.display_name)
+             WHEN 'christel' THEN 1
+             WHEN 'abigail' THEN 2
+             WHEN 'marietjie' THEN 3
+             ELSE 9
+           END AS practitioner_order
       FROM staff st
       JOIN staff_services ss ON ss.staff_id = st.id
       JOIN services s ON s.id = ss.service_id
@@ -124,13 +130,7 @@ async function listEligiblePractitionersForService(serviceId) {
        AND st.status = 'active'
        AND st.resource_type = 'practitioner'
        AND st.client_bookable = TRUE
-     ORDER BY CASE LOWER(st.display_name)
-       WHEN 'christel' THEN 1
-       WHEN 'abigail' THEN 2
-       WHEN 'marietjie' THEN 3
-       ELSE 9 END,
-       st.display_name,
-       st.id
+     ORDER BY practitioner_order, st.display_name, st.id
   `, [Number(serviceId)]);
   return result.rows;
 }
