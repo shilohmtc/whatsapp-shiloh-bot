@@ -1,5 +1,8 @@
 const Module = require('node:module');
 const nextAvailable = require('../services/adminBookingNextAvailable');
+const { pool } = require('../db/pool');
+
+const activeTimeBookingBySender = new Map();
 
 const MONTHS = new Map([
   ['jan',1],['january',1],['feb',2],['february',2],['mar',3],['march',3],['apr',4],['april',4],
@@ -17,10 +20,7 @@ function johannesburgToday() {
 
 function validDate(year, month, day) {
   const probe = new Date(`${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}T12:00:00+02:00`);
-  return !Number.isNaN(probe.getTime()) &&
-    probe.getUTCFullYear() === year &&
-    probe.getUTCMonth() + 1 === month &&
-    probe.getUTCDate() === day;
+  return !Number.isNaN(probe.getTime()) && probe.getUTCFullYear() === year && probe.getUTCMonth() + 1 === month && probe.getUTCDate() === day;
 }
 
 function resolveYear(month, day, explicitYear = null) {
@@ -33,7 +33,6 @@ function resolveYear(month, day, explicitYear = null) {
 function expandAdminBookingDateInput(value) {
   const raw = String(value || '').trim();
   let day, month, year;
-
   let m = raw.match(/^(\d{1,2})[\/-](\d{1,2})$/);
   if (m) {
     day = Number(m[1]); month = Number(m[2]); year = resolveYear(month, day);
@@ -42,15 +41,47 @@ function expandAdminBookingDateInput(value) {
     if (!m) return raw;
     day = Number(m[1]); month = MONTHS.get(m[2].toLowerCase()); year = resolveYear(month, day, m[3] ? Number(m[3]) : null);
   }
-
   if (!month || !validDate(year, month, day)) return raw;
   return `${String(day).padStart(2,'0')}/${String(month).padStart(2,'0')}/${year}`;
 }
 
+function senderKey(sender) { return String(sender || '').replace(/\D/g, ''); }
+
+async function sameDayTimestamp(appointmentId, text) {
+  const m = String(text || '').trim().match(/^(?:at\s+)?([01]?\d|2[0-3]):([0-5]\d)$/i);
+  if (!m) return null;
+  const r = await pool.query('SELECT starts_at FROM appointments WHERE id=$1 AND status<>\'cancelled\' LIMIT 1', [appointmentId]);
+  if (!r.rowCount) return null;
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Johannesburg', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date(r.rows[0].starts_at));
+  const get = (type) => parts.find((p) => p.type === type)?.value;
+  const iso = `${get('year')}-${get('month')}-${get('day')}T${String(Number(m[1])).padStart(2,'0')}:${m[2]}:00+02:00`;
+  const dt = new Date(iso);
+  return Number.isNaN(dt.getTime()) ? null : dt.getTime();
+}
+
+const originalImmediate = nextAvailable.processImmediateTimeAction;
+nextAvailable.processImmediateTimeAction = async function sameDayTimeShortcut(sender, text, processAdminBookingUpdateMessage) {
+  const raw = String(text || '').trim();
+  const key = senderKey(sender);
+  let match = raw.match(/^manage_change_time_(\d+)$/i);
+  if (match) activeTimeBookingBySender.set(key, Number(match[1]));
+  if (/^manage_quick_reschedule_other_/i.test(raw)) activeTimeBookingBySender.delete(key);
+
+  const appointmentId = activeTimeBookingBySender.get(key);
+  if (appointmentId && /^(?:at\s+)?(?:[01]?\d|2[0-3]):[0-5]\d$/i.test(raw)) {
+    const timestamp = await sameDayTimestamp(appointmentId, raw);
+    if (timestamp) {
+      const result = await originalImmediate(sender, `manage_quick_reschedule_slot_${appointmentId}_${timestamp}`, processAdminBookingUpdateMessage);
+      if (result?.handled) activeTimeBookingBySender.delete(key);
+      return result;
+    }
+  }
+  return originalImmediate(sender, text, processAdminBookingUpdateMessage);
+};
+
 const originalLoad = Module._load;
 Module._load = function patchedLoad(request, parent, isMain) {
   const exported = originalLoad.apply(this, arguments);
-
   if (typeof request === 'string' && /(?:^|\/)adminBookingUpdate(?:\.js)?$/.test(request) && exported && typeof exported.processAdminBookingUpdateMessage === 'function' && !exported.__naturalDatePatched) {
     const original = exported.processAdminBookingUpdateMessage;
     exported.processAdminBookingUpdateMessage = async function naturalDateBookingUpdate(sender, text, ...rest) {
@@ -58,7 +89,6 @@ Module._load = function patchedLoad(request, parent, isMain) {
     };
     Object.defineProperty(exported, '__naturalDatePatched', { value: true });
   }
-
   if (typeof request === 'string' && /(?:^|\/)adminBookingUpdateStateless(?:\.js)?$/.test(request) && exported && !exported.__nextAvailablePatched) {
     if (typeof exported.scopeAdminBookingInteractive === 'function') {
       const originalScope = exported.scopeAdminBookingInteractive;
@@ -77,7 +107,6 @@ Module._load = function patchedLoad(request, parent, isMain) {
     }
     Object.defineProperty(exported, '__nextAvailablePatched', { value: true });
   }
-
   return exported;
 };
 
