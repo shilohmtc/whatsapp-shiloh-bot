@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const transition = require('../src/services/clientTransitionWelcome');
+const { commandForAdminButton } = require('../src/services/adminEarningsButtons');
 
 const webhookSource = fs.readFileSync(
   path.join(__dirname, '..', 'src', 'controllers', 'webhookController.js'),
@@ -48,6 +49,11 @@ test('Book appointment enters deterministic service discovery instead of stale b
   assert.ok(book, 'Book appointment action must exist');
   assert.equal(book.id, 'services');
   assert.notEqual(book.id, 'client_book_now');
+});
+
+test('already-delivered legacy Book appointment payload remains compatible', () => {
+  assert.equal(commandForAdminButton('client_book_now'), 'services');
+  assert.match(webhookSource, /commandForAdminButton\(id\)\|\|id\|\|null/);
 });
 
 test('registered-client interactive body stays within Meta limit and excludes long welcome copy', () => {
