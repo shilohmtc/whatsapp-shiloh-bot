@@ -144,7 +144,9 @@ async function listServicesForCategory(categoryId) {
 
 async function listSqtBioMicroneedlingServices() {
   const result = await pool.query(`
-    SELECT DISTINCT s.id, s.name, s.duration_minutes, s.processing_time_minutes,
+    SELECT DISTINCT s.id,
+           REGEXP_REPLACE(s.name, '^[[:space:]]*[0-9]+[.][[:space:]]*', '') AS name,
+           s.duration_minutes, s.processing_time_minutes,
            s.extra_time_minutes, s.price, s.display_price,
            COALESCE(sc.id, 0) AS category_id,
            COALESCE(sc.name, 'Services') AS category_name,
@@ -158,7 +160,7 @@ async function listSqtBioMicroneedlingServices() {
        AND st.status = 'active'
        AND st.resource_type = 'practitioner'
        AND st.client_bookable = TRUE
-     ORDER BY s.display_order NULLS LAST, s.name, s.id
+     ORDER BY LOWER(REGEXP_REPLACE(s.name, '^[[:space:]]*[0-9]+[.][[:space:]]*', '')), s.id
   `);
   return result.rows;
 }
