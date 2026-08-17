@@ -1,0 +1,1 @@
+Approved Phase 1 Shiloh clinic imagery. Promotional artwork is intentionally excluded from the permanent booking catalogue.
