@@ -1,0 +1,1 @@
+Phase 1.2 keeps `/book` presentation-only. Decorative clinic side imagery is shown only on sufficiently wide desktop viewports and hidden for narrower screens. Canonical Shiloh service, price, availability, practitioner, appointment and booking rules are unchanged.
