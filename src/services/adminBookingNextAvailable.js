@@ -23,10 +23,17 @@ async function loadContext(appointmentId) {
   const r = await pool.query(`
     SELECT a.id,a.location_id,a.starts_at,
            ast.staff_id,
-           aps.service_id
+           aps.service_id,
+           ace.event_id,
+           e.expires_at AS package_expires_at
       FROM appointments a
       JOIN appointment_staff ast ON ast.appointment_id=a.id
       JOIN appointment_services aps ON aps.appointment_id=a.id
+      LEFT JOIN appointment_calendar_events ace
+        ON ace.appointment_id=a.id AND ace.provider='google_calendar' AND ace.sync_status='synced'
+      LEFT JOIN package_session_redemptions red
+        ON red.appointment_id=a.id AND red.status IN ('reserved','redeemed')
+      LEFT JOIN client_package_entitlements e ON e.id=red.entitlement_id
      WHERE a.id=$1 AND a.status<>'cancelled'
   `, [appointmentId]);
   if (r.rowCount !== 1) return null;
@@ -41,6 +48,7 @@ async function collectNextSlots(appointmentId) {
   const dates = await getNextOpenClinicDates({ locationId: context.location_id, count: 8, maxDays: 30 });
   const now = Date.now();
   const currentStart = new Date(context.starts_at).getTime();
+  const packageExpiry = context.package_expires_at ? new Date(context.package_expires_at).getTime() : null;
   const slots = [];
   for (const date of dates) {
     const result = await listAvailableSlots({
@@ -50,10 +58,12 @@ async function collectNextSlots(appointmentId) {
       locationId: context.location_id,
       intervalMinutes: 15,
       excludeAppointmentId: context.id,
+      ignoreEventId: context.event_id || null,
     });
     for (const slot of result.slots || []) {
       const startMs = new Date(slot.starts_at).getTime();
       if (!Number.isFinite(startMs) || startMs <= now || startMs === currentStart) continue;
+      if (Number.isFinite(packageExpiry) && startMs >= packageExpiry) continue;
       slots.push(slot);
     }
   }
@@ -84,15 +94,17 @@ async function nextAvailableInteractive(appointmentId, page = 1) {
     description: 'Enter a specific date instead',
   });
   if (!pageSlots.length) {
+    const packageNote = context.package_expires_at ? ' within the package validity window' : ' in the next 30 days';
     return {
       type: 'button',
-      body: '*No upcoming authoritative slots found*\n\nNo currently bookable replacement time was found in the next 30 days. Choose another date to search a specific day.',
+      body: `*No upcoming authoritative slots found*\n\nNo currently bookable replacement time was found${packageNote}. Choose another date to search a specific day.`,
       buttons: [{ id: `manage_quick_reschedule_other_${appointmentId}`, title: 'Choose date' }],
     };
   }
+  const packageNote = context.package_expires_at ? ` Package validity ends ${dayDateLabel(context.package_expires_at)}.` : '';
   return {
     type: 'list',
-    body: `*Next available times*\nChoose a replacement slot. Shiloh has already applied clinic hours, practitioner schedule, CRM appointments and Google Calendar. Availability is checked again before saving.`,
+    body: `*Next available times*\nChoose a replacement slot. Shiloh has already applied clinic hours, practitioner schedule, CRM appointments and Google Calendar.${packageNote} Availability is checked again before saving.`,
     buttonText: 'Available times',
     sectionTitle: `Next available ${safePage}/${totalPages}`.slice(0, 24),
     rows,
@@ -142,6 +154,11 @@ async function processImmediateTimeAction(sender, text, processAdminBookingUpdat
     const timestamp = Number(match[2]);
     const starts = new Date(timestamp);
     if (Number.isNaN(starts.getTime())) return { handled: true, reply: 'That slot is no longer valid. Please open Change date / time again.' };
+    const context = await loadContext(appointmentId);
+    if (!context) return { handled: true, reply: 'That booking is no longer available to reschedule.' };
+    if (context.package_expires_at && starts.getTime() >= new Date(context.package_expires_at).getTime()) {
+      return { handled: true, reply: 'That time falls outside this package validity window. No change was saved.' };
+    }
     const primed = await primeAppointment(sender, appointmentId, processAdminBookingUpdateMessage);
     if (!primed?.handled) return primed || { handled: false };
     const opened = await processAdminBookingUpdateMessage(sender, 'manage_change_time');
