@@ -1,1 +1,1 @@
-Approved Phase 1 Shiloh clinic imagery. Promotional artwork is intentionally excluded from the permanent booking catalogue.
+Approved Phase 1 Shiloh clinic imagery. The public booking page currently ships with the approved reception photograph as the primary brand image. Promotional artwork is intentionally excluded from the permanent catalogue. Additional clinic and treatment photography can be added progressively without changing the catalogue data model.
