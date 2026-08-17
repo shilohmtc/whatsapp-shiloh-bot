@@ -274,7 +274,7 @@ async function practitionersInteractive() {
   const rows = staff.slice(0, 9).map((row) => ({
     id: `client_practitioner_${row.id}`,
     title: serviceTitle(row.display_name),
-    description: 'Client-bookable Shiloh practitioner',
+    description: row.client_role || 'Shiloh Practitioner',
   }));
   rows.push({ id: 'client_book_now', title: 'Book now', description: 'Start with a service or preference' });
   return {
