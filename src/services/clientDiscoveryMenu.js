@@ -47,7 +47,13 @@ async function listClientBookableCategories() {
        AND st.resource_type = 'practitioner'
        AND st.client_bookable = TRUE
      GROUP BY COALESCE(sc.id, 0), COALESCE(sc.name, 'Services'), sc.display_order
-     ORDER BY sc.display_order NULLS LAST, COALESCE(sc.name, 'Services')
+     ORDER BY CASE LOWER(COALESCE(sc.name, 'Services'))
+                WHEN 'massage' THEN 0
+                WHEN 'pedicures & foot care' THEN 1
+                ELSE 2
+              END,
+              LOWER(COALESCE(sc.name, 'Services')),
+              COALESCE(sc.id, 0)
   `);
   return result.rows;
 }
@@ -145,14 +151,19 @@ function serviceTitle(name = '') {
   return value.length <= 24 ? value : `${value.slice(0, 21)}…`;
 }
 
+function categoryClientTitle(name = '') {
+  const value = clean(name);
+  return value.toLowerCase() === 'massage' ? 'Massage Treatments' : value;
+}
+
 function categoryPageInteractive(rows = [], page = 1) {
   const totalPages = Math.max(1, Math.ceil(rows.length / CATEGORY_PAGE_SIZE));
   const safePage = Math.min(Math.max(Number(page) || 1, 1), totalPages);
   const start = (safePage - 1) * CATEGORY_PAGE_SIZE;
   const pageRows = rows.slice(start, start + CATEGORY_PAGE_SIZE).map((row) => ({
     id: `client_category_${row.id}`,
-    title: serviceTitle(row.name),
-    description: `${Number(row.service_count) || 0} active service${Number(row.service_count) === 1 ? '' : 's'}`,
+    title: serviceTitle(categoryClientTitle(row.name)),
+    description: `${Number(row.service_count) || 0} treatment${Number(row.service_count) === 1 ? '' : 's'}`,
   }));
 
   if (safePage < totalPages) {
