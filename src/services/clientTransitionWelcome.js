@@ -1,8 +1,10 @@
 const { pool } = require('../db/pool');
 const { processClientIdentityMessage, REGISTRATION_START_PROMPT } = require('./clientIdentityOnboarding');
+const { sendWhatsAppList } = require('./whatsapp');
 
 const UNIVERSAL_WELCOME_VERSION = 'v2';
 const UNIVERSAL_WELCOME_ATTRIBUTE = 'whatsapp_universal_welcome_v2_sent_at';
+const WHATSAPP_INTERACTIVE_BODY_MAX = 1024;
 
 function normalizePhone(value = '') {
   return String(value).replace(/[^0-9]/g, '');
@@ -74,9 +76,13 @@ function buildTransitionWelcome() {
 }
 
 function registeredClientInteractive() {
+  const body = buildRegisteredClientPrompt();
+  if (body.length > WHATSAPP_INTERACTIVE_BODY_MAX) {
+    throw new Error(`Registered-client interactive body exceeds WhatsApp ${WHATSAPP_INTERACTIVE_BODY_MAX}-character limit`);
+  }
   return {
     type: 'list',
-    body: buildTransitionWelcome(),
+    body,
     buttonText: 'Choose an option',
     rows: [
       { id: 'client_book_now', title: 'Book appointment', description: 'Start a new appointment booking' },
@@ -175,6 +181,20 @@ async function markUniversalWelcomeSent(phone, clientId = null) {
   }
 }
 
+function registeredClientPostSend(phone, clientId) {
+  return async () => {
+    const interactive = registeredClientInteractive();
+    await sendWhatsAppList(
+      phone,
+      interactive.body,
+      interactive.buttonText,
+      interactive.rows,
+      interactive.sectionTitle
+    );
+    await markUniversalWelcomeSent(phone, clientId);
+  };
+}
+
 async function processClientTransitionWelcome(phone, text) {
   if (!isGreetingOnly(text)) return { handled: false };
 
@@ -196,9 +216,9 @@ async function processClientTransitionWelcome(phone, text) {
     if (!profileComplete(client)) return { handled: false };
     return {
       handled: true,
-      interactive: registeredClientInteractive(),
+      reply: buildUniversalWelcome(),
       client,
-      postSend: async () => markUniversalWelcomeSent(phone, client.id),
+      postSend: registeredClientPostSend(phone, client.id),
     };
   }
 
@@ -215,6 +235,7 @@ async function processClientTransitionWelcome(phone, text) {
 module.exports = {
   UNIVERSAL_WELCOME_VERSION,
   UNIVERSAL_WELCOME_ATTRIBUTE,
+  WHATSAPP_INTERACTIVE_BODY_MAX,
   normalizePhone,
   isGreetingOnly,
   profileComplete,
