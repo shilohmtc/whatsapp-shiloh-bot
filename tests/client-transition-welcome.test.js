@@ -38,8 +38,16 @@ test('registered clients receive a clear already-registered branch and guided ac
   assert.match(interactive.body, /no need to register again/i);
   assert.deepEqual(
     interactive.rows.map((row) => row.id),
-    ['client_book_now', 'client_browse_services', 'client_practitioners', 'main menu']
+    ['services', 'client_browse_services', 'client_practitioners', 'main menu']
   );
+});
+
+test('Book appointment enters deterministic service discovery instead of stale booking intent handling', () => {
+  const interactive = transition.registeredClientInteractive();
+  const book = interactive.rows.find((row) => row.title === 'Book appointment');
+  assert.ok(book, 'Book appointment action must exist');
+  assert.equal(book.id, 'services');
+  assert.notEqual(book.id, 'client_book_now');
 });
 
 test('registered-client interactive body stays within Meta limit and excludes long welcome copy', () => {
