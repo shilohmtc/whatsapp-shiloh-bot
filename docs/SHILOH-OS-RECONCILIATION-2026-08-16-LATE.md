@@ -1,83 +1,117 @@
 # Shiloh OS — Late 16 August 2026 Reconciliation
 
-Authoritative reconciliation point after the 19:26 SAST Master/Tracker snapshot, extended through the 17 August universal client-entry deployment.
+Updated through 2026-08-17 13:28 SAST.
 
-## Production baseline
+This is the authoritative continuation reconciliation after the 16 August Master/Tracker snapshot. Read it together with `docs/SHILOH-OS-MASTER-STATUS.md` and `docs/SHILOH-OS-PROJECT-TRACKER.md`. Where runtime/provider/client-UX state below is newer, this note supersedes the older baseline statements without reopening completed work.
 
-GitHub `main` and Render production are aligned at runtime commit `8e82edbcdc25c8fb3619b5c4b77e66687d085a1e` (`Use one universal Shiloh welcome for new and registered clients`). PR CI passed before merge, `main` CI passed after merge, Render verified this exact commit `live` on 2026-08-17, Shiloh started normally, and production health checks returned HTTP 200.
+## Current production baseline
 
-This reconciliation supersedes the older runtime-baseline statements in the 19:26 SAST Master/Tracker and the earlier baseline in this note where they conflict, while preserving all unrelated human/provider/evidence gates.
+Latest runtime-semantic application commit verified live on Render: **`0fba72068423e03a0c68fbb806ca1bb59d00ee48`** (`Fix SQT client-list SQL ordering`). PR #261 CI passed before merge. Render auto-deployed that exact commit, Shiloh started normally, and repeated `/health` checks returned HTTP 200.
 
-## Changes completed after the 19:26 SAST snapshot
+Any documentation-only reconciliation commit after `0fba720...` may advance GitHub `main`/Render without changing runtime semantics; treat `0fba720...` as the application baseline until a later runtime change is deliberately merged.
+
+Fresh Render startup provider evidence at this baseline:
+- `shiloh_staff_finalization_v1` — **APPROVED / UTILITY**.
+- `shiloh_staff_finalization_actions_v1` — **PENDING / UTILITY**.
+- `shiloh_booking_confirmation_v1` — **APPROVED / UTILITY**.
+
+The proactive historical Finalize shortcut therefore remains fail-closed on the action-template provider gate. Ordinary Admin → Appointments → Finalize past visits remains available.
+
+## Completed work preserved from the earlier reconciliation
 
 ### Historical manual bookings — production live
 
-Historical manual bookings now create the canonical CRM appointment and synchronize the Google Calendar event so genuine past appointments are visible in the clinic diary. Practitioner-calendar mirroring follows the existing configured calendar path. Historical creation suppresses the ordinary client booking notification and leaves the appointment unresolved/scheduled for later certification through Admin → Appointments → Finalize past visits. Existing clinic/practitioner/service/conflict validation remains in force.
+Historical manual bookings create the canonical CRM appointment and synchronize Google Calendar while suppressing ordinary client booking notification. They remain unresolved/scheduled for later authorized certification. Existing clinic/practitioner/service/conflict validation remains in force.
 
-Runtime commit: `0e75f73d058b09a502994c22193981afda3bf660` (`Sync historical admin bookings to Google Calendar`), subsequently included in current production.
+Runtime lineage includes `0e75f73d058b09a502994c22193981afda3bf660` (`Sync historical admin bookings to Google Calendar`). Do not redo this work.
 
-### Historical finalization menu parity + Service change — production live
+### Historical finalization parity + Service change — production live
 
-The role-authorized historical finalization workflow now exposes the polished outcome set for both Christel and Marietjie:
+The role-authorized historical finalization workflow exposes Completed, No-show, Cancelled, No charge, Service change, Adjust price, Reschedule, and Leave unresolved. Service change records the treatment actually performed while preserving the original service in audit/history and supports optional final-price adjustment including R0. Certification authority remains Christel → Christel+Abigail, Marietjie → Marietjie, Abigail → none.
 
-1. Completed — Client attended as booked
-2. No-show — Client did not attend
-3. Cancelled — Appointment was cancelled
-4. No charge — Client attended; R0 charge and R0 earnings
-5. Service change — A different treatment was performed
-6. Adjust price — Change the final amount charged
-7. Reschedule — Move the appointment to another date/time
-8. Leave unresolved — Save no final outcome yet
+Runtime lineage includes `41bda2ae2b57cb72dddc1addfecb45ba3e01dcb7`. Do not redo this work.
 
-Service change is functional rather than presentation-only: it records the actual treatment performed, preserves the original service in audit/history, supports an optional final-price adjustment including R0, and finalizes the visit through the canonical completed path. Finalized visits leave the pending finalization queue. Marietjie receives menu parity without gaining Christel/Abigail certification authority; existing server-side certification scope remains unchanged.
+### Universal WhatsApp client welcome — production live and handset-proven
 
-Runtime commit: `41bda2ae2b57cb72dddc1addfecb45ba3e01dcb7` (`Add service change and finalization menu parity`), subsequently included in current production.
+The universal welcome remains the canonical greeting-only first-contact model for registered and genuinely new clients, with existing identity/claim safeguards preserved. During 17 August acceptance, the registered-client handset path exposed two defects which were repaired rather than worked around:
 
-### Existing-client WhatsApp transition welcome — superseded by universal v2 entry model
+- Meta interactive-body length was brought within provider limits (`d633e692817442c77ec117b3ae108c42fc4cdd6d`).
+- Both current and already-delivered legacy **Book appointment** payloads now route directly into service discovery (`8be1627b6f9ff920e83b6ad6a368f1d1e9a81805`, `4ad77d606574c9e4361732e63a51fd5fedecaa58`).
+- Eligible-practitioner DISTINCT ordering was repaired (`1d55b32e1bdd55e51414e6ceb120b459f8b0da5f`).
 
-The earlier once-only existing-client transition welcome at runtime commit `d1e9532eb4d92f18021118d23558b0f99cfdfa34` is now superseded by the universal client-entry model below. Its approved copy and transition intent are preserved within the v2 onboarding experience rather than remaining registered-client-only.
+Handset evidence subsequently proved the booking journey from the registered-client entry surface through categories, service selection, eligible practitioner selection, date, authoritative availability, preference confirmation, policy acceptance, approval hold, confirmation, reminder and cancellation.
 
-### Universal WhatsApp client welcome — production live
+## Client lifecycle button parity — production live
 
-All clients now share one polished first-contact Shiloh introduction when entering through a greeting-only first-contact path. The welcome reassures prior users of the number that they are in the right place, introduces Shiloh as the clinic AI assistant, explains treatment guidance, live availability and booking/management capability, and provides direct human contact by Calls & SMS on `066 239 9138`.
+PR lineage commit `834cf43cef158053c81511f982cdd96a27d5d2de` reconciled the Pa Derik-tested lifecycle surfaces rather than inventing new behaviour.
 
-After the shared introduction, Shiloh branches by authoritative identity/registration state:
+- Booking confirmation delivery restores the existing appointment-action controls rather than degrading to raw action text.
+- Cancellation presents a button-first rebooking action instead of relying only on `BOOK` text.
+- Existing natural-language fallback remains valid and routes into the same canonical handlers.
+- The repair is parity restoration; it does not alter booking identity, approval authority or appointment semantics.
 
-- **Fully registered client:** Shiloh explicitly confirms that the client is already registered and does not need to register again, then presents a guided WhatsApp action surface for booking, treatments, practitioners and the main menu.
-- **Genuinely new client:** Shiloh shows the same universal introduction first, then enters the canonical registration flow for first name, surname, date of birth and gender.
-- **Incomplete or ambiguous existing identity:** existing claim/verification and fail-closed identity safeguards remain in force; Shiloh does not falsely declare the person fully registered.
-- **Direct operational messages:** booking/reschedule/cancel intent is not intercepted merely to display onboarding copy.
+The controlled Dummy Test journey on 17 August proved booking #574 through approval and final confirmation, reminder action buttons, and normal cancellation. The test appointment is cancelled; do not recreate it merely for proof.
 
-The universal welcome has a durable phone-level v2 delivery ledger so the same person does not receive the transition introduction again merely because they move from unregistered to registered state. Delivery state is recorded only after successful send. The earlier client-level transition marker remains historical compatibility state and is not the canonical v2 gate.
+## Client practitioner directory polish — production live and handset-verified
 
-Runtime commit: `8e82edbcdc25c8fb3619b5c4b77e66687d085a1e` (`Use one universal Shiloh welcome for new and registered clients`) — current verified Render-live baseline.
+Commit `aba25983fa7b4a6a05207db86e434de1f9c2dd82` removed internal `Client-bookable Shiloh practitioner` wording from the client directory while preserving canonical practitioner metadata and eligibility.
 
-## Business communication copy decision
+Current handset-proven presentation:
+- **Christel · Massage** — Massage Practitioner
+- **Abigail · Massage** — Massage Practitioner
+- **Marietjie · Esthetician** — Aesthetic Practitioner
+- **Book now** — Start with a service or preference
 
-Christel's personal WhatsApp autoreply copy was finalized outside the bot runtime. Official business contact number is `066 239 9138`; it is also the WhatsApp number connected to Shiloh. The direct WhatsApp CTA should therefore resolve to `https://wa.me/27662399138` and use the wording `Chat directly with Shiloh AI Assistant on WhatsApp`. The email copy is `shilohmtc@gmail.com`. This is a communication-copy decision, not a bot-runtime mutation.
+Marietjie's canonical approved public title remains `Esthetician`; `Aesthetic Practitioner` is the descriptive client-facing role line. Do not rewrite canonical practitioner identity as part of presentation polish.
 
-## Fresh provider state captured during 17 August deployment
+## Client category directory polish — production live and handset-verified
 
-Render startup evidence for current production confirmed:
+Commit `177be81eae3f3414d1668b2bd901b8f63ee7b65c` established deterministic client-facing category presentation:
 
-- `shiloh_staff_finalization_v1` — **APPROVED / UTILITY**.
-- `shiloh_staff_finalization_actions_v1` — still **PENDING / UTILITY** at the fresh 2026-08-17 production startup check.
-- `shiloh_booking_confirmation_v1` — **APPROVED / UTILITY**.
+1. **Massage Treatments** pinned first (canonical category remains `Massage`).
+2. **Pedicures & Foot Care** pinned second.
+3. Remaining client categories alphabetized.
+4. Client subtitles use `treatment` / `treatments` rather than internal `active service(s)` wording.
+5. Existing two-page WhatsApp pagination is preserved.
 
-Therefore the proactive historical Finalize shortcut remains fail-closed on the new action-template provider gate. Ordinary Admin → Appointments → Finalize past visits remains the canonical available path and is not blocked by that provider status.
+This is presentation ordering only; canonical category IDs/names and booking routing remain authoritative underneath.
 
-## Gates preserved unchanged
+## SQT BioMicroneedling taxonomy reconciliation — COMPLETE / handset-verified
+
+The CRM contained two numbered one-treatment categories (`1. SQT BioMicroneedling` and `2. SQT BioMicroneedling`). Handset inspection established that they contained two distinct canonical services rather than duplicate records. The safe repair therefore groups them at the client presentation layer instead of mutating CRM taxonomy.
+
+Commit `d1267da2fcc13748769403df37a8c3cf204802bf` presents one virtual client family:
+
+- **SQT BioMicroneedling** — 2 treatments
+
+while retaining each original service/category identity underneath.
+
+Commit `0e7cd9ad1e3cbe4b52d7f45eccbe7829de12d7cc` removed the CRM ordering prefixes (`1.` / `2.`) from the SQT treatment display names and alphabetized the cleaned labels client-side only.
+
+That first label-polish query exposed a production PostgreSQL `42P10` error because `SELECT DISTINCT` was ordered by an expression not present in the select list. PR #261 / commit **`0fba72068423e03a0c68fbb806ca1bb59d00ee48`** repaired the query by ordering on the already-selected cleaned `name` alias and aligned regression coverage with the DISTINCT-safe SQL.
+
+Final handset evidence at 13:28 SAST proved the unified category opens successfully and shows both treatments without numeric prefixes, in alphabetical order, with existing canonical commercial data preserved:
+
+- **SQT Anti-Aging Rejuvenation…** — 90 min · R1785–R2585
+- **SQT Resurfacing BioMicroneedling…** — 90 min · R1785–R1840
+
+The SQT reconciliation is **complete**. Do not consolidate or rename the underlying CRM service/category records merely to reproduce the client presentation.
+
+## Provider and human gates preserved
 
 - Historical attendance truth remains human-certified; never infer attendance.
 - Appointment #558 remains fail-closed until the actual practitioner is established from authoritative evidence.
-- Do not recreate or mutate appointments merely for proof.
-- Pa Derik #567 remains subject only to the genuine normal cancellation action when appropriate; prior reschedule evidence remains preserved.
-- Provider/template state must never be inferred from runtime code. Re-check dynamic provider state before any later claim that a pending template has become approved or has delivered successfully.
-- Genuine handset/provider delivery evidence remains distinct from code/configuration state.
-- Live historical unresolved counts are dynamic; recount from production before quoting them as current.
+- Live unresolved historical counts are dynamic; re-query before quoting a current count.
+- `shiloh_staff_finalization_actions_v1` remains **PENDING / UTILITY** at the latest authoritative production startup check. Do not send or claim the proactive shortcut until fresh provider evidence proves APPROVED.
+- Pa Derik #567 remains subject only to genuine normal cancellation when appropriate; do not mutate it for proof.
+- Genuine lifecycle delivery evidence remains distinct from code/configuration state.
+- Birthday/follow-up/reminder evidence remains natural-journey gated where not already observed.
+- Google Business Profile API, Ozow, destructive privacy execution and other standing external gates remain as recorded in Master/Tracker unless newer authoritative evidence is obtained.
 
-## Continuation priority
+## Continuation state
 
-For the next chat, read `docs/SHILOH-OS-MASTER-STATUS.md`, `docs/SHILOH-OS-PROJECT-TRACKER.md`, and this reconciliation note together before acting. Treat runtime `8e82edb...` as the verified production baseline. Re-check dynamic production/provider/human state before quoting live counts or provider status.
+**Authoritative current state:** runtime-semantic baseline `0fba720...` is production-live and healthy; universal client entry and repaired booking route are live; lifecycle appointment-action parity is restored; practitioner/category discovery polish is handset-verified; SQT BioMicroneedling grouping and label cleanup are handset-verified complete; historical attendance/provider gates remain fail-closed where previously recorded.
 
-Do not redo the historical-calendar work, finalization-menu/service-change work, or universal client-welcome implementation. The next chat should give the standard four-part checkpoint before the first new substantial controlled action, then continue from the highest-priority genuinely actionable workstream.
+**Highest-priority continuation:** return to the highest-priority unresolved operational workstream rather than redoing the client discovery repairs. First re-check the dynamic Meta state for `shiloh_staff_finalization_actions_v1` and current historical-finalization progress before making claims or actions there. If the template remains PENDING, ordinary Admin finalization remains available and another safe Tracker item may proceed.
+
+**Do not redo:** historical calendar sync, finalization menu/service-change parity, universal welcome, registered Book appointment routing, eligible-practitioner ordering, lifecycle button parity, practitioner-directory polish, category ordering/count polish, or SQT taxonomy/label repair.
