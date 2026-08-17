@@ -24,6 +24,11 @@ const BUTTON_COMMANDS = Object.freeze({
   admin_appointment_booking: 'Make a booking',
   admin_appointment_manage: 'Manage a booking',
   admin_appointment_finalize: 'Finalize past appointments',
+  // Backward compatibility for welcome lists already delivered before the
+  // registered-client Book appointment row moved from client_book_now to services.
+  // list_reply payloads are immutable once delivered by WhatsApp, so old rows must
+  // continue to enter deterministic service discovery rather than stale booking state.
+  client_book_now: 'services',
 });
 
 function earningsPeriodList(kind) {
