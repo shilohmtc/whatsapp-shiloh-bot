@@ -23,9 +23,9 @@ test('booking flow restores durable state before deciding a bare date is not its
   assert.match(bookingSource, /Historical manual booking/);
 });
 
-test('guided booking clears durable state on completion, cancellation, and menu escape', () => {
+test('guided booking clears durable state on completion, cancellation, and global Admin navigation escape', () => {
   assert.match(bookingSource, /async function deleteSession\(k\).*clearAdminMobileBookingSession\(k\)/s);
-  assert.match(bookingSource, /if\(v==='menu'\|\|v==='home'\).*await deleteSession\(k\)/s);
+  assert.match(bookingSource, /if\(session&&isNavigationEscape\(raw\)\).*await deleteSession\(k\).*return\{handled:false\}/s);
   assert.match(bookingSource, /historical_confirmed.*appointmentId.*return/s);
   assert.match(bookingSource, /await deleteSession\(k\);await audit\(admin\.id,'mobile_booking\.historical_confirmed'/);
 });
