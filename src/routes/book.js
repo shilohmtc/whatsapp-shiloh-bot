@@ -2,7 +2,7 @@ const path = require('path');
 const express = require('express');
 const { resolveWhatsAppNumber } = require('../services/publicWhatsApp');
 const { getPublicServiceCatalogue } = require('../services/publicServiceCatalogue');
-const { renderBookingPage } = require('../services/publicBookingPage');
+const { renderBookingPage } = require('../services/publicBookingPageEditorial');
 
 const router = express.Router();
 
