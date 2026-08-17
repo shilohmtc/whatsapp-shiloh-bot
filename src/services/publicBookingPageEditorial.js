@@ -3,17 +3,31 @@ const base = require('./publicBookingPage');
 function renderBookingPage(number, catalogue = []) {
   let html = base.renderBookingPage(number, catalogue);
 
+  // Keep the approved hero, but remove the standalone clinic gallery/photo blocks.
   const oldGallery = /<section class="clinic-gallery"[\s\S]*?<\/section>/;
-  const firstEditorial = `<section class="editorial-photo editorial-photo-primary" aria-label="Inside Shiloh"><img src="/assets/booking/treatment-room-side.webp" alt="Shiloh treatment room" loading="eager"></section>`;
-  html = html.replace(oldGallery, firstEditorial);
+  html = html.replace(oldGallery, '');
 
-  const secondEditorial = `<section class="editorial-photo editorial-photo-secondary" aria-label="Inside Shiloh pedicure area"><img src="/assets/booking/pedicure-side.webp" alt="Shiloh pedicure area" loading="lazy"></section>`;
-  html = html.replace('</div><section class="clinic">', `</div>${secondEditorial}<section class="clinic">`);
+  // Apply the clinic collage only to a bounded middle slice of the catalogue.
+  // The central surface stays warm/opaque enough for treatment readability while
+  // the collage is visible primarily around the edges on wider screens.
+  const atmosphereStart = '<section class="category" id="category-2">';
+  const atmosphereEnd = '<section class="category" id="category-5">';
+  if (html.includes(atmosphereStart)) {
+    html = html.replace(
+      atmosphereStart,
+      `<div class="collage-atmosphere" aria-label="Inside Shiloh"><div class="collage-surface">${atmosphereStart}`,
+    );
+    if (html.includes(atmosphereEnd)) {
+      html = html.replace(atmosphereEnd, `</div></div>${atmosphereEnd}`);
+    } else {
+      html = html.replace('</div><section class="clinic">', '</div></div></div><section class="clinic">');
+    }
+  }
 
-  const editorialCss = `
-.editorial-photo{width:min(940px,calc(100% - 48px));margin:10px auto 32px}.editorial-photo img{display:block;width:100%;height:320px;object-fit:cover;border-radius:20px;box-shadow:0 10px 30px rgba(36,53,47,.09);border:1px solid rgba(36,53,47,.08)}.editorial-photo-primary img{object-position:center 55%}.editorial-photo-secondary{width:min(820px,calc(100% - 48px));margin-top:6px;margin-bottom:42px}.editorial-photo-secondary img{height:280px;object-position:center 58%}@media(max-width:980px){.editorial-photo,.editorial-photo-secondary{width:min(100% - 36px,860px)}.editorial-photo img{height:280px}.editorial-photo-secondary img{height:240px}}@media(max-width:700px){.editorial-photo,.editorial-photo-secondary{width:calc(100% - 30px);margin-bottom:24px}.editorial-photo img,.editorial-photo-secondary img{height:210px;border-radius:16px}}
+  const atmosphereCss = `
+.collage-atmosphere{position:relative;isolation:isolate;margin:28px 0 42px;padding:34px 22px}.collage-atmosphere::before{content:"";position:absolute;z-index:-2;left:50%;top:0;bottom:0;width:100vw;transform:translateX(-50%);background:linear-gradient(rgba(247,243,235,.76),rgba(247,243,235,.76)),url('/assets/booking/clinic-collage-bg.jpg') center/cover no-repeat;filter:saturate(.78);opacity:.42}.collage-surface{background:rgba(247,243,235,.94);border:1px solid rgba(36,53,47,.08);border-radius:24px;padding:0 22px;box-shadow:0 12px 34px rgba(36,53,47,.055);backdrop-filter:blur(3px)}@media(max-width:980px){.collage-atmosphere{padding:24px 10px;margin:22px 0 32px}.collage-atmosphere::before{opacity:.24}.collage-surface{padding:0 14px}}@media(max-width:700px){.collage-atmosphere{padding:0;margin:0}.collage-atmosphere::before{display:none}.collage-surface{padding:0;background:transparent;border:0;border-radius:0;box-shadow:none;backdrop-filter:none}}
 `;
-  html = html.replace('</style>', `${editorialCss}</style>`);
+  html = html.replace('</style>', `${atmosphereCss}</style>`);
   return html;
 }
 
