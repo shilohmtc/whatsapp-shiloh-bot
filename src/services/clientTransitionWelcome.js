@@ -85,7 +85,7 @@ function registeredClientInteractive() {
     body,
     buttonText: 'Choose an option',
     rows: [
-      { id: 'client_book_now', title: 'Book appointment', description: 'Start a new appointment booking' },
+      { id: 'services', title: 'Book appointment', description: 'Start a new appointment booking' },
       { id: 'client_browse_services', title: 'Browse treatments', description: 'View Shiloh treatments and services' },
       { id: 'client_practitioners', title: 'Our practitioners', description: 'View client-bookable practitioners' },
       { id: 'main menu', title: 'Main menu', description: 'Open the standard Shiloh client menu' },
