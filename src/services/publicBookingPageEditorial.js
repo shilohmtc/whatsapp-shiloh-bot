@@ -7,10 +7,10 @@ function renderBookingPage(number, catalogue = []) {
   const oldGallery = /<section class="clinic-gallery"[\s\S]*?<\/section>/;
   html = html.replace(oldGallery, '');
 
-  // Apply the clinic collage only to a bounded middle slice of the catalogue.
-  // The central surface stays warm enough for treatment readability while
-  // the collage is deliberately visible around the edges on wider screens.
-  const atmosphereStart = '<section class="category" id="category-2">';
+  // Start the clinic atmosphere with Massage so it is visible in the first
+  // treatment section, while keeping the navigation and approved hero clean.
+  // End before category 5 to keep the treatment journey visually bounded.
+  const atmosphereStart = '<section class="category" id="category-1">';
   const atmosphereEnd = '<section class="category" id="category-5">';
   if (html.includes(atmosphereStart)) {
     html = html.replace(
