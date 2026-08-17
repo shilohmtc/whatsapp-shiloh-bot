@@ -13,7 +13,9 @@ test('booking page uses the Shiloh collage only as a bounded middle-section atmo
   assert.match(html, /class="collage-atmosphere"/);
   assert.match(html, /class="collage-surface"/);
   assert.match(html, /\/assets\/booking\/clinic-collage-bg\.jpg/);
-  assert.match(html, /linear-gradient\(rgba\(247,243,235,\.76\)/);
+  assert.match(html, /linear-gradient\(rgba\(247,243,235,\.52\)/);
+  assert.match(html, /opacity:\.78/);
+  assert.match(html, /background:rgba\(247,243,235,\.9\)/);
   assert.match(html, /@media\(max-width:700px\).*\.collage-atmosphere::before\{display:none\}/);
   assert.doesNotMatch(html, /class="editorial-photo/);
   assert.doesNotMatch(html, /<section class="clinic-gallery"/);
