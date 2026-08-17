@@ -47,20 +47,41 @@ function expandAdminBookingDateInput(value) {
 
 function senderKey(sender) { return String(sender || '').replace(/\D/g, ''); }
 
-async function sameDayTimestamp(appointmentId, text) {
-  const m = String(text || '').trim().match(/^(?:at\s+)?([01]?\d|2[0-3]):([0-5]\d)$/i);
+function parseDirectDateTime(text) {
+  const raw = String(text || '').trim();
+  let m = raw.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})\s+(?:at\s+)?([01]?\d|2[0-3]):([0-5]\d)$/i);
   if (!m) return null;
-  const r = await pool.query('SELECT starts_at FROM appointments WHERE id=$1 AND status<>\'cancelled\' LIMIT 1', [appointmentId]);
-  if (!r.rowCount) return null;
-  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Johannesburg', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date(r.rows[0].starts_at));
-  const get = (type) => parts.find((p) => p.type === type)?.value;
-  const iso = `${get('year')}-${get('month')}-${get('day')}T${String(Number(m[1])).padStart(2,'0')}:${m[2]}:00+02:00`;
+  const day = Number(m[1]);
+  const month = Number(m[2]);
+  const year = Number(m[3]);
+  if (!validDate(year, month, day)) return null;
+  return { year, month, day, hour: Number(m[4]), minute: Number(m[5]) };
+}
+
+async function bookingTimestamp(appointmentId, text) {
+  const raw = String(text || '').trim();
+  const direct = parseDirectDateTime(raw);
+  let year, month, day, hour, minute;
+
+  if (direct) {
+    ({ year, month, day, hour, minute } = direct);
+  } else {
+    const m = raw.match(/^(?:at\s+)?([01]?\d|2[0-3]):([0-5]\d)$/i);
+    if (!m) return null;
+    const r = await pool.query('SELECT starts_at FROM appointments WHERE id=$1 AND status<>\'cancelled\' LIMIT 1', [appointmentId]);
+    if (!r.rowCount) return null;
+    const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Johannesburg', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date(r.rows[0].starts_at));
+    const get = (type) => Number(parts.find((p) => p.type === type)?.value);
+    year = get('year'); month = get('month'); day = get('day'); hour = Number(m[1]); minute = Number(m[2]);
+  }
+
+  const iso = `${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}T${String(hour).padStart(2,'0')}:${String(minute).padStart(2,'0')}:00+02:00`;
   const dt = new Date(iso);
   return Number.isNaN(dt.getTime()) ? null : dt.getTime();
 }
 
 const originalImmediate = nextAvailable.processImmediateTimeAction;
-nextAvailable.processImmediateTimeAction = async function sameDayTimeShortcut(sender, text, processAdminBookingUpdateMessage) {
+nextAvailable.processImmediateTimeAction = async function directBookingTimeShortcut(sender, text, processAdminBookingUpdateMessage) {
   const raw = String(text || '').trim();
   const key = senderKey(sender);
   let match = raw.match(/^manage_change_time_(\d+)$/i);
@@ -68,8 +89,10 @@ nextAvailable.processImmediateTimeAction = async function sameDayTimeShortcut(se
   if (/^manage_quick_reschedule_other_/i.test(raw)) activeTimeBookingBySender.delete(key);
 
   const appointmentId = activeTimeBookingBySender.get(key);
-  if (appointmentId && /^(?:at\s+)?(?:[01]?\d|2[0-3]):[0-5]\d$/i.test(raw)) {
-    const timestamp = await sameDayTimestamp(appointmentId, raw);
+  const isTimeOnly = /^(?:at\s+)?(?:[01]?\d|2[0-3]):[0-5]\d$/i.test(raw);
+  const isDateTime = /^\d{1,2}[\/-]\d{1,2}[\/-]\d{4}\s+(?:at\s+)?(?:[01]?\d|2[0-3]):[0-5]\d$/i.test(raw);
+  if (appointmentId && (isTimeOnly || isDateTime)) {
+    const timestamp = await bookingTimestamp(appointmentId, raw);
     if (timestamp) {
       const result = await originalImmediate(sender, `manage_quick_reschedule_slot_${appointmentId}_${timestamp}`, processAdminBookingUpdateMessage);
       if (result?.handled) activeTimeBookingBySender.delete(key);
@@ -110,4 +133,4 @@ Module._load = function patchedLoad(request, parent, isMain) {
   return exported;
 };
 
-module.exports = { expandAdminBookingDateInput };
+module.exports = { expandAdminBookingDateInput, parseDirectDateTime };
