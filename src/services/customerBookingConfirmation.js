@@ -105,19 +105,17 @@ async function sendCustomerBookingConfirmation(data){
       lines.push('','We look forward to seeing you. 🌿');
       await sendWhatsAppMessage(phone,lines.join('\n'));
       providerAccepted=true;
-
-      const actionContext={appointmentId,clientId};
-      confirmationActions.googleCalendar=await sendOptionalConfirmationAction('google_calendar',()=>sendWhatsAppCtaUrl(phone,'Add to Google Calendar','Google Calendar',google),actionContext);
-      if(ics){
-        confirmationActions.appleOutlook=await sendOptionalConfirmationAction('apple_outlook_calendar',()=>sendWhatsAppCtaUrl(phone,'Add to Apple / Outlook','Apple / Outlook',ics),actionContext);
-      }
-      confirmationActions.changeButtons=await sendOptionalConfirmationAction('booking_change_buttons',()=>sendWhatsAppReplyButtons(phone,'*Need to make a change?*\nUse a button below, or type *RESCHEDULE* or *CANCEL*.',[
-        {id:'client_reschedule_booking',title:'Reschedule'},
-        {id:'client_cancel_booking',title:'Cancel booking'},
-      ]),actionContext);
     }
 
     const actionContext={appointmentId,clientId};
+    confirmationActions.googleCalendar=await sendOptionalConfirmationAction('google_calendar',()=>sendWhatsAppCtaUrl(phone,'Add to Google Calendar','Google Calendar',google),actionContext);
+    if(ics){
+      confirmationActions.appleOutlook=await sendOptionalConfirmationAction('apple_outlook_calendar',()=>sendWhatsAppCtaUrl(phone,'Add to Apple / Outlook','Apple / Outlook',ics),actionContext);
+    }
+    confirmationActions.changeButtons=await sendOptionalConfirmationAction('booking_change_buttons',()=>sendWhatsAppReplyButtons(phone,'*Need to make a change?*\nUse a button below, or type *RESCHEDULE* or *CANCEL*.',[
+      {id:'client_reschedule_booking',title:'Reschedule'},
+      {id:'client_cancel_booking',title:'Cancel booking'},
+    ]),actionContext);
     confirmationActions.postConfirmationMenu=await sendOptionalConfirmationAction('post_confirmation_menu',()=>sendWhatsAppReplyButtons(phone,'*What would you like to do next?*\nYou can also type *BOOK ANOTHER TREATMENT*, *MY APPOINTMENTS*, or *MAIN MENU*.',postConfirmationButtons()),actionContext);
 
     await markBookingConfirmationSent(appointmentId);
