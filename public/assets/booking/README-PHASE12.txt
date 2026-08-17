@@ -1,0 +1,1 @@
+Phase 1.2 visual enhancement uses approved real Shiloh clinic photography as editorial accents. The catalogue remains canonical and booking logic is unchanged.
