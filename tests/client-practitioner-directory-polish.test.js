@@ -8,17 +8,18 @@ const {
   clientFacingPractitionerRole,
 } = require('../src/services/clientBookingStaffGuard');
 
-test('client practitioner labels use approved professional wording within WhatsApp row-title limits', () => {
+test('client practitioner directory uses approved professional role descriptions within WhatsApp limits', () => {
   const cases = [
     ['Christel', 'Christel · Massage', 'Massage Practitioner'],
     ['Abigail', 'Abigail · Massage', 'Massage Practitioner'],
-    ['Marietjie', 'Marietjie · Aesthetic', 'Aesthetic Practitioner'],
+    ['Marietjie', 'Marietjie · Esthetician', 'Aesthetic Practitioner'],
   ];
 
   for (const [name, label, role] of cases) {
     assert.equal(clientFacingPractitionerLabel(name), label);
     assert.equal(clientFacingPractitionerRole(name), role);
     assert.ok(label.length <= 24, `${label} must fit the WhatsApp list-row title limit`);
+    assert.ok(role.length <= 72, `${role} must fit the WhatsApp list-row description limit`);
   }
 });
 
