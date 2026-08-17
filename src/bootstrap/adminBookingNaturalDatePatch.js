@@ -1,8 +1,11 @@
 const Module = require('node:module');
 const nextAvailable = require('../services/adminBookingNextAvailable');
 const { pool } = require('../db/pool');
-
-const activeTimeBookingBySender = new Map();
+const {
+  saveAdminBookingTimeInputSession,
+  loadAdminBookingTimeInputSession,
+  clearAdminBookingTimeInputSession,
+} = require('../services/adminBookingTimeInputSession');
 
 const MONTHS = new Map([
   ['jan',1],['january',1],['feb',2],['february',2],['mar',3],['march',3],['apr',4],['april',4],
@@ -45,11 +48,9 @@ function expandAdminBookingDateInput(value) {
   return `${String(day).padStart(2,'0')}/${String(month).padStart(2,'0')}/${year}`;
 }
 
-function senderKey(sender) { return String(sender || '').replace(/\D/g, ''); }
-
 function parseDirectDateTime(text) {
   const raw = String(text || '').trim();
-  let m = raw.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})\s+(?:at\s+)?([01]?\d|2[0-3]):([0-5]\d)$/i);
+  const m = raw.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})\s+(?:at\s+)?([01]?\d|2[0-3]):([0-5]\d)$/i);
   if (!m) return null;
   const day = Number(m[1]);
   const month = Number(m[2]);
@@ -83,19 +84,20 @@ async function bookingTimestamp(appointmentId, text) {
 const originalImmediate = nextAvailable.processImmediateTimeAction;
 nextAvailable.processImmediateTimeAction = async function directBookingTimeShortcut(sender, text, processAdminBookingUpdateMessage) {
   const raw = String(text || '').trim();
-  const key = senderKey(sender);
   let match = raw.match(/^manage_change_time_(\d+)$/i);
-  if (match) activeTimeBookingBySender.set(key, Number(match[1]));
-  if (/^manage_quick_reschedule_other_/i.test(raw)) activeTimeBookingBySender.delete(key);
+  if (match) await saveAdminBookingTimeInputSession(sender, Number(match[1]));
+  match = raw.match(/^manage_quick_reschedule_other_(\d+)$/i);
+  if (match) await saveAdminBookingTimeInputSession(sender, Number(match[1]));
 
-  const appointmentId = activeTimeBookingBySender.get(key);
+  const durable = await loadAdminBookingTimeInputSession(sender);
+  const appointmentId = durable?.appointmentId || null;
   const isTimeOnly = /^(?:at\s+)?(?:[01]?\d|2[0-3]):[0-5]\d$/i.test(raw);
   const isDateTime = /^\d{1,2}[\/-]\d{1,2}[\/-]\d{4}\s+(?:at\s+)?(?:[01]?\d|2[0-3]):[0-5]\d$/i.test(raw);
   if (appointmentId && (isTimeOnly || isDateTime)) {
     const timestamp = await bookingTimestamp(appointmentId, raw);
     if (timestamp) {
       const result = await originalImmediate(sender, `manage_quick_reschedule_slot_${appointmentId}_${timestamp}`, processAdminBookingUpdateMessage);
-      if (result?.handled) activeTimeBookingBySender.delete(key);
+      if (result?.handled) await clearAdminBookingTimeInputSession(sender);
       return result;
     }
   }
