@@ -138,6 +138,24 @@ function rescheduleDateChoice(a){
   };
 }
 
+function cancellationSuccessInteractive(a){
+  return {
+    type:'button',
+    body:[
+      '✅ Your appointment has been cancelled.',
+      summary(a),
+      '',
+      latePolicy(a.starts_at),
+      '',
+      'Would you like to book another appointment?',
+      'You can also type *BOOK*. 🌿',
+    ].join('\n'),
+    buttons:[
+      {id:'client_postbook_book_another',title:'Book another'},
+    ],
+  };
+}
+
 async function cancelCanonical(phone,a){const db=await pool.connect();try{await db.query('BEGIN');const locked=await db.query(`SELECT status FROM appointments WHERE id=$1 FOR UPDATE`,[a.id]);if(!locked.rows[0]||locked.rows[0].status==='cancelled'){await db.query('ROLLBACK');return{status:'already_cancelled'};}await db.query(`UPDATE appointments SET status='cancelled',updated_at=NOW() WHERE id=$1`,[a.id]);await db.query(`UPDATE appointment_lifecycle SET status='cancelled',updated_at=NOW() WHERE appointment_id=$1`,[a.id]);await db.query(`INSERT INTO appointment_status_history(appointment_id,from_status,to_status,changed_by,reason) VALUES($1,$2,'cancelled',$3,'Client cancellation confirmed in WhatsApp')`,[a.id,locked.rows[0].status,`client:${normalizePhone(phone)}`]);await db.query(`INSERT INTO crm_audit_events(action,entity_type,entity_id,metadata) VALUES('client.appointment_cancelled','appointment',$1,$2::jsonb)`,[a.id,JSON.stringify({phone:normalizePhone(phone)})]);await db.query('COMMIT');}catch(e){try{await db.query('ROLLBACK');}catch(_){}throw e;}finally{db.release();}
  let eventId=a.event_id;try{if(!eventId){const found=await findBookingEventByAppointmentId(a.id);eventId=found?.id||null;}if(eventId){await cancelBookingEvent(eventId);await pool.query(`UPDATE appointment_calendar_events SET sync_status='cancelled',last_error=NULL,updated_at=NOW() WHERE appointment_id=$1 AND provider='google_calendar'`,[a.id]);}}catch(error){logger.error({err:error,appointmentId:a.id},'Client cancellation Google Calendar sync failed');try{await pool.query(`UPDATE appointment_calendar_events SET sync_status='error',last_error=$2,updated_at=NOW() WHERE appointment_id=$1 AND provider='google_calendar'`,[a.id,String(error.message||error).slice(0,2000)]);}catch(_){}}
  return{status:'cancelled'};}
@@ -222,8 +240,8 @@ async function processAppointmentChangeMessage(phone,text){try{const action=dete
     handled:true,
     reply:'Please type another date, for example Friday, next Monday, or 21 August.'
   };
-}if(!intent.preferred_date){const d=extractDate(text);if(d)patch.preferredDate=d;}if(!intent.preferred_time){const t=extractTime(text);if(t)patch.preferredTime=t;}intent=await saveIntent(phone,patch);if(!intent.preferred_date)return rescheduleDateChoice(a);if(!intent.preferred_time)return{handled:true,reply:'What exact new time would you prefer? For example *14:00* or *2pm*.'};if(!parseClock(intent.preferred_time))return{handled:true,reply:'Please send an exact time, for example *14:00* or *2pm*.'};intent=await saveIntent(phone,{status:'awaiting_confirmation'});return{handled:true,reply:[`Please confirm this reschedule:`,summary(a),'',`➡️ New date: ${displayDate(intent.preferred_date)}`,`➡️ New time: ${intent.preferred_time}`,'',latePolicy(a.starts_at),'','Reply *YES* to reschedule, or *STOP* to leave it unchanged.'].join('\n')};}
- if(intent.status==='awaiting_confirmation'){if(!isConfirmation(text))return{handled:true,reply:'Please reply *YES* to confirm this change, or *STOP* to leave the appointment unchanged.'};if(intent.action==='cancel'){const result=await cancelCanonical(phone,a);await clearIntent(phone);if(result.status==='cancelled')return{handled:true,reply:[`✅ Your appointment has been cancelled.`,summary(a),'',latePolicy(a.starts_at),'','If you’d like to book another time, just reply *BOOK*. 🌿'].join('\n')};return{handled:true,reply:'That appointment was already cancelled or changed. No duplicate cancellation was made.'};}const result=await rescheduleCanonical(phone,a,intent.preferred_date,intent.preferred_time);if(result.status==='rescheduled'){await clearIntent(phone);return{handled:true,reply:[`✅ Your appointment has been rescheduled.`,`✨ ${a.service_name}`,`👤 ${a.staff_name}`,`📅 ${fmtDateTime(result.starts)}`,'','Your Shiloh CRM booking and Google Calendar event are synchronized. 🌿'].join('\n')};}return{handled:true,reply:result.reply||'I couldn’t safely reschedule that booking. Please choose another time.'};}
+}if(!intent.preferred_date){const d=extractDate(text);if(d)patch.preferredDate=d;}if(!intent.preferred_time){const t=extractTime(text);if(t)patch.preferredTime=t;}intent=await saveIntent(phone,patch);if(!intent.preferred_date)return rescheduleDateChoice(a);if(!intent.preferred_time)return{handled:true,reply:'What exact new time would you prefer? For example *14:00* or *2pm*.'};if(!parseClock(intent.preferred_time))return{handled:true,reply:'Please send an exact time, for example *14:00* or *2pm*.'};intent=await saveIntent(phone,{status:'awaiting_confirmation'});return{handled:true,reply:[`Please confirm this reschedule:`,summary(a),'',`➡️ New date: ${displayDate(intent.preferred_date)}`,`➡️ New time: ${intent.preferred_time}`,'',latePolicy(a.starts_at),'','Reply *YES* to reschedule, or *STOP* to leave the appointment unchanged.'].join('\n')};}
+ if(intent.status==='awaiting_confirmation'){if(!isConfirmation(text))return{handled:true,reply:'Please reply *YES* to confirm this change, or *STOP* to leave the appointment unchanged.'};if(intent.action==='cancel'){const result=await cancelCanonical(phone,a);await clearIntent(phone);if(result.status==='cancelled')return{handled:true,interactive:cancellationSuccessInteractive(a)};return{handled:true,reply:'That appointment was already cancelled or changed. No duplicate cancellation was made.'};}const result=await rescheduleCanonical(phone,a,intent.preferred_date,intent.preferred_time);if(result.status==='rescheduled'){await clearIntent(phone);return{handled:true,reply:[`✅ Your appointment has been rescheduled.`,`✨ ${a.service_name}`,`👤 ${a.staff_name}`,`📅 ${fmtDateTime(result.starts)}`,'','Your Shiloh CRM booking and Google Calendar event are synchronized. 🌿'].join('\n')};}return{handled:true,reply:result.reply||'I couldn’t safely reschedule that booking. Please choose another time.'};}
  return{handled:false};}catch(error){logger.error({err:error},'Canonical client appointment change failed');return{handled:true,reply:'I couldn’t safely complete that appointment change right now. Your current booking has not been intentionally changed. Please try again or contact the clinic team.'};}}
 
-module.exports={processAppointmentChangeMessage,getIntent,clearIntent,ensureTable,detectAction,appointmentChoiceInteractive};
+module.exports={processAppointmentChangeMessage,getIntent,clearIntent,ensureTable,detectAction,appointmentChoiceInteractive,cancellationSuccessInteractive};
