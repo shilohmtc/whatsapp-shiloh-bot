@@ -11,6 +11,15 @@ async function getPublicServiceCatalogue() {
         FROM services s
         LEFT JOIN service_categories sc ON sc.id = s.category_id
        WHERE s.status = 'active'
+         AND EXISTS (
+           SELECT 1
+             FROM staff_services ss
+             JOIN staff st ON st.id = ss.staff_id
+            WHERE ss.service_id = s.id
+              AND st.status = 'active'
+              AND st.resource_type = 'practitioner'
+              AND st.client_bookable = TRUE
+         )
        ORDER BY sc.display_order NULLS LAST, s.display_order, s.name
     `);
 
