@@ -23,6 +23,7 @@ const { processAdminHelpMessage } = require("../services/adminHelp");
 const { processAdminInteractiveMenuMessage } = require("../services/adminInteractiveMenu");
 const { processAdminMobileBookingFlowMessage } = require("../services/adminMobileBookingFlow");
 const { processAdminBookingUpdateMessage } = require("../services/adminBookingUpdate");
+const { scopeAdminBookingInteractive, processStatelessAdminBookingUpdateMessage } = require("../services/adminBookingUpdateStateless");
 const { processAdminAppointmentsByDateMessage } = require("../services/adminAppointmentsByDate");
 const { processAdminReportsMessage } = require("../services/adminReports");
 const { processAdminServiceTrendsMessage } = require("../services/adminServiceTrends");
@@ -57,6 +58,7 @@ function inboundText(message){
   return null;
 }
 async function sendAdminResult(to,result){
+  result=scopeAdminBookingInteractive(result);
   let sent;
   if(result?.template?.name) sent=await sendWhatsAppTemplate(to,result.template.name,result.template.bodyParameters||[],result.template.language||process.env.WHATSAPP_TEMPLATE_LANGUAGE||'en',result.template.quickReplyPayloads||[]);
   else if(result?.interactive?.type==="list") sent=await sendWhatsAppList(to,result.interactive.body,result.interactive.buttonText||result.interactive.button,result.interactive.rows||result.interactive.sections?.[0]?.rows,result.interactive.sectionTitle||result.interactive.sections?.[0]?.title);
@@ -77,6 +79,7 @@ const adminClientDemo=await processAdminClientDemoMessage(from,text);if(adminCli
 const adminSlots=await processAdminAvailableSlotsMessage(from,text);if(adminSlots.handled){log.info({from:maskPhone(from),admin:adminSlots.admin?.display_name},"Handled authoritative available-slots request");await sendWhatsAppMessage(from,adminSlots.reply);return res.sendStatus(200);}
 const staffServices=await processAdminStaffServicesMessage(from,text);if(staffServices.handled){await sendWhatsAppMessage(from,staffServices.reply);return res.sendStatus(200);}
 const activeMobileBooking=await processAdminMobileBookingFlowMessage(from,text);if(activeMobileBooking.handled){await sendAdminResult(from,activeMobileBooking);return res.sendStatus(200);}
+const statelessAdminBookingUpdate=await processStatelessAdminBookingUpdateMessage(from,text);if(statelessAdminBookingUpdate.handled){log.info({from:maskPhone(from),admin:statelessAdminBookingUpdate.admin?.display_name},"Handled restart-safe admin booking-update interaction");await sendAdminResult(from,statelessAdminBookingUpdate);return res.sendStatus(200);}
 const adminBookingUpdate=await processAdminBookingUpdateMessage(from,text);if(adminBookingUpdate.handled){log.info({from:maskPhone(from),admin:adminBookingUpdate.admin?.display_name},"Handled admin booking-update interaction");await sendAdminResult(from,adminBookingUpdate);return res.sendStatus(200);}
 const adminReports=await processAdminReportsMessage(from,text);if(adminReports.handled){await sendWhatsAppMessage(from,adminReports.reply);return res.sendStatus(200);}
 const serviceTrends=await processAdminServiceTrendsMessage(from,text);if(serviceTrends.handled){await sendWhatsAppMessage(from,serviceTrends.reply);return res.sendStatus(200);}
