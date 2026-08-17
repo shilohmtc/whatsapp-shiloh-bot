@@ -1,0 +1,1 @@
+Phase 1.2 approved real-clinic visual accents. Binary WebP assets are committed separately in the same branch.
