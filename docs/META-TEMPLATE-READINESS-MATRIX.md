@@ -2,25 +2,25 @@
 
 Updated: 2026-08-18
 
-The production Shiloh_MTC WhatsApp Manager evidence below was captured on 18 August 2026. **Active – Quality pending** is provider approval evidence, but not handset delivery evidence. `In review` is not approval. The checker must compare the complete provider contract and remain read-only; no template is submitted, edited or sent for evidence.
+The production Shiloh_MTC WhatsApp Manager evidence below was captured on 18 August 2026. The fresh read-only production API audit returned HTTP 200 with `report.ok=true`. Provider API quality is `UNKNOWN` for every identity; this does not supersede the separate WhatsApp Manager screenshot evidence showing **Active – Quality pending**. Provider approval is not handset delivery evidence. The checker must compare the complete provider contract and remain read-only; no template is submitted, edited or sent for evidence.
 
 | # | Identity | Category / language | Provider state | Production configuration / wiring | Readiness and remaining gate |
 |---:|---|---|---|---|---|
-| 1 | `shiloh_booking_update_v1` | Utility / English | **In review** | Expected current name; outbox additionally requires `WHATSAPP_BOOKING_UPDATE_ENABLED=true` | **Blocked:** provider approval, exact contract, environment gate, then genuine booking-change journey. |
-| 2 | `shiloh_staff_finalization_actions_v1` | Utility / English | Active – Quality pending | Current action path; provider check APPROVED / UTILITY; genuine accepted send exists | Wired and provider-verified; preserve natural-use evidence only. |
-| 3 | `shiloh_appointment_followup_v2` | Utility / English | Active – Quality pending | Current follow-up-actions configuration | Provider-ready; genuine send exists, but genuine rating-response evidence is still missing. |
-| 4 | `shiloh_booking_approval_outcome_v1` | Utility / English | Active – Quality pending | Current secondary-approver outcome contract | Provider-ready; genuine route evidence remains. |
-| 5 | `shiloh_booking_declined_v1` | Utility / English | Active – Quality pending | Current decline contract | Provider-ready; genuine decline journey remains. |
-| 6 | `shiloh_booking_approval_request_v1` | Utility / English | Active – Quality pending | Current practitioner request and resend path | Wired; genuine Meta-accepted production send exists. |
-| 7 | `shiloh_cancellation_confirmation_v1` | Utility / English | Active – Quality pending | Current cancellation contract; provider API APPROVED | Provider-ready; genuine cancellation journey remains. |
-| 8 | `shiloh_reschedule_confirmation_v1` | Utility / English | Active – Quality pending | Current reschedule contract | Provider-ready; genuine reschedule journey remains. |
-| 9 | `shiloh_appointment_reminder_actions_v1` | Utility / English | Active – Quality pending | Current reminder-actions configuration | Wired; genuine Meta-accepted production send exists. |
-| 10 | `shiloh_booking_confirmation_v1` | Utility / English | Active – Quality pending | Current confirmation contract; provider check APPROVED / UTILITY | Wired; genuine Meta-accepted production send exists. |
-| 11 | `shiloh_staff_finalization_v1` | Utility / English | Active – Quality pending | Current staff finalization path; provider check APPROVED / UTILITY | Wired; genuine Meta-accepted production send exists. |
-| 12 | `shiloh_birthday_wish_v2` | Marketing / English | Active – Quality pending | Current configured, brand-correct v2 only | Provider-ready; genuine opted-in birthday eligibility/delivery remains. |
-| 13 | `shiloh_birthday_wish_v1` | Marketing / English | Active – Quality pending | Legacy; deliberately non-sendable | Evidence-only legacy identity; do not newly configure. |
-| 14 | `appointment_followup` | Utility / English | Active – Quality pending | Legacy follow-up | Evidence-only legacy identity; current v2 supersedes it. |
-| 15 | `appointment_reminder` | Utility / English | Active – Quality pending | Legacy reminder | Evidence-only legacy identity; action reminder supersedes it. |
+| 1 | `shiloh_booking_update_v1` | Utility / `en` | API **PENDING**; quality `UNKNOWN` | Exact provider contract exists; `duplicateCount=0`; `configuredName=null`; `ready=false` | **Blocked:** provider approval and production configuration/enablement, then a genuine booking-change journey. |
+| 2 | `shiloh_staff_finalization_actions_v1` | Utility / `en` | API **APPROVED**; quality `UNKNOWN` | Exact configured contract; `duplicateCount=0`; `ready=true`; genuine accepted send exists | Wired and provider-verified; preserve natural-use evidence only. |
+| 3 | `shiloh_appointment_followup_v2` | Utility / `en` | API **APPROVED**; quality `UNKNOWN` | Exact configured contract; `duplicateCount=0`; `ready=true` | Provider-ready; genuine send exists, but genuine rating-response evidence is still missing. |
+| 4 | `shiloh_booking_approval_outcome_v1` | Utility / `en` | API **APPROVED**; quality `UNKNOWN` | Exact configured contract; `duplicateCount=0`; `ready=true` | Provider-ready; genuine route evidence remains. |
+| 5 | `shiloh_booking_declined_v1` | Utility / `en` | API **APPROVED**; quality `UNKNOWN` | Exact configured contract; `duplicateCount=0`; `ready=true` | Provider-ready; genuine decline journey remains. |
+| 6 | `shiloh_booking_approval_request_v1` | Utility / `en` | API **APPROVED**; quality `UNKNOWN` | Exact configured contract; `duplicateCount=0`; `ready=true` | Wired; genuine Meta-accepted production send exists. |
+| 7 | `shiloh_cancellation_confirmation_v1` | Utility / `en` | API **APPROVED**; quality `UNKNOWN` | Exact configured contract; `duplicateCount=0`; `ready=true` | Provider-ready; genuine cancellation journey remains. |
+| 8 | `shiloh_reschedule_confirmation_v1` | Utility / `en` | API **APPROVED**; quality `UNKNOWN` | Exact configured contract; `duplicateCount=0`; `ready=true` | Provider-ready; genuine reschedule journey remains. |
+| 9 | `shiloh_appointment_reminder_actions_v1` | Utility / `en` | API **APPROVED**; quality `UNKNOWN` | Exact configured contract; `duplicateCount=0`; `ready=true` | Wired; genuine Meta-accepted production send exists. |
+| 10 | `shiloh_booking_confirmation_v1` | Utility / `en` | API **APPROVED**; quality `UNKNOWN` | Exact configured contract; `duplicateCount=0`; `ready=true` | Wired; genuine Meta-accepted production send exists. |
+| 11 | `shiloh_staff_finalization_v1` | Utility / `en` | API **APPROVED**; quality `UNKNOWN` | Exact configured contract; `duplicateCount=0`; `ready=true` | Wired; genuine Meta-accepted production send exists. |
+| 12 | `shiloh_birthday_wish_v2` | Marketing / `en` | API **APPROVED**; quality `UNKNOWN` | Exact configured contract; `duplicateCount=0`; `ready=true` | Provider-ready; genuine opted-in birthday eligibility/delivery remains. |
+| 13 | `shiloh_birthday_wish_v1` | Marketing / `en` | API **APPROVED**; quality `UNKNOWN` | `configuredName` equals this identity; `configured=true`; `duplicateCount=0`; `sendable=false`; `ready=false` | Evidence-only legacy identity; full contract remains non-authoritative; existing configuration cannot bypass the fail-closed registry/send gate. |
+| 14 | `appointment_followup` | Utility / `en` | API **APPROVED**; quality `UNKNOWN` | `configuredName` equals this identity; `configured=true`; `duplicateCount=0`; `sendable=false`; `ready=false` | Evidence-only legacy identity; full contract remains non-authoritative; current v2 supersedes it and existing configuration cannot bypass the fail-closed registry/send gate. |
+| 15 | `appointment_reminder` | Utility / `en` | API **APPROVED**; quality `UNKNOWN` | `configuredName` equals this identity; `configured=true`; `duplicateCount=0`; `sendable=false`; `ready=false` | Evidence-only legacy identity; full contract remains non-authoritative; action reminder supersedes it and existing configuration cannot bypass the fail-closed registry/send gate. |
 
 Meta's default `hello_world` is visible but is not a Shiloh operational template and is excluded from the 15-template contract inventory.
 
