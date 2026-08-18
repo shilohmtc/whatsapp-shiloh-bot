@@ -3,6 +3,7 @@ const { listAvailableSlots } = require('./availabilityService');
 const { getIntent, extractDate, extractTime, processBookingMessage, displayDate, verifyService } = require('./bookingIntent');
 const { decorateClientBookingResult } = require('./clientBookingInteractive');
 const { getClinicDateStatus, getNextOpenClinicDates } = require('./clinicDateChoices');
+const { fullLabelDescription } = require('../presentation/whatsappListRowPresentation');
 
 const SLOT_PAGE_SIZE = 9;
 const TZ = 'Africa/Johannesburg';
@@ -61,7 +62,7 @@ async function authoritativeSlotsForIntent(intent, { daypart = null, now = new D
 
 function slotsInteractive(intent, slots = [], page = 1, options = {}) {
   const totalPages = Math.max(1, Math.ceil(slots.length / SLOT_PAGE_SIZE)); const safePage = Math.min(Math.max(Number(page) || 1, 1), totalPages); const start = (safePage - 1) * SLOT_PAGE_SIZE;
-  const rows = slots.slice(start, start + SLOT_PAGE_SIZE).map((slot) => ({ id: slotId(slot), title: `${localTimeParts(slot.starts_at).text} · ${slot.staff_name}`.slice(0, 24), description: `${slot.service_name}`.slice(0, 72) }));
+  const rows = slots.slice(start, start + SLOT_PAGE_SIZE).map((slot) => ({ id: slotId(slot), title: `${localTimeParts(slot.starts_at).text} · ${slot.staff_name}`.slice(0, 24), description: fullLabelDescription(slot.service_name) }));
   if (safePage < totalPages) rows.push({ id: `client_slots_page_${safePage + 1}${options.daypart ? `_${options.daypart}` : ''}`, title: 'More times →', description: `Go to page ${safePage + 1} of ${totalPages}` });
   else if (safePage > 1) rows.push({ id: `client_slots_page_1${options.daypart ? `_${options.daypart}` : ''}`, title: '← First page', description: `Go to page 1 of ${totalPages}` });
   const practitioner = clean(intent.therapist_text) || 'Any eligible practitioner'; const daypartLine = options.daypart ? ` · ${options.daypart}` : '';
