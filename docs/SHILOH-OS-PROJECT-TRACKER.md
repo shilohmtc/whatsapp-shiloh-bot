@@ -16,19 +16,22 @@ Purpose: concise operational dashboard. Master is the detailed current ledger; d
 
 ## Governance
 
-New chat: read Master + Tracker + latest reconciliation, currently `docs/SHILOH-OS-RECONCILIATION-2026-08-18-ADMIN-BOOKING-FAST-PATH.md`, plus `docs/SHILOH-OS-ENGINEERING-GOVERNANCE.md`, on GitHub `main`; verify applicable production/provider state; give the four-part checkpoint; obtain explicit approval before the first new substantial controlled action. After that approval, continue the approved workstream automatically through ordinary engineering/deploy/verification/housekeeping. Stop for material scope/risk expansion, contradictory authority, or an existing fail-closed human/provider/evidence gate.
+New chat: read Master + Tracker + latest reconciliation, currently `docs/SHILOH-OS-RECONCILIATION-2026-08-18-WORKSTREAM-OPERATING-MODEL.md`, plus `docs/SHILOH-OS-ENGINEERING-GOVERNANCE.md`, on GitHub `main`; verify applicable production/provider state; give the four-part checkpoint; obtain explicit approval before the first new substantial controlled action. After that approval, continue the approved workstream automatically through ordinary engineering/deploy/verification/housekeeping. Stop for material scope/risk expansion, contradictory authority, or an existing fail-closed human/provider/evidence gate.
 
 Operational screenshots are diagnostic evidence by default, not image-generation requests. Production defects follow trace → evidence → root cause → guarded repair → regression/E2E → CI → deploy → production verification → reconciliation. Never manufacture appointments, provider approval, attendance truth, Calendar truth or handset evidence.
 
 ## Production baseline
 
-Current accepted production code commit is **PR #313 / `ef0da63681d244fc3a0fbb1e6c9e1cdb42bf77c7`**. Full regression CI run **#1011** passed. Render deployment **`dep-da26430ae00c73c786s0`** reached LIVE on that exact merge commit; post-deploy telemetry showed HTTP 200 traffic and no error-level logs.
+Current accepted production code remains **PR #313 / `ef0da63681d244fc3a0fbb1e6c9e1cdb42bf77c7`**. The current deployed `main` governance baseline is **PR #314 / `9f6aa3d38ef292e8c80570c03b14be5250d616f8`**. Full regression CI run **#1015** passed; Render deploy **`dep-da26b39srm7s738g6gc0`** reached LIVE with no error-level logs.
 
 ## At-a-glance
 
 | ID | Workstream | State | Evidence / next action |
 |---|---|---|---|
-| DEPLOY-CONVERGENCE | GitHub ↔ Render production | 🟢 VERIFIED | #313 / `ef0da636...` passed CI #1011 and is LIVE as `dep-da26430ae00c73c786s0`; HTTP 200 traffic, no error-level logs. |
+| DEPLOY-CONVERGENCE | GitHub ↔ Render production | 🟢 VERIFIED | Production code #313 / `ef0da636...` remains accepted; governance #314 / `9f6aa3d...` passed CI #1015 and is LIVE as `dep-da26b39srm7s738g6gc0`; no error-level logs. |
+| WORKSTREAM-OPERATING-MODEL | Five specialist chats with one shared authority | 🟢 VERIFIED LIVE | #314 adopts Control & Reconciliation, Booking & Admin UX, WhatsApp / Meta Integration, CRM & Identity, and Production / DevOps; guarded by full CI #1015 and dated reconciliation evidence. |
+| WORKSTREAM-COMPLETION | End-to-end controlled-work protocol | 🟢 VERIFIED | Inspect → implement → full applicable regression → repair green → merge → production/provider verify → Tracker → durable Master → checkpoint; only material gates pause work. |
+| WORKSTREAM-CROSS-CONTRACT | Cross-workstream dependency reconciliation | 🟢 VERIFIED | Specialist ownership cannot create conflicting Shiloh OS state; changed assumptions/contracts must be reconciled into shared authority. |
 | ADMIN-BOOKING-ENTITLEMENT | Fail-closed practitioner booking scope | 🟢 VERIFIED LIVE | #313: Christel+Abigail shared scope; Marietjie only; other linked Admin own practitioner only; unlinked Admin including JP no catalogue; DB trigger enforces normal/crafted/historical paths. |
 | ADMIN-BOOKING-MENU-UX | Grouped concise WhatsApp treatment selection | 🟢 VERIFIED LIVE | #313 adds treatment sub-groups and removes repetitive row descriptions while retaining eligibility, pagination, availability, client selection and confirmation guards. |
 | ADMIN-JP-APPOINTMENTS | JP operational Appointments parity | 🟢 VERIFIED | #313 matches Christel's operational actions except Finalize past visits; attendance/finalization authority remains denied. |
@@ -77,6 +80,12 @@ Current accepted production code commit is **PR #313 / `ef0da63681d244fc3a0fbb1e
 | E1 | Ozow | 🟠 WAITING | Merchant config + explicit business rules required. |
 | PRIV | Destructive privacy execution | 🟠 WAITING | Fail closed pending authority/evidence. |
 
+## Adopted workstream operating rule
+
+Shiloh OS remains in one ChatGPT Work workspace with five focused specialist chats: **Control & Reconciliation**, **Booking & Admin UX**, **WhatsApp / Meta Integration**, **CRM & Identity**, and **Production / DevOps**. All read and write against the same GitHub/production/provider authority.
+
+A specialist chat must read applicable authoritative state before controlled work, complete all available engineering/delivery/reconciliation stages, and surface any changed cross-workstream dependency. Chat history does not supersede repository evidence. Do not claim background continuation unless an actual scheduled/automated mechanism exists.
+
 ## Accepted Admin booking operating rule
 
 The Admin who prepares a pending booking confirms it. Practitioner assignment is separate from confirmer identity: an authorized Admin may choose another eligible practitioner, while final CRM, clinic hours, staff schedule, conflict and Google Calendar checks remain authoritative.
@@ -91,7 +100,7 @@ PR #313 adds a separate fail-closed practitioner entitlement layer: Christel/Abi
 
 ## Exact continuation
 
-**Authoritative current state:** #313 is regression-green and live on `ef0da636...`. Fail-closed practitioner entitlement, grouped booking menus and JP non-finalization parity are accepted. #309 remains superseded and removed by #310; #311–#312 welcome/catalogue routing is also live.
+**Authoritative current state:** PR #314 is regression-green, merged and LIVE on `9f6aa3d...`; the five-workstream shared-authority operating model is adopted. Production application behaviour remains the accepted #313 state on `ef0da636...`.
 
 **Highest-priority next item:** re-check `shiloh_booking_update_v1` provider status. If still PENDING, continue the next approved Shiloh OS workstream without reopening the completed Admin-booking fixes.
 
