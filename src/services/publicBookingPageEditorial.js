@@ -21,16 +21,41 @@ function insertInsideShilohSignatures(html, catalogue = []) {
   return html;
 }
 
+function groupSpecialtyCategories(html, catalogue = []) {
+  const categories = [...new Set(catalogue.map((service) => service.category))];
+  const rows = [
+    ['Profosma Jet Plasma', 'Plasma Fibroblast Consultation'],
+    ['Plasma Fibroblast Prices', 'Ozone & Far Infrared'],
+    ['1. SQT BioMicroneedling', '2. SQT BioMicroneedling'],
+    ['HIFU', 'Neo Pelvic Therapy', 'Vaginal Tightening & Rejuvenation'],
+  ];
+
+  for (const row of rows) {
+    const indexes = row.map((name) => categories.indexOf(name));
+    if (indexes.some((index) => index < 0)) continue;
+    const sections = indexes.map((index) => {
+      const match = html.match(new RegExp(`<section class="category" id="category-${index}">[\\s\\S]*?<\\/section>`));
+      return match ? match[0] : null;
+    });
+    if (sections.some((section) => !section)) continue;
+    const contiguous = sections.join('');
+    const columns = row.length === 3 ? ' specialty-category-row--three' : '';
+    html = html.replace(contiguous, `<div class="specialty-category-row${columns}">${contiguous}</div>`);
+  }
+  return html;
+}
+
 function renderBookingPage(number, catalogue = []) {
   let html = base.renderBookingPage(number, catalogue);
 
   const oldGallery = /<section class="clinic-gallery"[\s\S]*?<\/section>/;
   html = html.replace(oldGallery, '');
 
+  html = groupSpecialtyCategories(html, catalogue);
   html = insertInsideShilohSignatures(html, catalogue);
 
   const visualBreakCss = `
-.inside-shiloh-break{width:calc(100% + 280px);margin:26px -140px 32px;border-radius:20px;overflow:hidden;box-shadow:0 10px 30px rgba(36,53,47,.12);border:1px solid rgba(36,53,47,.08);background:#5f584f}.inside-shiloh-break img{display:block;width:100%;height:auto}.catalogue>.inside-shiloh-break:first-child{margin-top:4px;margin-bottom:30px}.catalogue>.inside-shiloh-break:last-child{margin-top:34px;margin-bottom:8px}@media(max-width:1280px){.inside-shiloh-break{width:100%;margin:24px 0 30px}}@media(max-width:700px){.inside-shiloh-break{border-radius:16px;margin:20px 0 24px}}
+.inside-shiloh-break{width:calc(100% + 280px);margin:26px -140px 32px;border-radius:20px;overflow:hidden;box-shadow:0 10px 30px rgba(36,53,47,.12);border:1px solid rgba(36,53,47,.08);background:#5f584f}.inside-shiloh-break img{display:block;width:100%;height:auto}.catalogue>.inside-shiloh-break:first-child{margin-top:4px;margin-bottom:30px}.catalogue>.inside-shiloh-break:last-child{margin-top:34px;margin-bottom:8px}.specialty-category-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;align-items:stretch}.specialty-category-row--three{grid-template-columns:repeat(3,minmax(0,1fr))}.specialty-category-row>.category{min-width:0}.specialty-category-row .service-grid{grid-template-columns:1fr}.specialty-category-row .service-card{height:100%}@media(max-width:1280px){.inside-shiloh-break{width:100%;margin:24px 0 30px}.specialty-category-row--three{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:700px){.inside-shiloh-break{border-radius:16px;margin:20px 0 24px}.specialty-category-row,.specialty-category-row--three{grid-template-columns:1fr;gap:0}}
 `;
   html = html.replace('</style>', `${visualBreakCss}</style>`);
   return html;
