@@ -16,7 +16,7 @@ Purpose: concise operational dashboard. Master is the detailed current ledger; d
 
 ## Governance
 
-New chat: read Master + Tracker + latest reconciliation, currently `docs/SHILOH-OS-RECONCILIATION-2026-08-18-WORKSTREAM-OPERATING-MODEL.md`, plus `docs/SHILOH-OS-ENGINEERING-GOVERNANCE.md`, on GitHub `main`; verify applicable production/provider state; give the four-part checkpoint; obtain explicit approval before the first new substantial controlled action. After that approval, continue the approved workstream automatically through ordinary engineering/deploy/verification/housekeeping. Stop for material scope/risk expansion, contradictory authority, or an existing fail-closed human/provider/evidence gate.
+New chat: read Master + Tracker + latest reconciliation, currently `docs/SHILOH-OS-RECONCILIATION-2026-08-18-GBP-PROVIDER-GATE.md`, plus `docs/SHILOH-OS-ENGINEERING-GOVERNANCE.md`, on GitHub `main`; verify applicable production/provider state; give the four-part checkpoint; obtain explicit approval before the first new substantial controlled action. After that approval, continue the approved workstream automatically through ordinary engineering/deploy/verification/housekeeping. Stop for material scope/risk expansion, contradictory authority, or an existing fail-closed human/provider/evidence gate.
 
 Operational screenshots are diagnostic evidence by default, not image-generation requests. Production defects follow trace → evidence → root cause → guarded repair → regression/E2E → CI → deploy → production verification → reconciliation. Never manufacture appointments, provider approval, attendance truth, Calendar truth or handset evidence.
 
@@ -76,9 +76,13 @@ Current accepted production code remains **PR #313 / `ef0da63681d244fc3a0fbb1e6c
 | C1-FOLLOWUP-V2 | Follow-up/rating | 🟠 WAITING GENUINE JOURNEY | Verify after genuine completed-visit timing. |
 | BIRTHDAY-V2 | Birthday delivery | 🟠 WAITING GENUINE ELIGIBILITY | Genuine CRM birthday + opt-in/business rules only. |
 | GCONTACTS | CRM → Google Contacts | ⚪ READY | Lower priority; CRM authoritative. |
-| GBP | Google Business Profile API | ⏸️ DEFERRED | Last-authoritative 0 QPM. |
+| GBP-PROVIDER | Google Business Profile API access | 🟠 WAITING PROVIDER | My Business Business Information API enabled; GBP access application submitted; API-specific quotas visible; general Requests/min remains 0. Access is not confirmed/usable. Production / DevOps owns verification; Control & Reconciliation tracks the dependency. Do not treat as quota-increase work or start OAuth/API integration until positive provider access or >0 usable quota is verified. |
 | E1 | Ozow | 🟠 WAITING | Merchant config + explicit business rules required. |
 | PRIV | Destructive privacy execution | 🟠 WAITING | Fail closed pending authority/evidence. |
+
+## Google Business Profile provider gate
+
+Current state is **external/provider gate — pending Google**. Existing PR #35 GBP sync scaffolding is implementation history only and does not prove provider access. Reopen GBP integration only when authoritative provider evidence confirms approval or a usable general request quota greater than 0; then start from current `main` and re-evaluate the existing scaffolding under the full controlled-work protocol.
 
 ## Adopted workstream operating rule
 
@@ -100,13 +104,13 @@ PR #313 adds a separate fail-closed practitioner entitlement layer: Christel/Abi
 
 ## Exact continuation
 
-**Authoritative current state:** PR #314 is regression-green, merged and LIVE on `9f6aa3d...`; the five-workstream shared-authority operating model is adopted. Production application behaviour remains the accepted #313 state on `ef0da636...`.
+**Authoritative current state:** PR #314 is regression-green, merged and LIVE on `9f6aa3d...`; the five-workstream shared-authority operating model is adopted. Production application behaviour remains the accepted #313 state on `ef0da636...`. Google Business Profile remains an external/provider gate with general Requests/min at 0; integration is not authorized to proceed.
 
 **Highest-priority next item:** re-check `shiloh_booking_update_v1` provider status. If still PENDING, continue the next approved Shiloh OS workstream without reopening the completed Admin-booking fixes.
 
 **Why next:** engineering/CI/deployment gates for the Admin booking defects are closed. The remaining ordinary booking-change delivery dependency is Meta approval, not further booking-flow redesign.
 
-**Remaining gates:** `shiloh_booking_update_v1` approval; historical attendance and #558 human truth; genuine lifecycle/follow-up/birthday evidence; explicit approval for material commercial/service/business-rule changes.
+**Remaining gates:** `shiloh_booking_update_v1` approval; Google Business Profile positive provider approval or usable Requests/min >0; historical attendance and #558 human truth; genuine lifecycle/follow-up/birthday evidence; explicit approval for material commercial/service/business-rule changes.
 
 ## Guardrails
 
