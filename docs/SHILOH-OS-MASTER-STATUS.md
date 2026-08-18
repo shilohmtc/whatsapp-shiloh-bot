@@ -13,7 +13,7 @@ Permanent governance remains: operational screenshots are diagnostic evidence by
 
 ## Current production baseline
 
-Current accepted Render production commit is **PR #310 / `cb59fc67e09b5ac0afeb12c987bbaf7d41332f14`**, **Remove unnecessary Christel-Abigail cross-confirm handoff**. Deployment reached LIVE. Fresh startup evidence confirmed the cross-confirm preload is absent, `/health` returns 200, and **`Google Calendar provider health check passed`**.
+Current accepted Render production code commit is **PR #313 / `ef0da63681d244fc3a0fbb1e6c9e1cdb42bf77c7`**, **Enforce admin practitioner booking scope and group service menus**. GitHub Actions full regression run **#1011** passed. Render deployment **`dep-da26430ae00c73c786s0`** reached LIVE on the exact merge commit; post-deploy telemetry showed successful HTTP 200 traffic and no error-level logs.
 
 Relevant accepted lineage:
 - #301 / `6863958dbf97a6a6f593fc196c284571adf802c6` — accepted public catalogue presentation.
@@ -26,6 +26,9 @@ Relevant accepted lineage:
 - #308 / `fdcbae48577b464bf67442b36dcc1ea8155d2c69` — cleanup of unused provisional clients.
 - #309 / `fa4e403ac60fa6828b0da977784f0a04d6f08fe7` — temporary Christel↔Abigail cross-confirm handoff; **superseded**.
 - #310 / `cb59fc67e09b5ac0afeb12c987bbaf7d41332f14` — removes #309 cross-confirm handoff; **accepted state**.
+- #311 / `89291bbceb287b4a78eaf1e0ef84da4cc853ac50` — adds the `/book` treatment catalogue link to the client welcome.
+- #312 / `7aaef341d4ac8e897769e18093733092c197507c` — makes the universal welcome precede client-state branching.
+- #313 / `ef0da63681d244fc3a0fbb1e6c9e1cdb42bf77c7` — fail-closed Admin practitioner booking entitlement, grouped WhatsApp service menus and JP appointment-menu parity; **current accepted production code**.
 
 Fresh Meta/provider evidence from the #310 production startup:
 - `shiloh_staff_finalization_v1` — **APPROVED / UTILITY**.
@@ -75,6 +78,14 @@ PR #309 temporarily introduced Christel↔Abigail cross-confirm handoff. The bus
 **Accepted rule:** the Admin who prepares a pending booking confirms that booking. Practitioner choice is independent: Christel may create/confirm a booking for Abigail, Abigail may create/confirm a booking for Christel, and an authorized business Admin may create/confirm for an eligible practitioner. Existing final CRM, clinic-hours, practitioner-schedule, conflict and Google Calendar re-checks remain authoritative.
 
 Do not reintroduce cross-confirm handoff unless a new explicit business requirement justifies the added state/ambiguity complexity.
+
+### Practitioner booking entitlement and grouped treatment menus — verified live
+
+PR #313 makes booking entitlement independent from broad Admin capability. Christel and Abigail may book only the shared Christel/Abigail practitioner scope; Marietjie may book only Marietjie; any other practitioner-linked Admin may book only their linked practitioner; and an Admin without a practitioner link, including JP, receives no practitioner booking catalogue. A database trigger on `admin_booking_sessions` enforces the same rule fail-closed for normal, crafted and historical prepare paths.
+
+The WhatsApp booking catalogue retains authoritative service/staff eligibility while adding treatment sub-groups and removing repetitive `Select this service` row descriptions. Pagination, cancellation, client selection, availability and final confirmation guards remain intact.
+
+JP's Appointments menu matches Christel's operational actions except **Finalize past visits**. This parity does not grant JP attendance/finalization authority. The full regression gate initially exposed only stale source-format assertions; PR #313 repaired those assertions without weakening the new rules, and CI run #1011 passed.
 
 ## Google Calendar provider guard and recovery — 🟢 VERIFIED HEALTHY
 
@@ -146,18 +157,20 @@ CRM48 (Pa Derik) and CRM473 remain legitimate controlled Goldie-imported canonic
 
 ## Exact new-chat continuation state
 
-- Production is **LIVE** on PR #310 / `cb59fc67e09b5ac0afeb12c987bbaf7d41332f14`.
+- Production code is **LIVE** on PR #313 / `ef0da63681d244fc3a0fbb1e6c9e1cdb42bf77c7`; full regression CI run #1011 passed and Render deploy `dep-da26430ae00c73c786s0` is LIVE.
 - Admin typed-time selection is repaired; `14:00` / `2pm` resolve through authoritative slots.
 - Canonical + reconciled-Goldie client lookup improvements are live.
 - New-client Admin booking fast path is live: duplicate-check mobile → provisional canonical client → guarded review/confirmation.
 - Unused provisional clients are cleaned up safely when preparation fails or Admin cancels before confirmation and no appointment exists.
 - Christel↔Abigail cross-confirm handoff is intentionally **removed/superseded**. Same-Admin prepare→confirm is the accepted rule.
+- Admin practitioner booking scope is fail-closed: Christel/Abigail shared scope, Marietjie only, other linked Admin own practitioner only, unlinked Admin (including JP) no practitioner catalogue.
+- WhatsApp service selection is grouped and concise; JP has operational appointment-menu parity with Christel except finalization.
 - Google Calendar OAuth/provider health is **🟢 VERIFIED HEALTHY**; fail-closed provider guard remains permanent.
 - Customer-change confirmation architecture is live; cancellation template is APPROVED; `shiloh_booking_update_v1` is **PENDING**.
 - `/book` remains the accepted live CRM-backed public catalogue through #301; do not redo superseded #284–#300 variants.
 - Historical attendance remains human-controlled; #558 remains fail-closed.
 
-**Authoritative current state:** Admin booking fast-path defects discovered on 2026-08-18 are repaired, CI/deploy accepted, and the unnecessary cross-confirm experiment has been removed. Production is healthy on #310.
+**Authoritative current state:** PR #313 is regression-green, merged and live. Admin booking entitlement is enforced fail-closed in both menu/query logic and the database, grouped WhatsApp treatment selection is live, JP parity excludes finalization, and the earlier cross-confirm experiment remains removed.
 
 **Highest-priority continuation item:** re-check Meta provider status for `shiloh_booking_update_v1`; if still PENDING, continue the next approved Shiloh OS workstream without reopening the completed Admin-booking repairs.
 
