@@ -13,7 +13,7 @@ Permanent governance remains: operational screenshots are diagnostic evidence by
 
 ## Current production baseline
 
-Current accepted production application code is **PR #324 / `ac461dd7b6b0774a89bd179f913f54dcfae2414d`**, **Make attendance finalization practitioner-owned**. The current governance baseline is **PR #317 / `f2a78bb33db212f759ac5bb72f1d832ca11cc104`**, **Enforce specialist workstream reconciliation**. Full regression CI run **#1041** passed with **662 passed / 0 failed**; Render deploy **`dep-da2a3037uimc73a20leg`** reached LIVE. Post-deployment error-level logs were clear, Google Calendar health passed, and repeated production `/health` requests returned HTTP 200 after database-backed startup.
+Current accepted production application code is **PR #325 / `790b5c1254858e17d5811e0182acfb9cc83e32bd`**, **Make attendance finalization practitioner-owned**. The current governance baseline is **PR #317 / `f2a78bb33db212f759ac5bb72f1d832ca11cc104`**, **Enforce specialist workstream reconciliation**. Full regression CI run **#1041** passed with **662 passed / 0 failed**; Render deploy **`dep-da2a5bp5efls73cj9u10`** reached LIVE. Post-deployment error-level logs were clear, Google Calendar health passed, and repeated production `/health` requests returned HTTP 200 after database-backed startup.
 
 Relevant accepted lineage:
 - #301 / `6863958dbf97a6a6f593fc196c284571adf802c6` — accepted public catalogue presentation.

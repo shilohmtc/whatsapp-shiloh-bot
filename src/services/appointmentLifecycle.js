@@ -36,6 +36,8 @@ async function ensureTable() {
   await pool.query(`ALTER TABLE appointment_lifecycle ADD COLUMN IF NOT EXISTS appointment_id BIGINT`);
   await pool.query(`ALTER TABLE appointment_lifecycle ADD COLUMN IF NOT EXISTS client_id BIGINT`);
   await pool.query(`ALTER TABLE appointment_lifecycle ADD COLUMN IF NOT EXISTS appointment_ends_at TIMESTAMPTZ`);
+  await pool.query(`ALTER TABLE appointment_lifecycle ADD COLUMN IF NOT EXISTS followup_template_name TEXT`);
+  await pool.query(`ALTER TABLE appointment_lifecycle ADD COLUMN IF NOT EXISTS followup_provider_message_id TEXT`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_appointment_lifecycle_due ON appointment_lifecycle (status, appointment_at)`);
   await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS uq_appointment_lifecycle_appointment_id ON appointment_lifecycle (appointment_id) WHERE appointment_id IS NOT NULL`);
   initialized = true;
@@ -164,7 +166,7 @@ async function processReminders() {
   }
 
   if(followupTemplate){
-    for(let i=0;i<20;i+=1){const appointment=await claimDueFollowup();if(!appointment)break;try{const name=await customerName(appointment.phone);const quickReplyPayloads=followupActionsTemplate?['1','2','3','4','5']:[];await sendWhatsAppTemplate(appointment.phone,followupTemplate,[name,appointment.service_text],LANGUAGE_CODE,quickReplyPayloads);await createPendingExperience({appointmentId:appointment.appointment_id||appointment.id,phone:appointment.phone,service:appointment.service_text});logger.info({appointmentId:appointment.appointment_id||appointment.id,actionTemplate:Boolean(followupActionsTemplate)},"Customer aftercare/follow-up sent");}catch(error){await undoClaim(appointment.id,"followup_sent_at");logger.error({err:error,appointmentId:appointment.appointment_id||appointment.id},"Appointment follow-up failed");break;}}
+    for(let i=0;i<20;i+=1){const appointment=await claimDueFollowup();if(!appointment)break;try{const name=await customerName(appointment.phone);const quickReplyPayloads=followupActionsTemplate?['1','2','3','4','5']:[];const accepted=await sendWhatsAppTemplate(appointment.phone,followupTemplate,[name,appointment.service_text],LANGUAGE_CODE,quickReplyPayloads);const providerMessageId=accepted?.messages?.[0]?.id||null;await pool.query(`UPDATE appointment_lifecycle SET followup_template_name=$2,followup_provider_message_id=$3,updated_at=NOW() WHERE id=$1`,[appointment.id,followupTemplate,providerMessageId]);try{await createPendingExperience({appointmentId:appointment.appointment_id||appointment.id,phone:appointment.phone,service:appointment.service_text});}catch(bookkeepingError){logger.error({err:bookkeepingError,appointmentId:appointment.appointment_id||appointment.id,templateName:followupTemplate,providerMessageId},"Follow-up accepted; bookkeeping failed without reopening delivery claim");}logger.info({appointmentId:appointment.appointment_id||appointment.id,actionTemplate:Boolean(followupActionsTemplate),templateName:followupTemplate,providerMessageId},"Customer aftercare/follow-up sent");}catch(error){await undoClaim(appointment.id,"followup_sent_at");logger.error({err:error,appointmentId:appointment.appointment_id||appointment.id},"Appointment follow-up failed before durable provider acceptance");break;}}
   }
 }
 

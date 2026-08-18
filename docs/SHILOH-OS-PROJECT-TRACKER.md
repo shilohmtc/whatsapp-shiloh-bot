@@ -22,7 +22,7 @@ Operational screenshots are diagnostic evidence by default, not image-generation
 
 ## Production baseline
 
-Current accepted production application code is **PR #324 / `ac461dd7b6b0774a89bd179f913f54dcfae2414d`**. The current governance baseline is **PR #317 / `f2a78bb33db212f759ac5bb72f1d832ca11cc104`**. Full regression CI run **#1041** passed with **662 passed / 0 failed**; Render deploy **`dep-da2a3037uimc73a20leg`** reached LIVE. Post-deployment error-level logs were clear, Google Calendar health passed, and repeated `/health` requests returned HTTP 200 after database-backed startup.
+Current accepted production application code is **PR #325 / `790b5c1254858e17d5811e0182acfb9cc83e32bd`**. The current governance baseline is **PR #317 / `f2a78bb33db212f759ac5bb72f1d832ca11cc104`**. Full regression CI run **#1041** passed with **662 passed / 0 failed**; Render deploy **`dep-da2a5bp5efls73cj9u10`** reached LIVE. Post-deployment error-level logs were clear, Google Calendar health passed, and repeated `/health` requests returned HTTP 200 after database-backed startup.
 
 ## At-a-glance
 
@@ -51,6 +51,7 @@ Current accepted production application code is **PR #324 / `ac461dd7b6b0774a89b
 | ADMIN-PROVIDER-GUARD | PR #302 Calendar fail-closed guard | 🟢 VERIFIED / RETAIN | Provider failure blocks writes cleanly; startup/recurring health probe remains permanent. |
 | ADMIN-PRACTITIONER-CHANGE | Manage booking → Change practitioner | 🟢 VERIFIED LIVE | Real #570 changed to Christel; Calendar updated; preserve evidence, do not mutate for proof. |
 | CUSTOMER-CHANGE-CONFIRM | Customer confirmations after successful Admin changes | 🟢 IMPLEMENTED / LIVE | #303 covers service, practitioner, date/time, price and cancellation via durable idempotent outbox. |
+| META-TEMPLATE-AUDIT | WhatsApp / Meta Integration | 🔵 ACTIVE / DRAFT PR | Central paginated read-only 15-template inventory, exact contract/provider/configuration reconciliation, fail-closed send boundary, booking-update and birthday-v2 guards, approval resend template-only delivery, durable follow-up acceptance evidence and focused regression coverage implemented on `agent/meta-template-production-audit`. Full regression: 669 passed / 0 failed. Awaiting draft PR/CI/merge/deploy; production environment and natural-journey gates remain. |
 | META-BOOKING-UPDATE | `shiloh_booking_update_v1` | 🟠 WAITING PROVIDER | Latest production provider status **PENDING**. Ordinary change notifications remain queued until APPROVED. |
 | META-CANCEL-CONFIRM | `shiloh_cancellation_confirmation_v1` | 🟢 APPROVED / PROVIDER READY | Cancellation confirmation path ready. |
 | CUSTOMER-CHANGE-EVIDENCE | Genuine post-approval update delivery | 🟠 WAITING GENUINE JOURNEY | Capture natural update after provider approval; do not mutate a booking for proof. |
@@ -120,7 +121,7 @@ PR #318 is the accepted entitlement contract. Christel and Abigail share only th
 
 ## Exact continuation
 
-**Authoritative current state:** PR #324 is regression-green, merged and verified LIVE on `ac461dd...` as Render deploy `dep-da2a3037uimc73a20leg`. Christel, Abigail and Marietjie each finalize only their own appointments; JP finalizes none. Exact linked canonical identity is required and conflicts fail closed. PR #320/#322 menu presentation and JP's #318 Christel+Abigail booking entitlement remain unchanged. Governance baseline #317 remains authoritative. Google Business Profile remains an external/provider gate with general Requests/min at 0.
+**Authoritative current state:** PR #325 is regression-green, merged and verified LIVE on `790b5c1...` as Render deploy `dep-da2a5bp5efls73cj9u10`. Christel, Abigail and Marietjie each finalize only their own appointments; JP finalizes none. Exact linked canonical identity is required and conflicts fail closed. PR #320/#322 menu presentation and JP's #318 Christel+Abigail booking entitlement remain unchanged. Governance baseline #317 remains authoritative. Google Business Profile remains an external/provider gate with general Requests/min at 0.
 
 **Highest-priority next item:** continue the active historical attendance final review: re-query current CRM state and present only safely routable unresolved appointments for responsible-practitioner human determination.
 
@@ -131,3 +132,7 @@ PR #318 is the accepted entitlement contract. Christel and Abigail share only th
 ## Guardrails
 
 Preserve audit history. Never infer attendance, Calendar state, provider delivery or handset behaviour. Never silently assign #558. Never manufacture appointments or booking changes for evidence. Never create a static second public service catalogue when canonical CRM data can be projected instead. Retain #302 provider protection, #303 idempotent notification queue, and #307/#308 provisional-client duplicate/cleanup safeguards.
+
+## Meta template production audit — implementation checkpoint
+
+The focused branch implements the safe engineering gaps without submitting, editing, or sending a Meta template. The audit endpoint is sanitized and read-only. Provider evidence is the 18 August 2026 WhatsApp Manager capture recorded in `docs/META-TEMPLATE-READINESS-MATRIX.md`; `shiloh_booking_update_v1` remains In review and blocked. Tests pass **669 / 0** locally. This is not merged or production-verified; WhatsApp / Meta Integration owns PR/CI and post-merge exact inventory/environment verification, Production / DevOps observes deployment/configuration, and Control & Reconciliation tracks genuine-journey gates. The Master is not changed for the unmerged implementation because no verified durable production behaviour has changed.
