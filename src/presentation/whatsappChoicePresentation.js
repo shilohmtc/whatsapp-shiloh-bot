@@ -1,6 +1,7 @@
 const {
   WHATSAPP_LIST_LIMITS,
   cleanListText,
+  truncateListText,
 } = require('./whatsappListRowPresentation');
 
 const WHATSAPP_REPLY_BUTTON_LIMITS = Object.freeze({
@@ -9,6 +10,14 @@ const WHATSAPP_REPLY_BUTTON_LIMITS = Object.freeze({
   id: 256,
   title: WHATSAPP_LIST_LIMITS.buttonTitle,
 });
+
+function cleanChoiceId(value = '') {
+  return String(value || '').trim();
+}
+
+function buttonTitle(value = '') {
+  return truncateListText(value, WHATSAPP_REPLY_BUTTON_LIMITS.title);
+}
 
 function listRows(interactive = {}) {
   if (Array.isArray(interactive.rows)) return interactive.rows;
@@ -33,13 +42,14 @@ function canUseReplyButtons(interactive = {}) {
   const rows = listRows(interactive);
   if (rows.length < 1 || rows.length > WHATSAPP_REPLY_BUTTON_LIMITS.count) return false;
   if (rows.some((row) => {
-    const id = cleanListText(row?.id);
-    const title = cleanListText(row?.title);
+    const id = cleanChoiceId(row?.id);
+    const title = buttonTitle(row?.title);
     return !id
       || id.length > WHATSAPP_REPLY_BUTTON_LIMITS.id
-      || !title
-      || title.length > WHATSAPP_REPLY_BUTTON_LIMITS.title;
+      || !title;
   })) return false;
+  const titles = rows.map((row) => buttonTitle(row.title).toLowerCase());
+  if (new Set(titles).size !== titles.length) return false;
   return detailedChoiceBody(interactive.body, rows).length <= WHATSAPP_REPLY_BUTTON_LIMITS.body;
 }
 
@@ -50,15 +60,17 @@ function hybridizeChoiceInteractive(interactive = {}) {
     type: 'button',
     body: detailedChoiceBody(interactive.body, rows),
     buttons: rows.map((row) => ({
-      id: cleanListText(row.id),
-      title: cleanListText(row.title),
+      id: cleanChoiceId(row.id),
+      title: buttonTitle(row.title),
     })),
   };
 }
 
 module.exports = {
   WHATSAPP_REPLY_BUTTON_LIMITS,
+  buttonTitle,
   canUseReplyButtons,
+  cleanChoiceId,
   choiceDetailLine,
   detailedChoiceBody,
   hybridizeChoiceInteractive,
