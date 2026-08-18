@@ -188,71 +188,7 @@ exports.patchProfileByPhone = async (req, res) => {
   }
 };
 
-exports.sendTemplateTest = async (req, res) => {
-  const allowedTemplates = {
-    appointment_reminder: 4,
-    appointment_followup: 2,
-  };
-
-  try {
-    const { to, templateName, parameters, languageCode = "en" } = req.body || {};
-    const phone = String(to || "").replace(/[^0-9]/g, "");
-    const expectedParameterCount = allowedTemplates[templateName];
-
-    if (!phone || phone.length < 8 || phone.length > 15) {
-      return res.status(400).json({
-        error: "A valid international WhatsApp number is required",
-        requestId: req.id,
-      });
-    }
-
-    if (!expectedParameterCount) {
-      return res.status(400).json({
-        error: "Template is not approved for the admin test endpoint",
-        allowedTemplates: Object.keys(allowedTemplates),
-        requestId: req.id,
-      });
-    }
-
-    if (!Array.isArray(parameters) || parameters.length !== expectedParameterCount) {
-      return res.status(400).json({
-        error: `${templateName} requires exactly ${expectedParameterCount} body parameters`,
-        requestId: req.id,
-      });
-    }
-
-    const safeParameters = parameters.map((value) => String(value ?? "").slice(0, 500));
-    if (safeParameters.some((value) => !value.trim())) {
-      return res.status(400).json({
-        error: "Template parameters cannot be empty",
-        requestId: req.id,
-      });
-    }
-
-    const result = await sendWhatsAppTemplate(
-      phone,
-      templateName,
-      safeParameters,
-      String(languageCode || "en")
-    );
-
-    return res.status(200).json({
-      sent: true,
-      to: phone,
-      templateName,
-      messageId: result.messages?.[0]?.id || null,
-      requestId: req.id,
-    });
-  } catch (error) {
-    (req.log || console).error?.(
-      { err: error, metaError: error.response?.data?.error },
-      "Failed to send WhatsApp template test"
-    );
-
-    return res.status(error.response?.status || 500).json({
-      error: "WhatsApp template test failed",
-      metaError: error.response?.data?.error || null,
-      requestId: req.id,
-    });
-  }
-};
+exports.sendTemplateTest = async (req, res) => res.status(410).json({
+  error: "Template-test sending is retired. Use the read-only Meta template inventory; do not send messages for evidence.",
+  requestId: req.id,
+});

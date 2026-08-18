@@ -24,6 +24,10 @@ The production Shiloh_MTC WhatsApp Manager evidence below was captured on 18 Aug
 
 Meta's default `hello_world` is visible but is not a Shiloh operational template and is excluded from the 15-template contract inventory.
 
+## Permanent provider lead-time and submission governance
+
+Identify the complete foreseeable template set during feature planning and submit required templates early enough for provider review to run in parallel with engineering. Before treating a submission batch as complete, ask whether another foreseeable roadmap message will require provider approval. This never authorizes speculative submissions: payment, voucher, privacy, or other future workflows require approved product and business semantics first. Provider approval and production enablement remain separate gates. Do not submit, edit, configure, or send a template merely to create evidence.
+
 ## Enforced readiness reconciliation
 
 For each identity the centralized inventory reconciles: **defined by Shiloh → exact production environment name configured → provider status APPROVED → exact language/category/components/variable and button ordering match → send path wired**. Current operational contracts fail closed on any mismatch or provider-read failure. Arbitrary environment names and the three legacy identities cannot pass the send boundary. Booking update also requires its explicit environment enablement gate; birthday requires the exact brand-correct v2 contract.

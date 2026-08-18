@@ -32,3 +32,31 @@ test('send gate rejects arbitrary names, disabled booking update and legacy iden
  await assert.rejects(()=>assertTemplateSendAllowed('shiloh_booking_update_v1'),/gate is disabled/);
 });
 test('fetchAllTemplates requests every provider page',async()=>{let n=0;axios.get=async()=>({data:n++?{data:[{name:'b'}]}:{data:[{name:'a'}],paging:{next:'next'}}});assert.deepEqual((await fetchAllTemplates('x')).map(x=>x.name),['a','b']);});
+
+test('realistic Meta fixture ignores managed metadata but detects semantic drift',()=>{
+ const fixture=require('./fixtures/meta-message-templates-realistic.json').data[0];
+ const entry=CONTRACTS.find(x=>x.key==='booking_approval_request');
+ assert.equal(compareContract(entry,fixture).exact,true);
+ for(const mutate of [
+   value=>{value.components[0].text=value.components[0].text.replace('{{4}}','{{5}}');},
+   value=>{value.components[1].buttons.reverse();},
+   value=>{value.components.unshift({type:'HEADER',format:'TEXT',text:'Unexpected'});},
+   value=>{value.components.push({type:'FOOTER',text:'Unexpected'});},
+ ]) { const changed=structuredClone(fixture);mutate(changed);assert.equal(compareContract(entry,changed).components,false); }
+});
+
+test('every current operational contract validates exactly and drift fails',()=>{
+ const current=CONTRACTS.filter(x=>x.sendable);assert.equal(current.length,12);
+ for(const entry of current){const provider={...entry.contract,components:structuredClone(entry.contract.components)};assert.equal(compareContract(entry,provider).exact,true,entry.key);provider.category=entry.contract.category==='UTILITY'?'MARKETING':'UTILITY';assert.equal(compareContract(entry,provider).exact,false,entry.key);}
+});
+
+test('provider variants require exact language and duplicate exact-language variants fail closed',async()=>{
+ process.env.WHATSAPP_BUSINESS_ACCOUNT_ID='hidden';process.env.WHATSAPP_BIRTHDAY_TEMPLATE='shiloh_birthday_wish_v2';
+ const entry=CONTRACTS.find(x=>x.key==='birthday_v2');
+ axios.get=async()=>({data:{data:[{id:'z',status:'APPROVED',...entry.contract},{id:'a',status:'APPROVED',...entry.contract},{id:'fr',status:'APPROVED',...entry.contract,language:'fr'}]}});
+ const state=(await inspectMetaTemplateInventory()).templates.find(x=>x.key==='birthday_v2');assert.equal(state.provider.language,'en');assert.equal(state.provider.duplicateCount,1);assert.equal(state.ready,false);
+});
+
+test('staff finalization configuration is reconciled exactly',()=>{
+ const staff=CONTRACTS.find(x=>x.key==='staff_finalization');assert.equal(staff.env,'WHATSAPP_STAFF_FINALIZATION_TEMPLATE');
+});

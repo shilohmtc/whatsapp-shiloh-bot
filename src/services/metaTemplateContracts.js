@@ -4,7 +4,7 @@ const { buildBirthdayTemplateDefinition } = require('./birthdayTemplateProvision
 const { buildStaffFinalizationTemplateDefinition, buildStaffFinalizationActionTemplateDefinition } = require('./staffFinalizationTemplateProvisioning');
 const { buildBookingConfirmationTemplateDefinition } = require('./bookingConfirmationTemplateProvisioning');
 const { buildReminderActionTemplateDefinition } = require('./reminderActionTemplateProvisioning');
-const { DEFINITIONS, buildDefinition } = require('./clientLifecycleTemplateProvisioning');
+const { buildDefinition } = require('./clientLifecycleTemplateProvisioning');
 
 const GRAPH_VERSION = 'v23.0';
 const definition = (key) => buildDefinition(key);
@@ -19,27 +19,42 @@ const CONTRACTS = Object.freeze([
   ['reschedule_confirmation','WHATSAPP_RESCHEDULE_CONFIRMATION_TEMPLATE',definition('reschedule_confirmation'),true],
   ['appointment_reminder_actions','WHATSAPP_REMINDER_ACTIONS_TEMPLATE',buildReminderActionTemplateDefinition(),true],
   ['booking_confirmation','WHATSAPP_BOOKING_CONFIRMATION_TEMPLATE',buildBookingConfirmationTemplateDefinition(),true],
-  ['staff_finalization',null,buildStaffFinalizationTemplateDefinition(),true],
+  ['staff_finalization','WHATSAPP_STAFF_FINALIZATION_TEMPLATE',buildStaffFinalizationTemplateDefinition(),true],
   ['birthday_v2','WHATSAPP_BIRTHDAY_TEMPLATE',buildBirthdayTemplateDefinition(),true],
   ['birthday_v1',null,{name:'shiloh_birthday_wish_v1',language:'en',category:'MARKETING',components:null},false],
   ['appointment_followup_legacy','WHATSAPP_FOLLOWUP_TEMPLATE',{name:'appointment_followup',language:'en',category:'UTILITY',components:null},false],
   ['appointment_reminder_legacy','WHATSAPP_REMINDER_TEMPLATE',{name:'appointment_reminder',language:'en',category:'UTILITY',components:null},false],
 ].map(([key,env,contract,sendable]) => Object.freeze({key,env,contract,sendable})));
 
-function canonical(value) {
-  if (Array.isArray(value)) return value.map(canonical);
-  if (!value || typeof value !== 'object') return value;
-  return Object.fromEntries(Object.keys(value).filter(k => !['example'].includes(k)).sort().map(k => [k,canonical(value[k])]));
+function semanticButton(button = {}) {
+  const normalized = { type: String(button.type || '').toUpperCase(), text: button.text ?? null };
+  if (button.url != null) normalized.url = button.url;
+  if (button.phone_number != null) normalized.phone_number = button.phone_number;
+  return normalized;
+}
+function semanticComponents(components = []) {
+  return (Array.isArray(components) ? components : []).map((component) => {
+    const normalized = { type: String(component.type || '').toUpperCase() };
+    if (component.format != null) normalized.format = String(component.format).toUpperCase();
+    if (component.text != null) normalized.text = component.text;
+    if (Array.isArray(component.buttons)) normalized.buttons = component.buttons.map(semanticButton);
+    return normalized;
+  });
 }
 function componentsMatch(expected, actual) {
   if (!Array.isArray(expected)) return false;
-  return JSON.stringify(canonical(expected)) === JSON.stringify(canonical(actual || []));
+  return JSON.stringify(semanticComponents(expected)) === JSON.stringify(semanticComponents(actual));
 }
 function compareContract(entry, provider) {
   const expected=entry.contract;
-  const checks={name:provider?.name===expected.name,language:provider?.language===expected.language,category:provider?.category===expected.category,components:componentsMatch(expected.components,provider?.components)};
+  const checks={name:provider?.name===expected.name,language:provider?.language===expected.language,category:String(provider?.category||'').toUpperCase()===expected.category,components:componentsMatch(expected.components,provider?.components)};
   checks.exact=Object.values(checks).every(Boolean);
   return checks;
+}
+function selectProviderVariant(providers, entry) {
+  const variants=providers.filter(provider=>provider?.name===entry.contract.name&&provider?.language===entry.contract.language);
+  variants.sort((a,b)=>String(a.id||'').localeCompare(String(b.id||'')));
+  return { provider: variants[0] || null, duplicateCount: Math.max(variants.length-1,0) };
 }
 async function fetchAllTemplates(wabaId) {
   let url=`https://graph.facebook.com/${GRAPH_VERSION}/${wabaId}/message_templates`;
@@ -51,7 +66,7 @@ async function inspectMetaTemplateInventory() {
   const wabaId=await discoverWabaId();
   if(!wabaId)return {ok:false,reason:'waba_not_discovered',templates:[]};
   const providers=await fetchAllTemplates(wabaId);
-  return {ok:true,templates:CONTRACTS.map(entry=>{const provider=providers.find(p=>p?.name===entry.contract.name)||null;const configuredName=entry.env?process.env[entry.env]||null:entry.contract.name;const contract=provider?compareContract(entry,provider):null;return {key:entry.key,expectedName:entry.contract.name,configuredName,defined:true,configured:configuredName===entry.contract.name,provider:{exists:Boolean(provider),status:provider?.status||null,quality:provider?.quality_score?.score||provider?.quality_score||null,category:provider?.category||null,language:provider?.language||null},contract,sendable:entry.sendable,ready:Boolean(entry.sendable&&configuredName===entry.contract.name&&provider?.status==='APPROVED'&&contract?.exact)};})};
+  return {ok:true,templates:CONTRACTS.map(entry=>{const {provider,duplicateCount}=selectProviderVariant(providers,entry);const configuredName=entry.env?process.env[entry.env]||null:entry.contract.name;const contract=provider?compareContract(entry,provider):null;return {key:entry.key,expectedName:entry.contract.name,configuredName,defined:true,configured:configuredName===entry.contract.name,provider:{exists:Boolean(provider),status:provider?.status||null,quality:provider?.quality_score?.score||provider?.quality_score||null,category:provider?.category||null,language:provider?.language||null,duplicateCount},contract,sendable:entry.sendable,ready:Boolean(entry.sendable&&configuredName===entry.contract.name&&duplicateCount===0&&provider?.status==='APPROVED'&&contract?.exact)};})};
 }
 let cache=null, cachedAt=0;
 async function assertTemplateSendAllowed(name,language='en') {
@@ -66,4 +81,4 @@ async function assertTemplateSendAllowed(name,language='en') {
   return state;
 }
 function resetTemplateInventoryCache(){cache=null;cachedAt=0;}
-module.exports={CONTRACTS,compareContract,fetchAllTemplates,inspectMetaTemplateInventory,assertTemplateSendAllowed,resetTemplateInventoryCache};
+module.exports={CONTRACTS,semanticComponents,compareContract,selectProviderVariant,fetchAllTemplates,inspectMetaTemplateInventory,assertTemplateSendAllowed,resetTemplateInventoryCache};

@@ -1,0 +1,18 @@
+{
+  "data": [{
+    "id": "provider-managed-id",
+    "name": "shiloh_booking_approval_request_v1",
+    "status": "APPROVED",
+    "category": "UTILITY",
+    "language": "en",
+    "quality_score": { "score": "GREEN", "date": 1787011200 },
+    "components": [
+      { "type": "BODY", "text": "Booking approval required.\n\nClient: {{1}}\nTreatment: {{2}}\nWith: {{3}}\nTime: {{4}}\nBooking #{{5}}\n\nThis time is being held until an authorized approver approves or declines the request.", "example": { "body_text": [["Provider", "managed", "example", "ignored", "99"]] } },
+      { "type": "BUTTONS", "buttons": [
+        { "type": "QUICK_REPLY", "text": "Approve", "example": ["provider_payload"] },
+        { "type": "QUICK_REPLY", "text": "Decline" }
+      ] }
+    ]
+  }],
+  "paging": { "cursors": { "before": "secret", "after": "secret" } }
+}
