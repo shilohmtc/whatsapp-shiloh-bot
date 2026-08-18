@@ -199,11 +199,28 @@ function registeredClientPostSend(phone, clientId) {
   };
 }
 
+function identityBranchWithWelcome(phone, identity) {
+  if (!identity?.handled) return identity;
+
+  if (identity.identityStatus === 'unknown') {
+    return {
+      ...identity,
+      reply: `${buildUniversalWelcome()}\n\n${buildNewClientPrompt()}`,
+      postSend: async () => markUniversalWelcomeSent(phone),
+    };
+  }
+
+  return {
+    ...identity,
+    reply: `${buildUniversalWelcome()}\n\n${identity.reply}`,
+    postSend: async () => markUniversalWelcomeSent(phone, identity.client?.id || null),
+  };
+}
+
 async function processClientTransitionWelcome(phone, text) {
   if (!isGreetingOnly(text)) return { handled: false };
 
   const clientState = await resolveClientState(phone);
-  if (clientState.status === 'ambiguous') return { handled: false };
 
   if (await welcomeAlreadyDelivered(phone)) {
     if (clientState.status === 'none' && await pendingOnboardingSession(phone)) {
@@ -215,9 +232,8 @@ async function processClientTransitionWelcome(phone, text) {
     return { handled: false };
   }
 
-  if (clientState.status === 'unique') {
+  if (clientState.status === 'unique' && profileComplete(clientState.client)) {
     const client = clientState.client;
-    if (!profileComplete(client)) return { handled: false };
     return {
       handled: true,
       reply: buildUniversalWelcome(),
@@ -227,13 +243,7 @@ async function processClientTransitionWelcome(phone, text) {
   }
 
   const identity = await processClientIdentityMessage(phone, text);
-  if (!identity.handled || identity.identityStatus !== 'unknown') return identity;
-  return {
-    handled: true,
-    reply: `${buildUniversalWelcome()}\n\n${buildNewClientPrompt()}`,
-    identityStatus: 'unknown',
-    postSend: async () => markUniversalWelcomeSent(phone),
-  };
+  return identityBranchWithWelcome(phone, identity);
 }
 
 module.exports = {
