@@ -41,6 +41,35 @@ Shiloh OS remains one project inside the same ChatGPT Work workspace, organized 
 
 The Control & Reconciliation workstream coordinates shared state. It does not replace specialist ownership or become a second implementation queue.
 
+## Control checkpoint workstream routing rule
+
+Every **Shiloh OS — Control & Reconciliation** checkpoint must first determine the authoritative current state and recommended next controlled action. It must then include a routing block containing all of the following:
+
+- **Owning workstream**.
+- **Exact specialist chat to continue in**.
+- **Why that workstream owns the action**.
+- **Dependencies or observers**, including Control & Reconciliation where shared-state tracking is required.
+- **Implementation status**, stating explicitly whether work may proceed or is blocked.
+- **Ready-to-copy continuation instruction** for the named specialist chat.
+
+The continuation instruction is routing context, not delegated authority or a replacement for verification. It must tell the specialist chat to independently read the applicable Master, Project Tracker, latest reconciliation and Engineering Governance on GitHub `main`, verify relevant production/provider/human evidence, preserve any newer authoritative state, and then follow the controlled-work completion protocol.
+
+When the recommended item is blocked by provider approval, business approval, human truth, genuine-journey evidence or another external gate, the checkpoint must explicitly say that implementation must not proceed. Ownership remains with the appropriate monitoring/provider workstream, with Control & Reconciliation tracking or observing the dependency. A blocked item must not be routed to an implementation workstream merely to keep work moving.
+
+Control & Reconciliation supplies the routing decision and ready-to-copy instruction; it does not become a second implementation queue. The receiving specialist chat remains responsible for independent authoritative-state inspection and for reconciling any changed cross-workstream contract back into shared authority.
+
+The checkpoint routing block uses this structure:
+
+```markdown
+**Owning workstream:** ...
+**Exact specialist chat:** Shiloh OS — ...
+**Why this workstream owns it:** ...
+**Dependencies / observers:** ...
+**Implementation status:** Proceed / Blocked — ...
+**Ready-to-copy continuation instruction:**
+> ...
+```
+
 ## Authoritative-state rule
 
 Across every workstream, the shared source of truth is GitHub `main`, `docs/SHILOH-OS-MASTER-STATUS.md`, `docs/SHILOH-OS-PROJECT-TRACKER.md`, the latest reconciliation evidence identified by those documents, and verified production/provider state.
