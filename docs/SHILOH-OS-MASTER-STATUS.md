@@ -7,22 +7,32 @@ Purpose: permanent current-state source of truth. Historical implementation deta
 
 Operational truth is GitHub `main`, Render production, Shiloh CRM/Postgres, Google Calendar, Meta/WhatsApp provider evidence, and explicit real WhatsApp/human evidence. Never infer provider, attendance, approval, CRM, Calendar, or handset state.
 
-At the beginning of each new Shiloh OS chat: read this Master + `docs/SHILOH-OS-PROJECT-TRACKER.md` + the latest reconciliation, currently `docs/SHILOH-OS-RECONCILIATION-2026-08-18-CUSTOMER-CHANGE-CONFIRMATIONS.md`, plus `docs/SHILOH-OS-ENGINEERING-GOVERNANCE.md`, on `main`; verify applicable production/provider state; then give the four-part checkpoint: (1) authoritative current state, (2) highest-priority continuation item, (3) why it is next, (4) remaining approval/evidence/provider gate. Obtain explicit approval before the first new substantial controlled action. After that initial approval, continue the approved workstream automatically through ordinary engineering/deploy/verification/housekeeping boundaries. Stop only for material scope/risk expansion, contradictory authority, or an existing fail-closed human/provider/evidence gate.
+At the beginning of each new Shiloh OS chat: read this Master + `docs/SHILOH-OS-PROJECT-TRACKER.md` + the latest reconciliation, currently `docs/SHILOH-OS-RECONCILIATION-2026-08-18-ADMIN-BOOKING-FAST-PATH.md`, plus `docs/SHILOH-OS-ENGINEERING-GOVERNANCE.md`, on `main`; verify applicable production/provider state; then give the four-part checkpoint: (1) authoritative current state, (2) highest-priority continuation item, (3) why it is next, (4) remaining approval/evidence/provider gate. Obtain explicit approval before the first new substantial controlled action. After that initial approval, continue the approved workstream automatically through ordinary engineering/deploy/verification/housekeeping boundaries. Stop only for material scope/risk expansion, contradictory authority, or an existing fail-closed human/provider/evidence gate.
 
 Permanent governance remains: operational screenshots are diagnostic evidence by default and must not trigger image generation unless visual creation/editing is explicitly requested; production defects follow trace → authoritative evidence → root cause → guarded repair → regression/E2E → CI → deploy → production verification → reconciliation; provider lead-time is considered early; known finite client/admin choices are button/list-first where practical; natural language remains fallback into the same canonical handlers; no speculative provider submissions; no manufactured appointments/evidence; no duplicate public service source of truth.
 
-## Current production / deployment baseline
+## Current production baseline
 
-The accepted functional catalogue lineage remains through **PR #301 / `6863958dbf97a6a6f593fc196c284571adf802c6`**. PR **#302**, **Fail closed cleanly when Google Calendar auth expires**, passed CI run **#975** and merged as **`bee0bdcd71f7dae768a78e6e5cfcd5ec5ddf76c9`**. PR **#303**, **Send WhatsApp confirmations after booking changes**, passed CI run **#982** and merged as **`632ec4780489a97349b41a85567fa13b18d9ca35`**.
+Current accepted Render production commit is **PR #310 / `cb59fc67e09b5ac0afeb12c987bbaf7d41332f14`**, **Remove unnecessary Christel-Abigail cross-confirm handoff**. Deployment reached LIVE. Fresh startup evidence confirmed the cross-confirm preload is absent, `/health` returns 200, and **`Google Calendar provider health check passed`**.
 
-Render auto-deployed PR #303 as **`dep-da21jsdg1s2s73c1ju60`**. The production instance started the customer-change notification scheduler and retained a healthy Google Calendar provider probe.
+Relevant accepted lineage:
+- #301 / `6863958dbf97a6a6f593fc196c284571adf802c6` — accepted public catalogue presentation.
+- #302 / `bee0bdcd71f7dae768a78e6e5cfcd5ec5ddf76c9` — fail-closed Google Calendar provider guard + health probe.
+- #303 / `632ec4780489a97349b41a85567fa13b18d9ca35` — customer-change WhatsApp confirmation architecture.
+- #304 / `278aab397aa750af94e2b1d9df49cb82e75bd29d` — Admin typed-time picker repair.
+- #305 / `4767d2823ab41e7f803b5bc4bbdb043e7030dcd7` — canonical client-name resolution repair.
+- #306 / `507c3f492dc22e2c7767b8bac24128665f8ac73f` — reconciled Goldie→canonical client lookup bridge.
+- #307 / `55c2f00b1470a095ec78c675eaa368bdbd53dc51` — provisional new-client Admin booking fast path.
+- #308 / `fdcbae48577b464bf67442b36dcc1ea8155d2c69` — cleanup of unused provisional clients.
+- #309 / `fa4e403ac60fa6828b0da977784f0a04d6f08fe7` — temporary Christel↔Abigail cross-confirm handoff; **superseded**.
+- #310 / `cb59fc67e09b5ac0afeb12c987bbaf7d41332f14` — removes #309 cross-confirm handoff; **accepted state**.
 
-Fresh provider evidence retains:
+Fresh Meta/provider evidence from the #310 production startup:
 - `shiloh_staff_finalization_v1` — **APPROVED / UTILITY**.
 - `shiloh_staff_finalization_actions_v1` — **APPROVED / UTILITY**.
 - `shiloh_booking_confirmation_v1` — **APPROVED / UTILITY**.
 - `shiloh_cancellation_confirmation_v1` — **APPROVED**.
-- `shiloh_booking_update_v1` — **PENDING** after successful production submission on 2026-08-18.
+- `shiloh_booking_update_v1` — **PENDING**.
 
 Provider approval does not itself prove handset delivery or justify manufactured operational messaging.
 
@@ -34,31 +44,57 @@ Accepted presentation remains the #301 state: reduced hero; wider scannable cata
 
 The public compatibility contract remains **`Your appointment starts with Shiloh.`** and **`Continue with Shiloh on WhatsApp`**.
 
-## Admin booking and manage-booking — 🟢 VERIFIED LIVE
+## Admin booking — 🟢 VERIFIED / FAST PATH ACCEPTED
 
-The normal WhatsApp Admin surface remains button/list-first where practical. Appointments priority remains **Finalize past visits → Make a booking → Manage a booking → Today's clients → Tomorrow's clients**. `Find an available time` is integrated into Make a booking.
+The normal WhatsApp Admin surface remains button/list-first where practical. Appointments priority remains **Finalize past visits → Make a booking → Manage a booking → Today's clients → Tomorrow's clients**. `Find an available time` remains integrated into Make a booking.
 
-The accepted Admin reschedule lineage includes next-available choices, same-day direct time, explicit date+time input, restart-safe typed context, review-before-write confirmation, corrected confirmed commit, start-time-first manual booking presentation, canonical 15-minute candidate generation, clinic hours, practitioner schedule, CRM conflicts and configured Calendar conflicts.
+### Typed time and slot picker — repaired
 
-### Google Calendar provider guard and recovery — 🟢 VERIFIED LIVE
+PR #304 repaired two live defects: typed `14:00` / `2pm` was previously ignored at the slot step, and stale pagination could display only `← Previous`. Typed times now normalize into the authoritative generated slot set. They cannot bypass clinic hours, practitioner working schedule, CRM conflicts, shared Google Calendar, or configured practitioner Google Calendar conflicts. If the typed time is unavailable, Shiloh must explain that and offer authoritative alternatives rather than loop.
 
-A real Admin **Manage booking → Change practitioner** journey exposed expired/revoked Google OAuth credentials. PR #302 added fail-closed provider handling plus a read-only startup/recurring Google Calendar health probe. The Google Auth app was confirmed External/Testing, moved to **In production**, and the production OAuth Client ID / Client Secret / Refresh Token chain was reconciled.
+### Client lookup and provisional new-client booking — accepted
 
-Fresh Render startup evidence reports **`Google Calendar provider health check passed`**.
+PR #305 improved canonical name resolution without weakening duplicate/ambiguity guards. PR #306 safely checks already-reconciled Goldie external identities and follows only established `shiloh_entity_id` links to canonical clients; unresolved Goldie identities remain fail-closed.
 
-Real WhatsApp evidence verified booking **#570** end to end: practitioner changed to **Christel**, the **Google Calendar event was updated**, and the booking preserved **Linda Dr**, **Sports Massage — Package Session**, **2026/08/21 14:30–15:20**, and **R0.00**. Do not mutate #570 again merely for proof.
+PR #307 added the operational fast path for genuinely new clients. If Admin cannot find a canonical client, Shiloh may offer **Reserve new client**, collect the minimum **name + South African mobile**, normalize and duplicate-check the mobile, then either reuse an existing canonical client, fail closed on ambiguity, or create a clearly marked provisional canonical client. A provisional client does not bypass the booking review/confirmation guard.
 
-The PR #302 fail-closed guard and health probe are permanent protection and must remain even while the provider is healthy.
+PR #308 cleans up an unused provisional client when booking preparation fails or Admin cancels before confirmation, but only when that provisional record has no appointment. Existing clients and provisional clients with appointments are never removed by this cleanup.
 
-### Customer confirmations after Admin changes — 🟢 IMPLEMENTED / LIVE; 🟠 UPDATE TEMPLATE PENDING
+Accepted operational sequence:
 
-PR #303 adds customer-facing WhatsApp confirmation coverage after successful Admin changes to service, practitioner, date/time, booked price, and cancellation. New bookings continue using the existing booking-confirmation path and were not reimplemented.
+`choose service/practitioner/date/time → search client → no match → Reserve new client → name + mobile → duplicate check → provisional canonical client → review → explicit Confirm booking`.
 
-For service/practitioner/date-time/price changes, Shiloh records a durable audit-event-idempotent outbox item only after the canonical mutation succeeds. The latest authoritative appointment state is then sent using `shiloh_booking_update_v1` once Meta reports that UTILITY template **APPROVED**. The message includes current service, practitioner, date, 24-hour time range, booked price and booking number. Admin cancellation uses the existing `shiloh_cancellation_confirmation_v1` template.
+Do not require a completed full profile before securing a legitimate slot. Richer DOB/profile/consent/onboarding data may be completed later through the established registration/onboarding path. Do not silently create duplicate clients.
 
-The queue is retryable and does not use proactive free-text fallback. A failed/blocked CRM or Calendar mutation does not queue a client message. The Manage booking copy now states that successful saved changes queue the customer's latest WhatsApp confirmation.
+A real Stephan Erasmus Admin journey demonstrated the fast path through authoritative 14:00 selection, provisional CRM client creation and final review; Christel subsequently confirmed the booking herself. Do not cancel/recreate that appointment merely to manufacture evidence.
 
-Fresh production provider evidence after PR #303: `shiloh_cancellation_confirmation_v1` is **APPROVED**; newly submitted `shiloh_booking_update_v1` is **PENDING**. Therefore cancellations are provider-ready, while service/practitioner/date-time/price confirmations remain durably queued until Meta approval. Do not claim delivery until genuine post-approval evidence exists and do not mutate a real booking merely for proof.
+### Booking confirmation ownership — simplified accepted rule
+
+PR #309 temporarily introduced Christel↔Abigail cross-confirm handoff. The business decision was that this is not operationally necessary because each authorized Admin can create and confirm bookings while selecting the other practitioner when appropriate. PR #310 removed the handoff and all dedicated preload/tests/change markers.
+
+**Accepted rule:** the Admin who prepares a pending booking confirms that booking. Practitioner choice is independent: Christel may create/confirm a booking for Abigail, Abigail may create/confirm a booking for Christel, and an authorized business Admin may create/confirm for an eligible practitioner. Existing final CRM, clinic-hours, practitioner-schedule, conflict and Google Calendar re-checks remain authoritative.
+
+Do not reintroduce cross-confirm handoff unless a new explicit business requirement justifies the added state/ambiguity complexity.
+
+## Google Calendar provider guard and recovery — 🟢 VERIFIED HEALTHY
+
+A real Admin **Manage booking → Change practitioner** journey exposed expired/revoked Google OAuth credentials. PR #302 added fail-closed provider handling plus a read-only startup/recurring Google Calendar health probe. The Google Auth app was moved to **In production**, and the production OAuth Client ID / Client Secret / Refresh Token chain was reconciled.
+
+Fresh #310 startup evidence again reports **`Google Calendar provider health check passed`**.
+
+Real WhatsApp evidence previously verified booking **#570** end to end: practitioner changed to **Christel**, the **Google Calendar event was updated**, and Linda Dr / Sports Massage — Package Session / 2026/08/21 14:30–15:20 / R0.00 were preserved. Do not mutate #570 again merely for proof.
+
+The PR #302 fail-closed guard and health probe are permanent protection and must remain.
+
+## Customer confirmations after Admin changes — 🟢 LIVE / 🟠 UPDATE TEMPLATE PENDING
+
+PR #303 covers successful Admin changes to service, practitioner, date/time, booked price, and cancellation. New bookings continue using the established approved `shiloh_booking_confirmation_v1` path.
+
+For service/practitioner/date-time/price changes, Shiloh records a durable audit-event-idempotent outbox item only after the canonical mutation succeeds. The latest appointment state is sent through `shiloh_booking_update_v1` only when Meta reports it APPROVED. Admin cancellation uses `shiloh_cancellation_confirmation_v1`.
+
+The queue is retryable and has no proactive free-text fallback. A failed/blocked CRM or Calendar mutation does not queue a misleading client message.
+
+Current provider truth: cancellation confirmation is APPROVED; `shiloh_booking_update_v1` remains **PENDING**. Therefore ordinary change notifications remain queued until Meta approval. Do not claim delivery until genuine post-approval evidence exists and do not mutate a real booking merely for proof.
 
 ## Attendance finalization authority — 🟢 IMPLEMENTED
 
@@ -72,7 +108,7 @@ Historical finalization exposes Completed, No-show, Cancelled, No charge, Servic
 
 ## Historical attendance 2026-08-01 through 2026-08-15 — 🔵 HUMAN FINAL REVIEW ACTIVE
 
-Earlier audit: 53 appointments = 31 finalized, 4 cancelled, 17 unresolved/routable, plus one unresolved exception #558 historically mapped to `SHILOH MTC`. The 31 prior Completed/No-show visits were approved for reopening with audit/history preserved; cancelled visits were not reopened. The immediate post-reopen 48 routable count is historical evidence only; re-query before quoting a current total.
+Earlier audit: 53 appointments = 31 finalized, 4 cancelled, 17 unresolved/routable, plus one unresolved exception #558 historically mapped to `SHILOH MTC`. The 31 prior Completed/No-show visits were approved for reopening with audit/history preserved; cancelled visits were not reopened. Historical counts are not current truth; re-query before quoting a current total.
 
 ### #558 — 🔴 FAIL-CLOSED historical exception
 
@@ -80,7 +116,7 @@ Appointment **#558 on 2026-08-06** remains unresolved with historical practition
 
 ## Completed client/lifecycle/directory work — do not redo
 
-Universal welcome, registered/legacy Book appointment routing, eligible-practitioner ordering, booking/cancellation action-button parity, practitioner directory, category ordering/count polish, SQT BioMicroneedling virtual-family presentation, Admin booking/reschedule, and 24-hour presentation remain completed.
+Universal welcome, registered/legacy Book appointment routing, eligible-practitioner ordering, booking/cancellation action-button parity, practitioner directory, category ordering/count polish, SQT BioMicroneedling virtual-family presentation, Admin booking/reschedule, 24-hour presentation, typed-time repair, canonical/Goldie-aware client lookup, provisional-client reservation and cleanup remain completed.
 
 Canonical practitioner presentation remains:
 - Christel · Massage — Massage Practitioner
@@ -110,17 +146,21 @@ CRM48 (Pa Derik) and CRM473 remain legitimate controlled Goldie-imported canonic
 
 ## Exact new-chat continuation state
 
-- PR #303 customer-change notification architecture is **LIVE** in Render production.
-- `shiloh_cancellation_confirmation_v1` is **APPROVED**; Admin cancellation confirmations are provider-ready.
-- `shiloh_booking_update_v1` is **PENDING**; qualifying service/practitioner/date-time/price update messages stay queued until Meta approval.
-- Google Calendar OAuth/provider health is **🟢 VERIFIED HEALTHY**; fresh production probe passed.
-- Admin practitioner change is **🟢 VERIFIED LIVE** via real booking #570; Calendar event update succeeded.
-- PR #302 provider guard/health probe remains permanent protection; do not remove or bypass it.
+- Production is **LIVE** on PR #310 / `cb59fc67e09b5ac0afeb12c987bbaf7d41332f14`.
+- Admin typed-time selection is repaired; `14:00` / `2pm` resolve through authoritative slots.
+- Canonical + reconciled-Goldie client lookup improvements are live.
+- New-client Admin booking fast path is live: duplicate-check mobile → provisional canonical client → guarded review/confirmation.
+- Unused provisional clients are cleaned up safely when preparation fails or Admin cancels before confirmation and no appointment exists.
+- Christel↔Abigail cross-confirm handoff is intentionally **removed/superseded**. Same-Admin prepare→confirm is the accepted rule.
+- Google Calendar OAuth/provider health is **🟢 VERIFIED HEALTHY**; fail-closed provider guard remains permanent.
+- Customer-change confirmation architecture is live; cancellation template is APPROVED; `shiloh_booking_update_v1` is **PENDING**.
 - `/book` remains the accepted live CRM-backed public catalogue through #301; do not redo superseded #284–#300 variants.
 - Historical attendance remains human-controlled; #558 remains fail-closed.
 
-**Authoritative current state:** customer-change confirmations are engineered, regression-covered, merged and deployed. Cancellation confirmation is provider-ready; ordinary booking-update confirmation is waiting for Meta approval of `shiloh_booking_update_v1`.
+**Authoritative current state:** Admin booking fast-path defects discovered on 2026-08-18 are repaired, CI/deploy accepted, and the unnecessary cross-confirm experiment has been removed. Production is healthy on #310.
 
-**Highest-priority continuation item:** re-check Meta provider status for `shiloh_booking_update_v1`; once APPROVED, allow the existing retry queue to deliver qualifying genuine updates and capture natural operational evidence without manufacturing an appointment change.
+**Highest-priority continuation item:** re-check Meta provider status for `shiloh_booking_update_v1`; if still PENDING, continue the next approved Shiloh OS workstream without reopening the completed Admin-booking repairs.
+
+**Why next:** the Admin booking engineering/CI/deploy gates are closed; remaining ordinary booking-change delivery depends on Meta approval rather than more booking-flow engineering.
 
 **Remaining gates:** Meta approval for the booking-update template, human attendance/#558/genuine-journey truth, and explicit approval for material commercial/service/business-rule changes remain fail-closed.
