@@ -7,13 +7,13 @@ Purpose: permanent current-state source of truth. Historical implementation deta
 
 Operational truth is GitHub `main`, Render production, Shiloh CRM/Postgres, Google Calendar, Meta/WhatsApp provider evidence, and explicit real WhatsApp/human evidence. Never infer provider, attendance, approval, CRM, Calendar, or handset state.
 
-At the beginning of each new Shiloh OS chat: read this Master + `docs/SHILOH-OS-PROJECT-TRACKER.md` + the latest reconciliation, currently `docs/SHILOH-OS-RECONCILIATION-2026-08-18-JP-BOOKING-ENTITLEMENT.md`, plus `docs/SHILOH-OS-ENGINEERING-GOVERNANCE.md`, on `main`; verify applicable production/provider state; then give the four-part checkpoint: (1) authoritative current state, (2) highest-priority continuation item, (3) why it is next, (4) remaining approval/evidence/provider gate. Obtain explicit approval before the first new substantial controlled action. After that initial approval, continue the approved workstream automatically through ordinary engineering/deploy/verification/housekeeping boundaries. Stop only for material scope/risk expansion, contradictory authority, or an existing fail-closed human/provider/evidence gate.
+At the beginning of each new Shiloh OS chat: read this Master + `docs/SHILOH-OS-PROJECT-TRACKER.md` + the latest reconciliation, currently `docs/SHILOH-OS-RECONCILIATION-2026-08-18-WHATSAPP-MENU-LABEL-POLISH.md`, plus `docs/SHILOH-OS-ENGINEERING-GOVERNANCE.md`, on `main`; verify applicable production/provider state; then give the four-part checkpoint: (1) authoritative current state, (2) highest-priority continuation item, (3) why it is next, (4) remaining approval/evidence/provider gate. Obtain explicit approval before the first new substantial controlled action. After that initial approval, continue the approved workstream automatically through ordinary engineering/deploy/verification/housekeeping boundaries. Stop only for material scope/risk expansion, contradictory authority, or an existing fail-closed human/provider/evidence gate.
 
 Permanent governance remains: operational screenshots are diagnostic evidence by default and must not trigger image generation unless visual creation/editing is explicitly requested; production defects follow trace → authoritative evidence → root cause → guarded repair → regression/E2E → CI → deploy → production verification → reconciliation; provider lead-time is considered early; known finite client/admin choices are button/list-first where practical; natural language remains fallback into the same canonical handlers; no speculative provider submissions; no manufactured appointments/evidence; no duplicate public service source of truth.
 
 ## Current production baseline
 
-Current accepted production application code is **PR #318 / `aafd7acb278be97ddc1c0dc4b1fca25b16e83d5a`**, **Grant Jean‑Pierre scoped Christel+Abigail booking entitlement**. The current governance baseline is **PR #317 / `f2a78bb33db212f759ac5bb72f1d832ca11cc104`**, **Enforce specialist workstream reconciliation**. Full regression CI run **#1026** passed with **642 passed / 0 failed**; Render deploy **`dep-da2909ou01pc73bite9g`** reached LIVE. Post-deployment error-level logs were clear, the Google Calendar health check passed, and production `/health` reported application and database status `ok`.
+Current accepted production application code is **PR #320 / `90cbc79362183cff8ea9ef3116aac52e3f312f7f`**, **Polish WhatsApp menu labels across Admin and client flows**. The current governance baseline is **PR #317 / `f2a78bb33db212f759ac5bb72f1d832ca11cc104`**, **Enforce specialist workstream reconciliation**. Full regression CI run **#1033** passed with **648 passed / 0 failed**; Render deploy **`dep-da29chegekts7391fq90`** reached LIVE. Post-deployment error-level logs were clear, the Google Calendar health check passed, and production `/health` reported application and database status `ok`.
 
 Relevant accepted lineage:
 - #301 / `6863958dbf97a6a6f593fc196c284571adf802c6` — accepted public catalogue presentation.
@@ -33,7 +33,9 @@ Relevant accepted lineage:
 - #315 / `465afe295bdfc5f9570ab52147a4e97865a8947a` — carries forward the Google Business Profile provider gate.
 - #316 / `dd9681994eb51e4247cd86c8d37d1957b954aecd` — adds explicit workstream routing to Control checkpoints.
 - #317 / `f2a78bb33db212f759ac5bb72f1d832ca11cc104` — enforces specialist reconciliation and mandatory final checkpoints; **current governance baseline**.
-- #318 / `aafd7acb278be97ddc1c0dc4b1fca25b16e83d5a` — grants JP the explicit Christel+Abigail booking entitlement while preserving fail-closed enforcement and denying attendance finalization; **current accepted production application code**.
+- #318 / `aafd7acb278be97ddc1c0dc4b1fca25b16e83d5a` — grants JP the explicit Christel+Abigail booking entitlement while preserving fail-closed enforcement and denying attendance finalization; **accepted entitlement state**.
+- #319 / `6bb248fef50877235357b97087b4829db3bddeae` — reconciles the verified JP entitlement into shared authority.
+- #320 / `90cbc79362183cff8ea9ef3116aac52e3f312f7f` — centralizes full-label WhatsApp list presentation across applicable Admin and client menus; **current accepted production application code**.
 
 Fresh Meta/provider evidence from the #310 production startup:
 - `shiloh_staff_finalization_v1` — **APPROVED / UTILITY**.
@@ -125,6 +127,12 @@ PR #313 made booking entitlement independent from broad Admin capability. PR #31
 The WhatsApp menu and booking flow now use one canonical entitlement contract, so **Make a booking** is presented only when that contract grants a usable practitioner scope. The booking catalogue retains authoritative service/staff eligibility, treatment sub-groups, pagination, cancellation, client selection, availability and final confirmation guards.
 
 JP has the same authorized Admin operational actions as Christel and the same Christel+Abigail booking scope, except **Finalize past visits** remains absent and denied. This does not grant JP attendance/finalization authority. PR #318 passed CI run #1026 with 642 passed / 0 failed and is verified LIVE as Render deploy `dep-da2909ou01pc73bite9g` with healthy application, database and Google Calendar checks.
+
+### WhatsApp menu label presentation — verified live
+
+PR #320 adds one shared presentation contract for applicable dynamic Admin and client WhatsApp lists. WhatsApp row titles remain within the enforced 24-character limit; the optional 72-character description line now prioritizes the full canonical treatment, service, package or client wording whenever it fits. Secondary price, duration, date and practitioner detail is included only when it does not force a fitting canonical label to be shortened. Labels longer than the provider description limit remain explicitly ellipsized; canonical CRM wording is not renamed or mutated.
+
+The rule covers Admin booking, booking management, finalization, pricing and approvals, plus client discovery, packages, booking changes, availability and rescheduling. Static labels already displayed in full remain unchanged. Permissions, JP entitlement, availability, confirmation, booking, attendance, CRM identity and database enforcement are unaffected. CI #1033 passed 648 / 0; Render deploy `dep-da29chegekts7391fq90` is LIVE with clear error logs and healthy application, database and Google Calendar checks. Genuine handset presentation remains natural evidence and must not be manufactured.
 
 ## Google Calendar provider guard and recovery — 🟢 VERIFIED HEALTHY
 
