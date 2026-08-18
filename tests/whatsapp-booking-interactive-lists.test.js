@@ -9,14 +9,16 @@ const whatsapp = fs.readFileSync(path.join(root, 'src/services/whatsapp.js'), 'u
 const webhook = fs.readFileSync(path.join(root, 'src/controllers/webhookController.js'), 'utf8');
 const buttons = fs.readFileSync(path.join(root, 'src/services/adminEarningsButtons.js'), 'utf8');
 
-test('staff booking catalogue remains scoped to Marietjie or the Christel-Abigail team', () => {
-  assert.match(booking, /name==='marietjie'.*staffNames:\['marietjie'\]/);
-  assert.match(booking, /name==='christel'\|\|name==='abigail'.*staffNames:\['christel','abigail'\]/);
+test('staff booking catalogue remains fail-closed to the approved practitioner scope', () => {
+  assert.match(booking, /name === 'marietjie'.*staffNames: \['marietjie'\]/);
+  assert.match(booking, /name === 'christel' \|\| name === 'abigail'.*staffNames: \['christel', 'abigail'\]/);
+  assert.match(booking, /key: 'own_practitioner'.*staffIds: \[Number\(admin\.staff_id\)\]/s);
+  assert.match(booking, /key: 'no_practitioner_scope'.*staffNames: \[\], staffIds: \[\]/s);
   assert.match(booking, /st\.client_bookable=TRUE/);
 });
 
 test('service-first booking uses genuine WhatsApp list payloads with bounded pagination', () => {
-  assert.match(booking, /ux:'whatsapp_interactive_list'/);
+  assert.match(booking, /ux: 'whatsapp_interactive_list'/);
   assert.match(booking, /function categoryInteractive/);
   assert.match(booking, /function serviceInteractive/);
   assert.match(booking, /admin_booking_service:/);
@@ -50,6 +52,6 @@ test('final booking decision uses real reply buttons, not typed-only confirmatio
 test('interactive choices never bypass final authoritative booking validation', () => {
   assert.match(booking, /prepareAdminBooking/);
   assert.match(booking, /confirmAdminBooking/);
-  assert.match(booking, /staffRowsForService\(service\.id,admin\)/);
+  assert.match(booking, /staffRowsForService\(service\.id, admin\)/);
   assert.match(booking, /listAvailableSlots/);
 });
