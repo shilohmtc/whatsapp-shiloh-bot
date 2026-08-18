@@ -16,7 +16,7 @@ Purpose: concise operational dashboard. Master is the detailed current ledger; d
 
 ## Governance
 
-New chat: read Master + Tracker + latest reconciliation, currently `docs/SHILOH-OS-RECONCILIATION-2026-08-18-CONTROL-WORKSTREAM-ROUTING.md`, plus `docs/SHILOH-OS-ENGINEERING-GOVERNANCE.md`, on GitHub `main`; verify applicable production/provider state; give the four-part checkpoint; obtain explicit approval before the first new substantial controlled action. After that approval, continue the approved workstream automatically through ordinary engineering/deploy/verification/housekeeping. Stop for material scope/risk expansion, contradictory authority, or an existing fail-closed human/provider/evidence gate.
+New chat: read Master + Tracker + latest reconciliation, currently `docs/SHILOH-OS-RECONCILIATION-2026-08-18-SPECIALIST-WORKSTREAM-RECONCILIATION.md`, plus `docs/SHILOH-OS-ENGINEERING-GOVERNANCE.md`, on GitHub `main`; verify applicable production/provider state; give the four-part checkpoint; obtain explicit approval before the first new substantial controlled action. After that approval, continue the approved workstream automatically through ordinary engineering/deploy/verification/housekeeping. Stop for material scope/risk expansion, contradictory authority, or an existing fail-closed human/provider/evidence gate.
 
 Operational screenshots are diagnostic evidence by default, not image-generation requests. Production defects follow trace → evidence → root cause → guarded repair → regression/E2E → CI → deploy → production verification → reconciliation. Never manufacture appointments, provider approval, attendance truth, Calendar truth or handset evidence.
 
@@ -33,6 +33,7 @@ Current accepted production code remains **PR #313 / `ef0da63681d244fc3a0fbb1e6c
 | WORKSTREAM-COMPLETION | End-to-end controlled-work protocol | 🟢 VERIFIED | Inspect → implement → full applicable regression → repair green → merge → production/provider verify → Tracker → durable Master → checkpoint; only material gates pause work. |
 | WORKSTREAM-CROSS-CONTRACT | Cross-workstream dependency reconciliation | 🟢 VERIFIED | Specialist ownership cannot create conflicting Shiloh OS state; changed assumptions/contracts must be reconciled into shared authority. |
 | CONTROL-CHECKPOINT-ROUTING | Control recommendation → specialist continuation | 🟢 VERIFIED | Every Control checkpoint names the owner/chat/reason/dependencies/status and supplies a ready-to-copy instruction; blocked work remains with monitoring/control and is not routed to implementation. |
+| SPECIALIST-RECONCILIATION | Mandatory specialist verification → Tracker/Master → final checkpoint | 🟢 VERIFIED | Each specialist independently reads authority, reconciles verified delivery before completion, records blocked gates, and supplies the mandatory five-part final specialist checkpoint. |
 | ADMIN-BOOKING-ENTITLEMENT | Fail-closed practitioner booking scope | 🟢 VERIFIED LIVE | #313: Christel+Abigail shared scope; Marietjie only; other linked Admin own practitioner only; unlinked Admin including JP no catalogue; DB trigger enforces normal/crafted/historical paths. |
 | ADMIN-BOOKING-MENU-UX | Grouped concise WhatsApp treatment selection | 🟢 VERIFIED LIVE | #313 adds treatment sub-groups and removes repetitive row descriptions while retaining eligibility, pagination, availability, client selection and confirmation guards. |
 | ADMIN-JP-APPOINTMENTS | JP operational Appointments parity | 🟢 VERIFIED | #313 matches Christel's operational actions except Finalize past visits; attendance/finalization authority remains denied. |
@@ -94,6 +95,14 @@ A specialist chat must read applicable authoritative state before controlled wor
 Control & Reconciliation must convert each recommended next controlled action into an explicit route: owning workstream, exact specialist chat, ownership reason, dependencies/observers, implementation status and a ready-to-copy continuation instruction. The specialist instruction must require independent Master/Tracker/latest-reconciliation/governance and production/provider verification before action.
 
 When a provider, approval, human-truth, genuine-journey or other external gate blocks the item, say that implementation must not proceed. Keep ownership with the appropriate monitoring/provider workstream, with Control & Reconciliation tracking the dependency, instead of routing implementation prematurely.
+
+## Specialist completion and reconciliation contract
+
+Booking & Admin UX, WhatsApp / Meta Integration, CRM & Identity, and Production / DevOps must each independently verify applicable Master, Tracker, latest reconciliation, GitHub `main` and production/provider/human authority before controlled work.
+
+A specialist unit is not complete at implementation, test, PR, merge or deployment alone. It must reach the applicable verification boundary, reconcile delivery evidence/status/PR/commit/tests/production-provider verification/unresolved dependencies/next action into the Project Tracker, reconcile the Master only for verified durable state changes, and issue a final specialist checkpoint covering authoritative state, completed/do-not-redo work, unresolved gates, reconciliation performed, and dependency/next-action ownership.
+
+Proposed, in-progress and unmerged work must not be recorded as completed Master state. If a genuine gate prevents completion, record the blocked state and dependency rather than claim completion. Control & Reconciliation uses reconciled authoritative evidence, not specialist-chat narrative, for continuity.
 
 ## Accepted Admin booking operating rule
 
