@@ -7,13 +7,13 @@ Purpose: permanent current-state source of truth. Historical implementation deta
 
 Operational truth is GitHub `main`, Render production, Shiloh CRM/Postgres, Google Calendar, Meta/WhatsApp provider evidence, and explicit real WhatsApp/human evidence. Never infer provider, attendance, approval, CRM, Calendar, or handset state.
 
-At the beginning of each new Shiloh OS chat: read this Master + `docs/SHILOH-OS-PROJECT-TRACKER.md` + the latest reconciliation, currently `docs/SHILOH-OS-RECONCILIATION-2026-08-18-SPECIALIST-WORKSTREAM-RECONCILIATION.md`, plus `docs/SHILOH-OS-ENGINEERING-GOVERNANCE.md`, on `main`; verify applicable production/provider state; then give the four-part checkpoint: (1) authoritative current state, (2) highest-priority continuation item, (3) why it is next, (4) remaining approval/evidence/provider gate. Obtain explicit approval before the first new substantial controlled action. After that initial approval, continue the approved workstream automatically through ordinary engineering/deploy/verification/housekeeping boundaries. Stop only for material scope/risk expansion, contradictory authority, or an existing fail-closed human/provider/evidence gate.
+At the beginning of each new Shiloh OS chat: read this Master + `docs/SHILOH-OS-PROJECT-TRACKER.md` + the latest reconciliation, currently `docs/SHILOH-OS-RECONCILIATION-2026-08-18-JP-BOOKING-ENTITLEMENT.md`, plus `docs/SHILOH-OS-ENGINEERING-GOVERNANCE.md`, on `main`; verify applicable production/provider state; then give the four-part checkpoint: (1) authoritative current state, (2) highest-priority continuation item, (3) why it is next, (4) remaining approval/evidence/provider gate. Obtain explicit approval before the first new substantial controlled action. After that initial approval, continue the approved workstream automatically through ordinary engineering/deploy/verification/housekeeping boundaries. Stop only for material scope/risk expansion, contradictory authority, or an existing fail-closed human/provider/evidence gate.
 
 Permanent governance remains: operational screenshots are diagnostic evidence by default and must not trigger image generation unless visual creation/editing is explicitly requested; production defects follow trace → authoritative evidence → root cause → guarded repair → regression/E2E → CI → deploy → production verification → reconciliation; provider lead-time is considered early; known finite client/admin choices are button/list-first where practical; natural language remains fallback into the same canonical handlers; no speculative provider submissions; no manufactured appointments/evidence; no duplicate public service source of truth.
 
 ## Current production baseline
 
-Current accepted production application code remains **PR #313 / `ef0da63681d244fc3a0fbb1e6c9e1cdb42bf77c7`**, **Enforce admin practitioner booking scope and group service menus**. The current deployed `main` governance baseline is **PR #314 / `9f6aa3d38ef292e8c80570c03b14be5250d616f8`**, **Adopt Shiloh OS workstream operating model**. Full regression CI run **#1015** passed; Render deploy **`dep-da26b39srm7s738g6gc0`** reached LIVE with no error-level logs.
+Current accepted production application code is **PR #318 / `aafd7acb278be97ddc1c0dc4b1fca25b16e83d5a`**, **Grant Jean‑Pierre scoped Christel+Abigail booking entitlement**. The current governance baseline is **PR #317 / `f2a78bb33db212f759ac5bb72f1d832ca11cc104`**, **Enforce specialist workstream reconciliation**. Full regression CI run **#1026** passed with **642 passed / 0 failed**; Render deploy **`dep-da2909ou01pc73bite9g`** reached LIVE. Post-deployment error-level logs were clear, the Google Calendar health check passed, and production `/health` reported application and database status `ok`.
 
 Relevant accepted lineage:
 - #301 / `6863958dbf97a6a6f593fc196c284571adf802c6` — accepted public catalogue presentation.
@@ -28,8 +28,12 @@ Relevant accepted lineage:
 - #310 / `cb59fc67e09b5ac0afeb12c987bbaf7d41332f14` — removes #309 cross-confirm handoff; **accepted state**.
 - #311 / `89291bbceb287b4a78eaf1e0ef84da4cc853ac50` — adds the `/book` treatment catalogue link to the client welcome.
 - #312 / `7aaef341d4ac8e897769e18093733092c197507c` — makes the universal welcome precede client-state branching.
-- #313 / `ef0da63681d244fc3a0fbb1e6c9e1cdb42bf77c7` — fail-closed Admin practitioner booking entitlement, grouped WhatsApp service menus and JP appointment-menu parity; **current accepted production application code**.
-- #314 / `9f6aa3d38ef292e8c80570c03b14be5250d616f8` — adopts the five-workstream shared-authority operating model and full controlled-work completion protocol; **current governance baseline**.
+- #313 / `ef0da63681d244fc3a0fbb1e6c9e1cdb42bf77c7` — fail-closed Admin practitioner booking entitlement, grouped WhatsApp service menus and JP appointment-menu parity; **superseded for JP booking scope by #318**.
+- #314 / `9f6aa3d38ef292e8c80570c03b14be5250d616f8` — adopts the five-workstream shared-authority operating model and full controlled-work completion protocol.
+- #315 / `465afe295bdfc5f9570ab52147a4e97865a8947a` — carries forward the Google Business Profile provider gate.
+- #316 / `dd9681994eb51e4247cd86c8d37d1957b954aecd` — adds explicit workstream routing to Control checkpoints.
+- #317 / `f2a78bb33db212f759ac5bb72f1d832ca11cc104` — enforces specialist reconciliation and mandatory final checkpoints; **current governance baseline**.
+- #318 / `aafd7acb278be97ddc1c0dc4b1fca25b16e83d5a` — grants JP the explicit Christel+Abigail booking entitlement while preserving fail-closed enforcement and denying attendance finalization; **current accepted production application code**.
 
 Fresh Meta/provider evidence from the #310 production startup:
 - `shiloh_staff_finalization_v1` — **APPROVED / UTILITY**.
@@ -116,11 +120,11 @@ Do not reintroduce cross-confirm handoff unless a new explicit business requirem
 
 ### Practitioner booking entitlement and grouped treatment menus — verified live
 
-PR #313 makes booking entitlement independent from broad Admin capability. Christel and Abigail may book only the shared Christel/Abigail practitioner scope; Marietjie may book only Marietjie; any other practitioner-linked Admin may book only their linked practitioner; and an Admin without a practitioner link, including JP, receives no practitioner booking catalogue. A database trigger on `admin_booking_sessions` enforces the same rule fail-closed for normal, crafted and historical prepare paths.
+PR #313 made booking entitlement independent from broad Admin capability. PR #318 preserves Christel and Abigail's shared Christel/Abigail scope, Marietjie's Marietjie-only scope, and each other practitioner-linked Admin's own-practitioner scope. It adds one explicit exception for the unlinked Jean‑Pierre business Admin identity only when the canonical Admin record matches the guarded business-admin/all-business/all-services contract: JP may book **Christel or Abigail only**. No clinic-wide practitioner scope is inferred, no practitioner/CRM link is manufactured, and other unlinked Admins remain fail-closed with no booking catalogue. The `admin_booking_sessions` database trigger enforces the same narrow rule for normal, crafted and historical prepare paths.
 
-The WhatsApp booking catalogue retains authoritative service/staff eligibility while adding treatment sub-groups and removing repetitive `Select this service` row descriptions. Pagination, cancellation, client selection, availability and final confirmation guards remain intact.
+The WhatsApp menu and booking flow now use one canonical entitlement contract, so **Make a booking** is presented only when that contract grants a usable practitioner scope. The booking catalogue retains authoritative service/staff eligibility, treatment sub-groups, pagination, cancellation, client selection, availability and final confirmation guards.
 
-JP's Appointments menu matches Christel's operational actions except **Finalize past visits**. This parity does not grant JP attendance/finalization authority. The full regression gate initially exposed only stale source-format assertions; PR #313 repaired those assertions without weakening the new rules, and CI run #1011 passed.
+JP has the same authorized Admin operational actions as Christel and the same Christel+Abigail booking scope, except **Finalize past visits** remains absent and denied. This does not grant JP attendance/finalization authority. PR #318 passed CI run #1026 with 642 passed / 0 failed and is verified LIVE as Render deploy `dep-da2909ou01pc73bite9g` with healthy application, database and Google Calendar checks.
 
 ## Google Calendar provider guard and recovery — 🟢 VERIFIED HEALTHY
 
