@@ -21,6 +21,10 @@ test('universal welcome uses the approved client-facing copy', () => {
   assert.match(reply, /you’re in the right place/i);
   assert.match(reply, /Shiloh, our AI Assistant/i);
   assert.match(reply, /Choosing the right treatment/i);
+  assert.match(reply, /browse our treatments, descriptions and prices here/i);
+  assert.match(reply, /https:\/\/shiloh-whatsapp-bot\.onrender\.com\/book/i);
+  assert.match(reply, /start your booking directly from the treatment page/i);
+  assert.match(reply, /come back here and chat with me/i);
   assert.match(reply, /Checking availability/i);
   assert.match(reply, /Making or managing your appointment/i);
   assert.match(reply, /Calls & SMS: 066 239 9138/i);
