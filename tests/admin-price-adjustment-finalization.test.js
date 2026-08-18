@@ -9,12 +9,12 @@ const finalization = source('src/services/adminAppointmentFinalization.js');
 const migration = source('migrations/058_historical_price_adjustment.sql');
 const christelEarnings = source('src/services/adminChristelEarnings.js');
 
-test('price adjustment is available to Christel and Marietjie inside certification scope', () => {
-  assert.match(finalization, /DISCRETIONARY_FINALIZERS = new Set\(\['christel', 'marietjie'\]\)/);
+test('price adjustment is available to each practitioner Admin inside their own certification scope', () => {
   assert.match(finalization, /function canUseDiscretionaryFinalization\(admin\)/);
+  assert.match(finalization, /return canAccessOwnFinalization\(admin\)/);
   assert.match(finalization, /title: 'Adjust price'/);
   assert.match(finalization, /finalize_price_adjust_/);
-  assert.match(finalization, /Christel or Marietjie within their authorized certification scope/);
+  assert.match(finalization, /assigned practitioner through their own linked Admin account/);
 });
 
 test('price adjustment uses a guarded amount and explicit button confirmation', () => {

@@ -1,6 +1,7 @@
 const { pool } = require('../db/pool');
 const { sendWhatsAppTemplate } = require('./whatsapp');
 const { TEMPLATE_NAME, getStaffFinalizationTemplateStatus } = require('./staffFinalizationTemplateProvisioning');
+const { certificationStaffIds } = require('./attendanceFinalizationAuthority');
 const logger = require('../lib/logger');
 
 const SCAN_MINUTES = Math.max(Number(process.env.ATTENDANCE_FINALIZATION_SCAN_MINUTES || 15), 5);
@@ -73,19 +74,12 @@ function reminderWindow(now = new Date()) {
 }
 
 async function reminderRecipients() {
-  const result = await pool.query(`SELECT saa.id AS admin_id, saa.normalized_whatsapp, saa.display_name, saa.staff_id, lower(trim(saa.display_name)) AS admin_name FROM staff_admin_accounts saa WHERE saa.active=TRUE AND lower(trim(saa.display_name)) IN ('christel','marietjie') ORDER BY saa.id`);
+  const result = await pool.query(`SELECT saa.id AS admin_id, saa.normalized_whatsapp, saa.display_name, saa.staff_id, lower(trim(saa.display_name)) AS admin_name FROM staff_admin_accounts saa WHERE saa.active=TRUE AND lower(trim(saa.display_name)) IN ('christel','abigail','marietjie') ORDER BY saa.id`);
   return result.rows;
 }
 
-async function activeStaffIdsByName(names) {
-  const result = await pool.query(`SELECT id, lower(trim(display_name)) AS name FROM staff WHERE status='active' AND lower(trim(display_name)) = ANY($1::text[])`, [names]);
-  return new Map(result.rows.map((row) => [row.name, Number(row.id)]));
-}
-
-async function pendingCountForAuthority(admin, clinicDate, staffMap) {
-  let allowed = [];
-  if (admin.admin_name === 'christel') allowed = [staffMap.get('christel'), staffMap.get('abigail')].filter(Boolean);
-  if (admin.admin_name === 'marietjie') allowed = [staffMap.get('marietjie')].filter(Boolean);
+async function pendingCountForAuthority(admin, clinicDate) {
+  const allowed = await certificationStaffIds(admin);
   if (!allowed.length) return 0;
   const result = await pool.query(`SELECT COUNT(*)::int AS count FROM (SELECT a.id FROM appointments a JOIN appointment_staff ast ON ast.appointment_id=a.id WHERE (a.ends_at AT TIME ZONE 'Africa/Johannesburg')::date=$1::date AND a.ends_at < NOW() AND a.status NOT IN ('completed','cancelled','no_show') GROUP BY a.id HAVING COUNT(*) FILTER (WHERE ast.staff_id IS NOT NULL) > 0 AND BOOL_AND(ast.staff_id = ANY($2::bigint[]))) pending`, [clinicDate, allowed]);
   return Number(result.rows[0]?.count || 0);
@@ -106,10 +100,10 @@ async function processAttendanceFinalizationReminders(now = new Date()) {
   await ensureReminderTable();
   const window = reminderWindow(now);
   if (!window) return { enabled: true, sent: 0, reason: 'outside_window' };
-  const [admins, staffMap] = await Promise.all([reminderRecipients(), activeStaffIdsByName(['christel', 'abigail', 'marietjie'])]);
+  const admins = await reminderRecipients();
   let sent = 0;
   for (const admin of admins) {
-    const pendingCount = await pendingCountForAuthority(admin, window.clinicDate, staffMap);
+    const pendingCount = await pendingCountForAuthority(admin, window.clinicDate);
     if (!pendingCount) continue;
     const claimId = await claimReminder(admin.admin_id, window.clinicDate, window.kind, pendingCount);
     if (!claimId) continue;

@@ -1,4 +1,5 @@
 const { canPresentAdminBooking } = require('./adminBookingEntitlement');
+const { canAccessOwnFinalization } = require('./attendanceFinalizationAuthority');
 
 function has(admin, permission) {
   return admin?.permissions?.[permission] === true;
@@ -8,20 +9,16 @@ function isBusinessWide(admin) {
   return ['owner', 'business_admin'].includes(admin?.business_role) || admin?.calendar_scope === 'all_business';
 }
 
-function normalizedAdminName(admin) {
-  return String(admin?.display_name || '').trim().toLowerCase();
-}
-
 function canAccessFinalization(admin) {
-  return ['christel', 'marietjie'].includes(normalizedAdminName(admin));
+  return canAccessOwnFinalization(admin);
 }
 
 function appointmentsInteractive(admin) {
   const rows = [];
 
   // Daily operational actions come first so they are visible without scrolling.
-  // Finalization authority is deliberately narrow: Christel finalizes Christel
-  // and Abigail visits; Marietjie finalizes only her own visits.
+  // Finalization authority is deliberately narrow: each linked practitioner
+  // Admin finalizes only their own visits. Jean-Pierre has no finalization.
   if (canAccessFinalization(admin) && has(admin, 'booking:update') && has(admin, 'appointment:view')) {
     rows.push({
       id: 'admin_appointment_finalize',

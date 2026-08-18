@@ -5,6 +5,7 @@ const { scheduleMenu, canControlChristelBusiness } = require('../src/services/ad
 const { pricingOwner, isJeanPierreBusinessAdmin } = require('../src/services/adminServicePricing');
 const { certificationStaffIds, authorityDescription } = require('../src/services/attendanceFinalizationAuthority');
 const { appointmentsInteractive } = require('../src/services/adminAppointmentsMenu');
+const { enrichPrivilegedReportsMenu } = require('../src/services/adminInteractiveMenu');
 
 const jeanPierre = {
   id: 9001,
@@ -26,6 +27,8 @@ const jeanPierre = {
 };
 
 const christel = { ...jeanPierre, id: 9002, staff_id: 3, display_name: 'Christel' };
+const abigail = { ...jeanPierre, id: 9003, staff_id: 4, display_name: 'Abigail', business_role: 'employee_practitioner', calendar_scope: 'own_appointments', service_scope: 'own_services' };
+const marietjie = { ...jeanPierre, id: 9004, staff_id: 5, display_name: 'Marietjie', business_role: 'tenant_practitioner', calendar_scope: 'own_services', service_scope: 'own_services' };
 
 test('Jean-Pierre business admin receives Christel business schedule controls without practitioner self controls', () => {
   assert.equal(canControlChristelBusiness(jeanPierre), true);
@@ -47,6 +50,17 @@ test('JP appointment menu matches Christel operational actions except finalizati
   assert.ok(christelIds.includes('admin_appointment_finalize'));
   assert.ok(!jpIds.includes('admin_appointment_finalize'));
   assert.deepEqual(jpIds, christelIds.filter((id) => id !== 'admin_appointment_finalize'));
+});
+
+test('all three practitioner Admin menus expose own finalization while JP remains excluded', () => {
+  for (const admin of [christel, abigail, marietjie]) {
+    assert.ok(appointmentsInteractive(admin).rows.some((row) => row.id === 'admin_appointment_finalize'));
+  }
+  assert.ok(!appointmentsInteractive(jeanPierre).rows.some((row) => row.id === 'admin_appointment_finalize'));
+
+  const base = (admin) => ({ handled: true, admin, interactive: { body: '*Shiloh Admin 🌿*\n\n*Appointments*\n1️⃣ Make a booking' } });
+  assert.doesNotMatch(enrichPrivilegedReportsMenu(base(jeanPierre)).interactive.body, /Finalize past visits/);
+  assert.match(enrichPrivilegedReportsMenu(base(abigail)).interactive.body, /Finalize past visits/);
 });
 
 test('Jean-Pierre business admin parity does not grant attendance certification authority', async () => {

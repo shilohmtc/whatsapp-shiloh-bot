@@ -6,6 +6,7 @@ const {
   getStaffFinalizationActionTemplateStatus,
 } = require('./staffFinalizationTemplateProvisioning');
 const logger = require('../lib/logger');
+const { certificationStaffIds } = require('./attendanceFinalizationAuthority');
 
 const LANGUAGE_CODE = process.env.WHATSAPP_TEMPLATE_LANGUAGE || 'en';
 const SCAN_MINUTES = Math.max(Number(process.env.HISTORICAL_FINALIZATION_PROMPT_SCAN_MINUTES || 15), 5);
@@ -37,29 +38,17 @@ async function approvedActionTemplate() {
 
 async function recipients() {
   const result = await pool.query(`
-    SELECT id AS admin_id, normalized_whatsapp, display_name, lower(trim(display_name)) AS admin_name
+    SELECT id AS admin_id, staff_id, normalized_whatsapp, display_name, lower(trim(display_name)) AS admin_name
       FROM staff_admin_accounts
      WHERE active=TRUE
-       AND lower(trim(display_name)) IN ('christel','marietjie')
+       AND lower(trim(display_name)) IN ('christel','abigail','marietjie')
      ORDER BY id
   `);
   return result.rows;
 }
 
-async function activeStaffIds() {
-  const result = await pool.query(`
-    SELECT id, lower(trim(display_name)) AS name
-      FROM staff
-     WHERE status='active'
-       AND lower(trim(display_name)) IN ('christel','abigail','marietjie')
-  `);
-  return new Map(result.rows.map((row) => [row.name, Number(row.id)]));
-}
-
-async function pendingTotalForAuthority(admin, staffMap) {
-  let allowed = [];
-  if (admin.admin_name === 'christel') allowed = [staffMap.get('christel'), staffMap.get('abigail')].filter(Boolean);
-  if (admin.admin_name === 'marietjie') allowed = [staffMap.get('marietjie')].filter(Boolean);
+async function pendingTotalForAuthority(admin) {
+  const allowed = await certificationStaffIds(admin);
   if (!allowed.length) return 0;
 
   const result = await pool.query(`
@@ -98,12 +87,12 @@ async function processHistoricalFinalizationPrompts() {
   if (!template.approved) return { enabled: false, sent: 0, reason: 'action_template_not_approved', providerStatus: template.providerStatus };
 
   await ensurePromptLedger();
-  const [admins, staffMap] = await Promise.all([recipients(), activeStaffIds()]);
+  const admins = await recipients();
   let sent = 0;
   const results = [];
 
   for (const admin of admins) {
-    const pendingCount = await pendingTotalForAuthority(admin, staffMap);
+    const pendingCount = await pendingTotalForAuthority(admin);
     if (!pendingCount) { results.push({ admin: admin.admin_name, pendingCount: 0, sent: false }); continue; }
     if (!(await claim(admin.admin_id, pendingCount))) { results.push({ admin: admin.admin_name, pendingCount, sent: false, reason: 'already_prompted' }); continue; }
     try {
