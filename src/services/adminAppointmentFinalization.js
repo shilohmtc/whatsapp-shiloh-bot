@@ -3,6 +3,7 @@ const { normalizePhone } = require('./clientIdentityOnboarding');
 const { canCertifyAppointment, certificationStaffIds, authorityDescription } = require('./attendanceFinalizationAuthority');
 const { processAdminBookingUpdateMessage } = require('./adminBookingUpdate');
 const { processAdminAppointmentCancellationMessage, hasPendingCancellationIntent } = require('./adminAppointmentCancellation');
+const { compactListTitle, fullLabelDescription } = require('../presentation/whatsappListRowPresentation');
 
 // Reserve two of WhatsApp's 10 list rows for pagination and Back controls.
 const PAGE_SIZE = 8;
@@ -106,8 +107,8 @@ async function pendingPastAppointments(admin, page = 1) {
 function pendingListInteractive(data, admin = null) {
   const rows = data.rows.map((row) => ({
     id: `finalize_appt_${row.id}`,
-    title: `#${row.id} ${String(row.client_name || 'Client').slice(0, 14)}`.slice(0, 24),
-    description: `${formatDateTime(row.starts_at)} · ${String(row.services || row.staff || row.status).slice(0, 42)}`.slice(0, 72),
+    title: compactListTitle(`#${row.id} ${row.client_name || 'Client'}`),
+    description: fullLabelDescription(row.client_name || 'Client', `${formatDateTime(row.starts_at)} · ${row.services || row.staff || row.status}`),
   }));
   if (data.hasNext) rows.push({ id: `finalize_appts_page_${data.page + 1}`, title: 'More appointments', description: 'Show more visits from 1–15 Aug awaiting final status' });
   rows.push({ id: 'appointments', title: '← Back', description: 'Return to Appointments' });
@@ -296,8 +297,8 @@ function serviceChangeListInteractive(appointment, services, page = 1) {
   const slice = services.slice(start, start + SERVICE_PAGE_SIZE);
   const rows = slice.map((service) => ({
     id: `finalize_service_pick_${service.id}`,
-    title: String(service.name || 'Service').slice(0, 24),
-    description: `${service.variable_price ? 'Variable price' : money(service.price)} · ${Number(service.duration_minutes || 0) + Number(service.processing_time_minutes || 0) + Number(service.extra_time_minutes || 0)} min`.slice(0, 72),
+    title: compactListTitle(service.name || 'Service'),
+    description: fullLabelDescription(service.name || 'Service', `${service.variable_price ? 'Variable price' : money(service.price)} · ${Number(service.duration_minutes || 0) + Number(service.processing_time_minutes || 0) + Number(service.extra_time_minutes || 0)} min`),
   }));
   if (safePage > 1) rows.push({ id: `finalize_service_page_${safePage - 1}`, title: '← Previous', description: 'Show previous services' });
   if (start + SERVICE_PAGE_SIZE < services.length) rows.push({ id: `finalize_service_page_${safePage + 1}`, title: 'Next →', description: 'Show more services' });
