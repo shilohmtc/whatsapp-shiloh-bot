@@ -1,44 +1,52 @@
 # Shiloh OS — Master Project Status
 
-Updated: 2026-08-17 18:58 SAST
-Purpose: permanent current-state source of truth. Historical implementation detail remains in Git history; do not redo accepted work.
+Updated: 2026-08-18 09:03 SAST
+Purpose: permanent current-state source of truth. Historical implementation detail remains in Git history; do not redo accepted or superseded work.
 
 ## Authority and continuation protocol
 
 Operational truth is GitHub `main`, Render production, Shiloh CRM/Postgres, Google Calendar, Meta/WhatsApp provider evidence, and explicit real WhatsApp/human evidence. Never infer provider, attendance, approval, CRM, Calendar, or handset state.
 
-At the beginning of each new Shiloh OS chat: read this Master + `docs/SHILOH-OS-PROJECT-TRACKER.md` + the latest reconciliation, currently `docs/SHILOH-OS-RECONCILIATION-2026-08-17-PHASE1.md`, on `main`; verify applicable production/provider state; then give the four-part checkpoint: (1) authoritative current state, (2) highest-priority continuation item, (3) why it is next, (4) remaining approval/evidence/provider gate. Obtain explicit approval before the first new substantial controlled action. After that initial approval, continue the approved workstream automatically through ordinary engineering/deploy/verification/housekeeping boundaries. Stop only for material scope/risk expansion, contradictory authority, or an existing fail-closed human/provider/evidence gate.
+At the beginning of each new Shiloh OS chat: read this Master + `docs/SHILOH-OS-PROJECT-TRACKER.md` + the latest reconciliation, currently `docs/SHILOH-OS-RECONCILIATION-2026-08-18-PUBLIC-CATALOGUE-POLISH.md`, on `main`; verify applicable production/provider state; then give the four-part checkpoint: (1) authoritative current state, (2) highest-priority continuation item, (3) why it is next, (4) remaining approval/evidence/provider gate. Obtain explicit approval before the first new substantial controlled action. After that initial approval, continue the approved workstream automatically through ordinary engineering/deploy/verification/housekeeping boundaries. Stop only for material scope/risk expansion, contradictory authority, or an existing fail-closed human/provider/evidence gate.
 
 Permanent governance remains: provider lead-time early in feature planning; known finite client/admin choices are button/list-first when practical; natural language remains fallback into the same canonical handlers; no speculative provider submissions; no manufactured appointments/evidence; no duplicate public service source of truth.
 
 ## Current production / deployment baseline
 
-GitHub and Render are converged through **`5d8b2c2350a554656cc416ecbe289f9374e3305a`** (PR #280, `Build Phase 1 Shiloh public service catalogue`). PR #280 passed the full non-mutating CI suite before merge. Render auto-deployed the exact merge commit as **`dep-da1jqoe1egvs73aagcug`** and reported it LIVE. The new runtime started successfully and `/health` returned HTTP 200.
+GitHub and Render are converged through **`6863958dbf97a6a6f593fc196c284571adf802c6`** (PR #301, `Group plasma specialty categories in one row`). The final #301 branch head passed GitHub Actions CI run **#970** before merge. Render auto-deployed the exact merge commit as **`dep-da1ut3oae00c73c0g18g`** and reported it **LIVE** at 2026-08-18 05:33:32 UTC.
 
-The earlier #277 confirmed-reschedule commit-path repair and #278 start-time-first Admin manual booking presentation are contained in the current live lineage. Their previous deployment-convergence gate is closed. Do not reopen #272–#279 without new evidence.
+The accepted lineage now includes #277–#280 and the public-catalogue refinement sequence #282–#301. Intermediate visual experiments and earlier specialty-layout variants superseded by the current #301 runtime are historical only; do not reopen them without new evidence or explicit business direction.
 
-Fresh production startup evidence on 17 August reported:
+Fresh production startup evidence previously established on 17 August remains:
 - `shiloh_staff_finalization_v1` — **APPROVED / UTILITY**.
 - `shiloh_staff_finalization_actions_v1` — **APPROVED / UTILITY**.
 - `shiloh_booking_confirmation_v1` — **APPROVED / UTILITY**.
 
-This supersedes the older PENDING state for `shiloh_staff_finalization_actions_v1`. Provider approval does not itself prove a handset send or justify manufactured operational messaging; existing authorization, idempotency and genuine-use rules remain in force.
+Provider approval does not itself prove handset delivery or justify manufactured operational messaging; existing authorization, idempotency and genuine-use rules remain in force.
 
-## Public Shiloh service catalogue — 🟢 VERIFIED LIVE
+## Public Shiloh service catalogue — 🟢 VERIFIED LIVE through #301
 
-`/book` is now the Shiloh-owned public service catalogue and booking entry surface. It replaces Goldie as the intended public catalogue direction without copying Goldie into a second database.
+`/book` is the Shiloh-owned public service catalogue and booking entry surface. It remains a read-only projection of canonical Shiloh CRM catalogue data rather than a second service database.
 
-The page is a read-only projection of canonical Shiloh CRM catalogue data. A service is publicly exposed only when:
-- the service is active;
-- at least one mapped staff member is active;
-- that staff member is a practitioner; and
-- that practitioner is client-bookable.
+A service is publicly exposed only when the service is active and at least one mapped staff member is active, a practitioner, and client-bookable. The page renders canonical category, service name, duration, price, customer description and booking note. Each treatment action hands the exact canonical service name to the official Shiloh WhatsApp journey. The webpage never claims a slot is available; practitioner/date/time availability remains authoritative only inside the existing booking engine.
 
-The page renders canonical category, service name, duration, price, customer description and booking note. Each **Book this treatment** action hands the exact canonical service name to the official Shiloh WhatsApp journey. The webpage never claims a slot is available; practitioner/date/time availability remains authoritative only inside the existing booking engine.
+### Accepted presentation state
 
-Phase 1 ships with an approved real Shiloh reception photograph as the primary hero image. Promotional posters are excluded from the permanent catalogue. Additional approved clinic/category/treatment photography can be added progressively without changing the catalogue data model.
+The current accepted #301 page includes:
+- reduced conversion-oriented hero and faster treatment access;
+- wider desktop catalogue with scannable duration/price cards;
+- Massage pinned first and Pedicures & Foot Care second;
+- responsive category navigation and WhatsApp guidance/booking actions;
+- real Shiloh clinic imagery served from repository assets while treatment cards remain clean;
+- the exact uploaded **Inside Shiloh** artwork used as three recurring catalogue signatures;
+- responsive specialty-category grouping on desktop/mobile;
+- **Profosma Jet Plasma + Plasma Fibroblast Consultation + Plasma Fibroblast Prices** together in one three-column desktop plasma row;
+- the two SQT BioMicroneedling categories retained together;
+- **HIFU + Vaginal Tightening & Rejuvenation + Neo Pelvic Therapy** retained as the approved three-category specialty row.
 
-The established public landing-page compatibility contract remains visible: **`Your appointment starts with Shiloh.`** and **`Continue with Shiloh on WhatsApp`**. The final Phase 1 branch head `105cce9...` passed CI run #918 before merge.
+PRs #284–#294 contain iterative visual experiments that were subsequently superseded. PRs #298–#300 contain earlier specialty grouping variants superseded by #301. Do not treat those intermediate states as unfinished work.
+
+The established public compatibility contract remains visible: **`Your appointment starts with Shiloh.`** and **`Continue with Shiloh on WhatsApp`**.
 
 ## Admin booking and manage-booking — 🟢 IMPLEMENTED / LIVE
 
@@ -70,9 +78,7 @@ Appointment **#558 on 2026-08-06** remains unresolved with historical practition
 
 ## Historical finalization shortcut — 🟢 PROVIDER APPROVED / operational evidence rules remain
 
-The proactive role-aware Finalize shortcut is implemented with recipient-specific count, direct authorized queue action, idempotent send ledger and retry-safe failed delivery. Fresh production startup evidence now shows `shiloh_staff_finalization_actions_v1` **APPROVED / UTILITY**.
-
-Do not translate provider approval into fabricated handset evidence. Use the shortcut only under its existing authorized-recipient and genuine operational conditions. Ordinary **Admin → Appointments → Finalize past visits** remains canonical.
+The proactive role-aware Finalize shortcut is implemented with recipient-specific count, direct authorized queue action, idempotent send ledger and retry-safe failed delivery. `shiloh_staff_finalization_actions_v1` is **APPROVED / UTILITY**. Do not translate provider approval into fabricated handset evidence. Ordinary **Admin → Appointments → Finalize past visits** remains canonical.
 
 ## Universal client entry / lifecycle / discovery — 🟢 VERIFIED; do not redo
 
@@ -82,7 +88,7 @@ Canonical presentation remains:
 - Christel · Massage — Massage Practitioner
 - Abigail · Massage — Massage Practitioner
 - Marietjie · Esthetician — Aesthetic Practitioner
-- Massage Treatments pinned first; Pedicures & Foot Care second; remaining categories alphabetized.
+- Massage Treatments pinned first; Pedicures & Foot Care second; remaining categories alphabetized where that client-directory contract applies.
 - SQT BioMicroneedling presented as one virtual family with two treatments while underlying CRM identities remain unchanged.
 
 Do not consolidate/rename underlying CRM records merely to reproduce presentation.
@@ -109,18 +115,18 @@ CRM48 (Pa Derik) and CRM473 remain legitimate controlled Goldie-imported canonic
 
 ## Exact new-chat continuation state
 
-- GitHub + Render runtime: **`5d8b2c2350a554656cc416ecbe289f9374e3305a`** (#280) is production-live.
-- `/book` is the live Shiloh-owned CRM-backed public service catalogue and WhatsApp booking entry surface.
-- Only active services with an active client-bookable practitioner can appear publicly.
-- Phase 1 uses the approved Shiloh reception photograph; additional category/treatment imagery is a presentation evolution, not a catalogue-data rewrite.
-- #277/#278 deployment convergence is resolved and must not be treated as outstanding.
-- `shiloh_staff_finalization_actions_v1` is now freshly evidenced **APPROVED / UTILITY**.
+- GitHub + Render runtime: **`6863958dbf97a6a6f593fc196c284571adf802c6`** (#301) is production-live.
+- `/book` remains the live Shiloh-owned CRM-backed public service catalogue and WhatsApp booking entry surface.
+- The accepted presentation workstream through #301 is complete; do not redo superseded #284–#300 visual/layout variants.
+- Exact Inside Shiloh artwork is used at the three approved signature positions.
+- Final desktop specialty layout includes the three plasma categories together, the SQT pair together, and the approved HIFU/rejuvenation/pelvic row; mobile remains responsive/stacked.
+- Catalogue presentation changes did not alter canonical service, price, practitioner, availability, Calendar, appointment or WhatsApp booking semantics.
 - Historical attendance remains human-controlled; live remaining count must be re-queried before quoting.
 - #558 remains fail-closed.
-- Completed client welcome/lifecycle/directory/SQT work remains completed.
+- Completed client welcome/lifecycle/directory/SQT and Admin booking/reschedule work remains completed.
 
-**Authoritative current state:** source and production are converged through Phase 1 public catalogue launch. Provider action-template approval is refreshed. Human-truth gates remain separate.
+**Authoritative current state:** source and production are converged through PR #301 and the accepted public-catalogue polish workstream is live.
 
-**Highest-priority continuation item:** business review of the live `/book` experience, followed by approved presentation refinements and progressive clinic/category/treatment photography. Preserve canonical Shiloh CRM as the sole service source of truth.
+**Highest-priority continuation item:** business review of the current live #301 `/book` experience. Any next refinement must begin from this accepted state rather than recreating superseded experiments.
 
-**Remaining gate:** no engineering gate blocks Phase 1. Future material commercial/service-rule changes require explicit business approval; attendance/#558/genuine-journey truth remains fail-closed.
+**Remaining gate:** no engineering gate blocks the current catalogue. Future material commercial/service-rule changes require explicit business approval; attendance/#558/genuine-journey truth remains fail-closed.
