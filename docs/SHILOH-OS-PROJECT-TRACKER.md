@@ -16,43 +16,44 @@ Purpose: concise operational dashboard. Master is the detailed current ledger; d
 
 ## Governance
 
-New chat: read Master + Tracker + latest reconciliation, currently `docs/SHILOH-OS-RECONCILIATION-2026-08-18-CUSTOMER-CHANGE-CONFIRMATIONS.md`, plus `docs/SHILOH-OS-ENGINEERING-GOVERNANCE.md`, on GitHub `main`; verify applicable production/provider state; give the four-part checkpoint; obtain explicit approval before the first new substantial controlled action. After that approval, continue the approved workstream automatically through ordinary engineering/deploy/verification/housekeeping. Stop for material scope/risk expansion, contradictory authority, or an existing fail-closed human/provider/evidence gate.
+New chat: read Master + Tracker + latest reconciliation, currently `docs/SHILOH-OS-RECONCILIATION-2026-08-18-ADMIN-BOOKING-FAST-PATH.md`, plus `docs/SHILOH-OS-ENGINEERING-GOVERNANCE.md`, on GitHub `main`; verify applicable production/provider state; give the four-part checkpoint; obtain explicit approval before the first new substantial controlled action. After that approval, continue the approved workstream automatically through ordinary engineering/deploy/verification/housekeeping. Stop for material scope/risk expansion, contradictory authority, or an existing fail-closed human/provider/evidence gate.
 
 Operational screenshots are diagnostic evidence by default, not image-generation requests. Production defects follow trace → evidence → root cause → guarded repair → regression/E2E → CI → deploy → production verification → reconciliation. Never manufacture appointments, provider approval, attendance truth, Calendar truth or handset evidence.
 
 ## Production baseline
 
-Accepted public-catalogue functional lineage remains **#301 / `6863958dbf97a6a6f593fc196c284571adf802c6`**. Google Calendar provider protection was added in **PR #302 / `bee0bdcd71f7dae768a78e6e5cfcd5ec5ddf76c9`**. Customer-change confirmation infrastructure was added in **PR #303 / `632ec4780489a97349b41a85567fa13b18d9ca35`**, with GitHub Actions CI run **#982** passing. Render deployment **`dep-da21jsdg1s2s73c1ju60`** is the PR #303 production deployment.
+Current accepted production commit is **PR #310 / `cb59fc67e09b5ac0afeb12c987bbaf7d41332f14`**. Render deployment reached LIVE. Fresh startup evidence: cross-confirm preload absent, `/health` 200, Google Calendar health probe passed, booking confirmation template APPROVED, cancellation confirmation APPROVED, booking-update template PENDING.
 
 ## At-a-glance
 
 | ID | Workstream | State | Evidence / next action |
 |---|---|---|---|
-| DEPLOY-CONVERGENCE | GitHub ↔ Render production | 🟢 VERIFIED | PR #303 merge `632ec478...` deployed on Render; service live and Google Calendar health probe passed. |
-| CUSTOMER-CHANGE-CONFIRM | Customer confirmations after successful Admin changes | 🟢 IMPLEMENTED / LIVE | PR #303 covers service, practitioner, date/time, price and cancellation after canonical mutation; audit-event-idempotent retry outbox. |
-| META-BOOKING-UPDATE | `shiloh_booking_update_v1` | 🟠 WAITING PROVIDER | Production submission succeeded; latest provider status **PENDING**. Update notifications remain queued until APPROVED. |
-| META-CANCEL-CONFIRM | `shiloh_cancellation_confirmation_v1` | 🟢 APPROVED / PROVIDER READY | Existing template already APPROVED; Admin cancellation confirmation path is enabled through PR #303. |
-| CUSTOMER-CHANGE-EVIDENCE | Genuine post-approval update delivery | 🟠 WAITING GENUINE JOURNEY | Do not mutate #570 or another real booking for proof. Capture natural service/practitioner/date-time/price change after provider approval. |
-| GOOGLE-CALENDAR-AUTH | Google Calendar OAuth/provider health | 🟢 VERIFIED HEALTHY | External OAuth app moved from Testing to In production; Client ID/secret/refresh-token chain reconciled; startup health probe passed. |
-| ADMIN-PRACTITIONER-CHANGE | Manage booking → Change practitioner | 🟢 VERIFIED LIVE | Real booking #570 changed to Christel; Google Calendar event updated; Linda Dr / Sports Massage Package Session / 2026-08-21 14:30–15:20 / R0.00 preserved. Do not mutate again for proof. |
-| ADMIN-PROVIDER-GUARD | PR #302 Calendar fail-closed guard | 🟢 VERIFIED / RETAIN | Expired/revoked provider failure becomes explicit no-write message; read-only startup/30-min health probe retained permanently. |
-| PUBLIC-CATALOGUE-P1 | Shiloh-owned `/book` catalogue | 🟢 VERIFIED LIVE | CRM-backed category/name/duration/price/description/note, exact-service WhatsApp handoff, no availability assertion. |
-| PUBLIC-CATALOGUE-GUARD | Public service eligibility | 🟢 VERIFIED | Only active services with an active client-bookable practitioner are exposed. |
-| PUBLIC-CATALOGUE-POLISH | #282–#301 accepted presentation lineage | 🟢 VERIFIED LIVE | Final accepted state is #301; intermediate #284–#300 visual/layout variants are superseded. |
-| PUBLIC-CATALOGUE-ORDER | Public category priority | 🟢 VERIFIED LIVE | Massage first; Pedicures & Foot Care second. |
-| PUBLIC-CATALOGUE-VISUAL | Shiloh visual identity | 🟢 VERIFIED LIVE | Real clinic imagery; exact Inside Shiloh artwork at three approved signature positions; clean cards. |
-| PUBLIC-CATALOGUE-SPECIALTY | Desktop specialty grouping | 🟢 VERIFIED LIVE | Plasma three-card row; SQT pair; approved HIFU + rejuvenation + pelvic row; responsive mobile stacking. |
-| PUBLIC-CATALOGUE-NEXT | Business review of current #301 page | ⚪ READY | Resume only from accepted #301 state; preserve CRM/booking semantics. |
+| DEPLOY-CONVERGENCE | GitHub ↔ Render production | 🟢 VERIFIED | #310 / `cb59fc67...` is LIVE on Render; health 200; Google Calendar provider probe passed. |
+| ADMIN-TYPED-TIME | Admin typed time + stale slot pagination | 🟢 VERIFIED LIVE | #304 / `278aab397...`; `14:00` and `2pm` normalize through authoritative slots; stale navigation-only page repaired. |
+| ADMIN-CLIENT-NAME | Canonical Admin client name resolution | 🟢 VERIFIED LIVE | #305 / `4767d282...`; normalized/token matching without auto-create/merge. |
+| ADMIN-GOLDIE-BRIDGE | Reconciled Goldie identity → canonical client lookup | 🟢 VERIFIED LIVE | #306 / `507c3f492...`; only already-reconciled external identity links are followed; unresolved identities fail closed. |
+| ADMIN-PROVISIONAL-CLIENT | Reserve booking for genuinely new client | 🟢 VERIFIED LIVE | #307 / `55c2f00b...`; name + SA mobile → duplicate check → provisional canonical client → guarded confirmation. |
+| ADMIN-PROVISIONAL-CLEANUP | Remove abandoned unused provisional clients | 🟢 VERIFIED LIVE | #308 / `fdcbae48...`; cleanup only when no appointment exists; never deletes existing/booked clients. |
+| ADMIN-CROSS-CONFIRM | Christel↔Abigail pending-booking handoff | ⏸️ REMOVED / SUPERSEDED | #309 introduced it; #310 removed it by business decision. Accepted rule is same Admin prepares and confirms. Do not redo without new explicit requirement. |
+| ADMIN-BOOKING-FAST-PATH | New-client booking operational flow | 🟢 VERIFIED | Real Stephan Erasmus journey reached authoritative 14:00 selection, provisional CRM client and final review; Christel subsequently confirmed herself. Do not recreate for proof. |
+| GOOGLE-CALENDAR-AUTH | Google Calendar OAuth/provider health | 🟢 VERIFIED HEALTHY | OAuth app In production; client/secret/refresh-token chain reconciled; fresh #310 startup health probe passed. |
+| ADMIN-PROVIDER-GUARD | PR #302 Calendar fail-closed guard | 🟢 VERIFIED / RETAIN | Provider failure blocks writes cleanly; startup/recurring health probe remains permanent. |
+| ADMIN-PRACTITIONER-CHANGE | Manage booking → Change practitioner | 🟢 VERIFIED LIVE | Real #570 changed to Christel; Calendar updated; preserve evidence, do not mutate for proof. |
+| CUSTOMER-CHANGE-CONFIRM | Customer confirmations after successful Admin changes | 🟢 IMPLEMENTED / LIVE | #303 covers service, practitioner, date/time, price and cancellation via durable idempotent outbox. |
+| META-BOOKING-UPDATE | `shiloh_booking_update_v1` | 🟠 WAITING PROVIDER | Latest production provider status **PENDING**. Ordinary change notifications remain queued until APPROVED. |
+| META-CANCEL-CONFIRM | `shiloh_cancellation_confirmation_v1` | 🟢 APPROVED / PROVIDER READY | Cancellation confirmation path ready. |
+| CUSTOMER-CHANGE-EVIDENCE | Genuine post-approval update delivery | 🟠 WAITING GENUINE JOURNEY | Capture natural update after provider approval; do not mutate a booking for proof. |
+| PUBLIC-CATALOGUE-P1 | Shiloh-owned `/book` catalogue | 🟢 VERIFIED LIVE | Accepted #301 CRM-backed catalogue; no duplicate static source of truth. |
+| PUBLIC-CATALOGUE-POLISH | #282–#301 presentation lineage | 🟢 VERIFIED LIVE | #301 is accepted; #284–#300 visual/layout variants superseded. |
+| PUBLIC-CATALOGUE-NEXT | Business review of current #301 page | ⚪ READY | Resume only from accepted #301 state and preserve CRM/booking semantics. |
 | ADMIN-POLISH | Role-aware Admin UX polish | 🟢 VERIFIED | Accepted and live; do not redo. |
 | ADMIN-RESCHEDULE | #272–#277 reschedule lineage | 🟢 VERIFIED LIVE | Next available, direct time/date-time, durable context, confirmation and commit repair retained. |
-| ADMIN-MANUAL-START | #278 start-time-first manual booking picker | 🟢 VERIFIED LIVE | 15-minute authoritative candidate generation; no override/double-booking path. |
-| TIME-24H | Shiloh 24-hour presentation standard (#279) | 🟢 VERIFIED LIVE | Regression-covered; do not redo. |
-| HIST-BOOK-CALENDAR | Historical manual booking CRM + Calendar sync | 🟢 VERIFIED | Canonical write + configured Calendar sync; no ordinary client notification. |
+| ADMIN-MANUAL-START | #278 start-time-first manual picker | 🟢 VERIFIED LIVE | 15-minute authoritative candidate generation; no override/double-booking path. |
+| TIME-24H | 24-hour presentation standard | 🟢 VERIFIED LIVE | Regression-covered; do not redo. |
 | ATT-AUTH | Attendance certification authority | 🟢 VERIFIED | Christel → Christel+Abigail; Marietjie → Marietjie; Abigail → none. |
-| A1-HIST-REVIEW | 1–15 Aug historical attendance final review | 🔵 ACTIVE / human truth | Historical post-reopen count was 48 routable visits; re-query before quoting current count. |
+| A1-HIST-REVIEW | 1–15 Aug historical attendance final review | 🔵 ACTIVE / HUMAN TRUTH | Re-query before quoting current unresolved/routable count. |
 | A1-558 | Appointment #558 practitioner identity | 🔴 HOLD | Historical practitioner `SHILOH MTC`; establish real practitioner before correction/finalization. |
 | META-FINALIZE-ACTIONS | `shiloh_staff_finalization_actions_v1` | 🟢 APPROVED | APPROVED / UTILITY; genuine-use/evidence rules remain. |
-| FINALIZE-SHORTCUT | Proactive historical Finalize button | 🟢 IMPLEMENTED / provider approved | Role/count/idempotency guards remain. |
 | C1-UNIVERSAL-WELCOME | Universal WhatsApp client entry | 🟢 VERIFIED | Handset-proven; do not redo. |
 | C1-WELCOME-BOOK-ROUTE | Registered/legacy Book appointment routing | 🟢 VERIFIED | Handset-proven; do not redo. |
 | C1-ELIGIBLE-ORDER | Eligible-practitioner ordering | 🟢 VERIFIED | Regression-covered. |
@@ -60,38 +61,38 @@ Accepted public-catalogue functional lineage remains **#301 / `6863958dbf97a6a6f
 | C1-PRACTITIONER-DIR | Client practitioner directory | 🟢 VERIFIED | Approved role presentation retained. |
 | C1-CATEGORY-DIR | Client category ordering/count | 🟢 VERIFIED | Massage first, Pedicures second, remainder alphabetic where applicable. |
 | C1-SQT | SQT taxonomy + labels + SQL repair | 🟢 VERIFIED | One virtual family / two treatments; underlying CRM identities unchanged. |
-| APP-PADERIK | Pa Derik #567 | 🟠 WAITING genuine action | Last recorded Tue 18 Aug 08:30–10:15; re-query if needed; no mutation for proof. |
-| C1-RESCHEDULE-UX | Client closed-day + loop-state repair | 🟢 VERIFIED | Handset-proven. |
-| JUVAN-E2E | Juvan controlled client E2E | ⚪ READY | Resume only when it serves a current verification need. |
+| APP-PADERIK | Pa Derik #567 | 🟠 WAITING GENUINE ACTION | Re-query if needed; no mutation for proof. |
 | CRM-PROVENANCE | CRM48 / CRM473 provenance | 🟢 VERIFIED | Legitimate controlled Goldie imports; keep. |
 | CRM1-REVIEW | CRM1 orphan-like provenance | ⚪ READY | Read-only identity/supersession review; no deletion without proof. |
-| CRM-IMPORTED-CLAIM | Existing Goldie client first WhatsApp verification | 🟢 FIXED / 🟠 natural evidence | Unique unverified mobile claims same CRM; ambiguity fails closed. |
-| META-LIFECYCLE | Existing lifecycle template package | 🟢 CONFIGURED / 🟠 per-route evidence | Genuine delivery evidence remains per-route. |
-| C1-FOLLOWUP-V2 | Follow-up/rating | 🟠 WAITING genuine journey | Verify after genuine completed-visit timing. |
-| BIRTHDAY-V2 | Birthday delivery | 🟠 WAITING genuine eligibility | Genuine CRM birthday + opt-in/business rules only. |
+| CRM-IMPORTED-CLAIM | Existing Goldie client first WhatsApp verification | 🟢 FIXED / 🟠 NATURAL EVIDENCE | Unique unverified mobile claims same CRM; ambiguity fails closed. |
+| META-LIFECYCLE | Existing lifecycle template package | 🟢 CONFIGURED / 🟠 PER-ROUTE EVIDENCE | Genuine delivery evidence remains per-route. |
+| C1-FOLLOWUP-V2 | Follow-up/rating | 🟠 WAITING GENUINE JOURNEY | Verify after genuine completed-visit timing. |
+| BIRTHDAY-V2 | Birthday delivery | 🟠 WAITING GENUINE ELIGIBILITY | Genuine CRM birthday + opt-in/business rules only. |
 | GCONTACTS | CRM → Google Contacts | ⚪ READY | Lower priority; CRM authoritative. |
 | GBP | Google Business Profile API | ⏸️ DEFERRED | Last-authoritative 0 QPM. |
 | E1 | Ozow | 🟠 WAITING | Merchant config + explicit business rules required. |
 | PRIV | Destructive privacy execution | 🟠 WAITING | Fail closed pending authority/evidence. |
 
-## Customer-change confirmation exact state
+## Accepted Admin booking operating rule
 
-New appointments remain on the established `shiloh_booking_confirmation_v1` path. PR #303 adds downstream confirmation for successful Admin service, practitioner, date/time, price and cancellation mutations without weakening canonical write guards.
+The Admin who prepares a pending booking confirms it. Practitioner assignment is separate from confirmer identity: an authorized Admin may choose another eligible practitioner, while final CRM, clinic hours, staff schedule, conflict and Google Calendar checks remain authoritative.
 
-Each qualifying mutation is keyed to its CRM audit event in a retryable outbox. Service/practitioner/date-time/price use the latest appointment snapshot and `shiloh_booking_update_v1`; cancellation uses `shiloh_cancellation_confirmation_v1`. No proactive free-text fallback is permitted when a template is not approved.
+For a genuinely new client, the accepted fast path is:
 
-Current Meta truth: cancellation confirmation is APPROVED; booking update template is PENDING. Pending update notifications remain queued and are retried rather than discarded.
+`service/practitioner/date/time → client search → no match → Reserve new client → name + mobile → duplicate check → provisional canonical client → review → explicit Confirm booking`.
+
+Do not require a full profile before securing the slot. Do not silently create duplicates. Do not reintroduce Christel↔Abigail cross-confirm unless a future explicit business requirement justifies it.
 
 ## Exact continuation
 
-**Authoritative current state:** PR #303 is merged, CI-passed and live. Customer-change notification infrastructure is active; cancellations are provider-ready; ordinary update confirmation waits on Meta approval of `shiloh_booking_update_v1`.
+**Authoritative current state:** #304–#308 Admin booking repairs and fast-path work are live; #309 cross-confirm is superseded and removed by #310; production is healthy on `cb59fc67...`.
 
-**Highest-priority next item:** re-check `shiloh_booking_update_v1` provider status. Once APPROVED, allow the queue to service genuine changes and capture natural delivery evidence without manufacturing a booking mutation.
+**Highest-priority next item:** re-check `shiloh_booking_update_v1` provider status. If still PENDING, continue the next approved Shiloh OS workstream without reopening the completed Admin-booking fixes.
 
-**Why next:** engineering/CI/deployment gates are closed; Meta provider approval is now the controlling external dependency for service/practitioner/date-time/price confirmation delivery.
+**Why next:** engineering/CI/deployment gates for the Admin booking defects are closed. The remaining ordinary booking-change delivery dependency is Meta approval, not further booking-flow redesign.
 
 **Remaining gates:** `shiloh_booking_update_v1` approval; historical attendance and #558 human truth; genuine lifecycle/follow-up/birthday evidence; explicit approval for material commercial/service/business-rule changes.
 
 ## Guardrails
 
-Preserve audit history. Never infer attendance, Calendar state, provider delivery or handset behaviour. Never silently assign #558. Never reopen cancelled visits for proof. Never create a static second public service catalogue when canonical CRM data can be projected instead. Retain the PR #302 provider guard/health probe and PR #303 idempotent customer-notification queue.
+Preserve audit history. Never infer attendance, Calendar state, provider delivery or handset behaviour. Never silently assign #558. Never manufacture appointments or booking changes for evidence. Never create a static second public service catalogue when canonical CRM data can be projected instead. Retain #302 provider protection, #303 idempotent notification queue, and #307/#308 provisional-client duplicate/cleanup safeguards.
