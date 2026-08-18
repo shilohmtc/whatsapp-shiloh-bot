@@ -39,18 +39,23 @@ function groupSpecialtyCategories(html, catalogue = []) {
     const indexes = row.map((name) => categories.indexOf(name));
     if (indexes.some((index) => index < 0)) continue;
 
-    const sortedIndexes = [...indexes].sort((a, b) => a - b);
-    const contiguousIndexes = Array.from({ length: sortedIndexes.length }, (_, offset) => sortedIndexes[0] + offset);
-    if (!sortedIndexes.every((index, i) => index === contiguousIndexes[i])) continue;
+    const sections = indexes.map((index) => extractCategorySection(html, index));
+    if (sections.some((section) => !section)) continue;
 
-    const originalSections = sortedIndexes.map((index) => extractCategorySection(html, index));
-    const desiredSections = indexes.map((index) => extractCategorySection(html, index));
-    if (originalSections.some((section) => !section) || desiredSections.some((section) => !section)) continue;
+    // Categories do not need to be adjacent in the canonical catalogue. Remove
+    // each complete section, then insert the approved row where the earliest
+    // member originally appeared. This changes presentation only, not catalogue data.
+    const positions = sections.map((section) => html.indexOf(section));
+    const insertionPosition = Math.min(...positions);
+    const marker = `__SHILOH_SPECIALTY_ROW_${indexes.join('_')}__`;
+    const earliestSection = sections[positions.indexOf(insertionPosition)];
+    html = html.replace(earliestSection, marker);
+    for (const section of sections) {
+      if (section !== earliestSection) html = html.replace(section, '');
+    }
 
-    const originalBlock = originalSections.join('');
-    const desiredBlock = desiredSections.join('');
     const columns = row.length === 3 ? ' specialty-category-row--three' : '';
-    html = html.replace(originalBlock, `<div class="specialty-category-row${columns}">${desiredBlock}</div>`);
+    html = html.replace(marker, `<div class="specialty-category-row${columns}">${sections.join('')}</div>`);
   }
   return html;
 }
