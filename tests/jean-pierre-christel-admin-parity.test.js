@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const { scheduleMenu, canControlChristelBusiness } = require('../src/services/adminScheduleUx');
 const { pricingOwner, isJeanPierreBusinessAdmin } = require('../src/services/adminServicePricing');
 const { certificationStaffIds, authorityDescription } = require('../src/services/attendanceFinalizationAuthority');
+const { appointmentsInteractive } = require('../src/services/adminAppointmentsMenu');
 
 const jeanPierre = {
   id: 9001,
@@ -24,6 +25,8 @@ const jeanPierre = {
   },
 };
 
+const christel = { ...jeanPierre, id: 9002, staff_id: 3, display_name: 'Christel' };
+
 test('Jean-Pierre business admin receives Christel business schedule controls without practitioner self controls', () => {
   assert.equal(canControlChristelBusiness(jeanPierre), true);
   const menu = scheduleMenu(jeanPierre);
@@ -36,6 +39,14 @@ test('Jean-Pierre business admin receives Christel business schedule controls wi
 test('Jean-Pierre business admin controls the shared Christel and Abigail pricing catalogue', () => {
   assert.equal(isJeanPierreBusinessAdmin(jeanPierre), true);
   assert.equal(pricingOwner(jeanPierre), 'christel');
+});
+
+test('JP appointment menu matches Christel operational actions except finalization', () => {
+  const jpIds = appointmentsInteractive(jeanPierre).rows.map((row) => row.id);
+  const christelIds = appointmentsInteractive(christel).rows.map((row) => row.id);
+  assert.ok(christelIds.includes('admin_appointment_finalize'));
+  assert.ok(!jpIds.includes('admin_appointment_finalize'));
+  assert.deepEqual(jpIds, christelIds.filter((id) => id !== 'admin_appointment_finalize'));
 });
 
 test('Jean-Pierre business admin parity does not grant attendance certification authority', async () => {
