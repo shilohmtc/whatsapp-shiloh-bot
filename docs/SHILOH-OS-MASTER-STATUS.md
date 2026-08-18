@@ -7,7 +7,7 @@ Purpose: permanent current-state source of truth. Historical implementation deta
 
 Operational truth is GitHub `main`, Render production, Shiloh CRM/Postgres, Google Calendar, Meta/WhatsApp provider evidence, and explicit real WhatsApp/human evidence. Never infer provider, attendance, approval, CRM, Calendar, or handset state.
 
-At the beginning of each new Shiloh OS chat: read this Master + `docs/SHILOH-OS-PROJECT-TRACKER.md` + the latest reconciliation, currently `docs/SHILOH-OS-RECONCILIATION-2026-08-18-WORKSTREAM-OPERATING-MODEL.md`, plus `docs/SHILOH-OS-ENGINEERING-GOVERNANCE.md`, on `main`; verify applicable production/provider state; then give the four-part checkpoint: (1) authoritative current state, (2) highest-priority continuation item, (3) why it is next, (4) remaining approval/evidence/provider gate. Obtain explicit approval before the first new substantial controlled action. After that initial approval, continue the approved workstream automatically through ordinary engineering/deploy/verification/housekeeping boundaries. Stop only for material scope/risk expansion, contradictory authority, or an existing fail-closed human/provider/evidence gate.
+At the beginning of each new Shiloh OS chat: read this Master + `docs/SHILOH-OS-PROJECT-TRACKER.md` + the latest reconciliation, currently `docs/SHILOH-OS-RECONCILIATION-2026-08-18-GBP-PROVIDER-GATE.md`, plus `docs/SHILOH-OS-ENGINEERING-GOVERNANCE.md`, on `main`; verify applicable production/provider state; then give the four-part checkpoint: (1) authoritative current state, (2) highest-priority continuation item, (3) why it is next, (4) remaining approval/evidence/provider gate. Obtain explicit approval before the first new substantial controlled action. After that initial approval, continue the approved workstream automatically through ordinary engineering/deploy/verification/housekeeping boundaries. Stop only for material scope/risk expansion, contradictory authority, or an existing fail-closed human/provider/evidence gate.
 
 Permanent governance remains: operational screenshots are diagnostic evidence by default and must not trigger image generation unless visual creation/editing is explicitly requested; production defects follow trace → authoritative evidence → root cause → guarded repair → regression/E2E → CI → deploy → production verification → reconciliation; provider lead-time is considered early; known finite client/admin choices are button/list-first where practical; natural language remains fallback into the same canonical handlers; no speculative provider submissions; no manufactured appointments/evidence; no duplicate public service source of truth.
 
@@ -159,6 +159,22 @@ Pa Derik #567 real handset reschedule evidence remains accepted; last recorded s
 
 CRM48 (Pa Derik) and CRM473 remain legitimate controlled Goldie-imported canonical clients. CRM IDs are not proof of bot registration. CRM1 remains an orphan-like read-only review candidate; do not delete without identity/supersession proof. Unique unverified imported mobiles use the existing-profile claim/verification path; ambiguity remains fail-closed.
 
+## Google Business Profile provider access — 🟠 EXTERNAL/PROVIDER GATE
+
+Last-authoritative provider evidence remains:
+
+- My Business Business Information API is enabled.
+- The Google Business Profile API access/application was submitted.
+- API-specific quotas are visible.
+- The general **Requests per minute** quota remains **0**.
+- Google Business Profile API approval and usable access are therefore not positively established.
+
+Earlier PR #35 added GBP knowledge-sync scaffolding and the current repository retains `src/services/googleBusinessProfileSync.js`. That code is not evidence of provider approval and must not be activated or extended merely because it exists.
+
+This is not an ordinary capacity/quota-increase task. Do not begin or resume GBP OAuth/API integration until authoritative Google evidence confirms access or a usable general request quota greater than 0. When that gate closes, reopen from current GitHub `main`, reassess the existing scaffolding, and follow the full controlled-work completion protocol.
+
+Primary ownership is **Production / DevOps** for provider/configuration verification. **Shiloh OS — Control & Reconciliation** tracks the external dependency and protects the shared authoritative state.
+
 ## Standing gates
 
 - `shiloh_booking_update_v1` Meta approval remains a provider gate before service/practitioner/date-time/price customer-update messages can be delivered.
@@ -167,7 +183,7 @@ CRM48 (Pa Derik) and CRM473 remain legitimate controlled Goldie-imported canonic
 - Genuine per-route lifecycle evidence remains natural-journey gated where not already observed.
 - Follow-up/rating delivery remains genuine completed-visit timing gated.
 - Birthday v2 requires genuine eligible CRM birthday/opt-in conditions.
-- Google Business Profile API remains deferred at last-authoritative 0 QPM.
+- Google Business Profile remains **external/provider gate — pending Google**: Business Information API enabled, application submitted and API-specific quotas visible, but general Requests/min remains 0. Do not treat as normal quota work or start OAuth/API integration until positive usable access is verified.
 - Google Contacts sync remains lower priority; CRM is authoritative.
 - Ozow remains waiting for merchant configuration and explicit business rules.
 - Destructive privacy execution remains fail-closed pending authority/evidence.
@@ -186,11 +202,12 @@ CRM48 (Pa Derik) and CRM473 remain legitimate controlled Goldie-imported canonic
 - Customer-change confirmation architecture is live; cancellation template is APPROVED; `shiloh_booking_update_v1` is **PENDING**.
 - `/book` remains the accepted live CRM-backed public catalogue through #301; do not redo superseded #284–#300 variants.
 - Historical attendance remains human-controlled; #558 remains fail-closed.
+- Google Business Profile access remains pending Google with general Requests/min at 0; Production / DevOps owns verification and Control & Reconciliation tracks the dependency. No GBP integration work is authorized from this state.
 
-**Authoritative current state:** the five-workstream operating model is adopted, regression-green, merged and live through PR #314. All specialist chats share one repository/production/provider authority and the full controlled-work completion protocol. Production application behaviour remains the accepted #313 state.
+**Authoritative current state:** the five-workstream operating model is adopted, regression-green, merged and live through PR #314. All specialist chats share one repository/production/provider authority and the full controlled-work completion protocol. Production application behaviour remains the accepted #313 state. Google Business Profile is not confirmed usable and remains fail-closed behind the pending Google provider gate.
 
 **Highest-priority continuation item:** re-check Meta provider status for `shiloh_booking_update_v1`; if still PENDING, continue the next approved Shiloh OS workstream without reopening the completed Admin-booking repairs.
 
 **Why next:** the Admin booking engineering/CI/deploy gates are closed; remaining ordinary booking-change delivery depends on Meta approval rather than more booking-flow engineering.
 
-**Remaining gates:** Meta approval for the booking-update template, human attendance/#558/genuine-journey truth, and explicit approval for material commercial/service/business-rule changes remain fail-closed.
+**Remaining gates:** Meta approval for the booking-update template; positive Google Business Profile approval or usable Requests/min >0; human attendance/#558/genuine-journey truth; and explicit approval for material commercial/service/business-rule changes remain fail-closed.
