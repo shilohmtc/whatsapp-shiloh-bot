@@ -1,6 +1,11 @@
 const Module = require('node:module');
 const { normalizePhone } = require('../services/clientIdentityOnboarding');
-const { cleanName, normalizeZaMobile, createProvisionalClient } = require('../services/adminProvisionalClient');
+const {
+  cleanName,
+  normalizeZaMobile,
+  createProvisionalClient,
+  cleanupUnusedProvisionalClient,
+} = require('../services/adminProvisionalClient');
 
 function clean(value = '') {
   return String(value || '').trim().replace(/\s+/g, ' ');
@@ -37,6 +42,11 @@ function mobilePrompt(name) {
     '',
     'Type 0 to cancel.',
   ].join('\n');
+}
+
+function isBookingCancel(value = '') {
+  const v = clean(value).toLowerCase();
+  return ['0', '2', 'cancel booking', 'admin_booking_cancel', 'admin_booking_cancel_flow'].includes(v);
 }
 
 const originalLoad = Module._load;
@@ -120,6 +130,7 @@ Module._load = function patchedLoad(request, parent, isMain) {
         }
 
         const wasCreated = outcome.status === 'created';
+        const provisionalClientId = wasCreated ? outcome.client.id : null;
         await exported.setSession(key, {
           ...session,
           step: 'client-query',
@@ -127,6 +138,22 @@ Module._load = function patchedLoad(request, parent, isMain) {
           provisionalAdminId: undefined,
         });
         const result = await originalProcess(sender, normalizedMobile);
+        const after = await exported.getSession(key);
+
+        if (wasCreated && after?.step === 'confirm') {
+          await exported.setSession(key, {
+            ...after,
+            provisionalClientId,
+            provisionalAdminId: session.provisionalAdminId,
+          });
+        } else if (wasCreated) {
+          await cleanupUnusedProvisionalClient({
+            clientId: provisionalClientId,
+            adminId: session.provisionalAdminId,
+            reason: 'booking_prepare_failed',
+          });
+        }
+
         if (wasCreated && result?.interactive?.body) {
           result.interactive = {
             ...result.interactive,
@@ -140,6 +167,15 @@ Module._load = function patchedLoad(request, parent, isMain) {
 
       const before = session;
       const result = await originalProcess(sender, text);
+
+      if (before?.step === 'confirm' && before.provisionalClientId && isBookingCancel(raw)) {
+        await cleanupUnusedProvisionalClient({
+          clientId: before.provisionalClientId,
+          adminId: before.provisionalAdminId,
+          reason: 'booking_cancelled',
+        });
+      }
+
       if (
         before?.step === 'client-query' &&
         result?.handled === true &&
@@ -163,4 +199,4 @@ Module._load = function patchedLoad(request, parent, isMain) {
   return exported;
 };
 
-module.exports = { candidateNameFromQuery, noMatchOffer, mobilePrompt };
+module.exports = { candidateNameFromQuery, noMatchOffer, mobilePrompt, isBookingCancel };
