@@ -5,6 +5,7 @@ const { getCatalogueParityAudit } = require("../services/catalogueParityAudit");
 const { getGoldieExitAudit } = require("../services/goldieExitAudit");
 const { getReportingIntegrityAudit } = require("../services/reportingIntegrityAudit");
 const { getBirthdayTemplateStatus, TEMPLATE_BODY } = require("../services/birthdayTemplateProvisioning");
+const { inspectMetaTemplateInventory } = require("../services/metaTemplateContracts");
 
 const router = express.Router();
 
@@ -77,6 +78,18 @@ router.get("/birthday-template/status", async (req, res) => {
   } catch (error) {
     (req.log || console).error?.({ err: error }, "Failed to inspect sanitized birthday template status");
     return res.status(502).json({ error: "Could not inspect birthday template status", requestId: req.id });
+  }
+});
+
+
+// Sanitized, paginated, read-only inventory. WABA IDs, tokens, phone numbers and provider IDs are omitted.
+router.get("/meta-templates/status", auditReadAuth, async (req, res) => {
+  try {
+    const report = await inspectMetaTemplateInventory();
+    return res.status(report.ok ? 200 : 503).json({ report, requestId: req.id });
+  } catch (error) {
+    (req.log || console).error?.({ err: error }, "Meta template inventory failed");
+    return res.status(502).json({ error: "Could not inspect Meta template inventory", requestId: req.id });
   }
 });
 

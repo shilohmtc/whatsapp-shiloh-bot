@@ -209,6 +209,8 @@ async function sendWhatsAppList(to, body, buttonText, rows = [], sectionTitle = 
 }
 
 async function sendWhatsAppTemplate(to, templateName, bodyParameters = [], languageCode = "en", quickReplyPayloads = []) {
+  const { assertTemplateSendAllowed } = require("./metaTemplateContracts");
+  await assertTemplateSendAllowed(templateName, languageCode);
   if (!templateName) {
     throw new Error("WhatsApp template name is required");
   }

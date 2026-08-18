@@ -1,6 +1,9 @@
 const { pool } = require('../db/pool');
 const { normalizePhone } = require('./clientIdentityOnboarding');
-const { sendWhatsAppReplyButtons } = require('./whatsapp');
+const { sendWhatsAppTemplate } = require('./whatsapp');
+const { APPROVE_PREFIX, DECLINE_PREFIX } = require('./clientBookingApproval');
+const APPROVAL_TEMPLATE_NAME = 'shiloh_booking_approval_request_v1';
+const TEMPLATE_LANGUAGE = 'en';
 const { compactListTitle, fullLabelDescription } = require('../presentation/whatsappListRowPresentation');
 
 const RESEND_PREFIX = 'resend_booking_approval_';
@@ -15,6 +18,7 @@ function fmtDateTime(value) {
 async function ensureApprovalDeliveryState(db = pool) {
   await db.query(`ALTER TABLE appointment_booking_approvals ADD COLUMN IF NOT EXISTS approver_notification_attempts INTEGER NOT NULL DEFAULT 0`);
   await db.query(`ALTER TABLE appointment_booking_approvals ADD COLUMN IF NOT EXISTS approver_message_id TEXT`);
+  await db.query(`ALTER TABLE appointment_booking_approvals ADD COLUMN IF NOT EXISTS approver_template_name TEXT`);
   await db.query(`ALTER TABLE appointment_booking_approvals ADD COLUMN IF NOT EXISTS last_approver_notification_attempt_at TIMESTAMPTZ`);
 }
 
@@ -93,14 +97,16 @@ async function resendPendingApproval(admin, appointmentId, db = pool) {
   if (!row) return { handled: true, reply: 'That pending approval is no longer available or you are not authorized to resend it.' };
   if (!row.approver_whatsapp) return { handled: true, reply: 'The approval request is still pending, but the approver has no active WhatsApp contact configured. No message was sent.' };
 
-  const body = ['*Booking approval required*', '', `Client: ${row.client_name}`, `Treatment: ${row.service_name}`, `With: ${row.staff_name}`, `Time: ${fmtDateTime(row.starts_at)}`, '', 'This request is still pending. Approve or decline explicitly; resending does not create another appointment.'].join('\n');
-  const response = await sendWhatsAppReplyButtons(row.approver_whatsapp, body, [
-    { id: `booking_approval_approve_${appointmentId}`, title: 'Approve' },
-    { id: `booking_approval_decline_${appointmentId}`, title: 'Decline' },
-  ]);
+  const response = await sendWhatsAppTemplate(
+    row.approver_whatsapp,
+    APPROVAL_TEMPLATE_NAME,
+    [row.client_name, row.service_name, row.staff_name, fmtDateTime(row.starts_at), String(appointmentId)],
+    TEMPLATE_LANGUAGE,
+    [`${APPROVE_PREFIX}${appointmentId}`, `${DECLINE_PREFIX}${appointmentId}`]
+  );
   const messageId = response?.messages?.[0]?.id || null;
-  await db.query(`UPDATE appointment_booking_approvals SET approver_notification_attempts = approver_notification_attempts + 1, approver_message_id = $2, last_approver_notification_attempt_at = NOW(), approver_notified_at = COALESCE(approver_notified_at, NOW()), updated_at = NOW() WHERE appointment_id = $1 AND status = 'pending'`, [appointmentId, messageId]);
-  await db.query(`INSERT INTO crm_audit_events (actor_admin_id, action, entity_type, entity_id, metadata) VALUES ($1, 'client.booking_approval.notification_attempted', 'appointment', $2, $3::jsonb)`, [admin.id, appointmentId, JSON.stringify({ channel: 'whatsapp', reason: 'explicit_admin_resend', messageId })]);
+  await db.query(`UPDATE appointment_booking_approvals SET approver_notification_attempts = approver_notification_attempts + 1, approver_message_id = $2, approver_template_name = $3, last_approver_notification_attempt_at = NOW(), approver_notified_at = COALESCE(approver_notified_at, NOW()), updated_at = NOW() WHERE appointment_id = $1 AND status = 'pending'`, [appointmentId, messageId, APPROVAL_TEMPLATE_NAME]);
+  await db.query(`INSERT INTO crm_audit_events (actor_admin_id, action, entity_type, entity_id, metadata) VALUES ($1, 'client.booking_approval.notification_attempted', 'appointment', $2, $3::jsonb)`, [admin.id, appointmentId, JSON.stringify({ channel: 'whatsapp', reason: 'explicit_admin_resend', templateName: APPROVAL_TEMPLATE_NAME, messageId })]);
   return { handled: true, reply: `Approval request for appointment #${appointmentId} was resent. The appointment remains pending until an authorized approver decides it.` };
 }
 
@@ -118,4 +124,4 @@ async function processAdminPendingBookingApprovalsMessage(sender, text) {
   return resendPendingApproval(admin, Number(match[1]));
 }
 
-module.exports = { RESEND_PREFIX, ensureApprovalDeliveryState, listPending, pendingListInteractive, processAdminPendingBookingApprovalsMessage, resendPendingApproval };
+module.exports = { APPROVAL_TEMPLATE_NAME, TEMPLATE_LANGUAGE, RESEND_PREFIX, ensureApprovalDeliveryState, listPending, pendingListInteractive, processAdminPendingBookingApprovalsMessage, resendPendingApproval };

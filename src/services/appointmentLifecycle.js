@@ -36,6 +36,8 @@ async function ensureTable() {
   await pool.query(`ALTER TABLE appointment_lifecycle ADD COLUMN IF NOT EXISTS appointment_id BIGINT`);
   await pool.query(`ALTER TABLE appointment_lifecycle ADD COLUMN IF NOT EXISTS client_id BIGINT`);
   await pool.query(`ALTER TABLE appointment_lifecycle ADD COLUMN IF NOT EXISTS appointment_ends_at TIMESTAMPTZ`);
+  await pool.query(`ALTER TABLE appointment_lifecycle ADD COLUMN IF NOT EXISTS followup_template_name TEXT`);
+  await pool.query(`ALTER TABLE appointment_lifecycle ADD COLUMN IF NOT EXISTS followup_provider_message_id TEXT`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_appointment_lifecycle_due ON appointment_lifecycle (status, appointment_at)`);
   await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS uq_appointment_lifecycle_appointment_id ON appointment_lifecycle (appointment_id) WHERE appointment_id IS NOT NULL`);
   initialized = true;
@@ -152,6 +154,30 @@ async function customerName(phone){
   return profile?.name||"there";
 }
 
+async function deliverClaimedFollowup(appointment, followupTemplate, followupActionsTemplate, deps = {}) {
+  const send = deps.send || sendWhatsAppTemplate;
+  const updateEvidence = deps.updateEvidence || ((id, templateName, providerMessageId) => pool.query(`UPDATE appointment_lifecycle SET followup_template_name=$2,followup_provider_message_id=$3,updated_at=NOW() WHERE id=$1`, [id, templateName, providerMessageId]));
+  const createExperience = deps.createExperience || createPendingExperience;
+  const releaseClaim = deps.releaseClaim || ((id) => undoClaim(id, "followup_sent_at"));
+  let providerAccepted = false;
+  let providerMessageId = null;
+  try {
+    const name = deps.name || await customerName(appointment.phone);
+    const quickReplyPayloads = followupActionsTemplate ? ['1','2','3','4','5'] : [];
+    const accepted = await send(appointment.phone, followupTemplate, [name, appointment.service_text], LANGUAGE_CODE, quickReplyPayloads);
+    providerAccepted = true;
+    providerMessageId = accepted?.messages?.[0]?.id || null;
+    try { await updateEvidence(appointment.id, followupTemplate, providerMessageId); }
+    catch (error) { logger.error({err:error,appointmentId:appointment.appointment_id||appointment.id,templateName:followupTemplate,providerMessageId}, "Follow-up accepted; delivery-evidence update failed without reopening claim"); }
+    try { await createExperience({appointmentId:appointment.appointment_id||appointment.id,phone:appointment.phone,service:appointment.service_text}); }
+    catch (error) { logger.error({err:error,appointmentId:appointment.appointment_id||appointment.id,templateName:followupTemplate,providerMessageId}, "Follow-up accepted; experience bookkeeping failed without reopening claim"); }
+    return { sent: true, providerMessageId };
+  } catch (error) {
+    if (!providerAccepted) await releaseClaim(appointment.id);
+    throw error;
+  }
+}
+
 async function processReminders() {
   const reminderActionsTemplate=process.env.WHATSAPP_REMINDER_ACTIONS_TEMPLATE;
   const reminderTemplate=reminderActionsTemplate||process.env.WHATSAPP_REMINDER_TEMPLATE;
@@ -164,11 +190,11 @@ async function processReminders() {
   }
 
   if(followupTemplate){
-    for(let i=0;i<20;i+=1){const appointment=await claimDueFollowup();if(!appointment)break;try{const name=await customerName(appointment.phone);const quickReplyPayloads=followupActionsTemplate?['1','2','3','4','5']:[];await sendWhatsAppTemplate(appointment.phone,followupTemplate,[name,appointment.service_text],LANGUAGE_CODE,quickReplyPayloads);await createPendingExperience({appointmentId:appointment.appointment_id||appointment.id,phone:appointment.phone,service:appointment.service_text});logger.info({appointmentId:appointment.appointment_id||appointment.id,actionTemplate:Boolean(followupActionsTemplate)},"Customer aftercare/follow-up sent");}catch(error){await undoClaim(appointment.id,"followup_sent_at");logger.error({err:error,appointmentId:appointment.appointment_id||appointment.id},"Appointment follow-up failed");break;}}
+    for(let i=0;i<20;i+=1){const appointment=await claimDueFollowup();if(!appointment)break;try{const delivery=await deliverClaimedFollowup(appointment,followupTemplate,followupActionsTemplate);logger.info({appointmentId:appointment.appointment_id||appointment.id,actionTemplate:Boolean(followupActionsTemplate),templateName:followupTemplate,providerMessageId:delivery.providerMessageId},"Customer aftercare/follow-up sent");}catch(error){logger.error({err:error,appointmentId:appointment.appointment_id||appointment.id},"Appointment follow-up failed before provider acceptance");break;}}
   }
 }
 
 async function runScan(){if(running)return;running=true;try{await processReminders();}catch(error){logger.error({err:error},"Appointment lifecycle scan failed");}finally{running=false;}}
 function startAppointmentLifecycleScheduler(){if(timer)return;logger.info({scanMinutes:SCAN_MINUTES,reminderHours:REMINDER_HOURS,followupHours:FOLLOWUP_HOURS,reminderTemplateConfigured:Boolean(process.env.WHATSAPP_REMINDER_TEMPLATE),reminderActionsTemplateConfigured:Boolean(process.env.WHATSAPP_REMINDER_ACTIONS_TEMPLATE),followupTemplateConfigured:Boolean(process.env.WHATSAPP_FOLLOWUP_TEMPLATE),followupActionsTemplateConfigured:Boolean(process.env.WHATSAPP_FOLLOWUP_ACTIONS_TEMPLATE)},"Appointment lifecycle scheduler started");setTimeout(runScan,5000).unref();timer=setInterval(runScan,Math.max(SCAN_MINUTES,1)*60*1000);timer.unref();}
 
-module.exports={ensureTable,createAppointment,listAppointments,updateAppointmentStatus,processReminders,startAppointmentLifecycleScheduler};
+module.exports={ensureTable,createAppointment,listAppointments,updateAppointmentStatus,deliverClaimedFollowup,processReminders,startAppointmentLifecycleScheduler};

@@ -1,39 +1,121 @@
 # Meta / WhatsApp Template Readiness Matrix
 
-Updated: 2026-08-15
+Updated: 2026-08-18
 
-## Permanent provider lead-time rule
+The production Shiloh_MTC WhatsApp Manager evidence below was captured on 18 August 2026. **Active – Quality pending** is provider approval evidence, but not handset delivery evidence. `In review` is not approval. The checker must compare the complete provider contract and remain read-only; no template is submitted, edited or sent for evidence.
 
-Whenever a planned Shiloh feature may require an externally approved WhatsApp template, identify the complete foreseeable template set during feature planning and submit required templates early enough for provider review to run in parallel with engineering. Do not wait until implementation reaches the send step. Before declaring a submission batch complete, ask: **Does the current product roadmap contain any other foreseeable business-initiated WhatsApp message that would require provider approval?**
+| # | Identity | Category / language | Provider state | Production configuration / wiring | Readiness and remaining gate |
+|---:|---|---|---|---|---|
+| 1 | `shiloh_booking_update_v1` | Utility / English | **In review** | Expected current name; outbox additionally requires `WHATSAPP_BOOKING_UPDATE_ENABLED=true` | **Blocked:** provider approval, exact contract, environment gate, then genuine booking-change journey. |
+| 2 | `shiloh_staff_finalization_actions_v1` | Utility / English | Active – Quality pending | Current action path; provider check APPROVED / UTILITY; genuine accepted send exists | Wired and provider-verified; preserve natural-use evidence only. |
+| 3 | `shiloh_appointment_followup_v2` | Utility / English | Active – Quality pending | Current follow-up-actions configuration | Provider-ready; genuine send exists, but genuine rating-response evidence is still missing. |
+| 4 | `shiloh_booking_approval_outcome_v1` | Utility / English | Active – Quality pending | Current secondary-approver outcome contract | Provider-ready; genuine route evidence remains. |
+| 5 | `shiloh_booking_declined_v1` | Utility / English | Active – Quality pending | Current decline contract | Provider-ready; genuine decline journey remains. |
+| 6 | `shiloh_booking_approval_request_v1` | Utility / English | Active – Quality pending | Current practitioner request and resend path | Wired; genuine Meta-accepted production send exists. |
+| 7 | `shiloh_cancellation_confirmation_v1` | Utility / English | Active – Quality pending | Current cancellation contract; provider API APPROVED | Provider-ready; genuine cancellation journey remains. |
+| 8 | `shiloh_reschedule_confirmation_v1` | Utility / English | Active – Quality pending | Current reschedule contract | Provider-ready; genuine reschedule journey remains. |
+| 9 | `shiloh_appointment_reminder_actions_v1` | Utility / English | Active – Quality pending | Current reminder-actions configuration | Wired; genuine Meta-accepted production send exists. |
+| 10 | `shiloh_booking_confirmation_v1` | Utility / English | Active – Quality pending | Current confirmation contract; provider check APPROVED / UTILITY | Wired; genuine Meta-accepted production send exists. |
+| 11 | `shiloh_staff_finalization_v1` | Utility / English | Active – Quality pending | Current staff finalization path; provider check APPROVED / UTILITY | Wired; genuine Meta-accepted production send exists. |
+| 12 | `shiloh_birthday_wish_v2` | Marketing / English | Active – Quality pending | Current configured, brand-correct v2 only | Provider-ready; genuine opted-in birthday eligibility/delivery remains. |
+| 13 | `shiloh_birthday_wish_v1` | Marketing / English | Active – Quality pending | Legacy; deliberately non-sendable | Evidence-only legacy identity; do not newly configure. |
+| 14 | `appointment_followup` | Utility / English | Active – Quality pending | Legacy follow-up | Evidence-only legacy identity; current v2 supersedes it. |
+| 15 | `appointment_reminder` | Utility / English | Active – Quality pending | Legacy reminder | Evidence-only legacy identity; action reminder supersedes it. |
 
-This rule does not justify speculative templates for undefined features. Payment, voucher, privacy and other future workflows must first have approved product/business semantics before provider copy is submitted.
+Meta's default `hello_world` is visible but is not a Shiloh operational template and is excluded from the 15-template contract inventory.
 
-## Current appointment/customer-care lifecycle
+## Permanent provider lead-time and submission governance
 
-| Journey | Template | Provider evidence 2026-08-15 | Readiness |
-|---|---|---|---|
-| Booking confirmation after approval | `shiloh_booking_confirmation_v1` | Active / provider API APPROVED | Ready; existing production path |
-| Practitioner booking approval request | `shiloh_booking_approval_request_v1` | Missing at audit start | Submit now; required because approval can be business-initiated outside an open client/staff conversation window |
-| Secondary approver outcome notification | `shiloh_booking_approval_outcome_v1` | Missing at audit start | Submit now; required for reliable Abigail dual-authority outcome notification |
-| Client booking declined | `shiloh_booking_declined_v1` | Missing at audit start | Submit now; required because practitioner decision may occur after the client's service window closes |
-| 24-hour reminder with change actions | `shiloh_appointment_reminder_actions_v1` | In review / PENDING | Fail closed pending approval |
-| Reschedule confirmation | `shiloh_reschedule_confirmation_v1` | In review / PENDING | Fail closed pending approval |
-| Cancellation confirmation | `shiloh_cancellation_confirmation_v1` | In review / PENDING | Fail closed pending approval |
-| Staff attendance finalization | `shiloh_staff_finalization_v1` | Active / provider API APPROVED | Ready; existing staff path |
-| Generic appointment reminder | `appointment_reminder` | Active in Meta screenshot | Legacy fallback; supersede with action template once approved/evidence-verified |
-| Post-appointment follow-up / rating | `appointment_followup` | Active in Meta screenshot | Existing production path |
-| Birthday wish | `shiloh_birthday_wish_v2` | Active in Meta screenshot | Approved/active provider evidence; still requires explicit client birthday opt-in and production configuration |
-| Birthday legacy | `shiloh_birthday_wish_v1` | Active in Meta screenshot | Legacy; do not newly configure when v2 is the intended current version |
+Identify the complete foreseeable template set during feature planning and submit required templates early enough for provider review to run in parallel with engineering. Before treating a submission batch as complete, ask whether another foreseeable roadmap message will require provider approval. This never authorizes speculative submissions: payment, voucher, privacy, or other future workflows require approved product and business semantics first. Provider approval and production enablement remain separate gates. Do not submit, edit, configure, or send a template merely to create evidence.
 
-## No additional template submission now
+## Enforced readiness reconciliation
 
-- Post-confirmation `Book another treatment`, `My appointments`, and `Main menu` are conversational actions immediately following an inbound/client journey; no separate outbound template is required for the feature itself.
-- Treatment aftercare/rebooking guidance is currently delivered as part of the existing `appointment_followup`/rating conversation; no new provider template is required until a separate treatment-specific outbound campaign is deliberately designed.
-- Loyalty status is client-requested. No proactive reward-notification workflow is currently defined.
-- Google Business Profile and Google Contacts work do not create WhatsApp outbound-message requirements.
-- Ozow/payment/voucher messages are not submitted speculatively: payment business rules and provider rollout remain gated, and exact transactional message semantics must be defined before templates are created.
-- Privacy/data-subject workflows are evidence/authority gated and currently conversational/request-driven; do not create speculative outbound templates.
+For each identity the centralized inventory reconciles: **defined by Shiloh → exact production environment name configured → provider status APPROVED → exact language/category/components/variable and button ordering match → send path wired**. Current operational contracts fail closed on any mismatch or provider-read failure. Arbitrary environment names and the three legacy identities cannot pass the send boundary. Booking update also requires its explicit environment enablement gate; birthday requires the exact brand-correct v2 contract.
 
-## Engineering rule
+Provider approval never proves handset delivery. No appointment, attendance action, birthday, reminder, client message, rating response, template submission or template edit may be manufactured for evidence.
 
-Provider approval and production enablement are separate gates. A template may be submitted early, but Shiloh must not configure or send through a new template until the exact provider template is APPROVED, the production environment points to the exact approved name, and the relevant real-delivery/evidence gate is satisfied.
+## Exact current-template contract appendix
+
+`v1` and `v2` are literal suffixes within a Meta **template name**. They are not a separate application or provider `version` field. All current contracts have no HEADER unless explicitly stated below (none currently do). “None” means the component is absent, not an empty string.
+
+### `shiloh_booking_update_v1` — Utility / `en`
+- **HEADER:** None. **FOOTER:** None. **Buttons/payloads:** None.
+- **BODY (exact):**
+  ```text
+  Hi {{1}}, your Shiloh appointment has been updated. 🌿
+
+  ✨ Service: {{2}}
+  👤 With: {{3}}
+  📅 Date: {{4}}
+  🕐 Time: {{5}}
+  💰 Booked price: {{6}}
+  Booking #{{7}}
+
+  This is your latest confirmation. Reply RESCHEDULE or CANCEL if you need another change.
+  ```
+- **Variables in order:** `{{1}}` client name; `{{2}}` service; `{{3}}` practitioner; `{{4}}` appointment date; `{{5}}` time/range; `{{6}}` booked price; `{{7}}` booking ID.
+
+### `shiloh_staff_finalization_actions_v1` — Utility / `en`
+- **HEADER:** None. **FOOTER:** None.
+- **BODY (exact):** `Hi {{1}}, you have {{2}} Shiloh visit(s) awaiting finalization. Review them in batches if needed and return later. Attendance is never inferred automatically.`
+- **Variables:** `{{1}}` staff/Admin display name; `{{2}}` pending visit count.
+- **Buttons in exact order:** `Finalize past visits` → payload `admin_action_finalize`.
+
+### `shiloh_appointment_followup_v2` — Utility / `en`
+- **HEADER:** None. **FOOTER:** None.
+- **BODY (exact):** `Hi {{1}}, thank you for visiting Shiloh for {{2}}. 🌿\n\nHow was your experience? Please choose a rating from 1 to 5 below.`
+- **Variables:** `{{1}}` client name; `{{2}}` service.
+- **Buttons/payloads in exact order:** `1` → `1`; `2` → `2`; `3` → `3`; `4` → `4`; `5` → `5`.
+
+### `shiloh_booking_approval_outcome_v1` — Utility / `en`
+- **HEADER:** None. **FOOTER:** None. **Buttons/payloads:** None.
+- **BODY (exact):** `Booking request update.\n\n{{1}} — {{2}} — {{3}}\n{{4}} has {{5}} the request.\nBooking #{{6}}\n\nThe first valid decision is final for this request.`
+- **Variables:** `{{1}}` client name; `{{2}}` treatment; `{{3}}` requested date/time; `{{4}}` deciding Admin; `{{5}}` decision; `{{6}}` booking ID.
+
+### `shiloh_booking_declined_v1` — Utility / `en`
+- **HEADER:** None. **FOOTER:** None.
+- **BODY (exact):** `Hi {{1}}, your Shiloh booking request could not be confirmed.\n\n✨ Service: {{2}}\n📅 Requested time: {{3}}\nBooking #{{4}}\n\nThe held time has been released and nothing is booked. You can choose another available time whenever you are ready. 🌿`
+- **Variables:** `{{1}}` client name; `{{2}}` service; `{{3}}` requested date/time; `{{4}}` booking ID.
+- **Button:** `Book another time` → payload `BOOKING`.
+
+### `shiloh_booking_approval_request_v1` — Utility / `en`
+- **HEADER:** None. **FOOTER:** None.
+- **BODY (exact):** `Booking approval required.\n\nClient: {{1}}\nTreatment: {{2}}\nWith: {{3}}\nTime: {{4}}\nBooking #{{5}}\n\nThis time is being held until an authorized approver approves or declines the request.`
+- **Variables:** `{{1}}` client name; `{{2}}` treatment; `{{3}}` assigned practitioner; `{{4}}` requested date/time; `{{5}}` booking ID.
+- **Buttons/payloads in exact order:** `Approve` → `booking_approval_approve_<bookingId>`; `Decline` → `booking_approval_decline_<bookingId>`.
+
+### `shiloh_cancellation_confirmation_v1` — Utility / `en`
+- **HEADER:** None. **FOOTER:** None. **Buttons/payloads:** None.
+- **BODY (exact):** `Hi {{1}}, your Shiloh appointment has been cancelled.\n\n✨ Service: {{2}}\n📅 Date: {{3}}\n🕐 Time: {{4}}\nBooking #{{5}}\n\nReply BOOK if you would like to make another appointment. 🌿`
+- **Variables:** `{{1}}` client name; `{{2}}` service; `{{3}}` appointment date; `{{4}}` appointment time; `{{5}}` booking ID.
+
+### `shiloh_reschedule_confirmation_v1` — Utility / `en`
+- **HEADER:** None. **FOOTER:** None. **Buttons/payloads:** None.
+- **BODY (exact):** `Hi {{1}}, your Shiloh appointment has been rescheduled. 🌿\n\n✨ Service: {{2}}\n👤 With: {{3}}\n📅 New date: {{4}}\n🕐 New time: {{5}}\n\nReply RESCHEDULE or CANCEL if you need another change.`
+- **Variables:** `{{1}}` client name; `{{2}}` service; `{{3}}` practitioner; `{{4}}` new date; `{{5}}` new time.
+
+### `shiloh_appointment_reminder_actions_v1` — Utility / `en`
+- **HEADER:** None. **FOOTER:** None.
+- **BODY (exact):** `Hello {{1}},\n\nThis is a friendly reminder of your appointment at Shiloh Massage Therapy & Aesthetic Clinic.\n\nTreatment: {{2}}\nDate: {{3}}\nTime: {{4}}\n\nWe look forward to welcoming you.\n\nNeed to make a change? Use a button below.`
+- **Variables:** `{{1}}` client name; `{{2}}` treatment; `{{3}}` appointment date; `{{4}}` appointment time.
+- **Buttons/payloads in exact order:** `Reschedule` → `client_reschedule_booking`; `Cancel booking` → `client_cancel_booking`.
+
+### `shiloh_booking_confirmation_v1` — Utility / `en`
+- **HEADER:** None. **FOOTER:** None. **Buttons/payloads:** None in the Meta template.
+- **BODY (exact):** `Hi {{1}}, your Shiloh appointment is confirmed. 🌿\n\n✨ Service: {{2}}\n👤 With: {{3}}\n📅 Date: {{4}}\n🕐 Time: {{5}}\n\nAdd to calendar:\nGoogle Calendar: {{6}}\nApple / Outlook / phone: {{7}}\n\nNeed to make a change? Reply RESCHEDULE or CANCEL.\nWe look forward to seeing you. 🌿`
+- **Variables:** `{{1}}` client name; `{{2}}` service; `{{3}}` practitioner; `{{4}}` date; `{{5}}` time/range; `{{6}}` Google Calendar URL; `{{7}}` ICS/calendar URL.
+
+### `shiloh_staff_finalization_v1` — Utility / `en`
+- **HEADER:** None. **FOOTER:** None. **Buttons/payloads:** None.
+- **BODY (exact):** `Hi {{1}}, {{2}} Shiloh visit(s) {{4}} for {{3}}. Please open Shiloh Admin > Appointments > Finalize past visits and record Completed or No-show. Attendance is never inferred automatically.`
+- **Variables by numeric identity:** `{{1}}` staff/Admin display name; `{{2}}` pending count; `{{3}}` clinic date; `{{4}}` reminder timing phrase. The textual occurrence order is `{{1}}, {{2}}, {{4}}, {{3}}` and must remain exact.
+
+### `shiloh_birthday_wish_v2` — Marketing / `en`
+- **HEADER:** None. **Buttons/payloads:** None.
+- **BODY (exact):** `Happy birthday, {{1}}! 🎂 Wishing you a beautiful day from all of us at Shiloh Massage Therapy and Aesthetic Clinic. Thank you for being part of our community. 🌿`
+- **Variable:** `{{1}}` client name.
+- **FOOTER (exact):** `Reply BIRTHDAY OFF any time to stop birthday wishes.`
+
+### Legacy provider-only identities
+
+`shiloh_birthday_wish_v1`, `appointment_followup`, and `appointment_reminder` are visible provider identities, but their full HEADER/BODY/FOOTER/variable/button contracts are **unknown and not authoritative in current main**. No copy, variable meaning, or button/payload contract is inferred for them. They are deliberately non-sendable and cannot be enabled through an environment-name override.

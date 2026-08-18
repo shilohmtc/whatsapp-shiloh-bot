@@ -17,7 +17,7 @@ test('pending approvals are discoverable and explicitly resendable without recre
   const pending = source('src/services/adminPendingBookingApprovals.js');
   assert.match(pending, /aba\.status = 'pending'/);
   assert.match(pending, /resend_booking_approval_/);
-  assert.match(pending, /sendWhatsAppReplyButtons/);
+  assert.match(pending, /sendWhatsAppTemplate/);
   assert.doesNotMatch(pending, /INSERT INTO appointments|createBookingEvent|commitClientBooking/);
 });
 
@@ -37,4 +37,13 @@ test('resend path is pending-only auditable and does not decide approval', () =>
   assert.match(pending, /client\.booking_approval\.notification_attempted/);
   assert.match(pending, /WHERE appointment_id = \$1 AND status = 'pending'/);
   assert.doesNotMatch(pending, /SET status = 'approved'|SET status = 'declined'/);
+});
+
+test('approval resend uses exact approved five-parameter template and ordered decision payloads', () => {
+  const pending = source('src/services/adminPendingBookingApprovals.js');
+  assert.match(pending, /APPROVAL_TEMPLATE_NAME = 'shiloh_booking_approval_request_v1'/);
+  assert.match(pending, /\[row\.client_name, row\.service_name, row\.staff_name, fmtDateTime\(row\.starts_at\), String\(appointmentId\)\]/);
+  assert.match(pending, /`\$\{APPROVE_PREFIX\}\$\{appointmentId\}`, `\$\{DECLINE_PREFIX\}\$\{appointmentId\}`/);
+  assert.match(pending, /approver_template_name = \$3/);
+  assert.doesNotMatch(pending, /sendWhatsAppReplyButtons/);
 });
