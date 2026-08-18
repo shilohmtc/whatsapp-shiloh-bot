@@ -76,6 +76,32 @@ Across every workstream, the shared source of truth is GitHub `main`, `docs/SHIL
 
 Before controlled work, a specialist chat must read the applicable authoritative repository state and verify any production/provider facts that could have changed. Chat history is navigation context only when authoritative repository evidence exists; it must not be used to reconstruct or override project truth. Do not redo completed or superseded work.
 
+## Specialist workstream reconciliation rule
+
+This rule is mandatory for the four implementing/operating specialist workstreams: **Booking & Admin UX**, **WhatsApp / Meta Integration**, **CRM & Identity**, and **Production / DevOps**.
+
+Before controlled work begins, the owning specialist workstream must independently apply the Authoritative-state rule below: read the applicable Master Status, Project Tracker, latest reconciliation and Engineering Governance on GitHub `main`, and verify relevant production/provider/human evidence that could have changed. Routing context and specialist-chat narrative do not replace this inspection.
+
+When a controlled unit reaches its verification boundary, the owning specialist must complete the applicable sequence before declaring the work complete:
+
+`implement → test/full applicable regression gate → repair until green → merge → production/provider verification where applicable → Project Tracker reconciliation → Master reconciliation where durable authoritative state changed → final specialist checkpoint`
+
+Project Tracker reconciliation must record delivery evidence and current status, PR/commit references, tests and regression results, production/provider verification where applicable, unresolved dependencies or gates, and the next controlled action or owner.
+
+Master Status reconciliation is required only when verified, merged work changes durable architecture, business rules, permissions, integrations, operational behaviour or other authoritative current state. Proposed work, work in progress and implementation on an unmerged branch must never be recorded as completed Master state.
+
+Every specialist final checkpoint must explicitly state:
+
+- what became authoritative;
+- what was completed and must not be redone;
+- what remains unresolved or externally gated;
+- whether Project Tracker and/or Master reconciliation was required and completed;
+- whether another workstream owns a dependency or next action.
+
+Control & Reconciliation treats the reconciled repository and verified production/provider evidence—not specialist-chat narrative—as the source of cross-workstream continuity. Specialist narrative may explain or route work, but it cannot establish authoritative completion by itself.
+
+If a genuine approval, provider, human-truth, safety, production or capability gate prevents the reconciliation boundary from being reached, the specialist must record the blocked state, evidence, dependency and owning/observing workstream in the applicable authoritative tracker/reconciliation surface. It must not declare the unit complete or write unverified state into the Master.
+
 ## Controlled-work completion protocol
 
 After the initial approval for a substantial controlled workstream, continue automatically through every available applicable stage:
