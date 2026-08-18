@@ -3,6 +3,72 @@
 Updated: 2026-08-18
 Purpose: permanent engineering operating rules that apply across Shiloh OS continuation work.
 
+## Workstream operating model
+
+Shiloh OS remains one project inside the same ChatGPT Work workspace, organized into five specialist workstreams. These are responsibility boundaries for focused chats, not independent projects or independent sources of truth.
+
+1. **Shiloh OS — Control & Reconciliation**
+   - Overall project status and priorities.
+   - Cross-workstream coordination and dependencies.
+   - Authoritative-state reconciliation.
+   - Governance and architectural decisions.
+   - Master + Project Tracker integrity.
+2. **Booking & Admin UX**
+   - Client and Admin booking journeys.
+   - Treatment/service discovery and menus.
+   - Practitioner booking entitlements.
+   - Admin permissions and operational UX.
+   - Appointment-management UX.
+3. **WhatsApp / Meta Integration**
+   - WhatsApp Cloud API.
+   - Webhooks and message delivery.
+   - Interactive messages and templates.
+   - Meta verification and provider state.
+   - WhatsApp-specific production behaviour.
+4. **CRM & Identity**
+   - Canonical client, practitioner and staff identities.
+   - CRM integrity.
+   - Identity resolution and deduplication.
+   - Practitioner/service relationships.
+   - Conversation-memory identity integration.
+5. **Production / DevOps**
+   - Render.
+   - GitHub Actions / CI.
+   - Deployments.
+   - Runtime health and logs.
+   - Environment/configuration.
+   - Production incidents and operational verification.
+
+The Control & Reconciliation workstream coordinates shared state. It does not replace specialist ownership or become a second implementation queue.
+
+## Authoritative-state rule
+
+Across every workstream, the shared source of truth is GitHub `main`, `docs/SHILOH-OS-MASTER-STATUS.md`, `docs/SHILOH-OS-PROJECT-TRACKER.md`, the latest reconciliation evidence identified by those documents, and verified production/provider state.
+
+Before controlled work, a specialist chat must read the applicable authoritative repository state and verify any production/provider facts that could have changed. Chat history is navigation context only when authoritative repository evidence exists; it must not be used to reconstruct or override project truth. Do not redo completed or superseded work.
+
+## Controlled-work completion protocol
+
+After the initial approval for a substantial controlled workstream, continue automatically through every available applicable stage:
+
+`inspect authoritative state → implement → test/full applicable regression gate → repair until green → merge → verify Render/production/provider state → reconcile Project Tracker → reconcile Master when durable architectural/operational state changed → final checkpoint`
+
+An intermediate success is not a completion boundary. Do not stop merely because implementation, a commit, a PR, CI, merge, or deployment completed. Stop only for a genuine approval, safety, provider, human-truth, unavailable-capability, contradictory-authority, material scope/risk, or other material decision gate.
+
+Never describe work as continuing in the background unless an actual scheduled or automated mechanism has been created.
+
+## Cross-workstream rule
+
+When specialist work changes assumptions, permissions, contracts, provider behaviour, identity semantics, deployment requirements, or operational truth owned by another workstream, identify the dependency explicitly and reconcile it into the shared authoritative state. No specialist chat may maintain a conflicting version of Shiloh OS.
+
+The specialist executing the controlled change remains responsible for the full completion protocol, including applicable CI, merge, production verification and reconciliation. Production / DevOps assists with delivery evidence; Control & Reconciliation protects shared state and resolves cross-workstream priority or architecture conflicts.
+
+## Documentation responsibility
+
+The Master records durable current architecture, business rules, permissions, integrations and operational truth. The Project Tracker records delivery state, PRs/commits, tests, deployment evidence, outstanding work and next actions.
+
+Reconciliation must preserve existing authoritative facts unless newer verified evidence supersedes them. Planned or in-progress implementation must not be recorded as completed production state. Historical detail belongs in reconciliation evidence and Git history when it is no longer needed for the concise current state.
+
 ## Screenshot evidence rule
 
 Screenshots supplied during Shiloh OS work from WhatsApp, Render, GitHub, Meta/provider, CRM, Calendar, or related operational surfaces are diagnostic/operational evidence by default.
