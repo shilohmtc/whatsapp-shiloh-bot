@@ -7,13 +7,13 @@ Purpose: permanent current-state source of truth. Historical implementation deta
 
 Operational truth is GitHub `main`, Render production, Shiloh CRM/Postgres, Google Calendar, Meta/WhatsApp provider evidence, and explicit real WhatsApp/human evidence. Never infer provider, attendance, approval, CRM, Calendar, or handset state.
 
-At the beginning of each new Shiloh OS chat: read this Master + `docs/SHILOH-OS-PROJECT-TRACKER.md` + the latest reconciliation, currently `docs/SHILOH-OS-RECONCILIATION-2026-08-18-ADMIN-BOOKING-FAST-PATH.md`, plus `docs/SHILOH-OS-ENGINEERING-GOVERNANCE.md`, on `main`; verify applicable production/provider state; then give the four-part checkpoint: (1) authoritative current state, (2) highest-priority continuation item, (3) why it is next, (4) remaining approval/evidence/provider gate. Obtain explicit approval before the first new substantial controlled action. After that initial approval, continue the approved workstream automatically through ordinary engineering/deploy/verification/housekeeping boundaries. Stop only for material scope/risk expansion, contradictory authority, or an existing fail-closed human/provider/evidence gate.
+At the beginning of each new Shiloh OS chat: read this Master + `docs/SHILOH-OS-PROJECT-TRACKER.md` + the latest reconciliation, currently `docs/SHILOH-OS-RECONCILIATION-2026-08-18-WORKSTREAM-OPERATING-MODEL.md`, plus `docs/SHILOH-OS-ENGINEERING-GOVERNANCE.md`, on `main`; verify applicable production/provider state; then give the four-part checkpoint: (1) authoritative current state, (2) highest-priority continuation item, (3) why it is next, (4) remaining approval/evidence/provider gate. Obtain explicit approval before the first new substantial controlled action. After that initial approval, continue the approved workstream automatically through ordinary engineering/deploy/verification/housekeeping boundaries. Stop only for material scope/risk expansion, contradictory authority, or an existing fail-closed human/provider/evidence gate.
 
 Permanent governance remains: operational screenshots are diagnostic evidence by default and must not trigger image generation unless visual creation/editing is explicitly requested; production defects follow trace → authoritative evidence → root cause → guarded repair → regression/E2E → CI → deploy → production verification → reconciliation; provider lead-time is considered early; known finite client/admin choices are button/list-first where practical; natural language remains fallback into the same canonical handlers; no speculative provider submissions; no manufactured appointments/evidence; no duplicate public service source of truth.
 
 ## Current production baseline
 
-Current accepted Render production code commit is **PR #313 / `ef0da63681d244fc3a0fbb1e6c9e1cdb42bf77c7`**, **Enforce admin practitioner booking scope and group service menus**. GitHub Actions full regression run **#1011** passed. Render deployment **`dep-da26430ae00c73c786s0`** reached LIVE on the exact merge commit; post-deploy telemetry showed successful HTTP 200 traffic and no error-level logs.
+Current accepted production application code remains **PR #313 / `ef0da63681d244fc3a0fbb1e6c9e1cdb42bf77c7`**, **Enforce admin practitioner booking scope and group service menus**. The current deployed `main` governance baseline is **PR #314 / `9f6aa3d38ef292e8c80570c03b14be5250d616f8`**, **Adopt Shiloh OS workstream operating model**. Full regression CI run **#1015** passed; Render deploy **`dep-da26b39srm7s738g6gc0`** reached LIVE with no error-level logs.
 
 Relevant accepted lineage:
 - #301 / `6863958dbf97a6a6f593fc196c284571adf802c6` — accepted public catalogue presentation.
@@ -28,7 +28,8 @@ Relevant accepted lineage:
 - #310 / `cb59fc67e09b5ac0afeb12c987bbaf7d41332f14` — removes #309 cross-confirm handoff; **accepted state**.
 - #311 / `89291bbceb287b4a78eaf1e0ef84da4cc853ac50` — adds the `/book` treatment catalogue link to the client welcome.
 - #312 / `7aaef341d4ac8e897769e18093733092c197507c` — makes the universal welcome precede client-state branching.
-- #313 / `ef0da63681d244fc3a0fbb1e6c9e1cdb42bf77c7` — fail-closed Admin practitioner booking entitlement, grouped WhatsApp service menus and JP appointment-menu parity; **current accepted production code**.
+- #313 / `ef0da63681d244fc3a0fbb1e6c9e1cdb42bf77c7` — fail-closed Admin practitioner booking entitlement, grouped WhatsApp service menus and JP appointment-menu parity; **current accepted production application code**.
+- #314 / `9f6aa3d38ef292e8c80570c03b14be5250d616f8` — adopts the five-workstream shared-authority operating model and full controlled-work completion protocol; **current governance baseline**.
 
 Fresh Meta/provider evidence from the #310 production startup:
 - `shiloh_staff_finalization_v1` — **APPROVED / UTILITY**.
@@ -38,6 +39,22 @@ Fresh Meta/provider evidence from the #310 production startup:
 - `shiloh_booking_update_v1` — **PENDING**.
 
 Provider approval does not itself prove handset delivery or justify manufactured operational messaging.
+
+## Workstream operating model — 🟢 ADOPTED
+
+Shiloh OS remains one project in the same ChatGPT Work workspace, organized into five focused specialist workstreams:
+
+1. **Shiloh OS — Control & Reconciliation** — overall status/priorities, cross-workstream coordination, governance/architecture, authoritative reconciliation and Master/Tracker integrity.
+2. **Booking & Admin UX** — client/Admin booking journeys, treatment discovery, practitioner entitlement, permissions and appointment-management UX.
+3. **WhatsApp / Meta Integration** — Cloud API, webhooks, delivery, interactive messages/templates, Meta verification/provider state and WhatsApp production behaviour.
+4. **CRM & Identity** — canonical client/practitioner/staff identity, CRM integrity, resolution/deduplication, practitioner/service relationships and conversation-memory identity integration.
+5. **Production / DevOps** — Render, CI, deployments, runtime health/logs, environment/configuration and incident verification.
+
+These are ownership and chat-focus boundaries, not separate projects or sources of truth. Every workstream uses GitHub `main`, this Master, the Project Tracker, the latest reconciliation evidence and verified production/provider state. Chat history is navigation context only where repository evidence exists.
+
+After initial approval, controlled work continues through authoritative inspection, implementation, the full applicable regression gate, repair until green, merge, Render/production/provider verification, Project Tracker reconciliation, durable Master reconciliation when applicable, and the final checkpoint. Intermediate success does not end the task. Work stops only at a genuine material gate. Cross-workstream contract changes must be identified and reconciled into shared authority; no specialist chat may maintain conflicting Shiloh OS state.
+
+The Master records durable architecture, business rules, permissions, integrations and operational truth. The Project Tracker records delivery state, PRs/commits, tests, deployment evidence, outstanding work and next actions. Planned work is never recorded as completed production state.
 
 ## Public Shiloh service catalogue — 🟢 VERIFIED LIVE through #301
 
@@ -157,7 +174,7 @@ CRM48 (Pa Derik) and CRM473 remain legitimate controlled Goldie-imported canonic
 
 ## Exact new-chat continuation state
 
-- Production code is **LIVE** on PR #313 / `ef0da63681d244fc3a0fbb1e6c9e1cdb42bf77c7`; full regression CI run #1011 passed and Render deploy `dep-da26430ae00c73c786s0` is LIVE.
+- Production application code remains **LIVE** on PR #313 / `ef0da63681d244fc3a0fbb1e6c9e1cdb42bf77c7`; the governance baseline is **LIVE** on PR #314 / `9f6aa3d38ef292e8c80570c03b14be5250d616f8`, CI #1015 and Render deploy `dep-da26b39srm7s738g6gc0`.
 - Admin typed-time selection is repaired; `14:00` / `2pm` resolve through authoritative slots.
 - Canonical + reconciled-Goldie client lookup improvements are live.
 - New-client Admin booking fast path is live: duplicate-check mobile → provisional canonical client → guarded review/confirmation.
@@ -170,7 +187,7 @@ CRM48 (Pa Derik) and CRM473 remain legitimate controlled Goldie-imported canonic
 - `/book` remains the accepted live CRM-backed public catalogue through #301; do not redo superseded #284–#300 variants.
 - Historical attendance remains human-controlled; #558 remains fail-closed.
 
-**Authoritative current state:** PR #313 is regression-green, merged and live. Admin booking entitlement is enforced fail-closed in both menu/query logic and the database, grouped WhatsApp treatment selection is live, JP parity excludes finalization, and the earlier cross-confirm experiment remains removed.
+**Authoritative current state:** the five-workstream operating model is adopted, regression-green, merged and live through PR #314. All specialist chats share one repository/production/provider authority and the full controlled-work completion protocol. Production application behaviour remains the accepted #313 state.
 
 **Highest-priority continuation item:** re-check Meta provider status for `shiloh_booking_update_v1`; if still PENDING, continue the next approved Shiloh OS workstream without reopening the completed Admin-booking repairs.
 
