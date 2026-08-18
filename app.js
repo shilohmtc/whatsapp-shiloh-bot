@@ -62,6 +62,7 @@ const { ensureDemoClientPermissions } = require("./src/services/demoClientAccess
 const { ensureJeanPierreAdminCapabilities } = require("./src/services/jeanPierreAdminAccessBootstrap");
 const { ensureChristelMediHeelOwnership } = require("./src/services/pedicureOwnershipBootstrap");
 const { ensureMassagePackageSchema } = require("./src/services/massagePackageBootstrap");
+const { ensureChristelServiceCatalogueCorrection } = require("./src/services/christelServiceCatalogueCorrectionBootstrap");
 const { startMandatoryDemoCleanupScheduler } = require("./src/services/demoMandatoryCleanup");
 const { startAttendanceFinalizationReminderScheduler } = require("./src/services/attendanceFinalizationReminders");
 const { startHistoricalFinalizationPromptScheduler } = require("./src/services/historicalFinalizationPrompt");
@@ -101,6 +102,7 @@ async function start() {
   const demoAccess = await ensureDemoClientPermissions(); logger.info(demoAccess, "Controlled demo client production UI disabled");
   const jeanPierreAccess = await ensureJeanPierreAdminCapabilities(); if (!jeanPierreAccess) throw new Error('Jean-Pierre business admin capability clone could not be initialized'); logger.info({ configured: true, businessRole: jeanPierreAccess.business_role }, "Jean-Pierre business admin access verified");
   const mediHeelOwnership = await ensureChristelMediHeelOwnership(); logger.info(mediHeelOwnership, "Christel MediHeel ownership verified");
+  const christelCatalogueCorrection = await ensureChristelServiceCatalogueCorrection(); logger.info(christelCatalogueCorrection, "Christel service catalogue correction verified");
   await ensureHistoricalFinalizationFinancialSchema(); logger.info({ initialized: true }, "Historical finalization financial schema verified");
   try { await runConfiguredClientProvenanceAudit(logger); } catch (error) { logger.error({ err: error }, "Read-only CRM provenance audit failed"); }
   await provisionStaffFinalizationTemplateSafely(); await provisionStaffFinalizationActionTemplateSafely(); await provisionBookingConfirmationTemplateSafely(); await provisionClientLifecycleTemplatesIfExplicitlyEnabled();

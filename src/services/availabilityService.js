@@ -12,6 +12,12 @@ function localDate(value) {
   return /^\d{4}-\d{2}-\d{2}$/.test(String(value || '')) ? String(value) : null;
 }
 
+function canonicalServiceTotalMinutes(resource) {
+  return Number(resource?.duration_minutes || 0)
+    + Number(resource?.processing_time_minutes || 0)
+    + Number(resource?.extra_time_minutes || 0);
+}
+
 async function getServiceAndStaff(staffId, serviceId) {
   const result = await pool.query(
     `SELECT st.id AS staff_id, st.display_name AS staff_name, st.status AS staff_status,
@@ -96,9 +102,7 @@ async function listAvailableSlots({
   );
   if (!eligible.rowCount) return { status: 'not_eligible', slots: [], resource };
 
-  const totalMinutes = Number(resource.duration_minutes || 0)
-    + Number(resource.processing_time_minutes || 0)
-    + Number(resource.extra_time_minutes || 0);
+  const totalMinutes = canonicalServiceTotalMinutes(resource);
   if (totalMinutes <= 0) return { status: 'invalid_duration', slots: [], resource };
 
   const result = await pool.query(
@@ -250,4 +254,4 @@ async function listAvailableSlots({
   };
 }
 
-module.exports = { listAvailableSlots };
+module.exports = { canonicalServiceTotalMinutes, listAvailableSlots };
