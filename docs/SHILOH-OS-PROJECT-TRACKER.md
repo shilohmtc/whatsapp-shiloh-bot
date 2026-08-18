@@ -16,19 +16,19 @@ Purpose: concise operational dashboard. Master is the detailed current ledger; d
 
 ## Governance
 
-New chat: read Master + Tracker + latest reconciliation, currently `docs/SHILOH-OS-RECONCILIATION-2026-08-18-HYBRID-WHATSAPP-CHOICE-MENUS.md`, plus `docs/SHILOH-OS-ENGINEERING-GOVERNANCE.md`, on GitHub `main`; verify applicable production/provider state; give the four-part checkpoint; obtain explicit approval before the first new substantial controlled action. After that approval, continue the approved workstream automatically through ordinary engineering/deploy/verification/housekeeping. Stop for material scope/risk expansion, contradictory authority, or an existing fail-closed human/provider/evidence gate.
+New chat: read Master + Tracker + latest reconciliation, currently `docs/SHILOH-OS-RECONCILIATION-2026-08-18-OWN-APPOINTMENT-FINALIZATION.md`, plus `docs/SHILOH-OS-ENGINEERING-GOVERNANCE.md`, on GitHub `main`; verify applicable production/provider state; give the four-part checkpoint; obtain explicit approval before the first new substantial controlled action. After that approval, continue the approved workstream automatically through ordinary engineering/deploy/verification/housekeeping. Stop for material scope/risk expansion, contradictory authority, or an existing fail-closed human/provider/evidence gate.
 
 Operational screenshots are diagnostic evidence by default, not image-generation requests. Production defects follow trace → evidence → root cause → guarded repair → regression/E2E → CI → deploy → production verification → reconciliation. Never manufacture appointments, provider approval, attendance truth, Calendar truth or handset evidence.
 
 ## Production baseline
 
-Current accepted production application code is **PR #322 / `e4bf61f60cac4fd98492f846e37e07c07d3219e5`**. The current governance baseline is **PR #317 / `f2a78bb33db212f759ac5bb72f1d832ca11cc104`**. Full regression CI run **#1037** passed with **656 passed / 0 failed**; Render deploy **`dep-da29l28ae00c73957t30`** reached LIVE. Post-deployment error-level logs were clear, Google Calendar health passed, and `/health` reported application and database status `ok`.
+Current accepted production application code is **PR #324 / `ac461dd7b6b0774a89bd179f913f54dcfae2414d`**. The current governance baseline is **PR #317 / `f2a78bb33db212f759ac5bb72f1d832ca11cc104`**. Full regression CI run **#1041** passed with **662 passed / 0 failed**; Render deploy **`dep-da2a3037uimc73a20leg`** reached LIVE. Post-deployment error-level logs were clear, Google Calendar health passed, and repeated `/health` requests returned HTTP 200 after database-backed startup.
 
 ## At-a-glance
 
 | ID | Workstream | State | Evidence / next action |
 |---|---|---|---|
-| DEPLOY-CONVERGENCE | GitHub ↔ Render production | 🟢 VERIFIED | Application #322 / `e4bf61f...` passed CI #1037 (656/0) and is LIVE as `dep-da29l28ae00c73957t30`; no post-deploy error logs; Calendar health and `/health` app/database checks passed. Governance baseline is #317 / `f2a78bb...`. |
+| DEPLOY-CONVERGENCE | GitHub ↔ Render production | 🟢 VERIFIED | Application #324 / `ac461dd...` passed CI #1041 (662/0) and is LIVE as `dep-da2a3037uimc73a20leg`; no post-deploy error logs; Calendar health and repeated `/health` HTTP 200 checks passed. Governance baseline is #317 / `f2a78bb...`. |
 | WORKSTREAM-OPERATING-MODEL | Five specialist chats with one shared authority | 🟢 VERIFIED LIVE | #314 adopts Control & Reconciliation, Booking & Admin UX, WhatsApp / Meta Integration, CRM & Identity, and Production / DevOps; guarded by full CI #1015 and dated reconciliation evidence. |
 | WORKSTREAM-COMPLETION | End-to-end controlled-work protocol | 🟢 VERIFIED | Inspect → implement → full applicable regression → repair green → merge → production/provider verify → Tracker → durable Master → checkpoint; only material gates pause work. |
 | WORKSTREAM-CROSS-CONTRACT | Cross-workstream dependency reconciliation | 🟢 VERIFIED | Specialist ownership cannot create conflicting Shiloh OS state; changed assumptions/contracts must be reconciled into shared authority. |
@@ -61,7 +61,7 @@ Current accepted production application code is **PR #322 / `e4bf61f60cac4fd9849
 | ADMIN-RESCHEDULE | #272–#277 reschedule lineage | 🟢 VERIFIED LIVE | Next available, direct time/date-time, durable context, confirmation and commit repair retained. |
 | ADMIN-MANUAL-START | #278 start-time-first manual picker | 🟢 VERIFIED LIVE | 15-minute authoritative candidate generation; no override/double-booking path. |
 | TIME-24H | 24-hour presentation standard | 🟢 VERIFIED LIVE | Regression-covered; do not redo. |
-| ATT-AUTH | Attendance certification authority | 🟢 VERIFIED | Christel → Christel+Abigail; Marietjie → Marietjie; Abigail → none. |
+| ATT-AUTH | Attendance certification authority | 🟢 VERIFIED LIVE | #324 makes finalization own-practitioner-only: Christel → Christel, Abigail → Abigail, Marietjie → Marietjie, JP → none. Exact active Admin↔staff identity is required; conflicts fail closed. Menu, reminder, prompt, queue and row-locked write enforcement agree. CI #1041 passed 662/0; deploy `dep-da2a3037uimc73a20leg` is LIVE and healthy. |
 | A1-HIST-REVIEW | 1–15 Aug historical attendance final review | 🔵 ACTIVE / HUMAN TRUTH | Re-query before quoting current unresolved/routable count. |
 | A1-558 | Appointment #558 practitioner identity | 🔴 HOLD | Historical practitioner `SHILOH MTC`; establish real practitioner before correction/finalization. |
 | META-FINALIZE-ACTIONS | `shiloh_staff_finalization_actions_v1` | 🟢 APPROVED | APPROVED / UTILITY; genuine-use/evidence rules remain. |
@@ -120,11 +120,11 @@ PR #318 is the accepted entitlement contract. Christel and Abigail share only th
 
 ## Exact continuation
 
-**Authoritative current state:** PR #322 is regression-green, merged and verified LIVE on `e4bf61f...` as Render deploy `dep-da29l28ae00c73957t30`. One-to-three safe Admin/client choices use visible reply buttons after scope filtering; four-or-more or unsafe choices remain lists. PR #320's full-label rule and JP's #318 Christel+Abigail booking entitlement remain unchanged; finalization remains denied. Governance baseline #317 remains authoritative. Google Business Profile remains an external/provider gate with general Requests/min at 0.
+**Authoritative current state:** PR #324 is regression-green, merged and verified LIVE on `ac461dd...` as Render deploy `dep-da2a3037uimc73a20leg`. Christel, Abigail and Marietjie each finalize only their own appointments; JP finalizes none. Exact linked canonical identity is required and conflicts fail closed. PR #320/#322 menu presentation and JP's #318 Christel+Abigail booking entitlement remain unchanged. Governance baseline #317 remains authoritative. Google Business Profile remains an external/provider gate with general Requests/min at 0.
 
-**Highest-priority next item:** re-check `shiloh_booking_update_v1` provider status. If still PENDING, continue the next approved Shiloh OS workstream without reopening the completed menu-label, hybrid-choice or JP/Admin-booking fixes.
+**Highest-priority next item:** continue the active historical attendance final review: re-query current CRM state and present only safely routable unresolved appointments for responsible-practitioner human determination.
 
-**Why next:** menu wording and small-choice presentation are centralized and regression-covered across the shared Admin/client send boundary, with CI and production health verified. A genuine WhatsApp journey may confirm reply-button rendering naturally, but no booking, appointment change or attendance action may be manufactured for evidence.
+**Why next:** own-practitioner routing is now centralized, regression-covered and live. Attendance remains explicit human truth; no outcome can be inferred or changed for evidence.
 
 **Remaining gates:** `shiloh_booking_update_v1` approval; Google Business Profile positive provider approval or usable Requests/min >0; historical attendance and #558 human truth; natural handset evidence; genuine lifecycle/follow-up/birthday evidence; explicit approval for material commercial/service/business-rule changes.
 
