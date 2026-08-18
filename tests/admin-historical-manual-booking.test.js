@@ -8,12 +8,12 @@ const source = (relativePath) => fs.readFileSync(path.join(ROOT, relativePath), 
 
 test('admin guided booking routes past dates into historical manual entry instead of slot search', () => {
   const flow = source('src/services/adminMobileBookingFlow.js');
-  assert.match(flow, /date<johannesburgToday\(\)/);
-  assert.match(flow, /step:'historical-time'/);
+  assert.match(flow, /date\s*<\s*johannesburgToday\(\)/);
+  assert.match(flow, /step:\s*'historical-time'/);
   assert.match(flow, /Enter the actual start time/);
   assert.match(flow, /prepareHistoricalAdminBooking/);
   assert.match(flow, /confirmHistoricalAdminBooking/);
-  assert.match(flow, /futureBias:false/);
+  assert.match(flow, /futureBias:\s*false/);
 });
 
 test('historical booking writes CRM and calendar truth without sending a client notification', () => {
