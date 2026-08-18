@@ -1,6 +1,7 @@
 const { pool } = require('../db/pool');
 const { normalizePhone } = require('./clientIdentityOnboarding');
 const { sendWhatsAppReplyButtons } = require('./whatsapp');
+const { compactListTitle, fullLabelDescription } = require('../presentation/whatsappListRowPresentation');
 
 const RESEND_PREFIX = 'resend_booking_approval_';
 
@@ -63,8 +64,8 @@ function pendingListInteractive(rows) {
     rows: [
       ...rows.map((row) => ({
         id: `${RESEND_PREFIX}${row.appointment_id}`,
-        title: `#${row.appointment_id} ${String(row.client_name || '').slice(0, 18)}`.slice(0, 24),
-        description: `${String(row.service_name || '').slice(0, 36)} • ${fmtDateTime(row.starts_at)}`.slice(0, 72),
+        title: compactListTitle(`#${row.appointment_id} ${row.client_name || 'Client'}`),
+        description: fullLabelDescription(row.client_name || 'Client', `${row.service_name || 'Service'} • ${fmtDateTime(row.starts_at)}`),
       })),
       { id: 'menu', title: '← Back to Admin', description: 'Return to the main admin menu' },
     ],
