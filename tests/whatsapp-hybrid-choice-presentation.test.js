@@ -49,13 +49,27 @@ test('four or more choices remain a WhatsApp list', () => {
   assert.strictEqual(hybridizeChoiceInteractive(source), source);
 });
 
-test('a choice needing more than the 20-character button label remains a list', () => {
+test('a 21-24 character list title becomes a compact button while staying full in the body', () => {
   const source = {
     type: 'list',
     body: 'Choose',
     rows: [{ id: 'long_choice', title: 'This needs a list title' }],
   };
-  assert.equal(source.rows[0].title.length, 23);
+  const presented = hybridizeChoiceInteractive(source);
+  assert.equal(presented.type, 'button');
+  assert.equal(presented.buttons[0].title, 'This needs a list t…');
+  assert.match(presented.body, /This needs a list title/);
+});
+
+test('choices whose compact button titles would collide remain a list', () => {
+  const source = {
+    type: 'list',
+    body: 'Choose',
+    rows: [
+      { id: 'one', title: 'A repeated treatment option one' },
+      { id: 'two', title: 'A repeated treatment option two' },
+    ],
+  };
   assert.strictEqual(hybridizeChoiceInteractive(source), source);
 });
 
