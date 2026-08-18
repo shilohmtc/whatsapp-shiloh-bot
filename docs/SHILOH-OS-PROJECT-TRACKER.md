@@ -16,19 +16,23 @@ Purpose: concise operational dashboard. Master is the detailed current ledger; d
 
 ## Governance
 
-New chat: read Master + Tracker + latest reconciliation, currently `docs/SHILOH-OS-RECONCILIATION-2026-08-18-GOOGLE-CALENDAR-RECOVERY.md`, plus `docs/SHILOH-OS-ENGINEERING-GOVERNANCE.md`, on GitHub `main`; verify applicable production/provider state; give the four-part checkpoint; obtain explicit approval before the first new substantial controlled action. After that approval, continue the approved workstream automatically through ordinary engineering/deploy/verification/housekeeping. Stop for material scope/risk expansion, contradictory authority, or an existing fail-closed human/provider/evidence gate.
+New chat: read Master + Tracker + latest reconciliation, currently `docs/SHILOH-OS-RECONCILIATION-2026-08-18-CUSTOMER-CHANGE-CONFIRMATIONS.md`, plus `docs/SHILOH-OS-ENGINEERING-GOVERNANCE.md`, on GitHub `main`; verify applicable production/provider state; give the four-part checkpoint; obtain explicit approval before the first new substantial controlled action. After that approval, continue the approved workstream automatically through ordinary engineering/deploy/verification/housekeeping. Stop for material scope/risk expansion, contradictory authority, or an existing fail-closed human/provider/evidence gate.
 
 Operational screenshots are diagnostic evidence by default, not image-generation requests. Production defects follow trace → evidence → root cause → guarded repair → regression/E2E → CI → deploy → production verification → reconciliation. Never manufacture appointments, provider approval, attendance truth, Calendar truth or handset evidence.
 
 ## Production baseline
 
-Accepted public-catalogue functional lineage remains **#301 / `6863958dbf97a6a6f593fc196c284571adf802c6`**. Google Calendar provider protection was added in **PR #302 / `bee0bdcd71f7dae768a78e6e5cfcd5ec5ddf76c9`**, CI run **#975** passed. After OAuth credential reconciliation, Render deployment **`dep-da21culbedkc73d5desg`** reached **LIVE** and fresh startup evidence logged **`Google Calendar provider health check passed`**.
+Accepted public-catalogue functional lineage remains **#301 / `6863958dbf97a6a6f593fc196c284571adf802c6`**. Google Calendar provider protection was added in **PR #302 / `bee0bdcd71f7dae768a78e6e5cfcd5ec5ddf76c9`**. Customer-change confirmation infrastructure was added in **PR #303 / `632ec4780489a97349b41a85567fa13b18d9ca35`**, with GitHub Actions CI run **#982** passing. Render deployment **`dep-da21jsdg1s2s73c1ju60`** is the PR #303 production deployment.
 
 ## At-a-glance
 
 | ID | Workstream | State | Evidence / next action |
 |---|---|---|---|
-| DEPLOY-CONVERGENCE | GitHub ↔ Render production | 🟢 VERIFIED | Current production healthy after OAuth environment reconciliation; latest credential-triggered deploy `dep-da21culbedkc73d5desg` LIVE. |
+| DEPLOY-CONVERGENCE | GitHub ↔ Render production | 🟢 VERIFIED | PR #303 merge `632ec478...` deployed on Render; service live and Google Calendar health probe passed. |
+| CUSTOMER-CHANGE-CONFIRM | Customer confirmations after successful Admin changes | 🟢 IMPLEMENTED / LIVE | PR #303 covers service, practitioner, date/time, price and cancellation after canonical mutation; audit-event-idempotent retry outbox. |
+| META-BOOKING-UPDATE | `shiloh_booking_update_v1` | 🟠 WAITING PROVIDER | Production submission succeeded; latest provider status **PENDING**. Update notifications remain queued until APPROVED. |
+| META-CANCEL-CONFIRM | `shiloh_cancellation_confirmation_v1` | 🟢 APPROVED / PROVIDER READY | Existing template already APPROVED; Admin cancellation confirmation path is enabled through PR #303. |
+| CUSTOMER-CHANGE-EVIDENCE | Genuine post-approval update delivery | 🟠 WAITING GENUINE JOURNEY | Do not mutate #570 or another real booking for proof. Capture natural service/practitioner/date-time/price change after provider approval. |
 | GOOGLE-CALENDAR-AUTH | Google Calendar OAuth/provider health | 🟢 VERIFIED HEALTHY | External OAuth app moved from Testing to In production; Client ID/secret/refresh-token chain reconciled; startup health probe passed. |
 | ADMIN-PRACTITIONER-CHANGE | Manage booking → Change practitioner | 🟢 VERIFIED LIVE | Real booking #570 changed to Christel; Google Calendar event updated; Linda Dr / Sports Massage Package Session / 2026-08-21 14:30–15:20 / R0.00 preserved. Do not mutate again for proof. |
 | ADMIN-PROVIDER-GUARD | PR #302 Calendar fail-closed guard | 🟢 VERIFIED / RETAIN | Expired/revoked provider failure becomes explicit no-write message; read-only startup/30-min health probe retained permanently. |
@@ -70,16 +74,24 @@ Accepted public-catalogue functional lineage remains **#301 / `6863958dbf97a6a6f
 | E1 | Ozow | 🟠 WAITING | Merchant config + explicit business rules required. |
 | PRIV | Destructive privacy execution | 🟠 WAITING | Fail closed pending authority/evidence. |
 
+## Customer-change confirmation exact state
+
+New appointments remain on the established `shiloh_booking_confirmation_v1` path. PR #303 adds downstream confirmation for successful Admin service, practitioner, date/time, price and cancellation mutations without weakening canonical write guards.
+
+Each qualifying mutation is keyed to its CRM audit event in a retryable outbox. Service/practitioner/date-time/price use the latest appointment snapshot and `shiloh_booking_update_v1`; cancellation uses `shiloh_cancellation_confirmation_v1`. No proactive free-text fallback is permitted when a template is not approved.
+
+Current Meta truth: cancellation confirmation is APPROVED; booking update template is PENDING. Pending update notifications remain queued and are retried rather than discarded.
+
 ## Exact continuation
 
-**Authoritative current state:** Google Calendar provider health is restored and verified in production; the previously failing Admin practitioner-change journey is verified live on booking #570. The accepted `/book` state remains #301.
+**Authoritative current state:** PR #303 is merged, CI-passed and live. Customer-change notification infrastructure is active; cancellations are provider-ready; ordinary update confirmation waits on Meta approval of `shiloh_booking_update_v1`.
 
-**Highest-priority next item:** return to the authoritative backlog/business review from this recovered state. `PUBLIC-CATALOGUE-NEXT` remains ready unless a higher-priority real production defect or explicit business direction supersedes it.
+**Highest-priority next item:** re-check `shiloh_booking_update_v1` provider status. Once APPROVED, allow the queue to service genuine changes and capture natural delivery evidence without manufacturing a booking mutation.
 
-**Why next:** the Calendar credential incident and practitioner-change defect are closed with provider and handset evidence; duplicate OAuth/#570 work would be rework.
+**Why next:** engineering/CI/deployment gates are closed; Meta provider approval is now the controlling external dependency for service/practitioner/date-time/price confirmation delivery.
 
-**Remaining gates:** historical attendance and #558 require human truth; genuine lifecycle/follow-up/birthday evidence remains natural-journey gated; material commercial/service/business-rule changes require explicit approval.
+**Remaining gates:** `shiloh_booking_update_v1` approval; historical attendance and #558 human truth; genuine lifecycle/follow-up/birthday evidence; explicit approval for material commercial/service/business-rule changes.
 
 ## Guardrails
 
-Preserve audit history. Never infer attendance, Calendar state, provider delivery or handset behaviour. Never silently assign #558. Never reopen cancelled visits for proof. Never create a static second public service catalogue when canonical CRM data can be projected instead. Retain the PR #302 provider guard and health probe.
+Preserve audit history. Never infer attendance, Calendar state, provider delivery or handset behaviour. Never silently assign #558. Never reopen cancelled visits for proof. Never create a static second public service catalogue when canonical CRM data can be projected instead. Retain the PR #302 provider guard/health probe and PR #303 idempotent customer-notification queue.
