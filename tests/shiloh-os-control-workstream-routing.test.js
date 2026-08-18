@@ -38,7 +38,7 @@ test('blocked work remains fail-closed and is not routed to implementation', () 
 
 test('routing reconciliation remains durable when a later reconciliation becomes current', () => {
   const routing = path.join(root, 'docs/SHILOH-OS-RECONCILIATION-2026-08-18-CONTROL-WORKSTREAM-ROUTING.md');
-  const latest = 'docs/SHILOH-OS-RECONCILIATION-2026-08-18-HYBRID-WHATSAPP-CHOICE-MENUS.md';
+  const latest = 'docs/SHILOH-OS-RECONCILIATION-2026-08-18-OWN-APPOINTMENT-FINALIZATION.md';
   assert.ok(fs.existsSync(routing));
   assert.ok(master.includes(latest));
   assert.ok(tracker.includes(latest));
