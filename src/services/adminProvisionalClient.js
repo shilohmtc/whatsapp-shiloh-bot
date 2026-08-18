@@ -94,4 +94,49 @@ async function createProvisionalClient({ fullName, mobileNumber, adminId }) {
   }
 }
 
-module.exports = { normalizeZaMobile, cleanName, findCanonicalByMobile, createProvisionalClient };
+async function cleanupUnusedProvisionalClient({ clientId, adminId, reason = 'booking_cancelled' }) {
+  if (!clientId) return { status: 'skipped' };
+  const db = await pool.connect();
+  try {
+    await db.query('BEGIN');
+    const clientResult = await db.query(
+      `SELECT id,source FROM clients WHERE id=$1 FOR UPDATE`,
+      [clientId]
+    );
+    const client = clientResult.rows[0];
+    if (!client || client.source !== 'admin_provisional_booking') {
+      await db.query('ROLLBACK');
+      return { status: 'kept', reason: 'not_provisional' };
+    }
+    const appointmentResult = await db.query(
+      `SELECT COUNT(*)::int AS count FROM appointments WHERE client_id=$1`,
+      [clientId]
+    );
+    if ((appointmentResult.rows[0]?.count || 0) > 0) {
+      await db.query('ROLLBACK');
+      return { status: 'kept', reason: 'has_appointments' };
+    }
+    await db.query(`DELETE FROM client_contacts WHERE client_id=$1`, [clientId]);
+    await db.query(`DELETE FROM clients WHERE id=$1`, [clientId]);
+    await db.query(
+      `INSERT INTO crm_audit_events (actor_admin_id,action,entity_type,entity_id,metadata)
+       VALUES ($1,'client.provisional_removed','client',$2,$3::jsonb)`,
+      [adminId || null, clientId, JSON.stringify({ source: 'admin_mobile_booking', reason })]
+    );
+    await db.query('COMMIT');
+    return { status: 'removed' };
+  } catch (error) {
+    await db.query('ROLLBACK');
+    throw error;
+  } finally {
+    db.release();
+  }
+}
+
+module.exports = {
+  normalizeZaMobile,
+  cleanName,
+  findCanonicalByMobile,
+  createProvisionalClient,
+  cleanupUnusedProvisionalClient,
+};
