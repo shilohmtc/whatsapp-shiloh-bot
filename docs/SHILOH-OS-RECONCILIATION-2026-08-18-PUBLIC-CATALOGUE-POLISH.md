@@ -1,6 +1,7 @@
 # Shiloh OS — Reconciliation 2026-08-18 Public Catalogue Polish
 
 Reconciled: 2026-08-18 09:03 SAST
+Post-reconciliation update: 2026-08-18 — Google Calendar provider guard and engineering-governance rule added after production evidence from Admin Manage booking.
 
 ## Authority checked
 
@@ -65,3 +66,33 @@ No catalogue data, service pricing, duration, practitioner eligibility, appointm
 **Next catalogue action:** business review of the current live #301 page. Any further presentation refinement should start from the live accepted state and preserve canonical CRM service truth and existing booking semantics.
 
 **Remaining hard gates:** human attendance truth, #558 practitioner identity, genuine journey evidence, and explicit approval for any material service/commercial/business-rule change.
+
+## Post-reconciliation production incident — Admin practitioner change / Google Calendar
+
+A real WhatsApp Admin **Manage booking → Change practitioner** journey on 2026-08-18 exposed a generic failure after a valid practitioner name was entered. Render production logs established the root cause rather than inferring it: Google OAuth refresh returned **`invalid_grant`** with **`Token has been expired or revoked.`** during the authoritative Calendar availability check inside the booking-update path. The failure was therefore a Google Calendar authorization/provider-state failure, not a practitioner-name parsing failure.
+
+PR **#302**, **Fail closed cleanly when Google Calendar auth expires**, passed GitHub Actions CI run **#975** and merged to `main` as **`bee0bdcd71f7dae768a78e6e5cfcd5ec5ddf76c9`**. Render production startup evidence showed the new `adminBookingProviderGuardPatch.js` preload active. Its read-only startup provider probe immediately detected the same `invalid_grant` condition and logged **`Google Calendar provider health check failed; booking mutations remain fail-closed`**.
+
+The application now:
+
+- catches Google Calendar OAuth/provider failures on both stateful and restart-safe Admin booking-update paths;
+- fails closed instead of returning the generic WhatsApp processing error;
+- explicitly states that Google Calendar is unavailable and that **no booking change was saved**;
+- tells the operator to reconnect Google Calendar before retrying;
+- performs a read-only Google Calendar health probe at startup and every 30 minutes so the dependency failure is visible before a human enters the affected journey;
+- has regression coverage for expired/revoked OAuth recognition, fail-closed messaging, preload ordering, and provider-health probing.
+
+**Provider gate remains:** the configured Google OAuth refresh token is currently expired or revoked. The code guard is live, but Calendar-dependent booking mutations must remain fail-closed until Google Calendar authorization is restored with authoritative credentials. Do not disable Calendar conflict checks or bypass the provider gate merely to make the practitioner change succeed.
+
+## Permanent engineering-governance addition
+
+`docs/SHILOH-OS-ENGINEERING-GOVERNANCE.md` is now authoritative for Shiloh OS engineering work and must be applied together with the Master, Tracker, and latest reconciliation.
+
+Permanent rules added:
+
+- WhatsApp, Render, GitHub, Meta/provider, CRM, Calendar, and similar screenshots supplied during Shiloh OS work are **diagnostic/operational evidence by default**. Do **not** generate images, sketches, mockups, redesigns, or other visual artifacts from them unless the user explicitly asks for visual creation or image editing.
+- When screenshots or other operational evidence reveal unexpected production behaviour, follow the controlled path: current `main` → actual handler/state/provider trace → production/provider evidence → reproduce where practical → root cause → guarded repair → regression/E2E coverage → CI → deploy → production verification → reconciliation.
+- The user must not become Shiloh's primary production test suite. Business-critical recurring journeys should progressively gain regression/E2E protection and dependency-health checks where practical.
+- Provider/dependency failures that can be identified safely should be surfaced explicitly and fail closed rather than collapsing into generic errors or weakening authoritative CRM/Calendar/conflict/audit rules.
+
+For future continuation, do not treat the governance file as optional historical documentation; apply it as part of the Shiloh OS continuation protocol.
