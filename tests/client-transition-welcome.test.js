@@ -82,7 +82,7 @@ test('registered-client delivery sends compact list before marking the welcome d
   const postSendIndex = serviceSource.indexOf('function registeredClientPostSend');
   const listIndex = serviceSource.indexOf('await sendWhatsAppList(', postSendIndex);
   const markIndex = serviceSource.indexOf('await markUniversalWelcomeSent(phone, clientId);', postSendIndex);
-  const registeredBranchIndex = serviceSource.indexOf("if (clientState.status === 'unique')");
+  const registeredBranchIndex = serviceSource.indexOf("clientState.status === 'unique' && profileComplete(clientState.client)");
   const plainReplyIndex = serviceSource.indexOf('reply: buildUniversalWelcome()', registeredBranchIndex);
 
   assert.ok(postSendIndex >= 0, 'registered post-send sequencer must exist');
@@ -97,6 +97,14 @@ test('new clients receive the same universal welcome before registration', () =>
   assert.match(reply, /looks like you’re new to Shiloh/i);
   assert.match(reply, /quick registration/i);
   assert.match(reply, /first name, surname, date of birth and gender/i);
+});
+
+test('incomplete and ambiguous identities receive universal welcome before their safe branch', () => {
+  assert.match(serviceSource, /function identityBranchWithWelcome\(phone, identity\)/);
+  assert.match(serviceSource, /reply: `\$\{buildUniversalWelcome\(\)\}\\n\\n\$\{identity\.reply\}`/);
+  assert.match(serviceSource, /markUniversalWelcomeSent\(phone, identity\.client\?\.id \|\| null\)/);
+  assert.doesNotMatch(serviceSource, /if \(clientState\.status === 'ambiguous'\) return \{ handled: false \};/);
+  assert.doesNotMatch(serviceSource, /if \(!profileComplete\(client\)\) return \{ handled: false \};/);
 });
 
 test('universal welcome remains greeting-only so direct operational intent is not intercepted', () => {
