@@ -18,7 +18,7 @@ test('staff booking catalogue remains fail-closed to the approved practitioner s
 });
 
 test('service-first booking uses genuine WhatsApp list payloads with bounded pagination', () => {
-  assert.match(booking, /ux: 'whatsapp_interactive_list'/);
+  assert.match(booking, /ux: 'whatsapp_interactive_list_grouped'/);
   assert.match(booking, /function categoryInteractive/);
   assert.match(booking, /function serviceInteractive/);
   assert.match(booking, /admin_booking_service:/);
