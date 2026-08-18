@@ -17,8 +17,8 @@ const catalogue = [
 
 test('specialty single-treatment categories are grouped horizontally on desktop', () => {
   const html = renderBookingPage('+27823269871', catalogue);
-  assert.equal((html.match(/class="specialty-category-row/g) || []).length, 4);
-  assert.match(html, /specialty-category-row--three/);
+  assert.equal((html.match(/class="specialty-category-row/g) || []).length, 3);
+  assert.match(html, /specialty-category-row--three[\s\S]*Profosma Jet Plasma[\s\S]*Plasma Fibroblast Consultation[\s\S]*Plasma Fibroblast Prices/);
   assert.match(html, /grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
   assert.match(html, /specialty-category-row--three\{grid-template-columns:repeat\(3,minmax\(0,1fr\)\)\}/);
   assert.match(html, /@media\(max-width:700px\).*specialty-category-row.*grid-template-columns:1fr/s);
