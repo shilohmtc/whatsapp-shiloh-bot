@@ -1,6 +1,6 @@
 const { pool } = require('../db/pool');
 const { normalizePhone } = require('./clientIdentityOnboarding');
-const { canCertifyAppointment, certificationStaffIds, authorityDescription } = require('./attendanceFinalizationAuthority');
+const { canAccessOwnFinalization, canCertifyAppointment, certificationStaffIds, authorityDescription } = require('./attendanceFinalizationAuthority');
 const { processAdminBookingUpdateMessage } = require('./adminBookingUpdate');
 const { processAdminAppointmentCancellationMessage, hasPendingCancellationIntent } = require('./adminAppointmentCancellation');
 const { compactListTitle, fullLabelDescription } = require('../presentation/whatsappListRowPresentation');
@@ -13,7 +13,6 @@ const FINAL_STATUSES = new Set(['completed', 'no_show', 'no_charge']);
 // Start is inclusive; end is exclusive so all of 15 Aug 2026 is included.
 const HISTORICAL_WINDOW_START = '2026-08-01T00:00:00+02:00';
 const HISTORICAL_WINDOW_END = '2026-08-16T00:00:00+02:00';
-const DISCRETIONARY_FINALIZERS = new Set(['christel', 'marietjie']);
 
 function key(sender) { return normalizePhone(sender); }
 function has(admin, permission) { return admin?.permissions?.[permission] === true; }
@@ -22,7 +21,7 @@ function isBusinessWide(admin) {
   return ['owner', 'business_admin'].includes(admin?.business_role) || admin?.calendar_scope === 'all_business';
 }
 function canUseDiscretionaryFinalization(admin) {
-  return DISCRETIONARY_FINALIZERS.has(cleanName(admin?.display_name));
+  return canAccessOwnFinalization(admin);
 }
 function formatDateTime(value) {
   return new Intl.DateTimeFormat('en-ZA', {
@@ -72,6 +71,7 @@ async function pendingPastAppointments(admin, page = 1) {
   const safePage = Math.max(Number(page) || 1, 1);
   const offset = (safePage - 1) * PAGE_SIZE;
   const certifiableStaff = await certificationStaffIds(admin);
+  if (!certifiableStaff.length) return { rows: [], page: safePage, hasNext: false };
   const certifiableOnly = certifiableStaff.length > 0;
   const result = await pool.query(
     `SELECT a.id, a.starts_at, a.ends_at, a.status,
@@ -178,7 +178,7 @@ function decisionInteractive(appointment) {
 function reviewOnlyInteractive(appointment) {
   return {
     type: 'button',
-    body: `${appointmentDetails(appointment)}\n\n🔒 Review only. Attendance must be certified by the responsible practitioner, or by Christel for Christel/Abigail appointments.`,
+    body: `${appointmentDetails(appointment)}\n\n🔒 Review only. Attendance must be certified by the assigned practitioner through their own linked Admin account.`,
     buttons: [{ id: 'finalize_back', title: 'Back' }],
   };
 }
@@ -585,7 +585,7 @@ async function processAdminAppointmentFinalizationMessage(sender, text) {
   }
 
   if (priceAdjustmentMatch) {
-    if (!canUseDiscretionaryFinalization(admin)) return { handled: true, admin, reply: 'Adjust price is available only to Christel or Marietjie within their authorized certification scope.' };
+    if (!canUseDiscretionaryFinalization(admin)) return { handled: true, admin, reply: 'Adjust price is available only to the assigned practitioner through their own linked Admin account.' };
     if (!has(admin, 'booking:update')) return { handled: true, admin, reply: 'Your admin account cannot adjust appointment prices.' };
     const appointment = await loadAuthorizedPendingAppointment(admin, Number(priceAdjustmentMatch[1]));
     if (!appointment) return { handled: true, admin, reply: 'That appointment changed or is outside the approved 1–15 Aug historical window or your authorized scope, so no price adjustment was started.' };
@@ -599,7 +599,7 @@ async function processAdminAppointmentFinalizationMessage(sender, text) {
     if (!intent) return { handled: true, admin, interactive: pendingListInteractive(await pendingPastAppointments(admin, 1), admin) };
     if (!canUseDiscretionaryFinalization(admin) || !has(admin, 'booking:update')) {
       await clearPriceAdjustmentIntent(sender);
-      return { handled: true, admin, reply: 'Adjust price is available only to Christel or Marietjie within their authorized certification scope.' };
+      return { handled: true, admin, reply: 'Adjust price is available only to the assigned practitioner through their own linked Admin account.' };
     }
     const appointment = await loadAuthorizedPendingAppointment(admin, Number(intent.appointment_id));
     if (!appointment) { await clearPriceAdjustmentIntent(sender); return { handled: true, admin, reply: 'That appointment is no longer awaiting finalization, so the price-adjustment request was cleared.' }; }
