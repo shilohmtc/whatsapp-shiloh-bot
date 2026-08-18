@@ -5,6 +5,7 @@ const { findClients } = require('./adminClientLookup');
 const { prepareAdminBooking, confirmAdminBooking, cancelPendingBooking } = require('./adminBooking');
 const { prepareHistoricalAdminBooking, confirmHistoricalAdminBooking } = require('./adminHistoricalBooking');
 const { parseClinicDateInput, johannesburgToday } = require('./adminClinicDateInput');
+const { adminBookingEntitlement } = require('./adminBookingEntitlement');
 const {
   loadAdminMobileBookingSession,
   saveAdminMobileBookingSession,
@@ -49,15 +50,7 @@ function localDateTime(date, instant) { return `${date.split('-').reverse().join
 function displayServiceName(name = '') { return clean(name).replace(/^\d+\.\s*/, '').replace(/^[-–—]\s*/, ''); }
 function addDays(iso, days) { const d = new Date(`${iso}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + days); return d.toISOString().slice(0, 10); }
 
-function bookingScope(admin) {
-  const name = norm(admin?.display_name);
-  if (name === 'marietjie') return { key: 'marietjie', staffNames: ['marietjie'], staffIds: null, label: 'Marietjie services' };
-  if (name === 'christel' || name === 'abigail') return { key: 'christel_abigail', staffNames: ['christel', 'abigail'], staffIds: null, label: 'Christel & Abigail services' };
-  if (Number.isFinite(Number(admin?.staff_id)) && Number(admin.staff_id) > 0) {
-    return { key: 'own_practitioner', staffNames: null, staffIds: [Number(admin.staff_id)], label: `${clean(admin.display_name)} services` };
-  }
-  return { key: 'no_practitioner_scope', staffNames: [], staffIds: [], label: 'No practitioner services' };
-}
+const bookingScope = adminBookingEntitlement;
 
 async function scopedActiveServiceRows(admin) {
   const scope = bookingScope(admin);
