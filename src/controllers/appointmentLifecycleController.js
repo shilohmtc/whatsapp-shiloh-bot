@@ -4,9 +4,6 @@ const {
   updateAppointmentStatus,
   processReminders,
 } = require("../services/appointmentLifecycle");
-const { sendWhatsAppTemplate } = require("../services/whatsapp");
-const { upsertProfile } = require("../services/profile");
-const { createPendingExperience } = require("../services/customerExperience");
 
 exports.createLifecycleAppointment = async (req, res) => {
   try {

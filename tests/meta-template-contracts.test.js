@@ -1,7 +1,7 @@
 const test=require('node:test');
 const assert=require('node:assert/strict');
 const axios=require('axios');
-const {CONTRACTS,compareContract,fetchAllTemplates,inspectMetaTemplateInventory,assertTemplateSendAllowed,resetTemplateInventoryCache}=require('../src/services/metaTemplateContracts');
+const {CONTRACTS,configuredTemplateName,compareContract,fetchAllTemplates,inspectMetaTemplateInventory,assertTemplateSendAllowed,resetTemplateInventoryCache}=require('../src/services/metaTemplateContracts');
 const originalGet=axios.get;
 const env={...process.env};
 test.afterEach(()=>{axios.get=originalGet;process.env={...env};resetTemplateInventoryCache();});
@@ -59,4 +59,23 @@ test('provider variants require exact language and duplicate exact-language vari
 
 test('staff finalization configuration is reconciled exactly',()=>{
  const staff=CONTRACTS.find(x=>x.key==='staff_finalization');assert.equal(staff.env,'WHATSAPP_STAFF_FINALIZATION_TEMPLATE');
+});
+
+async function staffFinalizationState(override) {
+  process.env.WHATSAPP_BUSINESS_ACCOUNT_ID='hidden';
+  if (override === undefined) delete process.env.WHATSAPP_STAFF_FINALIZATION_TEMPLATE; else process.env.WHATSAPP_STAFF_FINALIZATION_TEMPLATE=override;
+  const entry=CONTRACTS.find(x=>x.key==='staff_finalization');
+  axios.get=async()=>({data:{data:[{id:'staff-en',status:'APPROVED',quality_score:{score:'GREEN'},...entry.contract}]}});
+  const state=(await inspectMetaTemplateInventory()).templates.find(x=>x.key==='staff_finalization');
+  return {entry,state};
+}
+
+test('staff finalization unset override defaults consistently to the approved canonical name',async()=>{
+  const {entry,state}=await staffFinalizationState(undefined);assert.equal(configuredTemplateName(entry),'shiloh_staff_finalization_v1');assert.equal(state.configuredName,'shiloh_staff_finalization_v1');assert.equal(state.ready,true);assert.equal((await assertTemplateSendAllowed('shiloh_staff_finalization_v1')).ready,true);
+});
+test('staff finalization exact optional override passes inventory and send gates',async()=>{
+  const {entry,state}=await staffFinalizationState('shiloh_staff_finalization_v1');assert.equal(configuredTemplateName(entry),'shiloh_staff_finalization_v1');assert.equal(state.ready,true);assert.equal((await assertTemplateSendAllowed('shiloh_staff_finalization_v1')).ready,true);
+});
+test('staff finalization wrong optional override fails inventory and send gates closed',async()=>{
+  const {entry,state}=await staffFinalizationState('unapproved_staff_template');assert.equal(configuredTemplateName(entry),'unapproved_staff_template');assert.equal(state.configured,false);assert.equal(state.ready,false);await assert.rejects(()=>assertTemplateSendAllowed('shiloh_staff_finalization_v1'),/configuration does not match/);
 });

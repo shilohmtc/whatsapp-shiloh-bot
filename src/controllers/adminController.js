@@ -6,7 +6,6 @@ const {
 } = require("../services/knowledge");
 const { extractDocumentText } = require("../services/documentParser");
 const { getProfile, upsertProfile, listProfiles } = require("../services/profile");
-const { sendWhatsAppTemplate } = require("../services/whatsapp");
 
 exports.createDocument = async (req, res) => {
   try {
