@@ -16,26 +16,27 @@ Purpose: concise operational dashboard. Master is the detailed current ledger; d
 
 ## Governance
 
-New chat: read Master + Tracker + latest reconciliation, currently `docs/SHILOH-OS-RECONCILIATION-2026-08-18-JP-BOOKING-ENTITLEMENT.md`, plus `docs/SHILOH-OS-ENGINEERING-GOVERNANCE.md`, on GitHub `main`; verify applicable production/provider state; give the four-part checkpoint; obtain explicit approval before the first new substantial controlled action. After that approval, continue the approved workstream automatically through ordinary engineering/deploy/verification/housekeeping. Stop for material scope/risk expansion, contradictory authority, or an existing fail-closed human/provider/evidence gate.
+New chat: read Master + Tracker + latest reconciliation, currently `docs/SHILOH-OS-RECONCILIATION-2026-08-18-WHATSAPP-MENU-LABEL-POLISH.md`, plus `docs/SHILOH-OS-ENGINEERING-GOVERNANCE.md`, on GitHub `main`; verify applicable production/provider state; give the four-part checkpoint; obtain explicit approval before the first new substantial controlled action. After that approval, continue the approved workstream automatically through ordinary engineering/deploy/verification/housekeeping. Stop for material scope/risk expansion, contradictory authority, or an existing fail-closed human/provider/evidence gate.
 
 Operational screenshots are diagnostic evidence by default, not image-generation requests. Production defects follow trace → evidence → root cause → guarded repair → regression/E2E → CI → deploy → production verification → reconciliation. Never manufacture appointments, provider approval, attendance truth, Calendar truth or handset evidence.
 
 ## Production baseline
 
-Current accepted production application code is **PR #318 / `aafd7acb278be97ddc1c0dc4b1fca25b16e83d5a`**. The current governance baseline is **PR #317 / `f2a78bb33db212f759ac5bb72f1d832ca11cc104`**. Full regression CI run **#1026** passed with **642 passed / 0 failed**; Render deploy **`dep-da2909ou01pc73bite9g`** reached LIVE. Post-deployment error-level logs were clear, Google Calendar health passed, and `/health` reported application and database status `ok`.
+Current accepted production application code is **PR #320 / `90cbc79362183cff8ea9ef3116aac52e3f312f7f`**. The current governance baseline is **PR #317 / `f2a78bb33db212f759ac5bb72f1d832ca11cc104`**. Full regression CI run **#1033** passed with **648 passed / 0 failed**; Render deploy **`dep-da29chegekts7391fq90`** reached LIVE. Post-deployment error-level logs were clear, Google Calendar health passed, and `/health` reported application and database status `ok`.
 
 ## At-a-glance
 
 | ID | Workstream | State | Evidence / next action |
 |---|---|---|---|
-| DEPLOY-CONVERGENCE | GitHub ↔ Render production | 🟢 VERIFIED | Application #318 / `aafd7acb...` passed CI #1026 (642/0) and is LIVE as `dep-da2909ou01pc73bite9g`; no post-deploy error logs; Calendar health and `/health` app/database checks passed. Governance baseline is #317 / `f2a78bb...`. |
+| DEPLOY-CONVERGENCE | GitHub ↔ Render production | 🟢 VERIFIED | Application #320 / `90cbc793...` passed CI #1033 (648/0) and is LIVE as `dep-da29chegekts7391fq90`; no post-deploy error logs; Calendar health and `/health` app/database checks passed. Governance baseline is #317 / `f2a78bb...`. |
 | WORKSTREAM-OPERATING-MODEL | Five specialist chats with one shared authority | 🟢 VERIFIED LIVE | #314 adopts Control & Reconciliation, Booking & Admin UX, WhatsApp / Meta Integration, CRM & Identity, and Production / DevOps; guarded by full CI #1015 and dated reconciliation evidence. |
 | WORKSTREAM-COMPLETION | End-to-end controlled-work protocol | 🟢 VERIFIED | Inspect → implement → full applicable regression → repair green → merge → production/provider verify → Tracker → durable Master → checkpoint; only material gates pause work. |
 | WORKSTREAM-CROSS-CONTRACT | Cross-workstream dependency reconciliation | 🟢 VERIFIED | Specialist ownership cannot create conflicting Shiloh OS state; changed assumptions/contracts must be reconciled into shared authority. |
 | CONTROL-CHECKPOINT-ROUTING | Control recommendation → specialist continuation | 🟢 VERIFIED | Every Control checkpoint names the owner/chat/reason/dependencies/status and supplies a ready-to-copy instruction; blocked work remains with monitoring/control and is not routed to implementation. |
 | SPECIALIST-RECONCILIATION | Mandatory specialist verification → Tracker/Master → final checkpoint | 🟢 VERIFIED | Each specialist independently reads authority, reconciles verified delivery before completion, records blocked gates, and supplies the mandatory five-part final specialist checkpoint. |
 | ADMIN-BOOKING-ENTITLEMENT | Fail-closed practitioner booking scope | 🟢 VERIFIED LIVE | #318 centralizes the application entitlement and mirrors it in the DB trigger: Christel+Abigail shared scope; Marietjie only; other linked Admin own practitioner only; JP explicit Christel+Abigail exception; every other unlinked Admin no catalogue. No clinic-wide inference. |
-| ADMIN-BOOKING-MENU-UX | Grouped concise WhatsApp treatment selection | 🟢 VERIFIED LIVE | #318 makes menu presentation and booking enforcement use the same canonical entitlement; #313 grouping, eligibility, pagination, availability, client selection and confirmation guards remain. |
+| ADMIN-BOOKING-MENU-UX | Grouped full-label WhatsApp treatment selection | 🟢 VERIFIED LIVE | #320 preserves #313 grouping and #318 entitlement while using each list description to show the full canonical label whenever it fits; eligibility, pagination, availability, client selection and confirmation guards remain. |
+| WHATSAPP-MENU-LABELS | Shared Admin/client list-row presentation | 🟢 VERIFIED LIVE | #320 centralizes the 24-character title / 72-character description contract across applicable Admin and client dynamic lists. Full canonical labels take priority over secondary details; no CRM names, permissions, bookings or attendance changed. CI #1033 passed (648/0); deploy `dep-da29chegekts7391fq90` LIVE and healthy. |
 | ADMIN-JP-APPOINTMENTS | JP Admin parity without finalization | 🟢 VERIFIED LIVE | #318 gives JP Christel-equivalent authorized Admin actions and Christel+Abigail booking scope only. Finalize past visits remains absent/denied; no practitioner CRM link was manufactured. CI #1026 passed (642/0); deploy `dep-da2909ou01pc73bite9g` LIVE and healthy. |
 | CLIENT-WELCOME-CATALOGUE | Welcome → `/book` treatment catalogue | 🟢 VERIFIED LIVE | #311 adds catalogue/booking-page access; #312 preserves universal welcome before client-state branching. |
 | ADMIN-TYPED-TIME | Admin typed time + stale slot pagination | 🟢 VERIFIED LIVE | #304 / `278aab397...`; `14:00` and `2pm` normalize through authoritative slots; stale navigation-only page repaired. |
@@ -118,13 +119,13 @@ PR #318 is the accepted entitlement contract. Christel and Abigail share only th
 
 ## Exact continuation
 
-**Authoritative current state:** PR #318 is regression-green, merged and verified LIVE on `aafd7acb...` as Render deploy `dep-da2909ou01pc73bite9g`. JP now has Christel-equivalent authorized Admin actions and the explicit Christel+Abigail booking scope only; finalization remains denied. Governance baseline #317 remains authoritative. Google Business Profile remains an external/provider gate with general Requests/min at 0; integration is not authorized to proceed.
+**Authoritative current state:** PR #320 is regression-green, merged and verified LIVE on `90cbc793...` as Render deploy `dep-da29chegekts7391fq90`. Applicable Admin and client dynamic WhatsApp lists now prioritize full canonical labels within provider limits. JP's #318 Christel+Abigail booking entitlement remains unchanged and finalization remains denied. Governance baseline #317 remains authoritative. Google Business Profile remains an external/provider gate with general Requests/min at 0; integration is not authorized to proceed.
 
-**Highest-priority next item:** re-check `shiloh_booking_update_v1` provider status. If still PENDING, continue the next approved Shiloh OS workstream without reopening the completed JP/Admin-booking fix.
+**Highest-priority next item:** re-check `shiloh_booking_update_v1` provider status. If still PENDING, continue the next approved Shiloh OS workstream without reopening the completed menu-label or JP/Admin-booking fixes.
 
-**Why next:** the JP menu/entitlement contradiction is closed across application presentation, booking enforcement and database enforcement, with CI and production health verified. A genuine JP WhatsApp retry may confirm handset presentation naturally, but no booking may be created or changed merely for evidence.
+**Why next:** menu wording is centralized and regression-covered across the applicable Admin/client surfaces, with CI and production health verified. A genuine WhatsApp menu journey may confirm the updated handset presentation naturally, but no booking, appointment change or attendance action may be manufactured for evidence.
 
-**Remaining gates:** `shiloh_booking_update_v1` approval; Google Business Profile positive provider approval or usable Requests/min >0; historical attendance and #558 human truth; natural handset evidence for JP's updated menu/booking journey if it occurs; genuine lifecycle/follow-up/birthday evidence; explicit approval for material commercial/service/business-rule changes.
+**Remaining gates:** `shiloh_booking_update_v1` approval; Google Business Profile positive provider approval or usable Requests/min >0; historical attendance and #558 human truth; natural handset evidence for the updated menu presentation if it occurs; genuine lifecycle/follow-up/birthday evidence; explicit approval for material commercial/service/business-rule changes.
 
 ## Guardrails
 
