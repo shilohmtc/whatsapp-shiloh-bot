@@ -7,13 +7,13 @@ Purpose: permanent current-state source of truth. Historical implementation deta
 
 Operational truth is GitHub `main`, Render production, Shiloh CRM/Postgres, Google Calendar, Meta/WhatsApp provider evidence, and explicit real WhatsApp/human evidence. Never infer provider, attendance, approval, CRM, Calendar, or handset state.
 
-At the beginning of each new Shiloh OS chat: read this Master + `docs/SHILOH-OS-PROJECT-TRACKER.md` + the latest reconciliation, currently `docs/SHILOH-OS-RECONCILIATION-2026-08-18-WHATSAPP-MENU-LABEL-POLISH.md`, plus `docs/SHILOH-OS-ENGINEERING-GOVERNANCE.md`, on `main`; verify applicable production/provider state; then give the four-part checkpoint: (1) authoritative current state, (2) highest-priority continuation item, (3) why it is next, (4) remaining approval/evidence/provider gate. Obtain explicit approval before the first new substantial controlled action. After that initial approval, continue the approved workstream automatically through ordinary engineering/deploy/verification/housekeeping boundaries. Stop only for material scope/risk expansion, contradictory authority, or an existing fail-closed human/provider/evidence gate.
+At the beginning of each new Shiloh OS chat: read this Master + `docs/SHILOH-OS-PROJECT-TRACKER.md` + the latest reconciliation, currently `docs/SHILOH-OS-RECONCILIATION-2026-08-18-HYBRID-WHATSAPP-CHOICE-MENUS.md`, plus `docs/SHILOH-OS-ENGINEERING-GOVERNANCE.md`, on `main`; verify applicable production/provider state; then give the four-part checkpoint: (1) authoritative current state, (2) highest-priority continuation item, (3) why it is next, (4) remaining approval/evidence/provider gate. Obtain explicit approval before the first new substantial controlled action. After that initial approval, continue the approved workstream automatically through ordinary engineering/deploy/verification/housekeeping boundaries. Stop only for material scope/risk expansion, contradictory authority, or an existing fail-closed human/provider/evidence gate.
 
 Permanent governance remains: operational screenshots are diagnostic evidence by default and must not trigger image generation unless visual creation/editing is explicitly requested; production defects follow trace → authoritative evidence → root cause → guarded repair → regression/E2E → CI → deploy → production verification → reconciliation; provider lead-time is considered early; known finite client/admin choices are button/list-first where practical; natural language remains fallback into the same canonical handlers; no speculative provider submissions; no manufactured appointments/evidence; no duplicate public service source of truth.
 
 ## Current production baseline
 
-Current accepted production application code is **PR #320 / `90cbc79362183cff8ea9ef3116aac52e3f312f7f`**, **Polish WhatsApp menu labels across Admin and client flows**. The current governance baseline is **PR #317 / `f2a78bb33db212f759ac5bb72f1d832ca11cc104`**, **Enforce specialist workstream reconciliation**. Full regression CI run **#1033** passed with **648 passed / 0 failed**; Render deploy **`dep-da29chegekts7391fq90`** reached LIVE. Post-deployment error-level logs were clear, the Google Calendar health check passed, and production `/health` reported application and database status `ok`.
+Current accepted production application code is **PR #322 / `e4bf61f60cac4fd98492f846e37e07c07d3219e5`**, **Use one-tap buttons for small WhatsApp menus**. The current governance baseline is **PR #317 / `f2a78bb33db212f759ac5bb72f1d832ca11cc104`**, **Enforce specialist workstream reconciliation**. Full regression CI run **#1037** passed with **656 passed / 0 failed**; Render deploy **`dep-da29l28ae00c73957t30`** reached LIVE. Post-deployment error-level logs were clear, the Google Calendar health check passed, and production `/health` reported application and database status `ok`.
 
 Relevant accepted lineage:
 - #301 / `6863958dbf97a6a6f593fc196c284571adf802c6` — accepted public catalogue presentation.
@@ -35,7 +35,8 @@ Relevant accepted lineage:
 - #317 / `f2a78bb33db212f759ac5bb72f1d832ca11cc104` — enforces specialist reconciliation and mandatory final checkpoints; **current governance baseline**.
 - #318 / `aafd7acb278be97ddc1c0dc4b1fca25b16e83d5a` — grants JP the explicit Christel+Abigail booking entitlement while preserving fail-closed enforcement and denying attendance finalization; **accepted entitlement state**.
 - #319 / `6bb248fef50877235357b97087b4829db3bddeae` — reconciles the verified JP entitlement into shared authority.
-- #320 / `90cbc79362183cff8ea9ef3116aac52e3f312f7f` — centralizes full-label WhatsApp list presentation across applicable Admin and client menus; **current accepted production application code**.
+- #320 / `90cbc79362183cff8ea9ef3116aac52e3f312f7f` — centralizes full-label WhatsApp list presentation across applicable Admin and client menus.
+- #322 / `e4bf61f60cac4fd98492f846e37e07c07d3219e5` — hybridizes one-to-three safe choices into visible reply buttons after scope filtering; **current accepted production application code**.
 
 Fresh Meta/provider evidence from the #310 production startup:
 - `shiloh_staff_finalization_v1` — **APPROVED / UTILITY**.
@@ -134,6 +135,14 @@ PR #320 adds one shared presentation contract for applicable dynamic Admin and c
 
 The rule covers Admin booking, booking management, finalization, pricing and approvals, plus client discovery, packages, booking changes, availability and rescheduling. Static labels already displayed in full remain unchanged. Permissions, JP entitlement, availability, confirmation, booking, attendance, CRM identity and database enforcement are unaffected. CI #1033 passed 648 / 0; Render deploy `dep-da29chegekts7391fq90` is LIVE with clear error logs and healthy application, database and Google Calendar checks. Genuine handset presentation remains natural evidence and must not be manufactured.
 
+### Hybrid one-tap choice presentation — verified live
+
+PR #322 adds one shared send-boundary presenter after the existing Admin booking-scope guard. Applicable Admin and client list interactions with one to three safely distinguishable choices render as immediately visible reply buttons; four or more choices remain lists. Full row wording and descriptions stay visible in the message body, while only the button label is compacted to the 20-character provider limit.
+
+Menus remain lists when compact button labels would collide, the reply-button body would exceed the provider limit, or list presentation is explicitly required. Original action IDs and canonical handlers are preserved. WhatsApp list sheets cannot be programmatically opened; this rule removes the extra opening tap only where the reply-button contract allows it.
+
+Permissions, JP entitlement, practitioner scope, availability, confirmation, CRM, database enforcement, Calendar and attendance are unchanged. CI #1037 passed 656 / 0; Render deploy `dep-da29l28ae00c73957t30` is LIVE with clear error logs and healthy application, database and Google Calendar checks. Genuine handset rendering remains natural evidence and must not be manufactured.
+
 ## Google Calendar provider guard and recovery — 🟢 VERIFIED HEALTHY
 
 A real Admin **Manage booking → Change practitioner** journey exposed expired/revoked Google OAuth credentials. PR #302 added fail-closed provider handling plus a read-only startup/recurring Google Calendar health probe. The Google Auth app was moved to **In production**, and the production OAuth Client ID / Client Secret / Refresh Token chain was reconciled.
@@ -220,24 +229,20 @@ Primary ownership is **Production / DevOps** for provider/configuration verifica
 
 ## Exact new-chat continuation state
 
-- Production application code remains **LIVE** on PR #313 / `ef0da63681d244fc3a0fbb1e6c9e1cdb42bf77c7`; the governance baseline is **LIVE** on PR #314 / `9f6aa3d38ef292e8c80570c03b14be5250d616f8`, CI #1015 and Render deploy `dep-da26b39srm7s738g6gc0`.
-- Admin typed-time selection is repaired; `14:00` / `2pm` resolve through authoritative slots.
-- Canonical + reconciled-Goldie client lookup improvements are live.
-- New-client Admin booking fast path is live: duplicate-check mobile → provisional canonical client → guarded review/confirmation.
-- Unused provisional clients are cleaned up safely when preparation fails or Admin cancels before confirmation and no appointment exists.
-- Christel↔Abigail cross-confirm handoff is intentionally **removed/superseded**. Same-Admin prepare→confirm is the accepted rule.
-- Admin practitioner booking scope is fail-closed: Christel/Abigail shared scope, Marietjie only, other linked Admin own practitioner only, unlinked Admin (including JP) no practitioner catalogue.
-- WhatsApp service selection is grouped and concise; JP has operational appointment-menu parity with Christel except finalization.
-- Google Calendar OAuth/provider health is **🟢 VERIFIED HEALTHY**; fail-closed provider guard remains permanent.
-- Customer-change confirmation architecture is live; cancellation template is APPROVED; `shiloh_booking_update_v1` is **PENDING**.
+- Production application code is **LIVE** on PR #322 / `e4bf61f60cac4fd98492f846e37e07c07d3219e5`; the governance baseline remains PR #317 / `f2a78bb33db212f759ac5bb72f1d832ca11cc104`. CI #1037 passed 656 / 0 and Render deploy `dep-da29l28ae00c73957t30` is live and healthy.
+- PR #320's full-label list presentation remains accepted. PR #322 adds the hybrid send-boundary rule: one-to-three safe choices use visible reply buttons after scope filtering; four-or-more or unsafe choices remain lists.
+- JP retains the explicit #318 Christel+Abigail booking scope and Christel-equivalent authorized Admin actions except finalization. Other unlinked Admins remain fail-closed.
+- Admin typed-time, canonical/Goldie lookup, provisional-client booking/cleanup and same-Admin prepare→confirm rules remain accepted.
+- Google Calendar OAuth/provider health is **🟢 VERIFIED HEALTHY**; the fail-closed provider guard remains permanent.
+- Customer-change confirmation architecture is live; cancellation template is APPROVED; `shiloh_booking_update_v1` remains **PENDING**.
 - `/book` remains the accepted live CRM-backed public catalogue through #301; do not redo superseded #284–#300 variants.
-- Historical attendance remains human-controlled; #558 remains fail-closed.
+- Historical attendance remains human-controlled; #558 remains fail-closed with historical practitioner `SHILOH MTC`.
 - Google Business Profile access remains pending Google with general Requests/min at 0; Production / DevOps owns verification and Control & Reconciliation tracks the dependency. No GBP integration work is authorized from this state.
 
-**Authoritative current state:** the five-workstream operating model is adopted, regression-green, merged and live through PR #314. All specialist chats share one repository/production/provider authority and the full controlled-work completion protocol. Production application behaviour remains the accepted #313 state. Google Business Profile is not confirmed usable and remains fail-closed behind the pending Google provider gate.
+**Authoritative current state:** PR #322 is regression-green, merged and verified LIVE on `e4bf61f...` as Render deploy `dep-da29l28ae00c73957t30`. Applicable one-to-three Admin/client choices now use visible reply buttons after scope filtering; four-or-more and unsafe-to-compact choices remain lists. PR #320's full-label rule and JP's #318 entitlement remain unchanged; finalization remains denied. Governance baseline #317 remains authoritative.
 
-**Highest-priority continuation item:** re-check Meta provider status for `shiloh_booking_update_v1`; if still PENDING, continue the next approved Shiloh OS workstream without reopening the completed Admin-booking repairs.
+**Highest-priority next item:** re-check Meta provider status for `shiloh_booking_update_v1`; if still PENDING, continue the next approved Shiloh OS workstream without reopening the completed menu-label, hybrid-choice or JP/Admin-booking fixes.
 
-**Why next:** the Admin booking engineering/CI/deploy gates are closed; remaining ordinary booking-change delivery depends on Meta approval rather than more booking-flow engineering.
+**Why next:** menu wording and small-choice presentation are centralized and regression-covered across the applicable Admin/client send boundary, with CI and production health verified. A genuine WhatsApp journey may confirm reply-button rendering naturally, but no booking, appointment change or attendance action may be manufactured for evidence.
 
-**Remaining gates:** Meta approval for the booking-update template; positive Google Business Profile approval or usable Requests/min >0; human attendance/#558/genuine-journey truth; and explicit approval for material commercial/service/business-rule changes remain fail-closed.
+**Remaining gates:** Meta approval for the booking-update template; positive Google Business Profile approval or usable Requests/min >0; historical attendance and #558 human truth; natural handset evidence; genuine lifecycle/follow-up/birthday evidence; and explicit approval for material commercial/service/business-rule changes.
