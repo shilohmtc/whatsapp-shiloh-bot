@@ -1,1 +1,0 @@
-Verification plan: CI regression coverage first; then merge to main; Render production health verification; then a real WhatsApp handoff test where one of Christel/Abigail prepares a booking and the other confirms it. No production appointment should be created until the receiving Admin explicitly confirms, and all existing final conflict/calendar checks must still run.
