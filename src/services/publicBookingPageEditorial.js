@@ -21,26 +21,36 @@ function insertInsideShilohSignatures(html, catalogue = []) {
   return html;
 }
 
+function extractCategorySection(html, index) {
+  const match = html.match(new RegExp(`<section class="category" id="category-${index}">[\\s\\S]*?<\\/section>`));
+  return match ? match[0] : null;
+}
+
 function groupSpecialtyCategories(html, catalogue = []) {
   const categories = [...new Set(catalogue.map((service) => service.category))];
   const rows = [
     ['Profosma Jet Plasma', 'Plasma Fibroblast Consultation'],
     ['Plasma Fibroblast Prices', 'Ozone & Far Infrared'],
     ['1. SQT BioMicroneedling', '2. SQT BioMicroneedling'],
-    ['HIFU', 'Neo Pelvic Therapy', 'Vaginal Tightening & Rejuvenation'],
+    ['HIFU', 'Vaginal Tightening & Rejuvenation', 'Neo Pelvic Therapy'],
   ];
 
   for (const row of rows) {
     const indexes = row.map((name) => categories.indexOf(name));
     if (indexes.some((index) => index < 0)) continue;
-    const sections = indexes.map((index) => {
-      const match = html.match(new RegExp(`<section class="category" id="category-${index}">[\\s\\S]*?<\\/section>`));
-      return match ? match[0] : null;
-    });
-    if (sections.some((section) => !section)) continue;
-    const contiguous = sections.join('');
+
+    const sortedIndexes = [...indexes].sort((a, b) => a - b);
+    const contiguousIndexes = Array.from({ length: sortedIndexes.length }, (_, offset) => sortedIndexes[0] + offset);
+    if (!sortedIndexes.every((index, i) => index === contiguousIndexes[i])) continue;
+
+    const originalSections = sortedIndexes.map((index) => extractCategorySection(html, index));
+    const desiredSections = indexes.map((index) => extractCategorySection(html, index));
+    if (originalSections.some((section) => !section) || desiredSections.some((section) => !section)) continue;
+
+    const originalBlock = originalSections.join('');
+    const desiredBlock = desiredSections.join('');
     const columns = row.length === 3 ? ' specialty-category-row--three' : '';
-    html = html.replace(contiguous, `<div class="specialty-category-row${columns}">${contiguous}</div>`);
+    html = html.replace(originalBlock, `<div class="specialty-category-row${columns}">${desiredBlock}</div>`);
   }
   return html;
 }
