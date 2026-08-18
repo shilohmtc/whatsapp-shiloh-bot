@@ -8,8 +8,8 @@
     "node": "24.14.1"
   },
   "scripts": {
-    "start": "node -r ./src/bootstrap/adminBookingNaturalDatePatch.js -r ./src/bootstrap/adminBookingChangeConfirmationPatch.js -r ./src/bootstrap/adminBookingChangeConfirmationAuthPatch.js -r ./src/bootstrap/adminBookingChangeConfirmationCommitPatch.js -r ./src/bootstrap/adminManualStartTimePickerPatch.js app.js",
-    "dev": "nodemon --exec \"node -r ./src/bootstrap/adminBookingNaturalDatePatch.js -r ./src/bootstrap/adminBookingChangeConfirmationPatch.js -r ./src/bootstrap/adminBookingChangeConfirmationAuthPatch.js -r ./src/bootstrap/adminBookingChangeConfirmationCommitPatch.js -r ./src/bootstrap/adminManualStartTimePickerPatch.js\" app.js",
+    "start": "node -r ./src/bootstrap/adminBookingNaturalDatePatch.js -r ./src/bootstrap/adminBookingChangeConfirmationPatch.js -r ./src/bootstrap/adminBookingChangeConfirmationAuthPatch.js -r ./src/bootstrap/adminBookingChangeConfirmationCommitPatch.js -r ./src/bootstrap/adminManualStartTimePickerPatch.js -r ./src/bootstrap/adminBookingProviderGuardPatch.js app.js",
+    "dev": "nodemon --exec \"node -r ./src/bootstrap/adminBookingNaturalDatePatch.js -r ./src/bootstrap/adminBookingChangeConfirmationPatch.js -r ./src/bootstrap/adminBookingChangeConfirmationAuthPatch.js -r ./src/bootstrap/adminBookingChangeConfirmationCommitPatch.js -r ./src/bootstrap/adminManualStartTimePickerPatch.js -r ./src/bootstrap/adminBookingProviderGuardPatch.js\" app.js",
     "db:migrate": "node scripts/migrate.js",
     "maintenance": "node scripts/maintenance.js",
     "test": "node --test tests/*.test.js"
@@ -17,8 +17,7 @@
   "keywords": [
     "whatsapp",
     "meta",
-    "openai",
-    "express"
+    "openai"
   ],
   "author": "",
   "license": "MIT",
