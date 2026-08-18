@@ -9,6 +9,7 @@ const { processAdminTestClientResetMessage } = require('./adminTestClientReset')
 const { processAdminPendingBookingApprovalsMessage } = require('./adminPendingBookingApprovals');
 const { processAdminScheduleUxMessage } = require('./adminScheduleUx');
 const { abigailEarningsButtons, christelEarningsButtons, marietjieEarningsButtons } = require('./adminEarningsButtons');
+const { canAccessFinalization } = require('./adminAppointmentsMenu');
 
 const SECTION_ORDER = ['Appointments', 'Reports', 'Clients', 'Services', 'Schedule', 'More'];
 const APPOINTMENT_PRIORITY = ['finalize', 'booking', 'manage_booking', 'today', 'tomorrow'];
@@ -137,7 +138,7 @@ function enrichPrivilegedReportsMenu(result) {
   const christel = isChristelOwnerAdmin(result.admin);
   const marietjie = isMarietjieAdmin(result.admin);
   let body = String(result.interactive.body);
-  if (result.admin?.permissions?.['booking:update'] === true && result.admin?.permissions?.['appointment:view'] === true && !/Finalize past visits/i.test(body)) body += '\n\n*Appointments*\n93️⃣ Finalize past visits';
+  if (canAccessFinalization(result.admin) && result.admin?.permissions?.['booking:update'] === true && result.admin?.permissions?.['appointment:view'] === true && !/Finalize past visits/i.test(body)) body += '\n\n*Appointments*\n93️⃣ Finalize past visits';
   if (!jeanPierre && !christel && !marietjie) return { ...result, interactive: { ...result.interactive, body } };
   if (jeanPierre && !/Christel earnings/i.test(body)) body += '\n\n*Reports*\n98️⃣ 💰 Christel earnings';
   if (!/Marietjie earnings/i.test(body)) body += '\n\n*Reports*\n99️⃣ 💰 Marietjie earnings';
