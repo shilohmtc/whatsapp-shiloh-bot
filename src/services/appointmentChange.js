@@ -9,6 +9,7 @@ const {
   cancelBookingEvent,
 } = require("./googleBookingCalendar");
 const logger = require("../lib/logger");
+const { fullLabelDescription } = require('../presentation/whatsappListRowPresentation');
 
 let initialized = false;
 const APPOINTMENT_CHOICE_PAGE_SIZE = 8;
@@ -84,7 +85,7 @@ function appointmentChoiceInteractive(rows=[],action='reschedule',page=1){
   const pageRows=rows.slice(start,start+APPOINTMENT_CHOICE_PAGE_SIZE).map(a=>({
     id:`client_change_${verb}_${a.id}`,
     title:`${fmtTimeOnly(a.starts_at)} · #${a.id}`.slice(0,24),
-    description:`${fmtDateOnly(a.starts_at)} • ${concise(a.staff_name,20)} • ${concise(a.service_name,28)}`.slice(0,72),
+    description:fullLabelDescription(a.service_name, `${fmtDateOnly(a.starts_at)} • ${a.staff_name}`),
   }));
   if(safePage<totalPages)pageRows.push({id:`client_change_${verb}_page_${safePage+1}`,title:'More bookings →',description:`Page ${safePage+1} of ${totalPages}`});
   else if(safePage>1)pageRows.push({id:`client_change_${verb}_page_1`,title:'← First page',description:`Page 1 of ${totalPages}`});

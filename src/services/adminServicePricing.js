@@ -1,5 +1,6 @@
 const { pool } = require('../db/pool');
 const { normalizePhone } = require('./clientIdentityOnboarding');
+const { compactListTitle, fullLabelDescription } = require('../presentation/whatsappListRowPresentation');
 
 const sessions = new Map();
 const PAGE_SIZE = 8;
@@ -25,7 +26,7 @@ async function allowedServices(admin){const owner=pricingOwner(admin);if(!owner)
  ORDER BY s.name
  `,[practitionerNames]);return r.rows;}
 function priceLabel(service){if(service.price==null)return'Not set';return service.variable_price?`From R${Number(service.price).toFixed(0)}`:`R${Number(service.price).toFixed(0)}`;}
-function serviceList(services,offset=0){const slice=services.slice(offset,offset+PAGE_SIZE);const rows=slice.map(s=>({id:`pricing_service_${s.id}`,title:s.name.slice(0,24),description:`Current price: ${priceLabel(s)}`}));if(offset+PAGE_SIZE<services.length)rows.push({id:`pricing_more_${offset+PAGE_SIZE}`,title:'More services',description:'Show more active services'});if(offset>0)rows.push({id:`pricing_more_${Math.max(0,offset-PAGE_SIZE)}`,title:'Previous services',description:'Go back one page'});return{type:'list',body:'*Services & pricing*\nChoose a service to view or update its price.',buttonText:'Choose service',rows,sectionTitle:'Active services'};}
+function serviceList(services,offset=0){const slice=services.slice(offset,offset+PAGE_SIZE);const rows=slice.map(s=>({id:`pricing_service_${s.id}`,title:compactListTitle(s.name,'Service'),description:fullLabelDescription(s.name,`Current price: ${priceLabel(s)}`)}));if(offset+PAGE_SIZE<services.length)rows.push({id:`pricing_more_${offset+PAGE_SIZE}`,title:'More services',description:'Show more active services'});if(offset>0)rows.push({id:`pricing_more_${Math.max(0,offset-PAGE_SIZE)}`,title:'Previous services',description:'Go back one page'});return{type:'list',body:'*Services & pricing*\nChoose a service to view or update its price.',buttonText:'Choose service',rows,sectionTitle:'Active services'};}
 function serviceActions(service){return{type:'button',body:`*${service.name}*\nCurrent price: *${priceLabel(service)}*\n\nChoose what you want to do.`,buttons:[{id:'pricing_change',title:'Change price'},{id:'pricing_back_services',title:'Back to services'}]};}
 function confirmation(service,pending){const next=pending.price==null?'Not set':pending.variable?`From R${pending.price.toFixed(2)}`:`R${pending.price.toFixed(2)}`;return{type:'button',body:`*Confirm price change*\n\n${service.name}\nCurrent: *${priceLabel(service)}*\nNew: *${next}*\n\nNothing has changed yet.`,buttons:[{id:'pricing_confirm',title:'Confirm change'},{id:'pricing_keep',title:'Keep current'}]};}
 function parsePrice(input){const n=norm(input);if(n==='unset')return{ok:true,price:null,variable:false};const m=n.match(/^(variable\s+)?r?\s*(\d+(?:\.\d{1,2})?)$/i);if(!m)return{ok:false};const price=Number(m[2]);if(!Number.isFinite(price)||price<0||price>100000)return{ok:false};return{ok:true,price,variable:!!m[1]};}

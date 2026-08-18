@@ -1,3 +1,5 @@
+const { compactListTitle, fullLabelDescription } = require('./whatsappListRowPresentation');
+
 function clean(value = '') {
   return String(value || '').trim().replace(/\s+/g, ' ');
 }
@@ -40,18 +42,12 @@ function treatmentDuration(row = {}) {
 }
 
 function treatmentTitle(name = '') {
-  const value = clean(name);
-  return value.length <= 24 ? value : `${value.slice(0, 21)}…`;
+  return compactListTitle(name, 'Treatment');
 }
 
 function treatmentDescription(row = {}) {
-  const name = clean(row.name);
   const details = `${treatmentDuration(row)} • ${formatClientTreatmentPrice(row)}`;
-  if (!name) return details.slice(0, 72);
-  const full = `${name} • ${details}`;
-  if (full.length <= 72) return full;
-  const available = Math.max(1, 72 - details.length - 5);
-  return `${name.slice(0, available).trimEnd()}… • ${details}`.slice(0, 72);
+  return fullLabelDescription(clean(row.name), details);
 }
 
 function presentTreatmentRow(row = {}, id) {

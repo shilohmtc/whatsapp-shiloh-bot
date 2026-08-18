@@ -3,6 +3,7 @@ const { formatPrice, formatDuration } = require('./serviceCatalogue');
 const { listClientBookableStaff } = require('./clientBookingStaffGuard');
 const { processBookingMessage, getIntent, clearIntent } = require('./bookingIntent');
 const { decorateClientBookingResult } = require('./clientBookingInteractive');
+const { compactListTitle, fullLabelDescription } = require('../presentation/whatsappListRowPresentation');
 
 const SERVICE_PAGE_SIZE = 9;
 const CATEGORY_PAGE_SIZE = 9;
@@ -209,12 +210,11 @@ async function listEligiblePractitionersForService(serviceId) {
 
 function serviceDescription(row) {
   const parts = [formatDuration(row), formatPrice(row)].filter(Boolean);
-  return parts.join(' • ').slice(0, 72);
+  return fullLabelDescription(row?.name, parts.join(' • '));
 }
 
 function serviceTitle(name = '') {
-  const value = clean(name);
-  return value.length <= 24 ? value : `${value.slice(0, 21)}…`;
+  return compactListTitle(name, 'Service');
 }
 
 function categoryClientTitle(name = '') {

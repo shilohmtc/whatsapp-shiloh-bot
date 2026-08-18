@@ -3,6 +3,7 @@ const baseDiscovery = require('./clientDiscoveryMenu');
 const { processBookingMessage, clearIntent } = require('./bookingIntent');
 const { decorateClientBookingResult } = require('./clientBookingInteractive');
 const { normalizePhone, resolveClientByWhatsApp } = require('./clientIdentityOnboarding');
+const { compactListTitle, fullLabelDescription } = require('../presentation/whatsappListRowPresentation');
 
 const MASSAGE_PACKAGE_PAGE_SIZE = 9;
 const SPORTS_PACKAGE_SLUG = 'sports-massage-monthly';
@@ -71,8 +72,8 @@ function packageDirectoryInteractive(packages = []) {
     buttonText: 'View packages',
     rows: packages.slice(0, 9).map((p) => ({
       id: `client_package_${p.slug}`,
-      title: short(p.name.replace(/^Sports Massage\s*[—-]\s*/i, ''), 24),
-      description: `${money(p.package_price)} • ${p.sessions_included} sessions • ${p.validity_days} days`.slice(0, 72),
+      title: compactListTitle(p.name.replace(/^Sports Massage\s*[—-]\s*/i, ''), 'Package'),
+      description: fullLabelDescription(p.name, `${money(p.package_price)} • ${p.sessions_included} sessions • ${p.validity_days} days`),
     })),
     sectionTitle: 'Massage Packages',
   };
@@ -127,7 +128,7 @@ async function massageTreatmentsInteractive(page = 1) {
     const s = item.service;
     const duration = Number(s.duration_minutes || 0) + Number(s.processing_time_minutes || 0) + Number(s.extra_time_minutes || 0);
     const price = s.display_price || (s.price == null ? 'Price on request' : money(s.price));
-    return { id: `client_service_${s.id}`, title: short(s.name), description: `${duration || '?'} min • ${price}`.slice(0, 72) };
+    return { id: `client_service_${s.id}`, title: compactListTitle(s.name, 'Treatment'), description: fullLabelDescription(s.name, `${duration || '?'} min • ${price}`) };
   });
   if (safePage < totalPages) rows.push({ id: `client_massage_treatments_page_${safePage + 1}`, title: 'More services →', description: `Page ${safePage + 1} of ${totalPages}` });
   else if (safePage > 1) rows.push({ id: 'client_massage_treatments_page_1', title: '← First page', description: `Page 1 of ${totalPages}` });

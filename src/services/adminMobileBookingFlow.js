@@ -6,6 +6,7 @@ const { prepareAdminBooking, confirmAdminBooking, cancelPendingBooking } = requi
 const { prepareHistoricalAdminBooking, confirmHistoricalAdminBooking } = require('./adminHistoricalBooking');
 const { parseClinicDateInput, johannesburgToday } = require('./adminClinicDateInput');
 const { adminBookingEntitlement } = require('./adminBookingEntitlement');
+const { compactListTitle, fullLabelDescription } = require('../presentation/whatsappListRowPresentation');
 const {
   loadAdminMobileBookingSession,
   saveAdminMobileBookingSession,
@@ -113,7 +114,7 @@ async function staffRowsForService(serviceId, admin) {
 function clientLabel(c) {
   const contact = (c.contacts || []).find(x => x.isPrimary) || (c.contacts || [])[0];
   const digits = normalizePhone(contact?.normalizedValue || contact?.value || '');
-  return `${c.display_name || 'Unnamed client'} — CRM #${c.id}${digits.length >= 4 ? ` · …${digits.slice(-4)}` : ''}`;
+  return `CRM #${c.id}${digits.length >= 4 ? ` · …${digits.slice(-4)}` : ''}`;
 }
 
 const CATEGORY_ORDER = ['Massage & Body', 'Facials & Skin', 'Needling & Aesthetics', 'Permanent Makeup', 'Feet & Pedicure', 'Other'];
@@ -215,7 +216,10 @@ function serviceInteractive(scope, category, group, page = 0) {
   return listInteractive(
     `*${scope.label} — ${heading}*\n\nChoose the treatment.`,
     'Choose service',
-    pageRows(group.services, page, s => ({ id: `admin_booking_service:${s.id}`, title: short(displayServiceName(s.name)) })),
+    pageRows(group.services, page, (s) => {
+      const name = displayServiceName(s.name);
+      return { id: `admin_booking_service:${s.id}`, title: compactListTitle(name), description: fullLabelDescription(name) };
+    }),
     short(group.name || category.name)
   );
 }
@@ -226,7 +230,10 @@ function slotsInteractive(session, page = 0) {
   return listInteractive(`*${fmtDate(session.date)} — Choose a time*\n\n${session.staff.display_name} · ${displayServiceName(session.service.name)}`, 'Choose time', pageRows(session.slots, page, (s, i) => ({ id: `admin_booking_slot:${page * PAGE_SIZE + i}`, title: `${fmtTime(s.starts_at)}–${fmtTime(s.ends_at)}`, description: 'Available slot' })), 'Available times');
 }
 function clientsInteractive(clients) {
-  return listInteractive('*Choose client*\n\nSelect the matching CRM client.', 'Choose client', [...clients.slice(0, 9).map(c => ({ id: `admin_booking_client:${c.id}`, title: short(c.display_name || 'Unnamed client'), description: short(clientLabel(c), 72) })), cancelRow()], 'CRM clients');
+  return listInteractive('*Choose client*\n\nSelect the matching CRM client.', 'Choose client', [...clients.slice(0, 9).map((c) => {
+    const name = c.display_name || 'Unnamed client';
+    return { id: `admin_booking_client:${c.id}`, title: compactListTitle(name), description: fullLabelDescription(name, clientLabel(c)) };
+  }), cancelRow()], 'CRM clients');
 }
 function noSlotsInteractive(session, exhausted = false) {
   const body = exhausted

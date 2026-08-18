@@ -5,6 +5,7 @@ const { checkAuthoritativeSchedule } = require('./adminAvailability');
 const { checkCalendarAvailability, updateBookingEvent } = require('./googleBookingCalendar');
 const { listAvailableSlots } = require('./availabilityService');
 const { getNextOpenClinicDates, shortDateTitle } = require('./clinicDateChoices');
+const { compactListTitle, fullLabelDescription } = require('../presentation/whatsappListRowPresentation');
 
 const sessions = new Map();
 const SLOT_PAGE_SIZE = 8;
@@ -19,7 +20,7 @@ function formatTime(v) { return new Intl.DateTimeFormat('en-ZA', { timeZone: 'Af
 function formatManageDate(v) { return new Intl.DateTimeFormat('en-ZA', { timeZone: 'Africa/Johannesburg', weekday: 'short', day: '2-digit', month: 'short' }).format(new Date(v)); }
 function parseLocal(v = '') { const m = String(v).trim().match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})\s+(\d{1,2}):(\d{2})$/); if (!m) return null; const [, d, mo, y, h, mi] = m; const iso = `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}T${String(h).padStart(2, '0')}:${mi}:00+02:00`; const dt = new Date(iso); return Number.isNaN(dt.getTime()) ? null : dt; }
 function parseDateOnly(v = '') { const m = String(v).trim().match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/); if (!m) return null; const [, d, mo, y] = m; const iso = `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`; const probe = new Date(`${iso}T12:00:00+02:00`); return Number.isNaN(probe.getTime()) ? null : iso; }
-function serviceTitle(v = '') { const s = String(v || '').trim(); return s.length <= 24 ? s : `${s.slice(0, 21).trim()}…`; }
+function serviceTitle(v = '') { return compactListTitle(v, 'Service'); }
 function money(v) { const n = Number(v); return Number.isFinite(n) ? `R${n.toFixed(2)}` : 'Price on request'; }
 
 async function adminFor(sender) {
@@ -66,8 +67,8 @@ async function upcomingAppointmentsInteractive(admin) {
   if (!r.rowCount) return null;
   const rows = r.rows.map((a) => ({
     id: `manage_booking_select_${a.id}`,
-    title: `${formatTime(a.starts_at)} · ${a.client_name}`.slice(0, 24),
-    description: `${formatManageDate(a.starts_at)} · ${a.service_name} · ${a.staff_name}`.slice(0, 72),
+    title: compactListTitle(`${formatTime(a.starts_at)} · ${a.client_name}`),
+    description: fullLabelDescription(a.service_name, `${formatManageDate(a.starts_at)} · ${a.client_name} · ${a.staff_name}`),
   }));
   rows.push({ id: 'manage_booking_manual', title: 'Enter appointment no.', description: 'Use a Shiloh appointment number instead' });
   return {
@@ -170,7 +171,7 @@ function replacementServiceInteractive(a, services, page = 1) {
     return {
       id: `manage_service_pick_${service.id}`,
       title: serviceTitle(service.name),
-      description: `${minutes || '?'} min · ${price}`.slice(0, 72),
+      description: fullLabelDescription(service.name, `${minutes || '?'} min · ${price}`),
     };
   });
   if (safePage > 1) pageRows.push({ id: `manage_service_page_${safePage - 1}`, title: '← Previous', description: 'Show previous services' });
