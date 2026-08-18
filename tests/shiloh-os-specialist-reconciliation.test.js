@@ -48,8 +48,10 @@ test('blocked specialist work is recorded and not falsely completed', () => {
   assert.match(reconciliation, /work remains incomplete and fail-closed/);
 });
 
-test('latest reconciliation pointers select specialist reconciliation', () => {
-  const latest = 'docs/SHILOH-OS-RECONCILIATION-2026-08-18-SPECIALIST-WORKSTREAM-RECONCILIATION.md';
+test('specialist reconciliation remains durable when JP entitlement reconciliation becomes current', () => {
+  const specialist = path.join(root, 'docs/SHILOH-OS-RECONCILIATION-2026-08-18-SPECIALIST-WORKSTREAM-RECONCILIATION.md');
+  const latest = 'docs/SHILOH-OS-RECONCILIATION-2026-08-18-JP-BOOKING-ENTITLEMENT.md';
+  assert.ok(fs.existsSync(specialist));
   assert.ok(master.includes(latest));
   assert.ok(tracker.includes(latest));
 });
