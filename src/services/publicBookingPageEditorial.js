@@ -29,8 +29,7 @@ function extractCategorySection(html, index) {
 function groupSpecialtyCategories(html, catalogue = []) {
   const categories = [...new Set(catalogue.map((service) => service.category))];
   const rows = [
-    ['Profosma Jet Plasma', 'Plasma Fibroblast Consultation'],
-    ['Plasma Fibroblast Prices', 'Ozone & Far Infrared'],
+    ['Profosma Jet Plasma', 'Plasma Fibroblast Consultation', 'Plasma Fibroblast Prices'],
     ['1. SQT BioMicroneedling', '2. SQT BioMicroneedling'],
     ['HIFU', 'Vaginal Tightening & Rejuvenation', 'Neo Pelvic Therapy'],
   ];
