@@ -22,13 +22,17 @@ Operational screenshots are diagnostic evidence by default, not image-generation
 
 ## Production baseline
 
-Current accepted production commit is **PR #310 / `cb59fc67e09b5ac0afeb12c987bbaf7d41332f14`**. Render deployment reached LIVE. Fresh startup evidence: cross-confirm preload absent, `/health` 200, Google Calendar health probe passed, booking confirmation template APPROVED, cancellation confirmation APPROVED, booking-update template PENDING.
+Current accepted production code commit is **PR #313 / `ef0da63681d244fc3a0fbb1e6c9e1cdb42bf77c7`**. Full regression CI run **#1011** passed. Render deployment **`dep-da26430ae00c73c786s0`** reached LIVE on that exact merge commit; post-deploy telemetry showed HTTP 200 traffic and no error-level logs.
 
 ## At-a-glance
 
 | ID | Workstream | State | Evidence / next action |
 |---|---|---|---|
-| DEPLOY-CONVERGENCE | GitHub ↔ Render production | 🟢 VERIFIED | #310 / `cb59fc67...` is LIVE on Render; health 200; Google Calendar provider probe passed. |
+| DEPLOY-CONVERGENCE | GitHub ↔ Render production | 🟢 VERIFIED | #313 / `ef0da636...` passed CI #1011 and is LIVE as `dep-da26430ae00c73c786s0`; HTTP 200 traffic, no error-level logs. |
+| ADMIN-BOOKING-ENTITLEMENT | Fail-closed practitioner booking scope | 🟢 VERIFIED LIVE | #313: Christel+Abigail shared scope; Marietjie only; other linked Admin own practitioner only; unlinked Admin including JP no catalogue; DB trigger enforces normal/crafted/historical paths. |
+| ADMIN-BOOKING-MENU-UX | Grouped concise WhatsApp treatment selection | 🟢 VERIFIED LIVE | #313 adds treatment sub-groups and removes repetitive row descriptions while retaining eligibility, pagination, availability, client selection and confirmation guards. |
+| ADMIN-JP-APPOINTMENTS | JP operational Appointments parity | 🟢 VERIFIED | #313 matches Christel's operational actions except Finalize past visits; attendance/finalization authority remains denied. |
+| CLIENT-WELCOME-CATALOGUE | Welcome → `/book` treatment catalogue | 🟢 VERIFIED LIVE | #311 adds catalogue/booking-page access; #312 preserves universal welcome before client-state branching. |
 | ADMIN-TYPED-TIME | Admin typed time + stale slot pagination | 🟢 VERIFIED LIVE | #304 / `278aab397...`; `14:00` and `2pm` normalize through authoritative slots; stale navigation-only page repaired. |
 | ADMIN-CLIENT-NAME | Canonical Admin client name resolution | 🟢 VERIFIED LIVE | #305 / `4767d282...`; normalized/token matching without auto-create/merge. |
 | ADMIN-GOLDIE-BRIDGE | Reconciled Goldie identity → canonical client lookup | 🟢 VERIFIED LIVE | #306 / `507c3f492...`; only already-reconciled external identity links are followed; unresolved identities fail closed. |
@@ -83,9 +87,11 @@ For a genuinely new client, the accepted fast path is:
 
 Do not require a full profile before securing the slot. Do not silently create duplicates. Do not reintroduce Christel↔Abigail cross-confirm unless a future explicit business requirement justifies it.
 
+PR #313 adds a separate fail-closed practitioner entitlement layer: Christel/Abigail share only their combined scope; Marietjie remains Marietjie-only; other practitioner-linked Admins remain own-practitioner-only; unlinked Admins such as JP retain Admin capability but receive no booking catalogue. JP's operational Appointments menu remains equivalent to Christel's except finalization.
+
 ## Exact continuation
 
-**Authoritative current state:** #304–#308 Admin booking repairs and fast-path work are live; #309 cross-confirm is superseded and removed by #310; production is healthy on `cb59fc67...`.
+**Authoritative current state:** #313 is regression-green and live on `ef0da636...`. Fail-closed practitioner entitlement, grouped booking menus and JP non-finalization parity are accepted. #309 remains superseded and removed by #310; #311–#312 welcome/catalogue routing is also live.
 
 **Highest-priority next item:** re-check `shiloh_booking_update_v1` provider status. If still PENDING, continue the next approved Shiloh OS workstream without reopening the completed Admin-booking fixes.
 
