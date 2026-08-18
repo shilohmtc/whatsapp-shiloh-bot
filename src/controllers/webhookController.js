@@ -24,6 +24,7 @@ const { processAdminInteractiveMenuMessage } = require("../services/adminInterac
 const { processAdminMobileBookingFlowMessage } = require("../services/adminMobileBookingFlow");
 const { processAdminBookingUpdateMessage } = require("../services/adminBookingUpdate");
 const { scopeAdminBookingInteractive, processStatelessAdminBookingUpdateMessage } = require("../services/adminBookingUpdateStateless");
+const { hybridizeChoiceInteractive } = require("../presentation/whatsappChoicePresentation");
 const { processAdminAppointmentsByDateMessage } = require("../services/adminAppointmentsByDate");
 const { processAdminReportsMessage } = require("../services/adminReports");
 const { processAdminServiceTrendsMessage } = require("../services/adminServiceTrends");
@@ -59,6 +60,9 @@ function inboundText(message){
 }
 async function sendAdminResult(to,result){
   result=scopeAdminBookingInteractive(result);
+  if (result?.interactive) {
+    result = { ...result, interactive: hybridizeChoiceInteractive(result.interactive) };
+  }
   let sent;
   if(result?.template?.name) sent=await sendWhatsAppTemplate(to,result.template.name,result.template.bodyParameters||[],result.template.language||process.env.WHATSAPP_TEMPLATE_LANGUAGE||'en',result.template.quickReplyPayloads||[]);
   else if(result?.interactive?.type==="list") sent=await sendWhatsAppList(to,result.interactive.body,result.interactive.buttonText||result.interactive.button,result.interactive.rows||result.interactive.sections?.[0]?.rows,result.interactive.sectionTitle||result.interactive.sections?.[0]?.title);
