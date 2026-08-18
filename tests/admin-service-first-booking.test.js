@@ -4,33 +4,34 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const source = fs.readFileSync(path.join(__dirname, '..', 'src/services/adminMobileBookingFlow.js'), 'utf8');
+const entitlement = fs.readFileSync(path.join(__dirname, '..', 'src/services/adminBookingEntitlement.js'), 'utf8');
 const booking = fs.readFileSync(path.join(__dirname, '..', 'src/services/adminBooking.js'), 'utf8');
-const migration = fs.readFileSync(path.join(__dirname, '..', 'src/db/migrations/062_admin_booking_practitioner_scope.sql'), 'utf8');
+const migration = fs.readFileSync(path.join(__dirname, '..', 'src/db/migrations/063_jean_pierre_booking_entitlement.sql'), 'utf8');
 
 test('guided booking catalogue is fail-closed by explicit practitioner business rule', () => {
-  assert.match(source, /name === 'marietjie'.*staffNames: \['marietjie'\]/s);
-  assert.match(source, /name === 'christel' \|\| name === 'abigail'.*staffNames: \['christel', 'abigail'\]/s);
-  assert.match(source, /key: 'own_practitioner'.*staffIds: \[Number\(admin\.staff_id\)\]/s);
-  assert.match(source, /key: 'no_practitioner_scope'.*staffNames: \[\], staffIds: \[\]/s);
-  assert.doesNotMatch(source, /All client-bookable services/);
+  assert.match(entitlement, /name === 'marietjie'.*staffNames: \['marietjie'\]/s);
+  assert.match(entitlement, /name === 'christel' \|\| name === 'abigail' \|\| isJeanPierreBookingException\(admin\).*staffNames: \['christel', 'abigail'\]/s);
+  assert.match(entitlement, /key: 'own_practitioner'.*staffIds: \[Number\(admin\.staff_id\)\]/s);
+  assert.match(entitlement, /key: 'no_practitioner_scope'.*staffNames: \[\], staffIds: \[\]/s);
+  assert.doesNotMatch(entitlement, /All client-bookable services/);
   assert.match(source, /bookingScope: scope\.key/);
 });
 
 test('Marietjie catalogue contains only services mapped to Marietjie', () => {
   assert.match(source, /LOWER\(st\.display_name\)=ANY\(\$1::text\[\]\)/);
   assert.match(source, /scopedActiveServiceRows\(admin\)/);
-  assert.match(source, /Marietjie services/);
+  assert.match(entitlement, /Marietjie services/);
 });
 
 test('Christel and Abigail share one service pool while practitioner selection remains eligibility based', () => {
-  assert.match(source, /Christel & Abigail services/);
+  assert.match(entitlement, /Christel & Abigail services/);
   assert.match(source, /async function staffRowsForService\(serviceId, admin\)/);
   assert.match(source, /LOWER\(st\.display_name\)=ANY\(\$2::text\[\]\)/);
   assert.match(source, /staffRowsForService\(service\.id, admin\)/);
   assert.match(source, /Eligible practitioner/);
 });
 
-test('unlinked business admins such as JP do not inherit a clinic-wide booking catalogue', () => {
+test('unlinked business admins without JP explicit exception do not inherit a clinic-wide booking catalogue', () => {
   assert.match(source, /no practitioner booking scope/i);
   assert.match(source, /return \[\];/);
   assert.doesNotMatch(source, /staffNames:null,label:'All client-bookable services'/);
@@ -46,10 +47,11 @@ test('WhatsApp treatment rows are concise and services are grouped before select
 });
 
 test('database guard prevents crafted or alternate admin booking paths from escaping practitioner scope', () => {
-  assert.match(migration, /CREATE TRIGGER trg_admin_booking_practitioner_scope/);
+  assert.match(migration, /CREATE OR REPLACE FUNCTION enforce_admin_booking_practitioner_scope/);
   assert.match(migration, /admin_name IN \('christel', 'abigail'\)/);
   assert.match(migration, /target_staff_name IN \('christel', 'abigail'\)/);
   assert.match(migration, /admin_name = 'marietjie'/);
+  assert.match(migration, /admin_name = 'jean-pierre'[\s\S]*target_staff_name IN \('christel', 'abigail'\)/);
   assert.match(migration, /linked_staff_id = NEW\.staff_id/);
   assert.match(migration, /allowed := false/);
   assert.match(migration, /admin_booking_scope_denied/);

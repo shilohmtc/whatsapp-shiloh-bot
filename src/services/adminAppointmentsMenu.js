@@ -1,3 +1,5 @@
+const { canPresentAdminBooking } = require('./adminBookingEntitlement');
+
 function has(admin, permission) {
   return admin?.permissions?.[permission] === true;
 }
@@ -27,7 +29,7 @@ function appointmentsInteractive(admin) {
       description: 'Completed, No-show, Reschedule or leave unresolved',
     });
   }
-  if (has(admin, 'appointment:create') && has(admin, 'appointment:view')) {
+  if (canPresentAdminBooking(admin)) {
     rows.push({
       id: 'admin_appointment_booking',
       title: 'Make a booking',

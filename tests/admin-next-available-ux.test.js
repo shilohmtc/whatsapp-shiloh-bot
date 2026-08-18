@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'services', 'adminMobileBookingFlow.js'), 'utf8');
+const entitlementSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'services', 'adminBookingEntitlement.js'), 'utf8');
 const { noSlotsInteractive } = require('../src/services/adminMobileBookingFlow');
 
 const sampleSession = { date: '2026-08-13', staff: { id: 1, display_name: 'Christel' }, service: { id: 2, name: 'Cupping Area Specific' } };
@@ -42,10 +43,10 @@ test('next-available lookup never creates or mutates booking/calendar truth', ()
 });
 
 test('shared Admin scope rules remain fail-closed for practitioner and unlinked business admins', () => {
-  assert.match(source, /name === 'marietjie'.*staffNames: \['marietjie'\]/);
-  assert.match(source, /name === 'christel' \|\| name === 'abigail'.*staffNames: \['christel', 'abigail'\]/);
-  assert.match(source, /key: 'own_practitioner'.*staffIds: \[Number\(admin\.staff_id\)\]/s);
-  assert.match(source, /key: 'no_practitioner_scope'.*staffNames: \[\], staffIds: \[\]/s);
-  assert.doesNotMatch(source, /All client-bookable services/);
+  assert.match(entitlementSource, /name === 'marietjie'.*staffNames: \['marietjie'\]/);
+  assert.match(entitlementSource, /name === 'christel' \|\| name === 'abigail' \|\| isJeanPierreBookingException\(admin\).*staffNames: \['christel', 'abigail'\]/s);
+  assert.match(entitlementSource, /key: 'own_practitioner'.*staffIds: \[Number\(admin\.staff_id\)\]/s);
+  assert.match(entitlementSource, /key: 'no_practitioner_scope'.*staffNames: \[\], staffIds: \[\]/s);
+  assert.doesNotMatch(entitlementSource, /All client-bookable services/);
   assert.match(source, /st\.client_bookable=TRUE/);
 });
