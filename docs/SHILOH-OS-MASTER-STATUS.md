@@ -18,7 +18,8 @@ Current accepted production application code is **PR #328 / `78ece8d5bcf38aaf5d0
 Relevant accepted lineage:
 - #301 / `6863958dbf97a6a6f593fc196c284571adf802c6` — accepted public catalogue presentation.
 - #302 / `bee0bdcd71f7dae768a78e6e5cfcd5ec5ddf76c9` — fail-closed Google Calendar provider guard + health probe.
-- #303 / `632ec4780489a97349b41a85567fa13b18d9df49cb82e75bd29d` — Admin typed-time picker repair.
+- #303 / `632ec4780489a97349b41a85567fa13b18d9ca35` — customer-change WhatsApp confirmation architecture.
+- #304 / `278aab397aa750af94e2b1d9df49cb82e75bd29d` — Admin typed-time picker repair.
 - #305 / `4767d2823ab41e7f803b5bc4bbdb043e7030dcd7` — canonical client-name resolution repair.
 - #306 / `507c3f492dc22e2c7767b8bac24128665f8ac73f` — reconciled Goldie→canonical client lookup bridge.
 - #307 / `55c2f00b1470a095ec78c675eaa368bdbd53dc51` — provisional new-client Admin booking fast path.
