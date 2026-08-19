@@ -2,11 +2,11 @@
 
 Updated: 2026-08-19
 
-The production Shiloh_MTC WhatsApp Manager evidence below was captured on 18 August 2026, with a fresh read-only post-approval verification of `shiloh_booking_update_v1` completed on 19 August 2026. Provider API quality remains `UNKNOWN`; this does not supersede the separate WhatsApp Manager screenshot evidence showing **Active – Quality pending**. Provider approval is not handset delivery evidence, and provider approval does not itself authorize production configuration or delivery. The checker must compare the complete provider contract and remain read-only; no template is submitted, edited or sent for evidence.
+The production Shiloh_MTC WhatsApp Manager evidence below was captured on 18 August 2026, with a fresh read-only post-approval verification of `shiloh_booking_update_v1` and a subsequent stale-notification safety reconciliation completed on 19 August 2026. Provider API quality remains `UNKNOWN`; this does not supersede the separate WhatsApp Manager screenshot evidence showing **Active – Quality pending**. Provider approval is not handset delivery evidence, and provider approval does not itself authorize production configuration or delivery. The checker must compare the complete provider contract and remain read-only; no template is submitted, edited or sent for evidence.
 
 | # | Identity | Category / language | Provider state | Production configuration / wiring | Readiness and remaining gate |
 |---:|---|---|---|---|---|
-| 1 | `shiloh_booking_update_v1` | Utility / `en` | API **APPROVED**; `already_exists`; quality `UNKNOWN`; not resubmitted | Exact provider identity and component contract verified; `duplicateCount=0`; `WHATSAPP_BOOKING_UPDATE_TEMPLATE` remains unsatisfied in production; `ready=false`. `WHATSAPP_BOOKING_UPDATE_ENABLED` is not independently readable and has not been reached by the genuine #575 send path. | **Provider gate closed. Production delivery gate remains closed:** configuration/enablement requires a separately approved Production / DevOps decision. Appointment #575 / audit event 674 remains genuine, queued and unsent, failing closed on `WHATSAPP_BOOKING_UPDATE_TEMPLATE`. |
+| 1 | `shiloh_booking_update_v1` | Utility / `en` | API **APPROVED**; `already_exists`; quality `UNKNOWN`; not resubmitted | Exact provider identity and component contract verified; `duplicateCount=0`; `WHATSAPP_BOOKING_UPDATE_TEMPLATE` remains unsatisfied in production; `ready=false`. `WHATSAPP_BOOKING_UPDATE_ENABLED` is not independently readable and has not been reached by a valid future send path. PR #332 terminally suppresses stale ended booking-update rows before delivery. | **Provider gate closed. Production delivery gate remains closed:** configuration/enablement requires a separately approved Production / DevOps decision. Appointment #575 / audit event 674 is genuine historical queue evidence but is terminally suppressed with `appointment_already_ended`, was not sent, and cannot serve as delivery evidence. |
 | 2 | `shiloh_staff_finalization_actions_v1` | Utility / `en` | API **APPROVED**; quality `UNKNOWN` | Exact configured contract; `duplicateCount=0`; `ready=true`; genuine accepted send exists | Wired and provider-verified; preserve natural-use evidence only. |
 | 3 | `shiloh_appointment_followup_v2` | Utility / `en` | API **APPROVED**; quality `UNKNOWN` | Exact configured contract; `duplicateCount=0`; `ready=true` | Provider-ready; genuine send exists, but genuine rating-response evidence is still missing. |
 | 4 | `shiloh_booking_approval_outcome_v1` | Utility / `en` | API **APPROVED**; quality `UNKNOWN` | Exact configured contract; `duplicateCount=0`; `ready=true` | Provider-ready; genuine route evidence remains. |
@@ -24,13 +24,15 @@ The production Shiloh_MTC WhatsApp Manager evidence below was captured on 18 Aug
 
 Meta's default `hello_world` is visible but is not a Shiloh operational template and is excluded from the 15-template contract inventory.
 
-## Booking-update approval reconciliation — 2026-08-19
+## Booking-update approval and stale-notification reconciliation — 2026-08-19
 
 The provider gate for `shiloh_booking_update_v1` is closed: the template is **APPROVED**, `already_exists`, was not resubmitted, matches the expected provider identity, Utility / `en` category/language and exact component contract, and has `duplicateCount=0`. Provider quality remains `UNKNOWN`.
 
-The production delivery gate is separate and remains closed. `WHATSAPP_BOOKING_UPDATE_TEMPLATE` is still unsatisfied in production. The separate `WHATSAPP_BOOKING_UPDATE_ENABLED` gate is not independently readable with the available verification surface and has not been reached by appointment #575 because the template-name guard fails first.
+The production delivery gate is separate and remains closed. `WHATSAPP_BOOKING_UPDATE_TEMPLATE` is still unsatisfied in production. The separate `WHATSAPP_BOOKING_UPDATE_ENABLED` gate is not independently readable with the available verification surface and was not changed in the stale-suppression controlled unit.
 
-Appointment **#575 / audit event 674** is genuine production evidence. It remains queued and unsent and fails closed on `WHATSAPP_BOOKING_UPDATE_TEMPLATE`. Do not mutate the appointment, manufacture another booking change, send the message, alter provider state, or configure/enable delivery merely to create evidence.
+Appointment **#575 / audit event 674** is genuine historical production queue evidence, but the appointment had already ended before delivery. PR #332 terminally suppresses stale service/practitioner/time/price booking-update rows with durable reason `appointment_already_ended`; production emitted that successful suppression event for #575 / 674 at 14:30:18.812 SAST. The row was not sent and is excluded from future pending/failed retry scans. Do not mutate the appointment, release the suppressed row, manufacture another booking change, alter provider state, or configure/enable delivery merely to create evidence. After any separately approved activation, successful update-delivery evidence must arise from a genuine change to a still-future appointment.
+
+The supplied investigation observed `attempt_count=27`, but a further old-code retry occurred at 14:25:13 SAST before PR #332 deployed, so 27 is an investigation baseline rather than an asserted post-deploy counter. The suppression path itself does not increment the counter. Direct post-deploy SQL verification was blocked by the sanctioned Render read-only connector's SSL/TLS negotiation failure; no write-capable workaround was used.
 
 ## Permanent provider lead-time and submission governance
 
@@ -117,7 +119,6 @@ Provider approval never proves handset delivery. No appointment, attendance acti
 - **HEADER:** None. **FOOTER:** None. **Buttons/payloads:** None.
 - **BODY (exact):** `Hi {{1}}, {{2}} Shiloh visit(s) {{4}} for {{3}}. Please open Shiloh Admin > Appointments > Finalize past visits and record Completed or No-show. Attendance is never inferred automatically.`
 - **Variables by numeric identity:** `{{1}}` staff/Admin display name; `{{2}}` pending count; `{{3}}` clinic date; `{{4}}` reminder timing phrase. The textual occurrence order is `{{1}}, {{2}}, {{4}}, {{3}}` and must remain exact.
-
 ### `shiloh_birthday_wish_v2` — Marketing / `en`
 - **HEADER:** None. **Buttons/payloads:** None.
 - **BODY (exact):** `Happy birthday, {{1}}! 🎂 Wishing you a beautiful day from all of us at Shiloh Massage Therapy and Aesthetic Clinic. Thank you for being part of our community. 🌿`
