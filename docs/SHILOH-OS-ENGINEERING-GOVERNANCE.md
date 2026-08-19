@@ -132,7 +132,7 @@ A genuine provider, human-truth, approval, safety, evidence, production or capab
 
 The standard specialist handoff uses this structure:
 
-```markdown
+````markdown
 ### Next specialist handoff
 
 **Owning workstream:** ...
@@ -147,7 +147,7 @@ The standard specialist handoff uses this structure:
 ```text
 ...
 ```
-```
+````
 
 If no other specialist action is required, the final checkpoint must state:
 
