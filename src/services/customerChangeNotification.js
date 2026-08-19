@@ -233,12 +233,12 @@ async function attemptCustomerChangeNotification(auditEventId) {
     await pool.query(`UPDATE customer_change_notifications SET status='failed',attempt_count=attempt_count+1,last_error='appointment_not_found',updated_at=NOW() WHERE audit_event_id=$1`, [auditEventId]);
     return { sent: false, reason: 'appointment_not_found' };
   }
+  if (await suppressEndedBookingUpdate(item)) {
+    return { sent: false, reason: 'appointment_already_ended', suppressed: true };
+  }
   if (!appointment.client_phone) {
     await pool.query(`UPDATE customer_change_notifications SET status='failed',attempt_count=attempt_count+1,last_error='client_phone_not_found',updated_at=NOW() WHERE audit_event_id=$1`, [auditEventId]);
     return { sent: false, reason: 'client_phone_not_found' };
-  }
-  if (await suppressEndedBookingUpdate(item)) {
-    return { sent: false, reason: 'appointment_already_ended', suppressed: true };
   }
 
   const claimed = await pool.query(`
