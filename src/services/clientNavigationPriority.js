@@ -39,7 +39,17 @@ function installClientNavigationPriority({ identityService, discoveryService }) 
   }
 
   identityService.processClientIdentityMessage = async (sender, text, ...rest) => {
-    if (discoveryCommandForNavigation(text)) return { handled: false, navigationPriority: true };
+    if (isGreetingNavigation(text)) {
+      const identity = await originalIdentity(sender, text, ...rest);
+      if (identity?.identityStatus !== 'matched_complete') return identity;
+      return {
+        handled: false,
+        navigationPriority: true,
+        identityStatus: identity.identityStatus,
+        client: identity.client || null,
+      };
+    }
+    if (isBookAnotherNavigation(text)) return { handled: false, navigationPriority: true };
     return originalIdentity(sender, text, ...rest);
   };
 
