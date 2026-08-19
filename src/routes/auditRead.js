@@ -6,6 +6,7 @@ const { getGoldieExitAudit } = require("../services/goldieExitAudit");
 const { getReportingIntegrityAudit } = require("../services/reportingIntegrityAudit");
 const { getBirthdayTemplateStatus, TEMPLATE_BODY } = require("../services/birthdayTemplateProvisioning");
 const { inspectMetaTemplateInventory } = require("../services/metaTemplateContracts");
+const { getClientWelcomeDiagnostic } = require("../services/clientWelcomeDiagnostic");
 
 const router = express.Router();
 
@@ -50,6 +51,20 @@ router.get("/reporting-integrity/status", async (req, res) => {
   } catch (error) {
     (req.log || console).error?.({ err: error }, "Failed to build sanitized reporting integrity audit");
     return res.status(500).json({ error: "Could not build reporting integrity audit", requestId: req.id });
+  }
+});
+
+// Sanitized, authenticated, read-only client welcome state. Full phone, client IDs/names and contact data are omitted.
+router.get("/client-welcome/status", auditReadAuth, async (req, res) => {
+  try {
+    const status = await getClientWelcomeDiagnostic(req.query.phone || "");
+    return res.status(200).json({ status, requestId: req.id });
+  } catch (error) {
+    if (error.code === "INVALID_PHONE") {
+      return res.status(400).json({ error: error.message, requestId: req.id });
+    }
+    (req.log || console).error?.({ err: error }, "Client welcome diagnostic failed");
+    return res.status(500).json({ error: "Could not inspect client welcome state", requestId: req.id });
   }
 });
 
