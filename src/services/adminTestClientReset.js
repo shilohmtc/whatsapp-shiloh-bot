@@ -7,6 +7,12 @@ const TEST_CLIENTS = Object.freeze({
   dummy_test: 'Dummy Test',
 });
 
+const TEST_CLIENT_ALIASES = Object.freeze({
+  chenique: Object.freeze(['Chenique']),
+  juvan: Object.freeze(['Juvan']),
+  dummy_test: Object.freeze(['Dummy Test', 'CRM Dummy Test']),
+});
+
 function normalizedName(admin) {
   return String(admin?.display_name || '').trim().toLowerCase();
 }
@@ -34,8 +40,11 @@ async function getAdmin(sender, db = pool) {
 
 function targetFromText(text = '') {
   const raw = String(text).trim();
-  let match = raw.match(/^reset test client (chenique|juvan|dummy test)$/i);
-  if (match) return { mode: 'preview', key: match[1].toLowerCase().replace(/\s+/g, '_') };
+  let match = raw.match(/^reset test client (chenique|juvan|dummy test|crm dummy test)$/i);
+  if (match) {
+    const key = match[1].toLowerCase().replace(/\s+/g, '_');
+    return { mode: 'preview', key: key === 'crm_dummy_test' ? 'dummy_test' : key };
+  }
   match = raw.match(/^admin_test_client_reset_confirm:(chenique|juvan|dummy_test)$/i);
   if (match) return { mode: 'confirm', key: match[1].toLowerCase() };
   match = raw.match(/^admin_test_client_reset_cancel:(chenique|juvan|dummy_test)$/i);
@@ -44,15 +53,16 @@ function targetFromText(text = '') {
 }
 
 async function activeTargetClient(targetKey, db = pool, lock = false) {
-  const displayName = TEST_CLIENTS[targetKey];
-  if (!displayName) return { status: 'invalid_target', rows: [] };
+  const aliases = TEST_CLIENT_ALIASES[targetKey];
+  if (!aliases) return { status: 'invalid_target', rows: [] };
+  const names = aliases.map((value) => value.toLowerCase());
   const result = await db.query(
     `SELECT id,display_name,status
        FROM clients
-      WHERE lower(trim(display_name))=$1
+      WHERE lower(trim(display_name)) = ANY($1::text[])
         AND status='active'
       ORDER BY id${lock ? ' FOR UPDATE' : ''}`,
-    [displayName.toLowerCase()]
+    [names]
   );
   if (result.rowCount === 0) return { status: 'not_found', rows: [] };
   if (result.rowCount !== 1) return { status: 'ambiguous', rows: result.rows };
@@ -70,13 +80,21 @@ function confirmationInteractive(targetKey, client) {
       '',
       'Existing appointments and historical CRM/audit records will be preserved.',
       '',
-      'This action is limited to the Chenique/Juvan booking-test profiles.',
+      'This action is limited to the approved Chenique/Juvan/Dummy Test booking-test profiles.',
     ].join('\n'),
     buttons: [
       { id: `admin_test_client_reset_confirm:${targetKey}`, title: 'Confirm reset' },
       { id: `admin_test_client_reset_cancel:${targetKey}`, title: 'Cancel' },
     ],
   };
+}
+
+async function optionalPhoneCleanup(db, tableName, sql, phones) {
+  if (!phones.length) return 0;
+  const exists = await db.query('SELECT to_regclass($1) AS table_name', [`public.${tableName}`]);
+  if (!exists.rows[0]?.table_name) return 0;
+  const result = await db.query(sql, [phones]);
+  return Number(result.rowCount || 0);
 }
 
 async function resetTargetClient(admin, targetKey) {
@@ -109,9 +127,45 @@ async function resetTargetClient(admin, targetKey) {
     const phones = [...new Set(contacts.rows.map((row) => normalizePhone(row.normalized_value)).filter(Boolean))];
 
     if (phones.length) {
+      const sharedIdentity = await db.query(
+        `SELECT DISTINCT cc.client_id
+           FROM client_contacts cc
+           JOIN clients c ON c.id=cc.client_id
+          WHERE cc.normalized_value = ANY($1::text[])
+            AND cc.contact_type IN ('whatsapp','mobile')
+            AND cc.client_id <> $2
+            AND c.status='active'
+          LIMIT 1`,
+        [phones, client.id]
+      );
+      if (sharedIdentity.rowCount) {
+        await db.query('ROLLBACK');
+        return {
+          status: 'identity_conflict',
+          reply: `Reset blocked: ${displayName}'s WhatsApp/mobile number is also linked to another active CRM client. Resolve that identity conflict before releasing the number.`,
+        };
+      }
+    }
+
+    let clearedConversationSessions = 0;
+    let clearedUserProfiles = 0;
+    if (phones.length) {
       await db.query(`DELETE FROM booking_intents WHERE phone = ANY($1::text[])`, [phones]);
       await db.query(`DELETE FROM client_onboarding_sessions WHERE phone = ANY($1::text[])`, [phones]);
       await db.query(`DELETE FROM booking_policy_acceptances WHERE phone = ANY($1::text[])`, [phones]);
+      clearedConversationSessions = await optionalPhoneCleanup(
+        db,
+        'conversation_sessions',
+        `DELETE FROM conversation_sessions WHERE phone = ANY($1::text[])`,
+        phones
+      );
+      clearedUserProfiles = await optionalPhoneCleanup(
+        db,
+        'user_profiles',
+        `DELETE FROM user_profiles
+          WHERE regexp_replace(phone::text, '[^0-9]', '', 'g') = ANY($1::text[])`,
+        phones
+      );
     }
 
     const released = await db.query(
@@ -120,6 +174,17 @@ async function resetTargetClient(admin, targetKey) {
           AND contact_type IN ('whatsapp','mobile')`,
       [client.id]
     );
+
+    const residualContacts = await db.query(
+      `SELECT COUNT(*)::int AS count
+         FROM client_contacts
+        WHERE client_id=$1
+          AND contact_type IN ('whatsapp','mobile')`,
+      [client.id]
+    );
+    if (Number(residualContacts.rows[0]?.count || 0) !== 0) {
+      throw new Error('Test-client identity release postcondition failed');
+    }
 
     await db.query(
       `UPDATE clients
@@ -144,6 +209,8 @@ async function resetTargetClient(admin, targetKey) {
         displayName: client.display_name,
         releasedContactRows: released.rowCount,
         releasedIdentityCount: phones.length,
+        clearedConversationSessions,
+        clearedUserProfiles,
         preservedAppointmentHistory: true,
         purpose: 'real_whatsapp_booking_simulation',
       })]
@@ -157,7 +224,7 @@ async function resetTargetClient(admin, targetKey) {
         `✅ ${displayName} test client reset complete.`,
         '',
         `Old CRM profile #${client.id} is archived and ${released.rowCount} WhatsApp/mobile contact record${released.rowCount === 1 ? '' : 's'} released.`,
-        'Existing appointment and audit history was preserved.',
+        'Existing appointment and audit history was preserved, and temporary conversation/profile state was cleared.',
         '',
         `The next booking message from ${displayName}'s WhatsApp can now go through Shiloh as a new client registration.`,
       ].join('\n'),
@@ -198,10 +265,12 @@ async function processAdminTestClientResetMessage(sender, text) {
 
 module.exports = {
   TEST_CLIENTS,
+  TEST_CLIENT_ALIASES,
   canResetTestClients,
   targetFromText,
   activeTargetClient,
   confirmationInteractive,
+  optionalPhoneCleanup,
   resetTargetClient,
   processAdminTestClientResetMessage,
 };
