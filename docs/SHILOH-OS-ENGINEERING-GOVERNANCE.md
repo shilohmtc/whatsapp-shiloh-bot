@@ -96,6 +96,7 @@ Every specialist final checkpoint must explicitly state:
 - what was completed and must not be redone;
 - what remains unresolved or externally gated;
 - whether Project Tracker and/or Master reconciliation was required and completed;
+- whether another workstream owns a dependency or next action;
 - the next-specialist status: either the mandatory specialist handoff below, or **`Next specialist: None — controlled unit complete.`**
 
 ### Mandatory specialist-to-specialist handoff rule
