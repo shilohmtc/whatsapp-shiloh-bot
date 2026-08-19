@@ -1,19 +1,19 @@
 # Shiloh OS — Master Project Status
 
-Updated: 2026-08-18
+Updated: 2026-08-19
 Purpose: permanent current-state source of truth. Historical implementation detail remains in Git history; do not redo accepted or superseded work.
 
 ## Authority and continuation protocol
 
 Operational truth is GitHub `main`, Render production, Shiloh CRM/Postgres, Google Calendar, Meta/WhatsApp provider evidence, and explicit real WhatsApp/human evidence. Never infer provider, attendance, approval, CRM, Calendar, or handset state.
 
-At the beginning of each new Shiloh OS chat: read this Master + `docs/SHILOH-OS-PROJECT-TRACKER.md` + the latest reconciliation, currently `docs/SHILOH-OS-RECONCILIATION-2026-08-18-CHRISTEL-SERVICE-CATALOGUE-CORRECTION.md`, plus `docs/SHILOH-OS-ENGINEERING-GOVERNANCE.md`, on `main`; verify applicable production/provider state; then give the four-part checkpoint: (1) authoritative current state, (2) highest-priority continuation item, (3) why it is next, (4) remaining approval/evidence/provider gate. Obtain explicit approval before the first new substantial controlled action. After that initial approval, continue the approved workstream automatically through ordinary engineering/deploy/verification/housekeeping boundaries. Stop only for material scope/risk expansion, contradictory authority, or an existing fail-closed human/provider/evidence gate.
+At the beginning of each new Shiloh OS chat: read this Master + `docs/SHILOH-OS-PROJECT-TRACKER.md` + the latest reconciliation, currently `docs/SHILOH-OS-RECONCILIATION-2026-08-19-META-BOOKING-UPDATE-APPROVAL.md`, plus `docs/SHILOH-OS-ENGINEERING-GOVERNANCE.md`, on `main`; verify applicable production/provider state; then give the four-part checkpoint: (1) authoritative current state, (2) highest-priority continuation item, (3) why it is next, (4) remaining approval/evidence/provider gate. The prior applicable Christel catalogue reconciliation remains durable evidence at `docs/SHILOH-OS-RECONCILIATION-2026-08-18-CHRISTEL-SERVICE-CATALOGUE-CORRECTION.md`; a newer current reconciliation does not erase it. Obtain explicit approval before the first new substantial controlled action. After that initial approval, continue the approved workstream automatically through ordinary engineering/deploy/verification/housekeeping boundaries. Stop only for material scope/risk expansion, contradictory authority, or an existing fail-closed human/provider/evidence gate.
 
 Permanent governance remains: operational screenshots are diagnostic evidence by default and must not trigger image generation unless visual creation/editing is explicitly requested; production defects follow trace → authoritative evidence → root cause → guarded repair → regression/E2E → CI → deploy → production verification → reconciliation; provider lead-time is considered early; known finite client/admin choices are button/list-first where practical; natural language remains fallback into the same canonical handlers; no speculative provider submissions; no manufactured appointments/evidence; no duplicate public service source of truth.
 
 ## Current production baseline
 
-Current accepted production application code is **PR #328 / `78ece8d5bcf38aaf5d01dbaaefacde253bdef6e3`**, **Correct Christel service catalogue safely**. The current governance baseline is **PR #317 / `f2a78bb33db212f759ac5bb72f1d832ca11cc104`**, **Enforce specialist workstream reconciliation**. Full regression CI run **#1051** passed with **688 passed / 0 failed**; Render deploy **`dep-da2ba6f10e5c73cp6l60`** reached LIVE. The checksum-tracked Christel catalogue migration and postcondition verifier completed before traffic opened, post-deployment error/fatal logs were clear, and production `/health` returned application/database OK. PR #326 / `acefd0e3bc5a21c6e61c656ccfd8f185339c4783` is the accepted Meta integration lineage included in this production application; PR #330 / `f7c0f21ef91d3b91f08764deb069431e2cc8651b` is the newer documentation reconciliation preserved by this checkpoint.
+Current accepted production application code is **PR #328 / `78ece8d5bcf38aaf5d01dbaaefacde253bdef6e3`**, **Correct Christel service catalogue safely**. The current governance baseline is **PR #317 / `f2a78bb33db212f759ac5bb72f1d832ca11cc104`**, **Enforce specialist workstream reconciliation**. Full regression CI run **#1051** passed with **688 passed / 0 failed**; Render deploy **`dep-da2ba6f10e5c73cp6l60`** reached LIVE. The checksum-tracked Christel catalogue migration and postcondition verifier completed before traffic opened, post-deployment error/fatal logs were clear, and production `/health` returned application/database OK. PR #326 / `acefd0e3bc5a21c6e61c656ccfd8f185339c4783` is the accepted Meta integration lineage included in this production application; PR #330 / `f7c0f21ef91d3b91f08764deb069431e2cc8651b` is the newer catalogue documentation reconciliation preserved by this checkpoint. Later documentation-only repository heads and Render deploy identifiers do not supersede the accepted application-code baseline unless runtime code changes are verified.
 
 Relevant accepted lineage:
 - #301 / `6863958dbf97a6a6f593fc196c284571adf802c6` — accepted public catalogue presentation.
@@ -43,14 +43,14 @@ Relevant accepted lineage:
 - #327 / `5dc39552186d11b3be7d9a2abea56581cbefb006` — records the read-only production gate for Christel's reviewed catalogue scope.
 - #328 / `78ece8d5bcf38aaf5d01dbaaefacde253bdef6e3` — guarded retirement of service #27 plus the three reviewed canonical buffer removals; **current accepted production application code**.
 
-Fresh Meta/provider evidence from the #310 production startup:
+Fresh Meta/provider evidence reconciled on 19 August 2026:
 - `shiloh_staff_finalization_v1` — **APPROVED / UTILITY**.
 - `shiloh_staff_finalization_actions_v1` — **APPROVED / UTILITY**.
 - `shiloh_booking_confirmation_v1` — **APPROVED / UTILITY**.
 - `shiloh_cancellation_confirmation_v1` — **APPROVED**.
-- `shiloh_booking_update_v1` — **PENDING**.
+- `shiloh_booking_update_v1` — **APPROVED / UTILITY / `en`**, exact contract, `duplicateCount=0`, quality `UNKNOWN`, `already_exists`, not resubmitted.
 
-Provider approval does not itself prove handset delivery or justify manufactured operational messaging.
+Provider approval does not itself prove handset delivery or authorize production configuration/enablement.
 
 ## Workstream operating model — 🟢 ADOPTED
 
@@ -158,18 +158,24 @@ Menus remain lists when compact button labels would collide, the reply-button bo
 
 Permissions, JP entitlement, practitioner scope, availability, confirmation, CRM, database enforcement, Calendar and attendance are unchanged. CI #1037 passed 656 / 0; Render deploy `dep-da29l28ae00c73957t30` is LIVE with clear error logs and healthy application, database and Google Calendar checks. Genuine handset rendering remains natural evidence and must not be manufactured.
 
-## Meta template production integration — 🟢 VERIFIED LIVE / GATES EXPLICIT
+## Meta template production integration — 🟢 VERIFIED LIVE / DELIVERY GATE EXPLICIT
 
-PR #326 merged as `acefd0e3bc5a21c6e61c656ccfd8f185339c4783`. CI #1049 passed its final head `9328a89b84bdeeebbee9ab1d3b74af809a30e017`, and Render original deploy `dep-da2b5ogu01pc73blgvn0` was verified LIVE and healthy. The production read-only audit returned HTTP 200 with `report.ok=true`. This makes the centralized inventory, exact contract checks, fail-closed send boundary, duplicate-safe post-acceptance handling, exact approval-resend evidence, and retired legacy evidence endpoints durable production behaviour. This work is complete and must not be redone. Tracker and Master reconciliation is complete.
+PR #326 merged as `acefd0e3bc5a21c6e61c656ccfd8f185339c4783`. CI #1049 passed its final head `9328a89b84bdeeebbee9ab1d3b74af809a30e017`, and Render original deploy `dep-da2b5ogu01pc73blgvn0` was verified LIVE and healthy. The production read-only audit returned HTTP 200 with `report.ok=true`. This makes the centralized inventory, exact contract checks, fail-closed send boundary, duplicate-safe post-acceptance handling, exact approval-resend evidence, and retired legacy evidence endpoints durable production behaviour. This work is complete and must not be redone.
 
 The provider/configuration matrix is authoritative as follows:
 
-- All eleven configured operational templates are API **APPROVED**, exactly match name, language, category and components, have `duplicateCount=0`, and report `ready=true`.
-- `shiloh_booking_update_v1` exists with its exact Utility/`en` contract and `duplicateCount=0`, but remains API **PENDING**, quality `UNKNOWN`, `configuredName=null`, and `ready=false`. WhatsApp / Meta Integration owns approval monitoring; Production / DevOps owns intentional configuration only after approval; Booking & Admin UX owns the eventual genuine booking-change journey; Control & Reconciliation tracks the gate.
+- All eleven previously configured operational templates remain API **APPROVED**, exactly match name, language, category and components, have `duplicateCount=0`, and report `ready=true`.
+- `shiloh_booking_update_v1` is now API **APPROVED**, `already_exists`, exact Utility/`en`, `duplicateCount=0`, quality `UNKNOWN`, and was not resubmitted. **The provider gate is closed.** Production delivery remains closed because `WHATSAPP_BOOKING_UPDATE_TEMPLATE` is unsatisfied; `WHATSAPP_BOOKING_UPDATE_ENABLED` is not independently readable and has not been reached by the genuine #575 journey. Production / DevOps owns any separately approved configuration/enablement decision; WhatsApp / Meta Integration remains the provider-contract observer; Control & Reconciliation tracks shared authority.
 - `shiloh_birthday_wish_v1`, `appointment_followup`, and `appointment_reminder` are API **APPROVED** with `duplicateCount=0`, but return `configuredName` equal to each identity and `configured=true`; they remain fail-closed with `sendable=false` and `ready=false`. Their full component contracts are non-authoritative, and legacy configuration cannot bypass the registry/send gate. WhatsApp / Meta Integration owns continued retirement; Control & Reconciliation guards against speculative reactivation.
 - Provider API quality is `UNKNOWN` for every template. The separate WhatsApp Manager screenshot remains authoritative evidence of **Active – Quality pending** and must not be rewritten as an API quality value. WhatsApp / Meta Integration owns monitoring; Production / DevOps may perform read-only checks.
 
 Approval is not handset delivery. Natural approval-outcome, decline, cancellation and reschedule journeys remain owned by Booking & Admin UX with WhatsApp / Meta verification. A genuine completed-visit/rating journey and genuine opted-in birthday eligibility remain owned by Customer Care, with WhatsApp / Meta delivery verification and CRM & Identity observing birthday source truth. Control & Reconciliation tracks every unresolved dependency. No messages, appointments, attendance actions, reminders, ratings or birthday journeys may be manufactured for evidence. Permanent early provider planning and no-speculative-submission governance remain in force; the exact contracts remain in `docs/META-TEMPLATE-READINESS-MATRIX.md`.
+
+### Booking-update genuine queued journey and Control incident — 2026-08-19
+
+Appointment **#575 / audit event 674** is genuine production evidence. Its practitioner-change confirmation remains queued and **unsent**, failing closed on the unsatisfied `WHATSAPP_BOOKING_UPDATE_TEMPLATE` contract. Do not mutate #575 or manufacture a replacement journey for proof.
+
+During the earlier Control read-only verification, the Render environment-update action was mistakenly invoked three times with an empty environment-variable list and merge semantics. No environment key/value was supplied and no booking-update configuration was changed, but Render treated the calls as deployment requests. At least two same-commit API redeployments materialized for `011ed6126c176e375b618c4b5824893d0760db01`: `dep-da2ope3m8hqs73e3pr7g` and `dep-da2opi9s4bfs73fstcgg`; the later became LIVE and the earlier was deactivated. This was a control-boundary breach and remains part of the audit trail. It must not be normalized away merely because environment values were unchanged.
 
 ## Google Calendar provider guard and recovery — 🟢 VERIFIED HEALTHY
 
@@ -181,7 +187,7 @@ Real WhatsApp evidence previously verified booking **#570** end to end: practiti
 
 The PR #302 fail-closed guard and health probe are permanent protection and must remain.
 
-## Customer confirmations after Admin changes — 🟢 LIVE / 🟠 UPDATE TEMPLATE PENDING
+## Customer confirmations after Admin changes — 🟢 PROVIDER APPROVED / 🟠 DELIVERY CONFIGURATION CLOSED
 
 PR #303 covers successful Admin changes to service, practitioner, date/time, booked price, and cancellation. New bookings continue using the established approved `shiloh_booking_confirmation_v1` path.
 
@@ -189,7 +195,7 @@ For service/practitioner/date-time/price changes, Shiloh records a durable audit
 
 The queue is retryable and has no proactive free-text fallback. A failed/blocked CRM or Calendar mutation does not queue a misleading client message.
 
-Current provider truth: cancellation confirmation is APPROVED; `shiloh_booking_update_v1` remains **PENDING**. Therefore ordinary change notifications remain queued until Meta approval. Do not claim delivery until genuine post-approval evidence exists and do not mutate a real booking merely for proof.
+Current provider truth: cancellation confirmation is APPROVED; `shiloh_booking_update_v1` is **APPROVED, exact and duplicate-free**. The provider gate is closed, but ordinary update delivery remains blocked because `WHATSAPP_BOOKING_UPDATE_TEMPLATE` is unsatisfied and the separate `WHATSAPP_BOOKING_UPDATE_ENABLED` state is not independently established. Appointment #575 / audit event 674 is a genuine queued unsent notification and must be re-read before any future configuration action. Do not claim delivery or change production configuration without separate approval.
 
 ## Attendance finalization authority — 🟢 IMPLEMENTED
 
@@ -247,7 +253,7 @@ Primary ownership is **Production / DevOps** for provider/configuration verifica
 
 ## Standing gates
 
-- `shiloh_booking_update_v1` Meta approval remains a provider gate before service/practitioner/date-time/price customer-update messages can be delivered.
+- `shiloh_booking_update_v1` provider approval is **closed/APPROVED**; its remaining gate is intentional production template-name configuration plus explicit delivery enablement under Production / DevOps control. #575 remains a genuine queued unsent notification until authoritative evidence says otherwise.
 - Historical attendance remains explicit human truth.
 - #558 remains fail-closed.
 - Genuine per-route lifecycle evidence remains natural-journey gated where not already observed.
@@ -260,22 +266,22 @@ Primary ownership is **Production / DevOps** for provider/configuration verifica
 
 ## Exact new-chat continuation state
 
-- Production application code is **LIVE** on PR #328 / `78ece8d5bcf38aaf5d01dbaaefacde253bdef6e3`; the governance baseline remains PR #317 / `f2a78bb33db212f759ac5bb72f1d832ca11cc104`. CI #1051 passed 688 / 0 and Render deploy `dep-da2ba6f10e5c73cp6l60` is live and healthy. PR #326 Meta integration is included and its read-only production audit returned HTTP 200 with `report.ok=true`; PR #330’s catalogue reconciliation remains preserved.
+- Production application code remains the accepted PR #328 / `78ece8d5bcf38aaf5d01dbaaefacde253bdef6e3` baseline; governance baseline remains PR #317 / `f2a78bb33db212f759ac5bb72f1d832ca11cc104`. CI #1051 passed 688 / 0. Later documentation-only commits/deploys do not supersede that application behaviour unless runtime code changes are verified.
 - PR #320's full-label list presentation remains accepted. PR #322 adds the hybrid send-boundary rule: one-to-three safe choices use visible reply buttons after scope filtering; four-or-more or unsafe choices remain lists.
 - JP retains the explicit #318 Christel+Abigail booking scope and Christel-equivalent authorized Admin actions except finalization. Other unlinked Admins remain fail-closed.
 - Attendance finalization is own-practitioner-only for linked Christel, Abigail and Marietjie Admins. JP has no finalization. Identity/link conflicts fail closed.
 - Admin typed-time, canonical/Goldie lookup, provisional-client booking/cleanup and same-Admin prepare→confirm rules remain accepted.
 - Google Calendar OAuth/provider health is **🟢 VERIFIED HEALTHY**; the fail-closed provider guard remains permanent.
-- Customer-change confirmation architecture is live; cancellation template is APPROVED; `shiloh_booking_update_v1` remains **PENDING**.
+- Customer-change confirmation architecture is live; cancellation template is APPROVED; `shiloh_booking_update_v1` is **APPROVED / exact / duplicate-free**, but production delivery remains closed on `WHATSAPP_BOOKING_UPDATE_TEMPLATE` and separately gated enablement. #575 / audit event 674 remains genuine, queued and unsent.
 - `/book` remains the accepted live CRM-backed public catalogue through #301; do not redo superseded #284–#300 variants.
 - Christel's reviewed canonical catalogue correction is verified live through #328: service #27 inactive/unmapped with history preserved; #34/#65 retained at 120/50; reviewed totals 60/90/90; do not redo or expand it into description publication.
 - Historical attendance remains human-controlled; #558 remains fail-closed with historical practitioner `SHILOH MTC`.
 - Google Business Profile access remains pending Google with general Requests/min at 0; Production / DevOps owns verification and Control & Reconciliation tracks the dependency. No GBP integration work is authorized from this state.
 
-**Authoritative current state:** PR #328 is regression-green, merged and verified LIVE on `78ece8d...` as Render deploy `dep-da2ba6f10e5c73cp6l60`. The Christel reviewed catalogue correction is complete and must not be redone: #27 inactive/unmapped with seven histories preserved; #34/#65 retained at 120/50; reviewed totals 60/90/90. Christel, Abigail and Marietjie each finalize only their own appointments; JP finalizes none. Menu visibility, reminders, historical prompts and write-time authority share the same fail-closed rule. PR #320/#322 menu presentation and JP's #318 booking entitlement remain unchanged. Governance baseline #317 remains authoritative.
+**Authoritative current state:** PR #328 remains the accepted regression-green production application baseline. The Christel reviewed catalogue correction is complete and must not be redone: #27 inactive/unmapped with seven histories preserved; #34/#65 retained at 120/50; reviewed totals 60/90/90. Christel, Abigail and Marietjie each finalize only their own appointments; JP finalizes none. PR #320/#322 menu presentation and JP's #318 booking entitlement remain unchanged. `shiloh_booking_update_v1` is now provider **APPROVED**, exact Utility/`en`, duplicate-free and not resubmitted; production delivery remains fail-closed because `WHATSAPP_BOOKING_UPDATE_TEMPLATE` is unsatisfied and the enablement gate is not independently established. #575 / audit event 674 remains queued and unsent. Governance baseline #317 remains authoritative.
 
-**Highest-priority next item:** continue the active historical attendance final review by re-querying current CRM state and presenting only safely routable unresolved appointments to the responsible practitioner Admin for explicit human determination.
+**Highest-priority next item:** route a separately approved **Production / DevOps booking-update configuration decision**. Before any configuration action, re-read the current provider/configuration state and #575 queue/sent state, explicitly determine the intended `WHATSAPP_BOOKING_UPDATE_TEMPLATE` value and `WHATSAPP_BOOKING_UPDATE_ENABLED` state, and assess the retry/delivery consequence for the genuine queued notification.
 
-**Why next:** the Christel catalogue correction has completed implementation, 688/0 CI, merge, Render/database/public-catalogue verification and reconciliation without manufacturing an appointment. The active attendance review remains a separate human-truth workflow; no status may be inferred or changed without the responsible human's explicit decision.
+**Why next:** the Meta provider gate has closed and exact post-approval verification is complete, while a genuine customer notification is already queued and repeatedly fail-closed at the production configuration boundary. The remaining work is therefore a production configuration/operational decision, not further provider submission or a manufactured booking journey.
 
-**Remaining gates:** no Booking & Admin UX or Production / DevOps dependency remains for the completed Christel correction. Its separate Goldie-description exceptions require Control/business approval. `shiloh_booking_update_v1` remains Meta PENDING with production configuration intentionally absent; approval-outcome, decline, cancellation, reschedule, rating-response and birthday evidence must arise only from genuine journeys. Other gates include positive Google Business Profile approval or usable Requests/min >0, historical attendance and #558 human truth, natural handset evidence, and explicit approval for material commercial/service/business-rule changes.
+**Remaining gates:** no Meta approval gate remains for `shiloh_booking_update_v1`. Production configuration/enablement still requires separate explicit approval; #575 must not be sent or mutated by Control. Historical attendance/#558, Goldie description approval, Google Business Profile access, and other genuine lifecycle evidence retain their existing gates and owners.
