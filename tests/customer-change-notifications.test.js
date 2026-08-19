@@ -29,11 +29,56 @@ test('all material admin booking mutations map to customer notification kinds', 
 
 test('delivery is audit-event idempotent and retries provider or send failures', () => {
   assert.match(service, /audit_event_id BIGINT PRIMARY KEY/);
-  assert.match(service, /status TEXT NOT NULL CHECK \(status IN \('pending','sending','sent','failed'\)\)/);
+  assert.match(service, /status TEXT NOT NULL CHECK \(status IN \('pending','sending','sent','failed','suppressed'\)\)/);
   assert.match(service, /ON CONFLICT \(audit_event_id\) DO NOTHING/);
   assert.match(service, /template_not_approved/);
   assert.match(service, /queued for retry/);
   assert.match(service, /INTERVAL '5 minutes'/);
+});
+
+test('ended booking updates are terminally suppressed before provider checks and rechecked before send claim', () => {
+  assert.match(service, /suppression_reason TEXT/);
+  assert.match(service, /suppressed_at TIMESTAMPTZ/);
+  assert.match(service, /status='suppressed'/);
+  assert.match(service, /suppression_reason='appointment_already_ended'/);
+  assert.match(service, /appointment\.ends_at <= NOW\(\)/);
+  assert.match(service, /!UPDATE_KINDS\.has\(item\.change_kind\)/);
+  assert.match(service, /item\.status === 'suppressed'/);
+
+  const providerCheck = service.indexOf('templateStatus = await getTemplateStatus()');
+  const suppressionChecks = [...service.matchAll(/await suppressEndedBookingUpdate\(item\)/g)].map((match) => match.index);
+  assert.ok(providerCheck > 0);
+  assert.ok(suppressionChecks.length >= 2, 'expected an early stale guard and a pre-claim recheck');
+  assert.ok(suppressionChecks[0] < providerCheck, 'stale rows must be suppressed before provider/configuration checks');
+
+  const claim = service.indexOf("SET status='sending'");
+  assert.ok(claim > 0);
+  assert.ok(suppressionChecks.some((index) => index > providerCheck && index < claim), 'appointment end must be rechecked after provider lookup and before send claim');
+});
+
+test('suppression preserves failed-attempt history and terminal rows are excluded from retry scans', () => {
+  const suppressStart = service.indexOf('async function suppressEndedBookingUpdate');
+  const suppressEnd = service.indexOf('async function provisionRequiredCustomerChangeTemplates');
+  const suppressBlock = service.slice(suppressStart, suppressEnd);
+  assert.match(suppressBlock, /suppressed_at=COALESCE\(notification\.suppressed_at,NOW\(\)\)/);
+  assert.doesNotMatch(suppressBlock, /attempt_count\s*=/);
+  assert.doesNotMatch(suppressBlock, /last_error\s*=/);
+  assert.doesNotMatch(suppressBlock, /sent_at\s*=/);
+  assert.doesNotMatch(suppressBlock, /DELETE/i);
+
+  const flushStart = service.indexOf('async function flushCustomerChangeNotifications');
+  const schedulerStart = service.indexOf('function startCustomerChangeNotificationScheduler');
+  const flushBlock = service.slice(flushStart, schedulerStart);
+  assert.match(flushBlock, /WHERE status IN \('pending','failed'\)/);
+  assert.doesNotMatch(flushBlock, /suppressed/);
+});
+
+test('future booking updates remain on the normal delivery path while cancellations are not stale-suppressed', () => {
+  assert.match(service, /if \(!item \|\| !UPDATE_KINDS\.has\(item\.change_kind\)\) return false/);
+  assert.match(service, /AND appointment\.ends_at <= NOW\(\)/);
+  assert.match(service, /WHERE audit_event_id=\$1 AND status IN \('pending','failed'\)/);
+  assert.match(service, /sendWhatsAppTemplate/);
+  assert.match(service, /item\.change_kind === 'cancellation' \? 'cancellation_confirmation' : 'booking_update'/);
 });
 
 test('customer messages are sent only through approved utility templates', () => {
