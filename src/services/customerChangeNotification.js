@@ -53,13 +53,38 @@ async function ensureCustomerChangeNotificationTable() {
       audit_event_id BIGINT PRIMARY KEY REFERENCES crm_audit_events(id) ON DELETE CASCADE,
       appointment_id BIGINT NOT NULL REFERENCES appointments(id) ON DELETE CASCADE,
       change_kind TEXT NOT NULL,
-      status TEXT NOT NULL CHECK (status IN ('pending','sending','sent','failed')) DEFAULT 'pending',
+      status TEXT NOT NULL CHECK (status IN ('pending','sending','sent','failed','suppressed')) DEFAULT 'pending',
       attempt_count INTEGER NOT NULL DEFAULT 0,
       last_error TEXT,
+      suppression_reason TEXT,
+      suppressed_at TIMESTAMPTZ,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       sent_at TIMESTAMPTZ
     )
+  `);
+  await pool.query(`
+    ALTER TABLE customer_change_notifications
+      ADD COLUMN IF NOT EXISTS suppression_reason TEXT;
+    ALTER TABLE customer_change_notifications
+      ADD COLUMN IF NOT EXISTS suppressed_at TIMESTAMPTZ;
+    DO $$
+    DECLARE
+      status_constraint TEXT;
+    BEGIN
+      SELECT pg_get_constraintdef(oid)
+        INTO status_constraint
+        FROM pg_constraint
+       WHERE conrelid = 'customer_change_notifications'::regclass
+         AND conname = 'customer_change_notifications_status_check';
+      IF status_constraint IS NULL OR POSITION('suppressed' IN status_constraint) = 0 THEN
+        ALTER TABLE customer_change_notifications
+          DROP CONSTRAINT IF EXISTS customer_change_notifications_status_check;
+        ALTER TABLE customer_change_notifications
+          ADD CONSTRAINT customer_change_notifications_status_check
+          CHECK (status IN ('pending','sending','sent','failed','suppressed'));
+      END IF;
+    END $$;
   `);
   tableReady = true;
 }
@@ -118,6 +143,30 @@ function approvedTemplate(status, key) {
   return item.provider.name || item.templateName;
 }
 
+async function suppressEndedBookingUpdate(item) {
+  if (!item || !UPDATE_KINDS.has(item.change_kind)) return false;
+  const result = await pool.query(`
+    UPDATE customer_change_notifications notification
+       SET status='suppressed',
+           suppression_reason='appointment_already_ended',
+           suppressed_at=COALESCE(notification.suppressed_at,NOW()),
+           updated_at=NOW()
+      FROM appointments appointment
+     WHERE notification.audit_event_id=$1
+       AND appointment.id=notification.appointment_id
+       AND notification.status IN ('pending','failed')
+       AND appointment.ends_at <= NOW()
+     RETURNING notification.audit_event_id`, [item.audit_event_id]);
+  if (!result.rowCount) return false;
+  logger.info({
+    appointmentId: item.appointment_id,
+    auditEventId: Number(item.audit_event_id),
+    changeKind: item.change_kind,
+    reason: 'appointment_already_ended',
+  }, 'Customer booking-change confirmation suppressed');
+  return true;
+}
+
 async function provisionRequiredCustomerChangeTemplates() {
   const results = [];
   for (const key of ['booking_update', 'cancellation_confirmation']) {
@@ -153,12 +202,16 @@ async function queueCustomerChangeNotification(appointmentId, changeKind) {
 async function attemptCustomerChangeNotification(auditEventId) {
   await ensureCustomerChangeNotificationTable();
   const queued = await pool.query(`
-    SELECT audit_event_id,appointment_id,change_kind,status,attempt_count
+    SELECT audit_event_id,appointment_id,change_kind,status,attempt_count,suppression_reason,suppressed_at
       FROM customer_change_notifications
      WHERE audit_event_id=$1`, [auditEventId]);
   const item = queued.rows[0];
   if (!item) return { sent: false, reason: 'not_queued' };
   if (item.status === 'sent') return { sent: false, reason: 'already_sent' };
+  if (item.status === 'suppressed') return { sent: false, reason: 'already_suppressed' };
+  if (await suppressEndedBookingUpdate(item)) {
+    return { sent: false, reason: 'appointment_already_ended', suppressed: true };
+  }
 
   let templateStatus;
   try {
@@ -183,6 +236,9 @@ async function attemptCustomerChangeNotification(auditEventId) {
   if (!appointment.client_phone) {
     await pool.query(`UPDATE customer_change_notifications SET status='failed',attempt_count=attempt_count+1,last_error='client_phone_not_found',updated_at=NOW() WHERE audit_event_id=$1`, [auditEventId]);
     return { sent: false, reason: 'client_phone_not_found' };
+  }
+  if (await suppressEndedBookingUpdate(item)) {
+    return { sent: false, reason: 'appointment_already_ended', suppressed: true };
   }
 
   const claimed = await pool.query(`
@@ -259,6 +315,7 @@ module.exports = {
   ensureCustomerChangeNotificationTable,
   latestAuditEvent,
   loadAppointmentSnapshot,
+  suppressEndedBookingUpdate,
   provisionRequiredCustomerChangeTemplates,
   queueCustomerChangeNotification,
   attemptCustomerChangeNotification,
