@@ -1,6 +1,6 @@
 # Shiloh OS — Engineering Governance
 
-Updated: 2026-08-18
+Updated: 2026-08-19
 Purpose: permanent engineering operating rules that apply across Shiloh OS continuation work.
 
 ## Workstream operating model
@@ -96,7 +96,63 @@ Every specialist final checkpoint must explicitly state:
 - what was completed and must not be redone;
 - what remains unresolved or externally gated;
 - whether Project Tracker and/or Master reconciliation was required and completed;
-- whether another workstream owns a dependency or next action.
+- whether another workstream owns a dependency or next action;
+- the next-specialist status: either the mandatory specialist handoff below, or **`Next specialist: None — controlled unit complete.`**
+
+### Mandatory specialist-to-specialist handoff rule
+
+Whenever another workstream owns a dependency, verification step, blocked gate, or next controlled action, the final checkpoint from **Booking & Admin UX**, **WhatsApp / Meta Integration**, **CRM & Identity**, or **Production / DevOps** must include a self-contained specialist handoff.
+
+The handoff must contain all of the following:
+
+- **Owning workstream**.
+- **Exact specialist chat**, in the form `Shiloh OS — <workstream>`.
+- **Why this workstream owns it**.
+- **Dependencies / observers**, including Control & Reconciliation where shared-state tracking is required.
+- **Implementation status**, stated explicitly as **Proceed** or **Blocked**, with the reason.
+- **Completed / do-not-redo state**, identifying authoritative work that the receiving specialist must preserve.
+- **Ready-to-copy continuation instruction** for the receiving specialist.
+
+The ready-to-copy continuation instruction must be self-contained enough for the user to copy it directly into the receiving specialist chat without manually reconstructing context. It must be rendered in a fenced `text` code block so it is directly copyable as one unit.
+
+The continuation instruction must require the receiving specialist to:
+
+1. independently read current GitHub `main`;
+2. read the applicable Master Status, Project Tracker, latest reconciliation and Engineering Governance;
+3. verify any relevant production, provider, CRM, Calendar, Meta, human-truth or other evidence that could have changed;
+4. preserve newer authoritative state and completed/do-not-redo work;
+5. treat the handoff as routing context rather than authority;
+6. execute only the scope owned by that specialist;
+7. follow the controlled-work completion protocol;
+8. reconcile durable verified changes back into the Project Tracker and Master Status where required; and
+9. finish with the same mandatory specialist handoff when another workstream owns the next action.
+
+A specialist may hand off directly to another specialist without an intermediate Control & Reconciliation checkpoint when ownership is clear and the shared authority is not contradictory. Control & Reconciliation remains the escalation and coordination point for unclear ownership, conflicting authority, cross-workstream prioritisation, governance/architecture decisions, or reconciliation disputes. Direct handoff never weakens authoritative-state verification.
+
+A genuine provider, human-truth, approval, safety, evidence, production or capability gate must remain fail-closed. A blocked handoff must say **Blocked** and must not instruct an implementation workstream to bypass the gate merely to keep work moving.
+
+The standard specialist handoff uses this structure:
+
+````markdown
+### Next specialist handoff
+
+**Owning workstream:** ...
+**Exact specialist chat:** Shiloh OS — ...
+**Why this workstream owns it:** ...
+**Dependencies / observers:** ...
+**Implementation status:** Proceed / Blocked — ...
+**Completed / do not redo:** ...
+
+**Copy into the next specialist:**
+
+```text
+...
+```
+````
+
+If no other specialist action is required, the final checkpoint must state:
+
+**Next specialist:** None — controlled unit complete.
 
 Control & Reconciliation treats the reconciled repository and verified production/provider evidence—not specialist-chat narrative—as the source of cross-workstream continuity. Specialist narrative may explain or route work, but it cannot establish authoritative completion by itself.
 
