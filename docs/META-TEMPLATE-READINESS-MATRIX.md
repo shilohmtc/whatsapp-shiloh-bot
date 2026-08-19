@@ -2,11 +2,11 @@
 
 Updated: 2026-08-19
 
-The production Shiloh_MTC WhatsApp Manager evidence below was captured on 18 August 2026, with a fresh read-only post-approval verification of `shiloh_booking_update_v1` and a subsequent stale-notification safety reconciliation completed on 19 August 2026. Provider API quality remains `UNKNOWN`; this does not supersede the separate WhatsApp Manager screenshot evidence showing **Active – Quality pending**. Provider approval is not handset delivery evidence, and provider approval does not itself authorize production configuration or delivery. The checker must compare the complete provider contract and remain read-only; no template is submitted, edited or sent for evidence.
+The production Shiloh_MTC WhatsApp Manager evidence below was captured on 18 August 2026, with fresh read-only provider approval verification, stale-notification safety reconciliation, and completed production activation for `shiloh_booking_update_v1` on 19 August 2026. Provider API quality remains `UNKNOWN`; this does not supersede the separate WhatsApp Manager screenshot evidence showing **Active – Quality pending**. Provider approval is not handset delivery evidence. The checker must compare the complete provider contract and remain read-only; no template is submitted, edited or sent for evidence.
 
 | # | Identity | Category / language | Provider state | Production configuration / wiring | Readiness and remaining gate |
 |---:|---|---|---|---|---|
-| 1 | `shiloh_booking_update_v1` | Utility / `en` | API **APPROVED**; `already_exists`; quality `UNKNOWN`; not resubmitted | Exact provider identity and component contract verified; `duplicateCount=0`; `WHATSAPP_BOOKING_UPDATE_TEMPLATE` remains unsatisfied in production; `ready=false`. `WHATSAPP_BOOKING_UPDATE_ENABLED` is not independently readable and has not been reached by a valid future send path. PR #332 terminally suppresses stale ended booking-update rows before delivery. | **Provider gate closed. Production delivery gate remains closed:** configuration/enablement requires a separately approved Production / DevOps decision. Appointment #575 / audit event 674 is genuine historical queue evidence but is terminally suppressed with `appointment_already_ended`, was not sent, and cannot serve as delivery evidence. |
+| 1 | `shiloh_booking_update_v1` | Utility / `en` | API **APPROVED**; `already_exists`; quality `UNKNOWN`; not resubmitted | Exact provider identity and component contract verified; `duplicateCount=0`; production configured with `WHATSAPP_BOOKING_UPDATE_TEMPLATE=shiloh_booking_update_v1` and `WHATSAPP_BOOKING_UPDATE_ENABLED=true`. PR #332 terminally suppresses stale ended booking-update rows before delivery. | **LIVE / ENABLED.** Provider and production activation gates are closed. Successful customer delivery evidence remains open and may only arise naturally from a genuine change to a still-future appointment. #575 / audit event 674 is terminally suppressed historical evidence only and can never serve as delivery evidence. |
 | 2 | `shiloh_staff_finalization_actions_v1` | Utility / `en` | API **APPROVED**; quality `UNKNOWN` | Exact configured contract; `duplicateCount=0`; `ready=true`; genuine accepted send exists | Wired and provider-verified; preserve natural-use evidence only. |
 | 3 | `shiloh_appointment_followup_v2` | Utility / `en` | API **APPROVED**; quality `UNKNOWN` | Exact configured contract; `duplicateCount=0`; `ready=true` | Provider-ready; genuine send exists, but genuine rating-response evidence is still missing. |
 | 4 | `shiloh_booking_approval_outcome_v1` | Utility / `en` | API **APPROVED**; quality `UNKNOWN` | Exact configured contract; `duplicateCount=0`; `ready=true` | Provider-ready; genuine route evidence remains. |
@@ -24,25 +24,34 @@ The production Shiloh_MTC WhatsApp Manager evidence below was captured on 18 Aug
 
 Meta's default `hello_world` is visible but is not a Shiloh operational template and is excluded from the 15-template contract inventory.
 
-## Booking-update approval and stale-notification reconciliation — 2026-08-19
+## Booking-update approval, stale suppression and production activation — 2026-08-19
 
 The provider gate for `shiloh_booking_update_v1` is closed: the template is **APPROVED**, `already_exists`, was not resubmitted, matches the expected provider identity, Utility / `en` category/language and exact component contract, and has `duplicateCount=0`. Provider quality remains `UNKNOWN`.
 
-The production delivery gate is separate and remains closed. `WHATSAPP_BOOKING_UPDATE_TEMPLATE` is still unsatisfied in production. The separate `WHATSAPP_BOOKING_UPDATE_ENABLED` gate is not independently readable with the available verification surface and was not changed in the stale-suppression controlled unit.
+The production activation gate is also closed. Production / DevOps performed one Render environment merge update setting exactly:
 
-Appointment **#575 / audit event 674** is genuine historical production queue evidence, but the appointment had already ended before delivery. PR #332 terminally suppresses stale service/practitioner/time/price booking-update rows with durable reason `appointment_already_ended`; production emitted that successful suppression event for #575 / 674 at 14:30:18.812 SAST. The row was not sent and is excluded from future pending/failed retry scans. Do not mutate the appointment, release the suppressed row, manufacture another booking change, alter provider state, or configure/enable delivery merely to create evidence. After any separately approved activation, successful update-delivery evidence must arise from a genuine change to a still-future appointment.
+- `WHATSAPP_BOOKING_UPDATE_TEMPLATE=shiloh_booking_update_v1`
+- `WHATSAPP_BOOKING_UPDATE_ENABLED=true`
 
-The supplied investigation observed `attempt_count=27`, but a further old-code retry occurred at 14:25:13 SAST before PR #332 deployed, so 27 is an investigation baseline rather than an asserted post-deploy counter. The suppression path itself does not increment the counter. Direct post-deploy SQL verification was blocked by the sanctioned Render read-only connector's SSL/TLS negotiation failure; no write-capable workaround was used.
+Render activation deploy `dep-da2qovs9v7es73cqlrr0` reached LIVE at 15:16:16 SAST on GitHub `main` `29cf4ebc249b8b85d66a1616a26e35bd9e9739a0`. Post-restart health returned HTTP 200; startup provider verification reported `submitted=false`, `reason=already_exists`, `providerStatus=APPROVED`; no Meta resubmission or unexpected booking-update send occurred during startup.
+
+Immediately before activation, authoritative production read-only evidence established `active_booking_update_rows=0`. Appointment **#575 / audit event 674** remained terminally `suppressed` with reason `appointment_already_ended` and `sent_at=null`. PR #332 continues to exclude suppressed rows from pending/failed retry scans. #575 / 674 is historical queue evidence only and must never be released, marked sent or used as successful delivery evidence.
+
+Successful booking-update customer delivery evidence remains **OPEN**. It may only close from a naturally occurring service, practitioner, time or price change to a **still-future appointment**. Do not mutate an appointment, manufacture another booking change, force a retry or send a WhatsApp message merely to create evidence.
+
+The deterministic production kill switch is `WHATSAPP_BOOKING_UPDATE_ENABLED=false`.
+
+The supplied stale-suppression investigation observed `attempt_count=27`, but a further old-code retry occurred at 14:25:13 SAST before PR #332 deployed, so 27 remains an investigation baseline rather than an asserted final counter. Direct post-deploy SQL verification in that earlier checkpoint was blocked by the sanctioned Render read-only connector's SSL/TLS negotiation failure; no write-capable workaround was used.
 
 ## Permanent provider lead-time and submission governance
 
-Identify the complete foreseeable template set during feature planning and submit required templates early enough for provider review to run in parallel with engineering. Before treating a submission batch as complete, ask whether another foreseeable roadmap message will require provider approval. This never authorizes speculative submissions: payment, voucher, privacy, or other future workflows require approved product and business semantics first. Provider approval and production enablement remain separate gates. Do not submit, edit, configure, or send a template merely to create evidence.
+Identify the complete foreseeable template set during feature planning and submit required templates early enough for provider review to run in parallel with engineering. Before treating a submission batch as complete, ask whether another foreseeable roadmap message will require provider approval. This never authorizes speculative submissions: payment, voucher, privacy, or other future workflows require approved product and business semantics first. Provider approval and production enablement remain separate controls even when both are currently satisfied. Do not submit, edit, configure, or send a template merely to create evidence.
 
 ## Enforced readiness reconciliation
 
-For each identity the centralized inventory reconciles: **defined by Shiloh → exact production environment name configured → provider status APPROVED → exact language/category/components/variable and button ordering match → send path wired**. Current operational contracts fail closed on any mismatch or provider-read failure. Arbitrary environment names and the three legacy identities cannot pass the send boundary. Booking update also requires its explicit environment enablement gate; birthday requires the exact brand-correct v2 contract.
+For each identity the centralized inventory reconciles: **defined by Shiloh → exact production environment name configured → provider status APPROVED → exact language/category/components/variable and button ordering match → send path wired**. Current operational contracts fail closed on any mismatch or provider-read failure. Arbitrary environment names and the three legacy identities cannot pass the send boundary. Booking update also requires its explicit environment enablement gate; that gate is currently enabled, with `WHATSAPP_BOOKING_UPDATE_ENABLED=false` remaining the deterministic kill switch. Birthday requires the exact brand-correct v2 contract.
 
-Provider approval never proves handset delivery. No appointment, attendance action, birthday, reminder, client message, rating response, template submission or template edit may be manufactured for evidence.
+Provider approval and production activation never prove handset delivery. No appointment, attendance action, birthday, reminder, client message, rating response, template submission or template edit may be manufactured for evidence.
 
 ## Exact current-template contract appendix
 
