@@ -1,4 +1,5 @@
 const discovery = require('../services/clientDiscoveryPackages');
+const couplesBooking = require('../services/clientCouplesMassageBooking');
 
 const COUPLES_AND_PACKAGES_ACTION_ID = 'client_massage_couples_packages';
 const COUPLES_MASSAGE_ACTION_ID = 'client_couples_massage';
@@ -25,7 +26,7 @@ function buildCouplesAndPackagesInteractive(packages = []) {
     {
       id: COUPLES_MASSAGE_ACTION_ID,
       title: 'Couples Massage',
-      description: 'Arrange a coordinated couples booking',
+      description: `${couplesBooking.DURATION_MINUTES} min • ${couplesBooking.formatMoney(couplesBooking.PRICE)} • Abigail & Christel`,
     },
   ];
 
@@ -52,31 +53,31 @@ function buildCouplesAndPackagesInteractive(packages = []) {
   };
 }
 
-function couplesMassageInteractive() {
-  return {
-    type: 'button',
-    body: '*Couples Massage*\n\nCouples bookings need coordinated practitioner and treatment-space availability. Please contact Shiloh on 066 239 9138 and the team will arrange the booking with you.\n\nNo booking has been created yet.',
-    buttons: [
-      { id: COUPLES_AND_PACKAGES_ACTION_ID, title: 'Back' },
-    ],
-  };
-}
-
 function decorateMassageTreatmentsInteractive(interactive) {
   if (!interactive || interactive.type !== 'list' || !Array.isArray(interactive.rows)) return interactive;
   if (!/^\*Massage Treatments\*/i.test(clean(interactive.body))) return interactive;
-  if (!/Showing page 1 of \d+/i.test(String(interactive.body || ''))) return interactive;
 
-  const rows = interactive.rows.filter((row) => row?.id !== 'client_massage_packages' && row?.id !== COUPLES_AND_PACKAGES_ACTION_ID);
-  rows.unshift({
-    id: COUPLES_AND_PACKAGES_ACTION_ID,
-    title: 'Couples & Packages',
-    description: 'Couples massage & massage packages',
+  // Couples Massage is a coordinated two-practitioner booking. Never expose the
+  // canonical service as an ordinary one-practitioner massage row.
+  const rows = interactive.rows.filter((row) => {
+    if (row?.id === 'client_massage_packages' || row?.id === COUPLES_AND_PACKAGES_ACTION_ID) return false;
+    return clean(row?.title).toLowerCase() !== 'couples massage';
   });
+
+  const firstPage = /Showing page 1 of \d+/i.test(String(interactive.body || ''));
+  if (firstPage) {
+    rows.unshift({
+      id: COUPLES_AND_PACKAGES_ACTION_ID,
+      title: 'Couples & Packages',
+      description: 'Couples massage & massage packages',
+    });
+  }
 
   return {
     ...interactive,
-    body: String(interactive.body || '').replace('Choose a treatment, or open Massage Packages.', 'Choose a treatment, or open Couples & Packages.'),
+    body: firstPage
+      ? String(interactive.body || '').replace('Choose a treatment, or open Massage Packages.', 'Choose a treatment, or open Couples & Packages.')
+      : interactive.body,
     rows,
   };
 }
@@ -93,13 +94,22 @@ const originalProcessClientDiscoveryMessage = discovery.processClientDiscoveryMe
 discovery.processClientDiscoveryMessage = async function processClientDiscoveryMessageWithCouplesPackages(sender, text) {
   const raw = clean(text);
 
+  if (await couplesBooking.hasActiveIntent(sender)) {
+    const result = await couplesBooking.processCouplesMassageMessage(sender, text);
+    if (result?.returnToCouplesPackages) {
+      const packages = await discovery.activePackages();
+      return { handled: true, interactive: buildCouplesAndPackagesInteractive(packages) };
+    }
+    if (result?.handled) return result;
+  }
+
   if (raw === COUPLES_AND_PACKAGES_ACTION_ID || /^couples\s*(?:&|and)\s*packages$/i.test(raw)) {
     const packages = await discovery.activePackages();
     return { handled: true, interactive: buildCouplesAndPackagesInteractive(packages) };
   }
 
   if (raw === COUPLES_MASSAGE_ACTION_ID || /^couples massage$/i.test(raw)) {
-    return { handled: true, interactive: couplesMassageInteractive() };
+    return couplesBooking.startCouplesMassage(sender);
   }
 
   if (raw === SPORTS_PACKAGE_ACTION_ID) {
@@ -119,7 +129,6 @@ module.exports = {
   COUPLES_MASSAGE_ACTION_ID,
   SPORTS_PACKAGE_ACTION_ID,
   buildCouplesAndPackagesInteractive,
-  couplesMassageInteractive,
   decorateMassageTreatmentsInteractive,
   decorateSportsPackageDetail,
 };
