@@ -1,0 +1,359 @@
+const { pool } = require('../db/pool');
+const { applyMigrationFile } = require('./migrations');
+const { sendWhatsAppTemplate } = require('./whatsapp');
+const logger = require('../lib/logger');
+
+const MIGRATION = '065_client_reschedule_approved_confirmation.sql';
+const TEMPLATE_NAME = 'shiloh_reschedule_confirmation_v1';
+const RETRY_MS = 5 * 60 * 1000;
+const CLAIM_STALE_MINUTES = 5;
+let schemaReady = null;
+let scheduler = null;
+
+function fmtDate(value) {
+  return new Intl.DateTimeFormat('en-ZA', {
+    timeZone: 'Africa/Johannesburg',
+    weekday: 'long',
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric',
+  }).format(new Date(value));
+}
+
+function fmtTime(value) {
+  return new Intl.DateTimeFormat('en-ZA', {
+    timeZone: 'Africa/Johannesburg',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(new Date(value));
+}
+
+async function ensureApprovedRescheduleNotificationSchema() {
+  if (schemaReady) return schemaReady;
+  schemaReady = (async () => {
+    const migration = await applyMigrationFile(MIGRATION);
+    const verification = await pool.query(`
+      SELECT
+        EXISTS (
+          SELECT 1 FROM information_schema.columns
+           WHERE table_schema='public'
+             AND table_name='appointment_reschedule_requests'
+             AND column_name='client_notification_attempt_count'
+        ) AS attempt_column,
+        EXISTS (
+          SELECT 1 FROM information_schema.columns
+           WHERE table_schema='public'
+             AND table_name='appointment_reschedule_requests'
+             AND column_name='client_notification_claimed_at'
+        ) AS claim_column,
+        EXISTS (
+          SELECT 1 FROM information_schema.columns
+           WHERE table_schema='public'
+             AND table_name='appointment_reschedule_requests'
+             AND column_name='client_notification_suppressed_at'
+        ) AS suppression_column,
+        EXISTS (
+          SELECT 1 FROM pg_indexes
+           WHERE schemaname='public'
+             AND indexname='idx_appointment_reschedule_requests_approved_unnotified'
+        ) AS retry_index
+    `);
+    const row = verification.rows[0] || {};
+    if (!row.attempt_column || !row.claim_column || !row.suppression_column || !row.retry_index) {
+      throw new Error('Approved reschedule notification schema verification failed');
+    }
+    return {
+      initialized: true,
+      migration: MIGRATION,
+      applied: migration.applied === true,
+      checksumVerified: migration.checksumVerified === true,
+      appliedAt: migration.appliedAt || null,
+      attemptColumn: row.attempt_column === true,
+      claimColumn: row.claim_column === true,
+      suppressionColumn: row.suppression_column === true,
+      retryIndex: row.retry_index === true,
+      confirmationTemplateConfigured: String(process.env.WHATSAPP_RESCHEDULE_CONFIRMATION_TEMPLATE || '').trim() === TEMPLATE_NAME,
+    };
+  })();
+  try {
+    return await schemaReady;
+  } catch (error) {
+    schemaReady = null;
+    throw error;
+  }
+}
+
+async function latestApprovedRescheduleAudit(appointmentId) {
+  const result = await pool.query(`
+    SELECT id,
+           metadata->>'source' AS source,
+           CASE
+             WHEN COALESCE(metadata->>'requestId','') ~ '^\\d+$'
+             THEN (metadata->>'requestId')::bigint
+             ELSE NULL
+           END AS request_id
+      FROM crm_audit_events
+     WHERE entity_type='appointment'
+       AND entity_id=$1
+       AND action='appointment.time_updated'
+     ORDER BY id DESC
+     LIMIT 1
+  `, [String(appointmentId)]);
+  const row = result.rows[0] || null;
+  if (row?.source !== 'client_reschedule_approval' || !row?.request_id) return null;
+  return { auditEventId: Number(row.id), requestId: Number(row.request_id) };
+}
+
+async function loadApprovedRequestContext(requestId) {
+  const result = await pool.query(`
+    SELECT request.id,request.appointment_id,request.status AS request_status,
+           request.proposed_starts_at,request.proposed_ends_at,
+           request.client_notified_at,request.client_notification_claimed_at,
+           request.client_notification_suppressed_at,
+           appointment.starts_at AS current_starts_at,
+           appointment.ends_at AS current_ends_at,
+           appointment.status AS appointment_status,
+           COALESCE(client.display_name,appointment.source_client_name,'there') AS client_name,
+           COALESCE((SELECT string_agg(COALESCE(service.name,item.service_name_snapshot), ' + ' ORDER BY item.position)
+                       FROM appointment_services item
+                       LEFT JOIN services service ON service.id=item.service_id
+                      WHERE item.appointment_id=appointment.id),appointment.title,'Shiloh appointment') AS service_name,
+           COALESCE((SELECT string_agg(COALESCE(staff.display_name,item.staff_name_snapshot), ' + ' ORDER BY item.position)
+                       FROM appointment_staff item
+                       LEFT JOIN staff ON staff.id=item.staff_id
+                      WHERE item.appointment_id=appointment.id),'Shiloh practitioner') AS staff_name,
+           (SELECT normalized_value
+              FROM client_contacts contact
+             WHERE contact.client_id=appointment.client_id
+               AND LOWER(contact.contact_type) IN ('whatsapp','mobile','phone','telephone')
+               AND contact.normalized_value IS NOT NULL
+             ORDER BY contact.is_primary DESC,contact.verified_at DESC NULLS LAST,contact.id
+             LIMIT 1) AS client_phone
+      FROM appointment_reschedule_requests request
+      JOIN appointments appointment ON appointment.id=request.appointment_id
+      LEFT JOIN clients client ON client.id=appointment.client_id
+     WHERE request.id=$1
+     LIMIT 1
+  `, [Number(requestId)]);
+  return result.rows[0] || null;
+}
+
+function canonicalOutcomeState(context) {
+  if (!context) return { deliverable: false, suppress: false, reason: 'request_not_found' };
+  if (context.request_status !== 'approved') return { deliverable: false, suppress: false, reason: `request_${context.request_status}` };
+  if (context.client_notified_at) return { deliverable: false, suppress: false, reason: 'already_sent' };
+  if (context.client_notification_suppressed_at) return { deliverable: false, suppress: false, reason: 'already_suppressed' };
+  if (context.appointment_status === 'cancelled') return { deliverable: false, suppress: true, reason: 'appointment_cancelled_after_approval' };
+  if (new Date(context.current_ends_at).getTime() <= Date.now()) return { deliverable: false, suppress: true, reason: 'appointment_already_ended' };
+  if (
+    new Date(context.current_starts_at).getTime() !== new Date(context.proposed_starts_at).getTime()
+    || new Date(context.current_ends_at).getTime() !== new Date(context.proposed_ends_at).getTime()
+  ) {
+    return { deliverable: false, suppress: true, reason: 'canonical_appointment_changed_after_approval' };
+  }
+  if (!context.client_phone) return { deliverable: false, suppress: false, reason: 'client_phone_not_found' };
+  return { deliverable: true, suppress: false, reason: null };
+}
+
+async function markApprovedRescheduleNotificationRetryableError(requestId, reason) {
+  await pool.query(`
+    UPDATE appointment_reschedule_requests
+       SET client_notification_claimed_at=NULL,
+           client_notification_last_error=$2,
+           updated_at=NOW()
+     WHERE id=$1
+       AND status='approved'
+       AND client_notified_at IS NULL
+       AND client_notification_suppressed_at IS NULL
+  `, [Number(requestId), String(reason).slice(0, 1000)]);
+  return { sent: false, reason };
+}
+
+async function suppressApprovedRescheduleNotification(requestId, reason) {
+  const result = await pool.query(`
+    UPDATE appointment_reschedule_requests
+       SET client_notification_suppressed_at=COALESCE(client_notification_suppressed_at,NOW()),
+           client_notification_suppression_reason=$2,
+           client_notification_claimed_at=NULL,
+           updated_at=NOW()
+     WHERE id=$1
+       AND status='approved'
+       AND client_notified_at IS NULL
+       AND client_notification_suppressed_at IS NULL
+     RETURNING appointment_id
+  `, [Number(requestId), String(reason).slice(0, 500)]);
+  if (result.rowCount) {
+    await pool.query(`
+      INSERT INTO crm_audit_events(action,entity_type,entity_id,metadata)
+      VALUES ('customer.reschedule_confirmation_suppressed','appointment',$1,$2::jsonb)
+    `, [String(result.rows[0].appointment_id), JSON.stringify({ requestId: Number(requestId), reason })]);
+    logger.info({ requestId: Number(requestId), appointmentId: Number(result.rows[0].appointment_id), reason }, 'Approved reschedule customer confirmation suppressed');
+  }
+  return { suppressed: result.rowCount > 0, reason };
+}
+
+async function claimApprovedRescheduleNotification(requestId) {
+  const result = await pool.query(`
+    UPDATE appointment_reschedule_requests
+       SET client_notification_claimed_at=NOW(),
+           client_notification_attempt_count=client_notification_attempt_count+1,
+           client_notification_last_error=NULL,
+           updated_at=NOW()
+     WHERE id=$1
+       AND status='approved'
+       AND client_notified_at IS NULL
+       AND client_notification_suppressed_at IS NULL
+       AND (
+         client_notification_claimed_at IS NULL
+         OR client_notification_claimed_at <= NOW() - INTERVAL '${CLAIM_STALE_MINUTES} minutes'
+       )
+     RETURNING id
+  `, [Number(requestId)]);
+  return result.rowCount > 0;
+}
+
+async function attemptApprovedRescheduleConfirmation(requestId, auditEventId = null) {
+  await ensureApprovedRescheduleNotificationSchema();
+  let context = await loadApprovedRequestContext(requestId);
+  const state = canonicalOutcomeState(context);
+  if (!state.deliverable) {
+    if (state.suppress) return suppressApprovedRescheduleNotification(requestId, state.reason);
+    if (state.reason === 'client_phone_not_found') return markApprovedRescheduleNotificationRetryableError(requestId, state.reason);
+    return { sent: false, reason: state.reason };
+  }
+
+  const claimed = await claimApprovedRescheduleNotification(requestId);
+  if (!claimed) return { sent: false, reason: 'already_claimed_or_completed' };
+
+  context = await loadApprovedRequestContext(requestId);
+  const afterClaim = canonicalOutcomeState(context);
+  if (!afterClaim.deliverable) {
+    if (afterClaim.suppress) return suppressApprovedRescheduleNotification(requestId, afterClaim.reason);
+    if (afterClaim.reason === 'client_phone_not_found') return markApprovedRescheduleNotificationRetryableError(requestId, afterClaim.reason);
+    await pool.query(`UPDATE appointment_reschedule_requests SET client_notification_claimed_at=NULL,updated_at=NOW() WHERE id=$1`, [Number(requestId)]);
+    return { sent: false, reason: afterClaim.reason };
+  }
+
+  const configured = String(process.env.WHATSAPP_RESCHEDULE_CONFIRMATION_TEMPLATE || '').trim();
+  if (configured !== TEMPLATE_NAME) {
+    return markApprovedRescheduleNotificationRetryableError(requestId, 'reschedule_confirmation_template_not_configured');
+  }
+
+  try {
+    const provider = await sendWhatsAppTemplate(
+      context.client_phone,
+      TEMPLATE_NAME,
+      [
+        context.client_name || 'there',
+        context.service_name,
+        context.staff_name,
+        fmtDate(context.current_starts_at),
+        fmtTime(context.current_starts_at),
+      ],
+      process.env.WHATSAPP_TEMPLATE_LANGUAGE || 'en'
+    );
+    await pool.query(`
+      UPDATE appointment_reschedule_requests
+         SET client_notified_at=NOW(),
+             client_notification_claimed_at=NULL,
+             client_notification_last_error=NULL,
+             updated_at=NOW()
+       WHERE id=$1
+         AND status='approved'
+         AND client_notified_at IS NULL
+    `, [Number(requestId)]);
+    await pool.query(`
+      INSERT INTO crm_audit_events(action,entity_type,entity_id,metadata)
+      VALUES ('customer.reschedule_confirmation_sent','appointment',$1,$2::jsonb)
+    `, [String(context.appointment_id), JSON.stringify({
+      requestId: Number(requestId),
+      sourceAuditEventId: auditEventId == null ? null : Number(auditEventId),
+      templateName: TEMPLATE_NAME,
+      providerMessageId: provider?.messages?.[0]?.id || null,
+      idempotentDelivery: true,
+    })]);
+    logger.info({ appointmentId: Number(context.appointment_id), requestId: Number(requestId), templateName: TEMPLATE_NAME }, 'Approved reschedule customer confirmation sent');
+    return { sent: true, templateName: TEMPLATE_NAME };
+  } catch (error) {
+    const message = String(error.response?.data?.error?.message || error.message || error).slice(0, 1000);
+    await markApprovedRescheduleNotificationRetryableError(requestId, message);
+    logger.error({ err: error, appointmentId: Number(context.appointment_id), requestId: Number(requestId) }, 'Approved reschedule customer confirmation failed; retained for retry');
+    return { sent: false, reason: 'send_failed' };
+  }
+}
+
+async function queueApprovedRescheduleConfirmation(appointmentId, audit = null) {
+  await ensureApprovedRescheduleNotificationSchema();
+  const source = audit || await latestApprovedRescheduleAudit(appointmentId);
+  if (!source?.requestId) return { queued: false, reason: 'approved_reschedule_audit_not_found' };
+  const attempted = await attemptApprovedRescheduleConfirmation(source.requestId, source.auditEventId);
+  return {
+    queued: true,
+    requestId: Number(source.requestId),
+    auditEventId: Number(source.auditEventId),
+    attempted,
+  };
+}
+
+async function flushApprovedRescheduleConfirmations() {
+  await ensureApprovedRescheduleNotificationSchema();
+  const result = await pool.query(`
+    SELECT id
+      FROM appointment_reschedule_requests
+     WHERE status='approved'
+       AND client_notified_at IS NULL
+       AND client_notification_suppressed_at IS NULL
+       AND (
+         client_notification_claimed_at IS NULL
+         OR client_notification_claimed_at <= NOW() - INTERVAL '${CLAIM_STALE_MINUTES} minutes'
+       )
+       AND updated_at <= NOW() - INTERVAL '5 minutes'
+     ORDER BY updated_at,id
+     LIMIT 25
+  `);
+  for (const row of result.rows) {
+    try {
+      await attemptApprovedRescheduleConfirmation(row.id);
+    } catch (error) {
+      logger.error({ err: error, requestId: Number(row.id) }, 'Approved reschedule confirmation retry failed');
+    }
+  }
+  return { attempted: result.rowCount };
+}
+
+function startApprovedRescheduleConfirmationScheduler() {
+  if (scheduler) return;
+  setImmediate(async () => {
+    try {
+      const state = await ensureApprovedRescheduleNotificationSchema();
+      logger.info(state, 'Approved reschedule notification schema verified');
+      await flushApprovedRescheduleConfirmations();
+    } catch (error) {
+      logger.error({ err: error }, 'Approved reschedule notification initialization failed');
+    }
+  });
+  scheduler = setInterval(() => {
+    flushApprovedRescheduleConfirmations().catch((error) => logger.error({ err: error }, 'Approved reschedule confirmation retry scan failed'));
+  }, RETRY_MS);
+  scheduler.unref?.();
+  logger.info({ retryMinutes: RETRY_MS / 60000 }, 'Approved reschedule confirmation scheduler started');
+}
+
+module.exports = {
+  MIGRATION,
+  TEMPLATE_NAME,
+  RETRY_MS,
+  fmtDate,
+  fmtTime,
+  ensureApprovedRescheduleNotificationSchema,
+  latestApprovedRescheduleAudit,
+  loadApprovedRequestContext,
+  canonicalOutcomeState,
+  markApprovedRescheduleNotificationRetryableError,
+  suppressApprovedRescheduleNotification,
+  attemptApprovedRescheduleConfirmation,
+  queueApprovedRescheduleConfirmation,
+  flushApprovedRescheduleConfirmations,
+  startApprovedRescheduleConfirmationScheduler,
+};
