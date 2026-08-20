@@ -122,6 +122,18 @@ test('Admin cancellation locks every assigned practitioner and cancels every pra
   assert.match(source, /cancelPractitionerBookingEvents\(\{ appointmentId, staffNames \}\)/);
 });
 
+test('Client cancellation routes multi-staff bookings through all-staff locks and mirror cleanup while reschedule already fails closed', () => {
+  const patchSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'bootstrap', 'clientMultiStaffAppointmentChangePatch.js'), 'utf8');
+  const appointmentChangeSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'services', 'appointmentChange.js'), 'utf8');
+  const preload = fs.readFileSync(path.join(__dirname, '..', 'src', 'bootstrap', 'clientCouplesPackagesPatch.js'), 'utf8');
+  assert.match(patchSource, /for \(const staff of assignedStaff\) await db\.query\('SELECT pg_advisory_xact_lock/);
+  assert.match(patchSource, /cancelPractitionerBookingEvents\(\{ appointmentId, staffNames \}\)/);
+  assert.match(patchSource, /multiStaffSafe: true/);
+  assert.match(appointmentChangeSource, /staff_count\)!==1/);
+  assert.match(appointmentChangeSource, /complex practitioner setup/);
+  assert.match(preload, /clientMultiStaffAppointmentChangePatch/);
+});
+
 test('startup chain checksum-verifies migration 070 after existing catalogue corrections', () => {
   const bootstrap = fs.readFileSync(path.join(__dirname, '..', 'src', 'services', 'couplesMassageBookingBootstrap.js'), 'utf8');
   const patchSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'bootstrap', 'abigailJawReleaseMappingPatch.js'), 'utf8');
