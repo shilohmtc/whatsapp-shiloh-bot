@@ -3,17 +3,20 @@ const adminAvailability = require('../services/adminAvailability');
 const {
   featureEnabled,
   isClientConfirmation,
-  pendingRescheduleConflicts,
   createPendingRescheduleRequest,
   processRescheduleApprovalDecision,
   supersedePendingRescheduleForAppointment,
 } = require('../services/clientRescheduleApproval');
+const {
+  livePendingRescheduleConflicts,
+  reconcileStalePendingRescheduleHolds,
+} = require('../services/clientRescheduleHoldReconciliation');
 
 const originalGetConflicts = adminAvailability.getConflicts;
 adminAvailability.getConflicts = async function getConflictsWithRescheduleHolds(args = {}) {
   const conflicts = await originalGetConflicts(args);
   if (!featureEnabled()) return conflicts;
-  const holds = await pendingRescheduleConflicts({
+  const holds = await livePendingRescheduleConflicts({
     db: args.db || pool,
     staffId: args.staffId,
     startsAt: args.startsAt,
@@ -30,7 +33,7 @@ const originalCheckAvailability = adminAvailability.checkAvailability;
 adminAvailability.checkAvailability = async function checkAvailabilityWithRescheduleHolds(args = {}) {
   const result = await originalCheckAvailability(args);
   if (!featureEnabled() || result?.status !== 'available' || !result?.staff?.id) return result;
-  const holds = await pendingRescheduleConflicts({
+  const holds = await livePendingRescheduleConflicts({
     staffId: result.staff.id,
     startsAt: result.startsAt,
     endsAt: result.endsAt,
@@ -52,6 +55,8 @@ appointmentChange.processAppointmentChangeMessage = async function practitionerA
     && priorIntent?.status === 'awaiting_confirmation'
     && isClientConfirmation(text)
   ) {
+    // Explicit change boundary: retire any stale request rows before the new hold is validated.
+    await reconcileStalePendingRescheduleHolds();
     const result = await createPendingRescheduleRequest(phone, priorIntent);
     await appointmentChange.clearIntent(phone);
     return { handled: true, ...result };
@@ -96,6 +101,10 @@ rescheduleAvailability.processClientRescheduleAvailabilityMessage = async functi
 
 const originalProcessBookingApprovalMessage = bookingApproval.processClientBookingApprovalMessage;
 bookingApproval.processClientBookingApprovalMessage = async function bookingOrRescheduleApproval(sender, text, ...rest) {
+  // Approval/decline is a mutation boundary, so stale sibling holds may be retired here safely.
+  if (/^reschedule_approval_(?:approve|decline)_\d+$/i.test(String(text || '').trim())) {
+    await reconcileStalePendingRescheduleHolds();
+  }
   const reschedule = await processRescheduleApprovalDecision(sender, text);
   if (reschedule.handled) return reschedule;
   return originalProcessBookingApprovalMessage(sender, text, ...rest);
