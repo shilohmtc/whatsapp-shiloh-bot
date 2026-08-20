@@ -146,7 +146,7 @@ function standardizeInteractive(interactive) {
   if (Array.isArray(interactive.rows)) next.rows = interactive.rows.map(standardizeRow);
   if (Array.isArray(interactive.buttons)) {
     next.buttons = interactive.buttons.map((button) => {
-      if (button?.id === 'admin_booking_cancel_flow') return { ...button, title: 'Cancel new booking' };
+      if (['admin_booking_cancel_flow', 'admin_booking_cancel'].includes(button?.id)) return { ...button, title: 'Cancel new booking' };
       return { ...button };
     });
   }

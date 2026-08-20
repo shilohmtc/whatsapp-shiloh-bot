@@ -82,6 +82,22 @@ test('new-booking cancellation copy is explicit without changing existing appoin
   assert.equal(existingAppointment.description, 'Cancel this appointment safely');
 });
 
+test('pending new-booking confirmation button is standardized without changing unrelated cancellation controls', () => {
+  const result = standardizeInteractive({
+    type: 'button',
+    body: 'Choose whether to confirm or cancel this pending booking.',
+    buttons: [
+      { id: 'admin_booking_confirm', title: 'Confirm booking' },
+      { id: 'admin_booking_cancel', title: 'Cancel booking' },
+      { id: 'cancel_confirm', title: 'Confirm cancellation' },
+    ],
+  });
+
+  assert.equal(result.buttons[0].title, 'Confirm booking');
+  assert.equal(result.buttons[1].title, 'Cancel new booking');
+  assert.equal(result.buttons[2].title, 'Confirm cancellation');
+});
+
 test('Admin action labels and descriptions use the standardized menu copy', () => {
   assert.deepEqual(
     standardizeRow({ id: 'admin_action_booking', title: 'Make a booking', description: 'Book using authoritative availability' }),
