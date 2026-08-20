@@ -1,5 +1,6 @@
 const axios = require('axios');
 const { discoverWabaId } = require('./birthdayTemplateProvisioning');
+const logger = require('../lib/logger');
 
 const GRAPH_VERSION = 'v23.0';
 const TEMPLATE_NAME = 'shiloh_booking_confirmation_v2';
@@ -142,12 +143,32 @@ async function getBookingConfirmationV2TemplateStatus() {
   };
 }
 
+function logProviderVerification(status, reason) {
+  logger.info({
+    reason,
+    templateName: status?.template?.name || TEMPLATE_NAME,
+    providerStatus: status?.template?.status || null,
+    providerCategory: status?.template?.category || null,
+    providerLanguage: status?.template?.language || null,
+    exact: status?.template?.exact ?? null,
+    duplicateCount: status?.duplicateCount ?? status?.template?.duplicateCount ?? null,
+    providerComponents: status?.template?.components || null,
+  }, 'Booking confirmation v2 provider verification');
+}
+
 async function submitBookingConfirmationV2Template() {
   const status = await getBookingConfirmationV2TemplateStatus();
   if (!status.ok) return status;
   if (status.template) {
-    if (status.duplicateCount > 0) return { ...status, submitted: false, reason: 'duplicate_variants_present' };
-    if (status.template.exact) return { ...status, submitted: false, reason: 'already_exists_exact' };
+    if (status.duplicateCount > 0) {
+      logProviderVerification(status, 'duplicate_variants_present');
+      return { ...status, submitted: false, reason: 'duplicate_variants_present' };
+    }
+    if (status.template.exact) {
+      logProviderVerification(status, 'already_exists_exact');
+      return { ...status, submitted: false, reason: 'already_exists_exact' };
+    }
+    logProviderVerification(status, 'existing_contract_mismatch');
     return { ...status, submitted: false, reason: 'existing_contract_mismatch' };
   }
 
@@ -156,6 +177,9 @@ async function submitBookingConfirmationV2Template() {
     buildBookingConfirmationV2TemplateDefinition(),
     graphConfig()
   );
+
+  const verification = await getBookingConfirmationV2TemplateStatus();
+  logProviderVerification(verification, 'post_submission_readback');
 
   return {
     ok: true,
@@ -167,6 +191,8 @@ async function submitBookingConfirmationV2Template() {
       status: response.data?.status || null,
       category: response.data?.category || TEMPLATE_CATEGORY,
     },
+    verification: verification?.template || null,
+    duplicateCount: verification?.duplicateCount ?? null,
   };
 }
 
