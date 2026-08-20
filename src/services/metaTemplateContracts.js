@@ -16,6 +16,8 @@ const CONTRACTS = Object.freeze([
   ['booking_approval_outcome','WHATSAPP_BOOKING_APPROVAL_OUTCOME_TEMPLATE',definition('booking_approval_outcome'),true],
   ['booking_declined','WHATSAPP_BOOKING_DECLINED_TEMPLATE',definition('booking_declined'),true],
   ['booking_approval_request','WHATSAPP_BOOKING_APPROVAL_REQUEST_TEMPLATE',definition('booking_approval_request'),true],
+  ['reschedule_approval_request','WHATSAPP_RESCHEDULE_APPROVAL_REQUEST_TEMPLATE',definition('reschedule_approval_request'),true],
+  ['reschedule_declined','WHATSAPP_RESCHEDULE_DECLINED_TEMPLATE',definition('reschedule_declined'),true],
   ['cancellation_confirmation','WHATSAPP_CANCELLATION_CONFIRMATION_TEMPLATE',definition('cancellation_confirmation'),true],
   ['reschedule_confirmation','WHATSAPP_RESCHEDULE_CONFIRMATION_TEMPLATE',definition('reschedule_confirmation'),true],
   ['appointment_reminder_actions','WHATSAPP_REMINDER_ACTIONS_TEMPLATE',buildReminderActionTemplateDefinition(),true],
@@ -83,6 +85,7 @@ async function assertTemplateSendAllowed(name,language='en') {
   if(language!==entry.contract.language)throw new Error(`WhatsApp template language does not match contract: ${name}`);
   if(configuredTemplateName(entry)!==entry.contract.name)throw new Error(`WhatsApp template configuration does not match contract: ${entry.env}`);
   if(entry.key==='booking_update'&&process.env.WHATSAPP_BOOKING_UPDATE_ENABLED!=='true')throw new Error('Booking-update delivery gate is disabled');
+  if((entry.key==='reschedule_approval_request'||entry.key==='reschedule_declined')&&process.env.WHATSAPP_RESCHEDULE_APPROVAL_ENABLED!=='true')throw new Error('Reschedule-approval delivery gate is disabled');
   if(!cache||Date.now()-cachedAt>60000){cache=await inspectMetaTemplateInventory();cachedAt=Date.now();}
   const state=cache.templates?.find(x=>x.key===entry.key);
   if(!state?.ready)throw new Error(`WhatsApp template is not exact, approved and configured: ${name}`);
