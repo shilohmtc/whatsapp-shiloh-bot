@@ -17,8 +17,23 @@ const CLIENT_BOOKING_BUTTON_COMMANDS = Object.freeze({
   client_postbook_main_menu: 'main menu',
 });
 
+const BOOKING_CONFIRMATION_V2_PAYLOAD_PREFIX = 'client_booking_confirmation_v2';
+
+function bookingConfirmationV2QuickReplyPayloads(appointmentId) {
+  const id = Number(appointmentId);
+  if (!Number.isSafeInteger(id) || id <= 0) throw new Error('Booking confirmation v2 requires a valid appointment id');
+  return [
+    `${BOOKING_CONFIRMATION_V2_PAYLOAD_PREFIX}_calendar_${id}`,
+    `${BOOKING_CONFIRMATION_V2_PAYLOAD_PREFIX}_manage_${id}`,
+    'client_postbook_my_appointments',
+  ];
+}
+
 function commandForClientBookingButton(id = '') {
-  return CLIENT_BOOKING_BUTTON_COMMANDS[String(id || '').trim()] || null;
+  const normalized = String(id || '').trim();
+  const v2 = normalized.match(/^client_booking_confirmation_v2_(calendar|manage)_(\d+)$/);
+  if (v2) return `booking confirmation v2 ${v2[1]} ${v2[2]}`;
+  return CLIENT_BOOKING_BUTTON_COMMANDS[normalized] || null;
 }
 
 function treatmentTeamLines() {
@@ -180,6 +195,8 @@ function decorateClientBookingResult(result) {
 
 module.exports = {
   CLIENT_BOOKING_BUTTON_COMMANDS,
+  BOOKING_CONFIRMATION_V2_PAYLOAD_PREFIX,
+  bookingConfirmationV2QuickReplyPayloads,
   bookingDiscoveryInteractive,
   commandForClientBookingButton,
   dateInteractive,
