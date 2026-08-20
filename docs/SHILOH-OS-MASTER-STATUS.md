@@ -7,23 +7,24 @@ Purpose: permanent current-state source of truth. Historical implementation deta
 
 Operational truth is GitHub `main`, Render production, Shiloh CRM/Postgres, Google Calendar, Meta/WhatsApp provider evidence, and explicit real WhatsApp/human evidence. Never infer provider approval, attendance, approval decisions, CRM identity, Calendar state or handset behaviour.
 
-At the beginning of each new Shiloh OS chat: read this Master + `docs/SHILOH-OS-PROJECT-TRACKER.md` + the latest reconciliation, currently `docs/SHILOH-OS-RECONCILIATION-2026-08-20-ADMIN-BLOCK-TIME.md`, plus `docs/SHILOH-OS-ENGINEERING-GOVERNANCE.md`, on current GitHub `main`; verify production/provider/CRM/Calendar/human evidence that could have changed; preserve newer authority; then continue only the owned controlled scope.
+At the beginning of each new Shiloh OS chat: read this Master + `docs/SHILOH-OS-PROJECT-TRACKER.md` + the latest reconciliation, currently `docs/SHILOH-OS-RECONCILIATION-2026-08-20-DUMMY-TEST-BOOKING-CLEANUP.md`, plus `docs/SHILOH-OS-ENGINEERING-GOVERNANCE.md`, on current GitHub `main`; verify production/provider/CRM/Calendar/human evidence that could have changed; preserve newer authority; then continue only the owned controlled scope.
 
-Earlier dated reconciliations remain durable where not superseded. Preserve in particular `docs/SHILOH-OS-RECONCILIATION-2026-08-20-CRM-DUMMY-RESET-COMPLETION.md`, `docs/SHILOH-OS-RECONCILIATION-2026-08-20-CURRENT-MAIN-356.md`, the Christel service-catalogue correction, specialist-workstream and Control-routing reconciliations, booking-confirmation-v2 controlled submission, Juvan booking approval/v1 handset proof, client-welcome repair, booking-update activation/stale suppression, Meta booking-update approval and all explicit fail-closed gates.
+Earlier dated reconciliations remain durable where not superseded. Preserve in particular `docs/SHILOH-OS-RECONCILIATION-2026-08-20-ADMIN-BLOCK-TIME.md`, `docs/SHILOH-OS-RECONCILIATION-2026-08-20-CRM-DUMMY-RESET-COMPLETION.md`, `docs/SHILOH-OS-RECONCILIATION-2026-08-20-CURRENT-MAIN-356.md`, the Christel service-catalogue correction, specialist-workstream and Control-routing reconciliations, booking-confirmation-v2 controlled submission, Juvan booking approval/v1 handset proof, client-welcome repair, booking-update activation/stale suppression, Meta booking-update approval and all explicit fail-closed gates.
 
 Obtain explicit approval before the first new substantial controlled action. After that approval, continue the approved controlled unit through normal engineering/deploy/verification/reconciliation boundaries. Stop for material scope/risk expansion, contradictory authority, or a genuine fail-closed human/provider/evidence/safety/capability gate.
 
 ## Current production baseline
 
-Current accepted **application** code is **PR #360 / `1090c284e3971e159ea740dbb3388d0e2f7431ec`**, **Add guarded practitioner block-time workflow**.
+Current accepted **application** code is **PR #362 / `1fdf1a2d183d061a1dee64e46de5299fbecde992`**, **Clean up archived Dummy Test bookings safely**.
 
-- GitHub CI run **#1148** completed with the full non-mutating regression test step successful.
-- Render deploy **`dep-da3dbm1srm7s7396eop0`** reached **LIVE** on the exact #360 SHA in confirmed workspace **My Workspace**.
+- GitHub CI run **#1152** completed with the full non-mutating regression test step successful.
+- Default-off Render deploy `dep-da3dj58ae00c73fvs1k0` reached LIVE on exact #362 before cleanup activation.
+- One authorized activation of `CRM_DUMMY_APPOINTMENT_CLEANUP_ON_START=true` ran on deploy `dep-da3djhuk1f9s73em4td0`, cancelled the remaining non-final Dummy Test appointments, and completed all Calendar cleanup with no unresolved IDs.
+- The one-shot was immediately returned to `CRM_DUMMY_APPOINTMENT_CLEANUP_ON_START=false`; final deploy **`dep-da3dk36k1f9s73em616g`** reached **LIVE** on exact #362 SHA.
 - Production service `shiloh-whatsapp-bot` remains `main` auto-deploy with health-check path `/health`.
-- Post-deploy Render metrics showed one running instance and an HTTP 200 response after the deploy in the sampled verification window.
-- No manual deploy, Render environment/configuration change or same-commit redeploy was used for #360 verification.
-- #360 is deliberately bounded to practitioner availability blocking. It uses canonical `calendar_blocks`, not fake appointments; Christel may block Myself/Abigail, Abigail and Marietjie are own-only, and Jean-Pierre/other Admin identities have no Block time authority.
-- Practitioner-approved client rescheduling remains dark/off; #360 did not change `WHATSAPP_RESCHEDULE_APPROVAL_ENABLED=false` or any Meta provider gate.
+- No appointment row or finalized attendance outcome was deleted/reclassified; no customer cancellation message was queued or sent by the cleanup.
+- #360 practitioner Block time remains live and unchanged.
+- Practitioner-approved client rescheduling remains dark/off; #362 did not change `WHATSAPP_RESCHEDULE_APPROVAL_ENABLED=false` or any Meta provider gate.
 
 Relevant accepted runtime lineage remains:
 
@@ -38,6 +39,7 @@ Relevant accepted runtime lineage remains:
 - **#358** — CRM reset structured-interaction language-boundary repair.
 - **#359** — documentation/reconciliation of completed CRM Dummy Test reassignment and genuine fresh-identity handset proof.
 - **#360** — guarded practitioner Block time / Blocked time workflow using canonical `calendar_blocks`.
+- **#362** — exact archived/reset Dummy Test booking cleanup, default-off one-shot with CRM/Calendar proof and no client messaging.
 
 PR #357 and #359 were documentation/shared-authority reconciliations and did not broaden unrelated application behaviour.
 
@@ -82,7 +84,30 @@ Existing authoritative availability already excludes overlapping `calendar_block
 
 The initial #360 CI run exposed a stale parity regression that assumed Jean-Pierre must always match Christel's Appointments menu except finalization. That test was corrected to preserve the new explicit second exception: Jean-Pierre has neither finalization nor Block time authority. Final CI #1148 passed.
 
-Render deploy `dep-da3dbm1srm7s7396eop0` is LIVE on exact #360 SHA. No real block was manufactured for proof; future natural business use may provide handset/CRM evidence without creating artificial operational data.
+No real block was manufactured for proof; future natural business use may provide handset/CRM evidence without creating artificial operational data.
+
+## Dummy Test operational booking cleanup — 🟢 VERIFIED LIVE / COMPLETE
+
+Authoritative reconciliation: `docs/SHILOH-OS-RECONCILIATION-2026-08-20-DUMMY-TEST-BOOKING-CLEANUP.md`.
+
+The earlier CRM #835 number-reset deliberately preserved appointment history. The later user-authorized cleanup therefore used a separate exact-client one-shot rather than deleting rows or replaying the reset.
+
+Before any mutation, #362 requires exact client ID **835**, accepted Dummy Test name, inactive status, completed `test_client_reset=true` marker and zero WhatsApp/mobile bindings. The one-shot is default-off behind `CRM_DUMMY_APPOINTMENT_CLEANUP_ON_START`.
+
+Production execution established:
+
+- newly cancelled: **appointment #582** (Abigail) and **appointment #583** (Marietjie);
+- preserved as already cancelled: **#561, #565, #566, #574**;
+- preserved finalized historical truth: **#564 remains `no_show`**;
+- **3** appointment lifecycle rows were terminalized;
+- pending booking approvals changed: **0**;
+- pending/failed reschedule requests changed: **0**;
+- pending/failed customer-change notifications suppressed: **0**;
+- all shared/practitioner Calendar cleanup operations completed with `unresolvedCalendarIds=[]`.
+
+Independent 2026-wide searches after execution returned **zero `Dummy Test` events** on the shared booking calendar, Abigail calendar, Marietjie calendar and primary/Christel calendar.
+
+The one-shot flag is now **false** and final #362 deploy `dep-da3dk36k1f9s73em616g` is LIVE. Do not re-enable the cleanup merely to reproduce evidence. No client cancellation message was created by this controlled unit.
 
 ## CRM Dummy Test number reassignment — 🟢 VERIFIED LIVE / HANDSET-PROVEN / COMPLETE
 
@@ -116,9 +141,9 @@ At **11:59:23.746 SAST**, production received the genuine interactive confirmati
 
 At **12:01:27.486 SAST**, the legitimately reassigned number sent a real `Hi` from masked suffix `2646`; at **12:01:28.537 SAST** Shiloh responded with the unregistered/new-client registration branch. The handset response carried no inherited Dummy Test name, CRM #835 identity, booking intent, onboarding continuation, policy state or prior conversation-session context.
 
-No appointment or booking was manufactured. **Do not reset CRM #835 again or replay the reassigned number merely to reproduce proof.**
+No appointment or booking was manufactured. **Do not reset CRM #835 again or replay the reassigned number merely to reproduce proof.** #362 subsequently cleaned only the preserved operational bookings while retaining appointment/audit history and #564 no-show truth.
 
-The Render read-only Postgres connector still fails before SQL execution at its SSL/TLS boundary. Do not infer direct row evidence from that failed connector; the accepted completion evidence is the guarded transactional runtime semantics, post-commit success response and genuine post-reset first-contact behaviour.
+The Render read-only Postgres connector still fails before SQL execution at its SSL/TLS boundary. Do not infer direct row evidence from that failed connector; the accepted completion evidence is the guarded transactional runtime semantics, post-commit success response, genuine post-reset first-contact behaviour and the later guarded #362 cleanup startup evidence.
 
 ## Current highest-priority external gate — practitioner-approved client reschedule
 
@@ -171,12 +196,15 @@ Genuine booking **#585**, Upper Back, Neck & Jaw Release with Christel, Friday 2
 
 #302's provider guard and proactive health probe remain permanent. Provider failure blocks booking writes cleanly. Genuine #570 and #585 are accepted Calendar synchronization evidence. Do not mutate them merely for proof.
 
+#362 separately verified deterministic cleanup of archived Dummy Test mirrors; post-cleanup 2026 searches returned zero Dummy Test events on shared, Abigail, Marietjie and primary/Christel surfaces.
+
 Google Calendar remains a synchronized provider/mirror; canonical Shiloh CRM/appointment state remains authoritative.
 
 ## Booking/Admin durable rules — preserve
 
 - #318 booking entitlement remains fail-closed: Christel+Abigail shared scope; Marietjie only; other linked Admins own practitioner; JP explicit unlinked business-admin exception for Christel+Abigail only; other unlinked Admins no booking catalogue.
 - Block time authority is separate and narrower: Christel→Myself/Abigail; Abigail→self; Marietjie→self; JP/others→none.
+- Dummy Test cleanup is an exact-client maintenance one-shot only; `CRM_DUMMY_APPOINTMENT_CLEANUP_ON_START=false` is the normal state. Do not generalize it into a broad name-based purge or re-enable it merely for proof.
 - The Admin who prepares a pending booking confirms it; do not reintroduce superseded Christel↔Abigail cross-confirm behaviour without a new requirement.
 - Typed-time, clinic-hours, practitioner schedule, CRM conflicts, pending holds, shared/practitioner Google Calendar conflicts and final confirmation guards remain authoritative.
 - Provisional new-client fast path remains name + South African mobile → duplicate check → provisional canonical client → review → explicit confirm; abandoned provisional clients are removed only when no appointment exists.
@@ -186,7 +214,9 @@ Google Calendar remains a synchronized provider/mirror; canonical Shiloh CRM/app
 
 CRM is authoritative for canonical client/practitioner/staff identity. Ambiguous identity, duplicate/conflicting contact ownership, unresolved practitioner/staff identity and destructive changes lacking authority fail closed.
 
-The completed CRM Dummy Test reassignment is now do-not-redo evidence as recorded above. The same guarded reset facility remains available only for the approved test-client identities and privileged admin path; a future reset requires a new genuine business need and fresh target verification.
+The completed CRM Dummy Test reassignment is do-not-redo evidence. CRM #835 remains archived/reset and without its former WhatsApp/mobile identity. The #362 booking cleanup did not delete the client or appointment rows; #582/#583 are cancelled, #561/#565/#566/#574 were already cancelled and #564 remains no-show historical truth.
+
+The same guarded reset facility remains available only for the approved test-client identities and privileged admin path; a future reset requires a new genuine business need and fresh target verification.
 
 The historical #558 attendance exception remains unresolved with historical practitioner `SHILOH MTC`. Never infer Christel, Marietjie or another practitioner; establish human/authoritative truth before correction/finalization.
 
@@ -253,7 +283,9 @@ PR #351 remains superseded/closed because newer authority #352–#356 overtook i
 
 ## Exact continuation state
 
-**Authoritative current application state:** PR #360 / `1090c284e3971e159ea740dbb3388d0e2f7431ec`; CI #1148 regression step passed; Render `dep-da3dbm1srm7s7396eop0` LIVE on exact SHA; one running instance and post-deploy HTTP 200 observed through Render metrics.
+**Authoritative current application state:** PR #362 / `1fdf1a2d183d061a1dee64e46de5299fbecde992`; CI #1152 passed; final flag-off Render deploy `dep-da3dk36k1f9s73em616g` LIVE on exact SHA; Dummy Test one-shot is false.
+
+**Dummy Test booking cleanup:** complete. #582/#583 cancelled; #561/#565/#566/#574 already cancelled; #564 no-show preserved; independent 2026 Calendar searches show zero Dummy Test mirrors. Do not replay.
 
 **Admin practitioner Block time:** complete and verified live at the application/deployment boundary. Do not manufacture a block merely for evidence.
 
@@ -261,6 +293,6 @@ PR #351 remains superseded/closed because newer authority #352–#356 overtook i
 
 **Highest-priority standing gate:** WhatsApp / Meta Integration remains monitoring owner for a future genuinely read-only provider refresh of `shiloh_reschedule_approval_request_v1` and `shiloh_reschedule_declined_v1`.
 
-**Why next:** the Block time and CRM-number-reassignment controlled units are closed; the remaining reschedule dependency is external Meta approval rather than further Booking/Admin, CRM or Production implementation.
+**Why next:** the Dummy Test reset/booking-cleanup and Block time controlled units are closed; the remaining reschedule dependency is external Meta approval rather than further Booking/Admin, CRM or Production implementation.
 
 **Remaining gate:** both reschedule templates must independently prove `APPROVED / UTILITY / en / exact=true / duplicateCount=0 / configured=true`. Until then, no activation and no genuine reschedule handset journey. All other standing fail-closed gates remain preserved.
