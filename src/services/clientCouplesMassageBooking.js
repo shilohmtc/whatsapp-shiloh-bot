@@ -48,7 +48,8 @@ function clean(value = '') {
 }
 
 function formatMoney(value) {
-  return `R${Number(value).toLocaleString('en-ZA', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+  const whole = Math.round(Number(value));
+  return `R${String(whole).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}`;
 }
 
 function formatTime(value) {
@@ -78,6 +79,18 @@ function validCompanionName(value = '') {
   if (name.length < 2 || name.length > 100) return null;
   if (!/^[\p{L}][\p{L}' .-]*$/u.test(name)) return null;
   return name;
+}
+
+function patchValue(patch, key, currentValue, fallback = null) {
+  return Object.prototype.hasOwnProperty.call(patch, key) ? patch[key] : (currentValue ?? fallback);
+}
+
+function intersectSlots(first = [], second = [], now = Date.now()) {
+  const secondKeys = new Set(second.map((slot) => `${new Date(slot.starts_at).toISOString()}|${new Date(slot.ends_at).toISOString()}`));
+  return first.filter((slot) => (
+    new Date(slot.starts_at).getTime() > now
+    && secondKeys.has(`${new Date(slot.starts_at).toISOString()}|${new Date(slot.ends_at).toISOString()}`)
+  ));
 }
 
 async function getIntent(phone, db = pool) {
@@ -115,15 +128,15 @@ async function saveIntent(phone, patch = {}, db = pool) {
     RETURNING *
   `, [
     key,
-    patch.leadClientId ?? current.lead_client_id ?? null,
-    patch.state ?? current.state ?? 'choose_date',
-    patch.selectedDate ?? current.selected_date ?? null,
-    patch.selectedStartsAt ?? current.selected_starts_at ?? null,
-    patch.selectedEndsAt ?? current.selected_ends_at ?? null,
-    patch.companionName ?? current.companion_name ?? null,
-    patch.companionMobile ?? current.companion_mobile ?? null,
-    patch.policyVersion ?? current.policy_version ?? null,
-    patch.policyAcceptedAt ?? current.policy_accepted_at ?? null,
+    patchValue(patch, 'leadClientId', current.lead_client_id),
+    patchValue(patch, 'state', current.state, 'choose_date'),
+    patchValue(patch, 'selectedDate', current.selected_date),
+    patchValue(patch, 'selectedStartsAt', current.selected_starts_at),
+    patchValue(patch, 'selectedEndsAt', current.selected_ends_at),
+    patchValue(patch, 'companionName', current.companion_name),
+    patchValue(patch, 'companionMobile', current.companion_mobile),
+    patchValue(patch, 'policyVersion', current.policy_version),
+    patchValue(patch, 'policyAcceptedAt', current.policy_accepted_at),
   ]);
   return result.rows[0];
 }
@@ -184,8 +197,7 @@ async function listJointSlots(date, locationId = null) {
   if (results.some((result) => !['available', 'no_slots'].includes(result.status))) {
     return { status: 'unavailable', slots: [], foundation, results };
   }
-  const second = new Set(results[1].slots.map((slot) => `${new Date(slot.starts_at).toISOString()}|${new Date(slot.ends_at).toISOString()}`));
-  const slots = results[0].slots.filter((slot) => second.has(`${new Date(slot.starts_at).toISOString()}|${new Date(slot.ends_at).toISOString()}`));
+  const slots = intersectSlots(results[0].slots, results[1].slots);
   return { status: slots.length ? 'available' : 'no_slots', slots, foundation, results };
 }
 
@@ -205,25 +217,20 @@ async function datePickerInteractive() {
     buttonText: 'Choose date',
     sectionTitle: 'Available dates',
     rows: [
-      ...dates.map((entry) => ({
-        id: `${DATE_PREFIX}${entry.date}`,
-        title: entry.title,
-        description: entry.date,
-      })),
+      ...dates.map((entry) => ({ id: `${DATE_PREFIX}${entry.date}`, title: entry.title, description: entry.date })),
       { id: BACK_ACTION, title: 'Back', description: 'Back to Couples & Packages' },
     ],
   };
 }
 
 function timePickerInteractive(date, slots) {
-  const visible = slots.slice(0, 9);
   return {
     type: 'list',
     body: `*Couples Massage*\n${shortDateTitle(date)} • ${DURATION_MINUTES} min • ${formatMoney(PRICE)}\n\nThese times are currently clear for both Abigail & Christel:`,
     buttonText: 'Choose time',
     sectionTitle: 'Available times',
     rows: [
-      ...visible.map((slot) => ({
+      ...slots.slice(0, 9).map((slot) => ({
         id: `${TIME_PREFIX}${new Date(slot.starts_at).getTime()}`,
         title: formatTime(slot.starts_at),
         description: `${formatTime(slot.starts_at)}–${formatTime(slot.ends_at)} • both therapists`,
@@ -288,13 +295,7 @@ async function assertFinalAvailability(db, foundation, location, startsAt, endsA
   if (!clinic.covered) return { ok: false, reason: 'Shiloh’s clinic hours no longer permit that time.' };
 
   for (const staff of foundation.staff) {
-    const schedule = await checkAuthoritativeSchedule({
-      db,
-      staffId: Number(staff.id),
-      locationId: location.id,
-      startsAt,
-      endsAt,
-    });
+    const schedule = await checkAuthoritativeSchedule({ db, staffId: Number(staff.id), locationId: location.id, startsAt, endsAt });
     if (schedule.partialUnavailable || (schedule.allDayUnavailable && !schedule.insideAvailableException) || !schedule.covered) {
       return { ok: false, reason: `${staff.display_name}’s working schedule no longer permits that time.` };
     }
@@ -319,14 +320,7 @@ async function recordPolicyAcceptance(phone, intent, db = pool) {
     INSERT INTO booking_policy_acceptances
       (phone, policy_version, channel, service_text, preferred_date, preferred_time, therapist_text)
     VALUES ($1,$2,'whatsapp',$3,$4,$5,$6)
-  `, [
-    normalizePhone(phone),
-    POLICY_VERSION,
-    SERVICE_NAME,
-    intent.selected_date,
-    formatTime(intent.selected_starts_at),
-    STAFF_NAMES.join(' & '),
-  ]);
+  `, [normalizePhone(phone), POLICY_VERSION, SERVICE_NAME, intent.selected_date, formatTime(intent.selected_starts_at), STAFF_NAMES.join(' & ')]);
 }
 
 async function commitCouplesMassage(phone) {
@@ -337,8 +331,9 @@ async function commitCouplesMassage(phone) {
   }
 
   const db = await pool.connect();
+  let createdAppointmentId = null;
   let sharedEventId = null;
-  let practitionerEventsCreated = [];
+  const practitionerEventsCreated = [];
   try {
     await db.query('BEGIN');
     const intentResult = await db.query(`
@@ -391,17 +386,10 @@ async function commitCouplesMassage(phone) {
         (client_id, location_id, starts_at, ends_at, status, title, notes, total_price, currency, source)
       VALUES ($1,$2,$3,$4,'scheduled',$5,$6,$7,'ZAR',$8)
       RETURNING id, starts_at, ends_at, status
-    `, [
-      identity.client.id,
-      location.id,
-      startsAt,
-      endsAt,
-      SERVICE_NAME,
-      `Companion: ${intent.companion_name}. Backup mobile is stored appointment-scoped.`,
-      PRICE,
-      BOOKING_SOURCE,
-    ]);
+    `, [identity.client.id, location.id, startsAt, endsAt, SERVICE_NAME,
+      `Companion: ${intent.companion_name}. Backup mobile is stored appointment-scoped.`, PRICE, BOOKING_SOURCE]);
     const appointment = appointmentResult.rows[0];
+    createdAppointmentId = Number(appointment.id);
 
     await db.query(`
       INSERT INTO appointment_services
@@ -448,9 +436,7 @@ async function commitCouplesMassage(phone) {
 
     for (const staff of foundation.staff) {
       const result = await createPractitionerBookingEvent({ ...eventBase, staffName: staff.display_name });
-      if (result.enabled && result.configured && result.event && !result.idempotentReplay) {
-        practitionerEventsCreated.push(staff.display_name);
-      }
+      if (result.enabled && result.configured && result.event && !result.idempotentReplay) practitionerEventsCreated.push(staff.display_name);
     }
 
     await db.query(`
@@ -463,18 +449,11 @@ async function commitCouplesMassage(phone) {
       INSERT INTO crm_audit_events (action, entity_type, entity_id, metadata)
       VALUES ('client.couples_booking_created','appointment',$1,$2::jsonb)
     `, [appointment.id, JSON.stringify({
-      clientId: Number(identity.client.id),
-      serviceId: Number(foundation.service.id),
+      clientId: Number(identity.client.id), serviceId: Number(foundation.service.id),
       staffIds: foundation.staff.map((staff) => Number(staff.id)),
-      companionContactRole: 'booking_backup',
-      companionMarketingConsent: false,
-      startsAt,
-      endsAt,
-      durationMinutes: DURATION_MINUTES,
-      price: PRICE,
-      policyVersion: POLICY_VERSION,
-      bothPractitionersLocked: true,
-      bothPractitionersRechecked: true,
+      companionContactRole: 'booking_backup', companionMarketingConsent: false,
+      startsAt, endsAt, durationMinutes: DURATION_MINUTES, price: PRICE,
+      policyVersion: POLICY_VERSION, bothPractitionersLocked: true, bothPractitionersRechecked: true,
       googleCalendarEnabled: calendarEnabled(),
     })]);
 
@@ -497,19 +476,9 @@ async function commitCouplesMassage(phone) {
     };
   } catch (error) {
     try { await db.query('ROLLBACK'); } catch (_) {}
-    if (practitionerEventsCreated.length) {
-      try {
-        const intent = await getIntent(normalizedPhone).catch(() => null);
-        // appointment id is encoded in the shared deterministic event only after insertion; cleanup below uses the tracked shared event path.
-        if (sharedEventId) {
-          const appointmentLookup = await pool.query(`SELECT appointment_id FROM appointment_calendar_events WHERE event_id=$1 LIMIT 1`, [sharedEventId]).catch(() => ({ rows: [] }));
-          const appointmentId = appointmentLookup.rows[0]?.appointment_id;
-          if (appointmentId) await cancelPractitionerBookingEvents({ appointmentId, staffNames: practitionerEventsCreated });
-        }
-        void intent;
-      } catch (cleanupError) {
-        logger.error({ err: cleanupError }, 'Couples Massage practitioner-calendar compensation failed');
-      }
+    if (createdAppointmentId && practitionerEventsCreated.length) {
+      try { await cancelPractitionerBookingEvents({ appointmentId: createdAppointmentId, staffNames: practitionerEventsCreated }); }
+      catch (cleanupError) { logger.error({ err: cleanupError, appointmentId: createdAppointmentId }, 'Couples Massage practitioner-calendar compensation failed'); }
     }
     if (sharedEventId) {
       try { await cancelBookingEvent(sharedEventId); }
@@ -577,12 +546,10 @@ async function processCouplesMassageMessage(phone, text) {
     const epoch = Number(raw.slice(TIME_PREFIX.length));
     const joint = await listJointSlots(String(intent.selected_date));
     const slot = joint.slots.find((candidate) => new Date(candidate.starts_at).getTime() === epoch);
-    if (!slot) return { handled: true, reply: 'That shared time is no longer available. Please choose one of the currently available times.', interactive: joint.slots.length ? timePickerInteractive(String(intent.selected_date), joint.slots) : undefined };
-    await saveIntent(normalizedPhone, {
-      state: 'companion_name',
-      selectedStartsAt: slot.starts_at,
-      selectedEndsAt: slot.ends_at,
-    });
+    if (!slot) {
+      return { handled: true, reply: 'That shared time is no longer available. Please choose one of the currently available times.', interactive: joint.slots.length ? timePickerInteractive(String(intent.selected_date), joint.slots) : undefined };
+    }
+    await saveIntent(normalizedPhone, { state: 'companion_name', selectedStartsAt: slot.starts_at, selectedEndsAt: slot.ends_at });
     return { handled: true, reply: 'Great. Please send your companion’s name.\n\n0️⃣ Back' };
   }
 
@@ -671,6 +638,8 @@ module.exports = {
   BACK_ACTION,
   CANCEL_ACTION,
   formatMoney,
+  validCompanionName,
+  intersectSlots,
   hasActiveIntent,
   listJointSlots,
   startCouplesMassage,
