@@ -52,6 +52,14 @@ The controlled-work sequence remains:
 
 `inspect authoritative state → implement → test/full applicable regression gate → repair until green → merge → verify Render/production/provider → reconcile Project Tracker → reconcile Master when durable state changed → final specialist checkpoint`
 
+## Specialist workstream reconciliation — 🟢 ADOPTED
+
+Reconciliation from specialist branches is part of the same controlled unit, not optional cleanup. Every owning specialist workstream must verify current authority, implement within scope, run the applicable compile/regression gate, repair until green, merge, verify production/provider truth, reconcile the Project Tracker, reconcile the Master when durable foundational state changed, and issue the final specialist checkpoint. A specialist branch must not stop merely because code was merged or deployed. Control & Reconciliation reads reconciled current `main`, not unreconciled specialist-chat narrative.
+
+## Control checkpoint workstream routing — 🟢 ADOPTED
+
+Control checkpoints must identify the owning workstream, exact specialist chat, why that workstream owns the next boundary, dependencies/observers, Proceed or Blocked status, and a self-contained copy-ready continuation. Routing context is never a substitute for independently re-reading authoritative state. Blocked work remains with the appropriate monitoring/provider workstream rather than being routed to implementation, and existing approved fail-closed gates remain binding.
+
 ## CRM Dummy Test number reassignment — 🟢 VERIFIED LIVE / HANDSET-PROVEN / COMPLETE
 
 Authoritative completion reconciliation: `docs/SHILOH-OS-RECONCILIATION-2026-08-20-CRM-DUMMY-RESET-COMPLETION.md`.
@@ -157,9 +165,9 @@ The completed CRM Dummy Test reassignment is now do-not-redo evidence as recorde
 
 The historical #558 attendance exception remains unresolved with historical practitioner `SHILOH MTC`. Never infer Christel, Marietjie or another practitioner; establish human/authoritative truth before correction/finalization.
 
-## Attendance finalization authority — 🟢 VERIFIED LIVE
+## Attendance own-practitioner-only authority — 🟢 VERIFIED LIVE through #324
 
-#324 remains authoritative:
+PR #324 remains authoritative:
 
 - Christel finalizes Christel appointments only.
 - Abigail finalizes Abigail appointments only.
@@ -172,7 +180,7 @@ Exact active linked identity is required and conflicts fail closed. Historical a
 
 Universal welcome routing remains repaired through #337. A real Juvan `Hi` proved welcome then registered-client branch; subsequent Browse treatments evidence proved accepted two-page category presentation and SQT virtual family. The CRM Dummy reset completion adds separate genuine evidence that a released number correctly enters the unregistered/new-client branch. Do not reset/replay either journey merely for proof.
 
-## Christel reviewed service catalogue — 🟢 VERIFIED LIVE
+## Christel reviewed service catalogue — 🟢 VERIFIED LIVE through #328
 
 Authoritative reconciliation: `docs/SHILOH-OS-RECONCILIATION-2026-08-18-CHRISTEL-SERVICE-CATALOGUE-CORRECTION.md`.
 
@@ -194,11 +202,13 @@ Do not reactivate/remap #27, merge #27/#34, restore reviewed buffers, delete his
 
 An earlier Control read-only verification mistakenly invoked Render environment update three times with an empty merge set, causing same-commit API redeploys without changing env key/value state. Preserve this as a governance/audit breach. Control must use true read-only Render tools absent explicit override.
 
-## Google Business Profile provider access — 🟠 EXTERNAL/PROVIDER GATE
+## Google Business Profile provider access — 🟠 EXTERNAL / PROVIDER GATE
 
-Last authoritative provider evidence remains: Business Information API enabled/application submitted/API-specific quotas visible; general **Requests per minute = 0**. Usable GBP approval/access is not positively established.
+Last authoritative provider evidence remains: Google Business Profile Business Information API is enabled, the API-access application was submitted, and API-specific quota surfaces are visible. The general **Requests per minute = 0** means usable GBP read/write API access remains **not confirmed/usable**.
 
-Earlier GBP scaffolding is not evidence of approval and does not authorize integration. Do not begin/resume GBP OAuth/API integration until authoritative Google evidence confirms usable access or a usable general request quota greater than 0. Production / DevOps owns provider/config verification; Control tracks the dependency.
+This is **not an ordinary capacity/quota-increase task**; it remains the provider API-access approval/review pathway. Existing earlier GBP scaffolding is **not evidence of provider approval** and does not authorize integration.
+
+Do not begin or resume GBP OAuth/API integration until authoritative Google evidence establishes usable access, including a **usable general request quota greater than 0**, or another explicit Google approval/access result that proves usable API calls. Production / DevOps owns provider/config verification; Control tracks the dependency.
 
 ## Other standing gates
 
