@@ -140,6 +140,15 @@ function isBookingCategoryInteractive(interactive) {
     && interactive.rows.some((row) => /^admin_booking_category:\d+$/.test(String(row?.id || '')));
 }
 
+function standardizeAdminWelcomeBody(body = '') {
+  const value = String(body || '');
+  if (!/^\*Shiloh Admin 🌿\*\n/u.test(value)) return value;
+  return value.replace(
+    /\n\nWhat would you like to do today\?\n\nChoose a section below\.\s*$/u,
+    '\n\nWhat would you like to manage today?'
+  );
+}
+
 function standardizeInteractive(interactive) {
   if (!interactive || typeof interactive !== 'object') return interactive;
   const next = { ...interactive };
@@ -151,7 +160,7 @@ function standardizeInteractive(interactive) {
     });
   }
   if (typeof next.body === 'string') {
-    next.body = next.body
+    next.body = standardizeAdminWelcomeBody(next.body)
       .replace(/^\*Find & book an appointment\*/u, '*New booking*')
       .replace(/Choose what you want to do\./g, 'Choose an action.');
   }
@@ -172,6 +181,7 @@ module.exports = {
   isBookingCategoryInteractive,
   isRequestedBodyTreatment,
   standardizeAdminUxResult,
+  standardizeAdminWelcomeBody,
   standardizeBookingCategories,
   standardizeInteractive,
   standardizeRow,
