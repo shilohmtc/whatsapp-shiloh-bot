@@ -57,14 +57,14 @@ async function loadLockedIdentity(db) {
 async function loadAppointmentsForUpdate(db) {
   const result = await db.query(`
     SELECT a.id,a.status,a.starts_at,a.ends_at,
-           COALESCE(array_agg(DISTINCT ast.staff_name_snapshot)
-             FILTER (WHERE ast.staff_name_snapshot IS NOT NULL), ARRAY[]::text[]) AS staff_names
+           COALESCE((SELECT array_agg(DISTINCT ast.staff_name_snapshot ORDER BY ast.staff_name_snapshot)
+                       FROM appointment_staff ast
+                      WHERE ast.appointment_id=a.id
+                        AND ast.staff_name_snapshot IS NOT NULL), ARRAY[]::text[]) AS staff_names
       FROM appointments a
-      LEFT JOIN appointment_staff ast ON ast.appointment_id=a.id
      WHERE a.client_id=$1
-     GROUP BY a.id,a.status,a.starts_at,a.ends_at
      ORDER BY a.id
-     FOR UPDATE OF a`, [DUMMY_TEST_CLIENT_ID]);
+     FOR UPDATE`, [DUMMY_TEST_CLIENT_ID]);
   return result.rows;
 }
 
@@ -113,10 +113,13 @@ async function terminalizeRelatedState(db, appointmentIds) {
 async function cancelCanonicalAppointments(db, appointments) {
   const cancelled = [];
   const preserved = [];
+  const calendarCandidates = [];
   for (const appointment of appointments) {
     const status = String(appointment.status || '').toLowerCase();
+    const staffNames = Array.isArray(appointment.staff_names) ? appointment.staff_names.filter(Boolean) : [];
     if (FINAL_STATUSES.has(status)) {
       preserved.push({ id: Number(appointment.id), status });
+      if (status === 'cancelled') calendarCandidates.push({ id: Number(appointment.id), staffNames });
       continue;
     }
     const updated = await db.query(`
@@ -133,13 +136,11 @@ async function cancelCanonicalAppointments(db, appointments) {
       String(appointment.id),
       JSON.stringify({ clientId: DUMMY_TEST_CLIENT_ID, fromStatus: appointment.status, toStatus: 'cancelled', reason: CLEANUP_REASON, noClientMessage: true }),
     ]);
-    cancelled.push({
-      id: Number(appointment.id),
-      fromStatus: appointment.status,
-      staffNames: Array.isArray(appointment.staff_names) ? appointment.staff_names.filter(Boolean) : [],
-    });
+    const item = { id: Number(appointment.id), fromStatus: appointment.status, staffNames };
+    cancelled.push(item);
+    calendarCandidates.push({ id: item.id, staffNames });
   }
-  return { cancelled, preserved };
+  return { cancelled, preserved, calendarCandidates };
 }
 
 async function markSharedCalendarMapping(appointmentId, status, error = null, db = pool) {
@@ -150,15 +151,15 @@ async function markSharedCalendarMapping(appointmentId, status, error = null, db
      WHERE appointment_id=$1 AND provider='google_calendar'`, [appointmentId, status, error ? String(error).slice(0, 2000) : null]);
 }
 
-async function cleanupCalendars(cancelled, deps = {}) {
+async function cleanupCalendars(candidates, deps = {}) {
   const calendarOn = deps.calendarEnabled || calendarEnabled;
   const cancelShared = deps.cancelBookingEvent || cancelBookingEvent;
   const cancelPractitioner = deps.cancelPractitionerBookingEvents || cancelPractitionerBookingEvents;
   const markMapping = deps.markSharedCalendarMapping || markSharedCalendarMapping;
-  const results = [];
-  if (!calendarOn()) return cancelled.map((item) => ({ appointmentId: item.id, status: 'disabled' }));
+  if (!calendarOn()) return candidates.map((item) => ({ appointmentId: item.id, status: 'disabled' }));
 
-  for (const item of cancelled) {
+  const results = [];
+  for (const item of candidates) {
     const eventId = eventIdForAppointment(item.id);
     try {
       const shared = await cancelShared(eventId);
@@ -182,12 +183,13 @@ async function runDummyTestAppointmentCleanup(deps = {}) {
   const client = await dbPool.connect();
   let cancelled = [];
   let preserved = [];
+  let calendarCandidates = [];
   let related = {};
   try {
     await client.query('BEGIN');
     await loadLockedIdentity(client);
     const appointments = await loadAppointmentsForUpdate(client);
-    ({ cancelled, preserved } = await cancelCanonicalAppointments(client, appointments));
+    ({ cancelled, preserved, calendarCandidates } = await cancelCanonicalAppointments(client, appointments));
     related = await terminalizeRelatedState(client, appointments.map((item) => Number(item.id)));
     await client.query(`
       INSERT INTO crm_audit_events(actor_admin_id,action,entity_type,entity_id,metadata)
@@ -203,8 +205,8 @@ async function runDummyTestAppointmentCleanup(deps = {}) {
     client.release();
   }
 
-  const calendars = await cleanupCalendars(cancelled, deps);
-  const unresolvedCalendarIds = calendars.filter((item) => item.status === 'error').map((item) => item.appointmentId);
+  const calendars = await cleanupCalendars(calendarCandidates, deps);
+  const unresolvedCalendarIds = calendars.filter((item) => item.status !== 'cancelled').map((item) => item.appointmentId);
   const result = {
     enabled: true,
     clientId: DUMMY_TEST_CLIENT_ID,
@@ -215,6 +217,9 @@ async function runDummyTestAppointmentCleanup(deps = {}) {
     unresolvedCalendarIds,
   };
   logger.info(result, 'Dummy Test booking cleanup one-shot completed');
+  if (unresolvedCalendarIds.length) {
+    throw new Error(`Dummy Test booking cleanup has unresolved Calendar mirrors for appointments: ${unresolvedCalendarIds.join(', ')}`);
+  }
   return result;
 }
 
@@ -225,6 +230,7 @@ module.exports = {
   enabled,
   validDummyName,
   assertResetIdentity,
+  loadAppointmentsForUpdate,
   terminalizeRelatedState,
   cancelCanonicalAppointments,
   cleanupCalendars,
