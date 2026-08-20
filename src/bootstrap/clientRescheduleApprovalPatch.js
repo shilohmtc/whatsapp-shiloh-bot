@@ -1,4 +1,5 @@
 const { pool } = require('../db/pool');
+const logger = require('../lib/logger');
 const adminAvailability = require('../services/adminAvailability');
 const {
   featureEnabled,
@@ -11,11 +12,18 @@ const {
   livePendingRescheduleConflicts,
   reconcileStalePendingRescheduleHolds,
 } = require('../services/clientRescheduleHoldReconciliation');
+const { ensureClientRescheduleApprovalSchema } = require('../services/clientRescheduleApprovalSchema');
+
+const schemaReady = ensureClientRescheduleApprovalSchema();
+schemaReady
+  .then((state) => logger.info(state, 'Client reschedule approval schema verified'))
+  .catch((error) => logger.error({ err: error }, 'Client reschedule approval schema initialization failed; feature remains unusable'));
 
 const originalGetConflicts = adminAvailability.getConflicts;
 adminAvailability.getConflicts = async function getConflictsWithRescheduleHolds(args = {}) {
   const conflicts = await originalGetConflicts(args);
   if (!featureEnabled()) return conflicts;
+  await schemaReady;
   const holds = await livePendingRescheduleConflicts({
     db: args.db || pool,
     staffId: args.staffId,
@@ -33,6 +41,7 @@ const originalCheckAvailability = adminAvailability.checkAvailability;
 adminAvailability.checkAvailability = async function checkAvailabilityWithRescheduleHolds(args = {}) {
   const result = await originalCheckAvailability(args);
   if (!featureEnabled() || result?.status !== 'available' || !result?.staff?.id) return result;
+  await schemaReady;
   const holds = await livePendingRescheduleConflicts({
     staffId: result.staff.id,
     startsAt: result.startsAt,
@@ -49,6 +58,7 @@ const bookingApproval = require('../services/clientBookingApproval');
 const originalProcessAppointmentChangeMessage = appointmentChange.processAppointmentChangeMessage;
 appointmentChange.processAppointmentChangeMessage = async function practitionerApprovedClientReschedule(phone, text, ...rest) {
   if (!featureEnabled()) return originalProcessAppointmentChangeMessage(phone, text, ...rest);
+  await schemaReady;
   const priorIntent = await appointmentChange.getIntent(phone);
   if (
     priorIntent?.action === 'reschedule'
@@ -101,8 +111,10 @@ rescheduleAvailability.processClientRescheduleAvailabilityMessage = async functi
 
 const originalProcessBookingApprovalMessage = bookingApproval.processClientBookingApprovalMessage;
 bookingApproval.processClientBookingApprovalMessage = async function bookingOrRescheduleApproval(sender, text, ...rest) {
-  // Approval/decline is a mutation boundary, so stale sibling holds may be retired here safely.
-  if (/^reschedule_approval_(?:approve|decline)_\d+$/i.test(String(text || '').trim())) {
+  const isRescheduleDecision = /^reschedule_approval_(?:approve|decline)_\d+$/i.test(String(text || '').trim());
+  if (isRescheduleDecision) {
+    await schemaReady;
+    // Approval/decline is a mutation boundary, so stale sibling holds may be retired here safely.
     await reconcileStalePendingRescheduleHolds();
   }
   const reschedule = await processRescheduleApprovalDecision(sender, text);
