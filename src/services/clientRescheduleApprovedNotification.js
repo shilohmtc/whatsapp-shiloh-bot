@@ -87,6 +87,7 @@ async function ensureApprovedRescheduleNotificationSchema() {
 async function latestApprovedRescheduleAudit(appointmentId) {
   const result = await pool.query(`
     SELECT id,
+           metadata->>'source' AS source,
            CASE
              WHEN COALESCE(metadata->>'requestId','') ~ '^\\d+$'
              THEN (metadata->>'requestId')::bigint
@@ -96,12 +97,11 @@ async function latestApprovedRescheduleAudit(appointmentId) {
      WHERE entity_type='appointment'
        AND entity_id=$1
        AND action='appointment.time_updated'
-       AND metadata->>'source'='client_reschedule_approval'
      ORDER BY id DESC
      LIMIT 1
   `, [String(appointmentId)]);
   const row = result.rows[0] || null;
-  if (!row?.request_id) return null;
+  if (row?.source !== 'client_reschedule_approval' || !row?.request_id) return null;
   return { auditEventId: Number(row.id), requestId: Number(row.request_id) };
 }
 
