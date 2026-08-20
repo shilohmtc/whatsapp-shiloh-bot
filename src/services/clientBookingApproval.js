@@ -9,6 +9,8 @@ const logger = require('../lib/logger');
 const APPROVE_PREFIX = 'booking_approval_approve_';
 const DECLINE_PREFIX = 'booking_approval_decline_';
 const DUMMY_TEST_DISPLAY_NAME = 'Dummy Test';
+const JUVAN_DISPLAY_NAME = 'Juvan Botha';
+const JUVAN_POLICY_KEY = 'juvan_botha_jp_booking_approval';
 const JP_DISPLAY_NAME = 'Jean-Pierre';
 const TEMPLATE_LANGUAGE = process.env.WHATSAPP_TEMPLATE_LANGUAGE || 'en';
 
@@ -26,24 +28,315 @@ async function ensureBookingApprovalTable(db = pool) {
   await db.query(`CREATE INDEX IF NOT EXISTS idx_appointment_booking_approvals_status ON appointment_booking_approvals(status, requested_at)`);
   await db.query(`CREATE INDEX IF NOT EXISTS idx_appointment_booking_approvals_approver ON appointment_booking_approvals(approver_staff_id, status)`);
   await db.query(`CREATE INDEX IF NOT EXISTS idx_appointment_booking_approvals_admin_approver ON appointment_booking_approvals(approver_admin_id, status)`);
+  await db.query(`CREATE TABLE IF NOT EXISTS client_booking_approval_policies (policy_key TEXT PRIMARY KEY, client_id BIGINT NOT NULL UNIQUE REFERENCES clients(id) ON DELETE RESTRICT, approver_admin_id BIGINT NOT NULL REFERENCES staff_admin_accounts(id) ON DELETE RESTRICT, expected_display_name TEXT NOT NULL, active BOOLEAN NOT NULL DEFAULT TRUE, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`);
 }
 
-async function resolveObserverStaffId(db, staffName) { if (String(staffName || '').trim().toLowerCase() !== 'abigail') return null; const result = await db.query(`SELECT id FROM staff WHERE LOWER(display_name) = 'christel' AND status = 'active' ORDER BY id LIMIT 1`); return result.rows[0]?.id || null; }
-async function resolveDummyTestApprovalPolicy(db, appointmentId) { const appointment = await db.query(`SELECT a.client_id, c.display_name, (SELECT COUNT(*)::int FROM clients dc WHERE LOWER(TRIM(dc.display_name)) = LOWER($2) AND dc.status = 'active') AS active_dummy_count FROM appointments a JOIN clients c ON c.id = a.client_id WHERE a.id = $1`, [appointmentId, DUMMY_TEST_DISPLAY_NAME]); const row = appointment.rows[0]; if (!row || String(row.display_name || '').trim().toLowerCase() !== DUMMY_TEST_DISPLAY_NAME.toLowerCase()) return null; if (Number(row.active_dummy_count) !== 1) throw new Error(`Dummy Test approval blocked: expected exactly one active CRM ${DUMMY_TEST_DISPLAY_NAME} profile`); const jp = await db.query(`SELECT saa.id AS admin_id, saa.display_name, saa.normalized_whatsapp FROM staff_admin_accounts saa WHERE LOWER(TRIM(saa.display_name)) = LOWER($1) AND saa.active = TRUE AND saa.business_role = 'business_admin' AND saa.calendar_scope = 'all_business' AND saa.service_scope = 'all_services' AND saa.normalized_whatsapp IS NOT NULL ORDER BY saa.id`, [JP_DISPLAY_NAME]); if (jp.rowCount !== 1) throw new Error(`Dummy Test approval blocked: expected exactly one active ${JP_DISPLAY_NAME} business_admin account with all_business/all_services scope and WhatsApp identity`); return { approverAdminId: Number(jp.rows[0].admin_id), approverStaffId: null, observerStaffId: null, mode: 'dummy_test_jp' }; }
-async function createPendingBookingApproval(db, { appointmentId, staffId, staffName }) { await ensureBookingApprovalTable(db); const dummyPolicy = await resolveDummyTestApprovalPolicy(db, appointmentId); const observerStaffId = dummyPolicy ? null : await resolveObserverStaffId(db, staffName); const approverStaffId = dummyPolicy ? null : Number(staffId); const approverAdminId = dummyPolicy?.approverAdminId || null; const result = await db.query(`INSERT INTO appointment_booking_approvals (appointment_id, approver_staff_id, approver_admin_id, observer_staff_id, status) VALUES ($1, $2, $3, $4, 'pending') ON CONFLICT (appointment_id) DO UPDATE SET approver_staff_id = EXCLUDED.approver_staff_id, approver_admin_id = EXCLUDED.approver_admin_id, observer_staff_id = EXCLUDED.observer_staff_id, updated_at = NOW() RETURNING appointment_id, approver_staff_id, approver_admin_id, observer_staff_id, status`, [appointmentId, approverStaffId, approverAdminId, observerStaffId]); return result.rows[0]; }
-async function approvalContext(appointmentId, db = pool) { await ensureBookingApprovalTable(db); const result = await db.query(`SELECT aba.appointment_id, aba.approver_staff_id, aba.approver_admin_id, aba.observer_staff_id, aba.status, aba.approver_notified_at, aba.observer_notified_at, a.client_id, a.starts_at, a.ends_at, a.status AS appointment_status, c.display_name AS client_name, COALESCE((SELECT string_agg(aps.service_name_snapshot, ' + ' ORDER BY aps.position) FROM appointment_services aps WHERE aps.appointment_id = a.id), a.title) AS service_name, COALESCE((SELECT string_agg(ast.staff_name_snapshot, ' + ' ORDER BY ast.position) FROM appointment_staff ast WHERE ast.appointment_id = a.id), practitioner_approver.display_name, admin_approver.display_name) AS staff_name, COALESCE(admin_approver.display_name, practitioner_approver.display_name) AS approver_name, observer.display_name AS observer_name FROM appointment_booking_approvals aba JOIN appointments a ON a.id = aba.appointment_id JOIN clients c ON c.id = a.client_id LEFT JOIN staff practitioner_approver ON practitioner_approver.id = aba.approver_staff_id LEFT JOIN staff_admin_accounts admin_approver ON admin_approver.id = aba.approver_admin_id AND admin_approver.active = TRUE LEFT JOIN staff observer ON observer.id = aba.observer_staff_id WHERE aba.appointment_id = $1`, [appointmentId]); return result.rows[0] || null; }
-async function adminContactForStaff(staffId, db = pool) { if (!staffId) return null; const result = await db.query(`SELECT id, staff_id, display_name, normalized_whatsapp FROM staff_admin_accounts WHERE staff_id = $1 AND active = TRUE AND normalized_whatsapp IS NOT NULL ORDER BY id LIMIT 1`, [staffId]); return result.rows[0] || null; }
-async function adminContactForAdmin(adminId, db = pool) { if (!adminId) return null; const result = await db.query(`SELECT id, staff_id, display_name, normalized_whatsapp FROM staff_admin_accounts WHERE id = $1 AND active = TRUE AND normalized_whatsapp IS NOT NULL LIMIT 1`, [adminId]); return result.rows[0] || null; }
-async function clientPhone(clientId, db = pool) { const result = await db.query(`SELECT normalized_value FROM client_contacts WHERE client_id = $1 AND contact_type IN ('whatsapp', 'phone', 'mobile') AND normalized_value IS NOT NULL ORDER BY is_primary DESC, id LIMIT 1`, [clientId]); return result.rows[0]?.normalized_value || null; }
-function approvalButtons(appointmentId) { return [{ id: `${APPROVE_PREFIX}${appointmentId}`, title: 'Approve' }, { id: `${DECLINE_PREFIX}${appointmentId}`, title: 'Decline' }]; }
-function isAuthorizedDecisionMaker(admin, context) { if (!admin || !context) return false; if (context.approver_admin_id && Number(context.approver_admin_id) === Number(admin.id)) return true; if (context.approver_staff_id && Number(context.approver_staff_id) === Number(admin.staff_id)) return true; return Boolean(context.observer_staff_id) && Number(context.observer_staff_id) === Number(admin.staff_id); }
-function approvalRequestBody(context) { const dummyTest = String(context.client_name || '').trim().toLowerCase() === DUMMY_TEST_DISPLAY_NAME.toLowerCase(); return [dummyTest ? '*Dummy Test booking approval required*' : '*Booking approval required*', '', `Client: ${context.client_name}`, `Treatment: ${context.service_name}`, `With: ${context.staff_name}`, `Time: ${fmtDateTime(context.starts_at)}`, '', 'This time is being held and will remain unavailable until an authorized approver approves or declines the request.', dummyTest ? 'JP is the sole required approver for the controlled CRM Dummy Test journey.' : null, !dummyTest && context.observer_staff_id ? 'For Abigail bookings, either Abigail or Christel may make the first decision.' : null].filter(Boolean).join('\n'); }
-async function sendApprovalRequest(to, context) { return sendWhatsAppTemplate(to, 'shiloh_booking_approval_request_v1', [context.client_name, context.service_name, context.staff_name, fmtDateTime(context.starts_at), String(context.appointment_id)], TEMPLATE_LANGUAGE, [`${APPROVE_PREFIX}${context.appointment_id}`, `${DECLINE_PREFIX}${context.appointment_id}`]); }
-async function requestPractitionerApproval({ appointmentId }) { const context = await approvalContext(appointmentId); if (!context || context.status !== 'pending' || context.appointment_status === 'cancelled') return { sent: false, reason: 'not_pending' }; const approver = context.approver_admin_id ? await adminContactForAdmin(context.approver_admin_id) : await adminContactForStaff(context.approver_staff_id); if (!approver) { await pool.query(`INSERT INTO crm_audit_events (action, entity_type, entity_id, metadata) VALUES ('client.booking_approval.notification_blocked', 'appointment', $1, $2::jsonb)`, [appointmentId, JSON.stringify({ reason: 'approver_whatsapp_unavailable', approverStaffId: context.approver_staff_id || null, approverAdminId: context.approver_admin_id || null })]); return { sent: false, reason: 'approver_whatsapp_unavailable' }; } if (!context.approver_notified_at) { await sendApprovalRequest(approver.normalized_whatsapp, context); await pool.query(`UPDATE appointment_booking_approvals SET approver_notified_at = NOW(), updated_at = NOW() WHERE appointment_id = $1 AND status = 'pending'`, [appointmentId]); } if (context.observer_staff_id && !context.observer_notified_at) { const observer = await adminContactForStaff(context.observer_staff_id); if (observer) { await sendApprovalRequest(observer.normalized_whatsapp, context); await pool.query(`UPDATE appointment_booking_approvals SET observer_notified_at = NOW(), updated_at = NOW() WHERE appointment_id = $1 AND status = 'pending'`, [appointmentId]); } } return { sent: true, approver: context.approver_name, secondaryApprover: context.observer_name || null }; }
-function parseApprovalDecision(value = '') { const text = String(value || '').trim().toLowerCase(); let match = text.match(/^booking_approval_approve_(\d+)$/); if (match) return { appointmentId: Number(match[1]), decision: 'approved' }; match = text.match(/^booking_approval_decline_(\d+)$/); if (match) return { appointmentId: Number(match[1]), decision: 'declined' }; return null; }
-async function resolveAdminByWhatsApp(sender, db = pool) { const normalized = normalizePhone(sender); const result = await db.query(`SELECT id, staff_id, display_name, normalized_whatsapp FROM staff_admin_accounts WHERE normalized_whatsapp = $1 AND active = TRUE ORDER BY id LIMIT 1`, [normalized]); return result.rows[0] || null; }
-async function notifyOtherDecisionMaker(context, decision, decidingAdmin) { if (!context?.observer_staff_id) return; const otherStaffId = Number(decidingAdmin.staff_id) === Number(context.approver_staff_id) ? context.observer_staff_id : context.approver_staff_id; const other = await adminContactForStaff(otherStaffId); if (!other || Number(other.id) === Number(decidingAdmin.id)) return; const template = process.env.WHATSAPP_BOOKING_APPROVAL_OUTCOME_TEMPLATE; if (template) return sendWhatsAppTemplate(other.normalized_whatsapp, template, [context.client_name, context.service_name, fmtDateTime(context.starts_at), decidingAdmin.display_name, decision, String(context.appointment_id)], TEMPLATE_LANGUAGE); return sendWhatsAppMessage(other.normalized_whatsapp, ['*Abigail booking request update*', '', `${context.client_name} — ${context.service_name} — ${fmtDateTime(context.starts_at)}`, `${decidingAdmin.display_name} has ${decision} the request.`, 'The first valid decision is final for this request.'].join('\n')); }
-async function approveBookingRequest(admin, context) { const db = await pool.connect(); try { await db.query('BEGIN'); const locked = await db.query(`SELECT aba.status, aba.approver_staff_id, aba.approver_admin_id, aba.observer_staff_id, a.status AS appointment_status FROM appointment_booking_approvals aba JOIN appointments a ON a.id = aba.appointment_id WHERE aba.appointment_id = $1 FOR UPDATE`, [context.appointment_id]); const row = locked.rows[0]; if (!row) { await db.query('ROLLBACK'); return { handled: true, reply: 'That booking approval request no longer exists.' }; } if (!isAuthorizedDecisionMaker(admin, row)) { await db.query('ROLLBACK'); return { handled: true, reply: 'You are not authorized to decide this booking request, so no decision was recorded.' }; } if (row.status !== 'pending') { await db.query('ROLLBACK'); return { handled: true, reply: `This booking request has already been ${row.status}.` }; } if (row.appointment_status === 'cancelled') { await db.query(`UPDATE appointment_booking_approvals SET status = 'declined', decided_at = NOW(), decided_by_admin_id = $2, decision_note = 'appointment already cancelled', updated_at = NOW() WHERE appointment_id = $1`, [context.appointment_id, admin.id]); await db.query('COMMIT'); return { handled: true, reply: 'This booking request is no longer active because the appointment was already cancelled.' }; } await db.query(`UPDATE appointment_booking_approvals SET status = 'approved', decided_at = NOW(), decided_by_admin_id = $2, updated_at = NOW() WHERE appointment_id = $1 AND status = 'pending'`, [context.appointment_id, admin.id]); await db.query(`INSERT INTO crm_audit_events (action, entity_type, entity_id, metadata) VALUES ('client.booking_approval.approved', 'appointment', $1, $2::jsonb)`, [context.appointment_id, JSON.stringify({ decisionMakerStaffId: admin.staff_id || null, decisionMakerAdminId: admin.id, decisionMakerName: admin.display_name })]); await db.query('COMMIT'); } catch (error) { try { await db.query('ROLLBACK'); } catch (_) {} throw error; } finally { db.release(); } const confirmation = await sendCustomerBookingConfirmationForAppointment(context.appointment_id); try { await notifyOtherDecisionMaker(context, 'approved', admin); } catch (error) { logger.warn({ err: error, appointmentId: context.appointment_id }, 'Booking approval peer outcome notification failed'); } return { handled: true, status: 'approved', reply: confirmation.sent ? `Approved by ${admin.display_name}. Appointment #${context.appointment_id} is confirmed and the client confirmation has been sent.` : `Approved by ${admin.display_name}. Appointment #${context.appointment_id} is confirmed. Client confirmation delivery status: ${confirmation.reason || 'not sent'}.` }; }
-async function declineBookingRequest(admin, context) { const db = await pool.connect(); let sharedEventId = null; try { await db.query('BEGIN'); const locked = await db.query(`SELECT aba.status, aba.approver_staff_id, aba.approver_admin_id, aba.observer_staff_id, a.status AS appointment_status, (SELECT event_id FROM appointment_calendar_events ace WHERE ace.appointment_id = a.id AND ace.provider = 'google_calendar' LIMIT 1) AS shared_event_id FROM appointment_booking_approvals aba JOIN appointments a ON a.id = aba.appointment_id WHERE aba.appointment_id = $1 FOR UPDATE`, [context.appointment_id]); const row = locked.rows[0]; if (!row) { await db.query('ROLLBACK'); return { handled: true, reply: 'That booking approval request no longer exists.' }; } if (!isAuthorizedDecisionMaker(admin, row)) { await db.query('ROLLBACK'); return { handled: true, reply: 'You are not authorized to decide this booking request, so no decision was recorded.' }; } if (row.status !== 'pending') { await db.query('ROLLBACK'); return { handled: true, reply: `This booking request has already been ${row.status}.` }; } sharedEventId = row.shared_event_id || null; await db.query(`UPDATE appointment_booking_approvals SET status = 'declined', decided_at = NOW(), decided_by_admin_id = $2, updated_at = NOW() WHERE appointment_id = $1 AND status = 'pending'`, [context.appointment_id, admin.id]); if (row.appointment_status !== 'cancelled') { await db.query(`UPDATE appointments SET status = 'cancelled', updated_at = NOW() WHERE id = $1 AND status <> 'cancelled'`, [context.appointment_id]); await db.query(`INSERT INTO appointment_status_history (appointment_id, from_status, to_status, changed_by, reason) VALUES ($1, $2, 'cancelled', $3, 'Authorized practitioner/supervisor declined client booking request')`, [context.appointment_id, row.appointment_status, `admin:${admin.id}`]); } await db.query(`INSERT INTO crm_audit_events (action, entity_type, entity_id, metadata) VALUES ('client.booking_approval.declined', 'appointment', $1, $2::jsonb)`, [context.appointment_id, JSON.stringify({ decisionMakerStaffId: admin.staff_id || null, decisionMakerAdminId: admin.id, decisionMakerName: admin.display_name })]); await db.query('COMMIT'); } catch (error) { try { await db.query('ROLLBACK'); } catch (_) {} throw error; } finally { db.release(); } if (sharedEventId) { try { await cancelBookingEvent(sharedEventId); } catch (error) { logger.error({ err: error, appointmentId: context.appointment_id }, 'Declined booking shared-calendar release failed'); } } try { await cancelPractitionerBookingEvent({ appointmentId: context.appointment_id, staffName: context.staff_name }); } catch (error) { logger.error({ err: error, appointmentId: context.appointment_id }, 'Declined booking practitioner-calendar release failed'); } const phone = await clientPhone(context.client_id); if (phone) { const template = process.env.WHATSAPP_BOOKING_DECLINED_TEMPLATE; try { if (template) await sendWhatsAppTemplate(phone, template, [context.client_name, context.service_name, fmtDateTime(context.starts_at), String(context.appointment_id)], TEMPLATE_LANGUAGE, ['BOOKING']); else { const body = ['*Booking request update*', '', `Your request for ${context.service_name} on ${fmtDateTime(context.starts_at)} could not be confirmed.`, 'The held time has been released. Nothing is booked.', '', 'Would you like to choose another available time? 🌿', 'Use the button below, or type *BOOKING*.'].join('\n'); await sendWhatsAppReplyButtons(phone, body, [{ id: 'BOOKING', title: 'Book another time' }]); } } catch (error) { logger.error({ err: error, appointmentId: context.appointment_id }, 'Declined booking client notification failed'); } } try { await notifyOtherDecisionMaker(context, 'declined', admin); } catch (error) { logger.warn({ err: error, appointmentId: context.appointment_id }, 'Booking decline peer outcome notification failed'); } return { handled: true, status: 'declined', reply: `Declined by ${admin.display_name}. Appointment request #${context.appointment_id} was cancelled and the held time was released.` }; }
-async function processClientBookingApprovalMessage(sender, text) { const decision = parseApprovalDecision(text); if (!decision) return { handled: false }; await ensureBookingApprovalTable(); const admin = await resolveAdminByWhatsApp(sender); if (!admin) return { handled: true, reply: 'This approval action is restricted to an authorized Shiloh practitioner or supervisor.' }; const context = await approvalContext(decision.appointmentId); if (!context) return { handled: true, reply: 'That booking approval request no longer exists.' }; if (!isAuthorizedDecisionMaker(admin, context)) return { handled: true, reply: 'You are not authorized to decide this booking request, so no decision was recorded.' }; return decision.decision === 'approved' ? approveBookingRequest(admin, context) : declineBookingRequest(admin, context); }
-module.exports = { APPROVE_PREFIX, DECLINE_PREFIX, approvalButtons, createPendingBookingApproval, ensureBookingApprovalTable, isAuthorizedDecisionMaker, parseApprovalDecision, processClientBookingApprovalMessage, requestPractitionerApproval, resolveDummyTestApprovalPolicy };
+async function resolveObserverStaffId(db, staffName) {
+  if (String(staffName || '').trim().toLowerCase() !== 'abigail') return null;
+  const result = await db.query(`SELECT id FROM staff WHERE LOWER(display_name) = 'christel' AND status = 'active' ORDER BY id LIMIT 1`);
+  return result.rows[0]?.id || null;
+}
+
+async function resolveJuvanApprovalPolicy(db, appointmentId) {
+  const appointment = await db.query(`
+    SELECT a.client_id,
+           c.display_name,
+           c.status AS client_status,
+           p.approver_admin_id,
+           p.expected_display_name,
+           p.active AS policy_active,
+           (SELECT COUNT(*)::int
+              FROM clients named
+             WHERE named.status='active'
+               AND LOWER(TRIM(named.display_name))=LOWER($3)) AS active_juvan_count,
+           (SELECT COUNT(DISTINCT cc.normalized_value)::int
+              FROM client_contacts cc
+             WHERE cc.client_id=a.client_id
+               AND cc.contact_type IN ('whatsapp','mobile')
+               AND NULLIF(TRIM(cc.normalized_value),'') IS NOT NULL) AS canonical_contact_count,
+           (SELECT COUNT(DISTINCT other.id)::int
+              FROM client_contacts target_cc
+              JOIN client_contacts other_cc
+                ON other_cc.normalized_value=target_cc.normalized_value
+               AND other_cc.contact_type IN ('whatsapp','mobile')
+              JOIN clients other
+                ON other.id=other_cc.client_id
+               AND other.status='active'
+             WHERE target_cc.client_id=a.client_id
+               AND target_cc.contact_type IN ('whatsapp','mobile')
+               AND NULLIF(TRIM(target_cc.normalized_value),'') IS NOT NULL
+               AND other.id<>a.client_id) AS shared_active_contact_count
+      FROM appointments a
+      JOIN clients c ON c.id=a.client_id
+      LEFT JOIN client_booking_approval_policies p
+        ON p.policy_key=$2
+       AND p.client_id=a.client_id
+     WHERE a.id=$1
+  `, [appointmentId, JUVAN_POLICY_KEY, JUVAN_DISPLAY_NAME]);
+  const row = appointment.rows[0];
+  if (!row) return null;
+
+  const isJuvanName = String(row.display_name || '').trim().toLowerCase() === JUVAN_DISPLAY_NAME.toLowerCase();
+  if (!row.approver_admin_id) {
+    if (isJuvanName) throw new Error('Juvan Botha approval blocked: canonical client policy is missing');
+    return null;
+  }
+
+  if (!isJuvanName
+      || row.client_status !== 'active'
+      || row.policy_active !== true
+      || String(row.expected_display_name || '').trim().toLowerCase() !== JUVAN_DISPLAY_NAME.toLowerCase()
+      || Number(row.active_juvan_count) !== 1
+      || Number(row.canonical_contact_count) < 1
+      || Number(row.shared_active_contact_count) !== 0) {
+    throw new Error('Juvan Botha approval blocked: canonical client identity no longer satisfies the guarded policy');
+  }
+
+  const jp = await db.query(`
+    SELECT saa.id AS admin_id, saa.display_name, saa.normalized_whatsapp
+      FROM staff_admin_accounts saa
+     WHERE saa.id=$1
+       AND LOWER(TRIM(saa.display_name))=LOWER($2)
+       AND saa.active=TRUE
+       AND saa.business_role='business_admin'
+       AND saa.calendar_scope='all_business'
+       AND saa.service_scope='all_services'
+       AND saa.normalized_whatsapp IS NOT NULL
+  `, [row.approver_admin_id, JP_DISPLAY_NAME]);
+  if (jp.rowCount !== 1) {
+    throw new Error(`Juvan Botha approval blocked: persisted ${JP_DISPLAY_NAME} approver no longer satisfies the guarded admin contract`);
+  }
+
+  return {
+    approverAdminId: Number(jp.rows[0].admin_id),
+    approverStaffId: null,
+    observerStaffId: null,
+    mode: JUVAN_POLICY_KEY,
+    clientId: Number(row.client_id),
+  };
+}
+
+async function resolveDummyTestApprovalPolicy(db, appointmentId) {
+  const appointment = await db.query(`SELECT a.client_id, c.display_name, (SELECT COUNT(*)::int FROM clients dc WHERE LOWER(TRIM(dc.display_name)) = LOWER($2) AND dc.status = 'active') AS active_dummy_count FROM appointments a JOIN clients c ON c.id = a.client_id WHERE a.id = $1`, [appointmentId, DUMMY_TEST_DISPLAY_NAME]);
+  const row = appointment.rows[0];
+  if (!row || String(row.display_name || '').trim().toLowerCase() !== DUMMY_TEST_DISPLAY_NAME.toLowerCase()) return null;
+  if (Number(row.active_dummy_count) !== 1) throw new Error(`Dummy Test approval blocked: expected exactly one active CRM ${DUMMY_TEST_DISPLAY_NAME} profile`);
+  const jp = await db.query(`SELECT saa.id AS admin_id, saa.display_name, saa.normalized_whatsapp FROM staff_admin_accounts saa WHERE LOWER(TRIM(saa.display_name)) = LOWER($1) AND saa.active = TRUE AND saa.business_role = 'business_admin' AND saa.calendar_scope = 'all_business' AND saa.service_scope = 'all_services' AND saa.normalized_whatsapp IS NOT NULL ORDER BY saa.id`, [JP_DISPLAY_NAME]);
+  if (jp.rowCount !== 1) throw new Error(`Dummy Test approval blocked: expected exactly one active ${JP_DISPLAY_NAME} business_admin account with all_business/all_services scope and WhatsApp identity`);
+  return { approverAdminId: Number(jp.rows[0].admin_id), approverStaffId: null, observerStaffId: null, mode: 'dummy_test_jp' };
+}
+
+async function resolveClientApprovalPolicy(db, appointmentId) {
+  return (await resolveJuvanApprovalPolicy(db, appointmentId)) || resolveDummyTestApprovalPolicy(db, appointmentId);
+}
+
+async function createPendingBookingApproval(db, { appointmentId, staffId, staffName }) {
+  await ensureBookingApprovalTable(db);
+  const specialPolicy = await resolveClientApprovalPolicy(db, appointmentId);
+  const observerStaffId = specialPolicy ? null : await resolveObserverStaffId(db, staffName);
+  const approverStaffId = specialPolicy ? null : Number(staffId);
+  const approverAdminId = specialPolicy?.approverAdminId || null;
+  const result = await db.query(`INSERT INTO appointment_booking_approvals (appointment_id, approver_staff_id, approver_admin_id, observer_staff_id, status) VALUES ($1, $2, $3, $4, 'pending') ON CONFLICT (appointment_id) DO UPDATE SET approver_staff_id = EXCLUDED.approver_staff_id, approver_admin_id = EXCLUDED.approver_admin_id, observer_staff_id = EXCLUDED.observer_staff_id, updated_at = NOW() RETURNING appointment_id, approver_staff_id, approver_admin_id, observer_staff_id, status`, [appointmentId, approverStaffId, approverAdminId, observerStaffId]);
+  return result.rows[0];
+}
+
+async function approvalContext(appointmentId, db = pool) {
+  await ensureBookingApprovalTable(db);
+  const result = await db.query(`SELECT aba.appointment_id, aba.approver_staff_id, aba.approver_admin_id, aba.observer_staff_id, aba.status, aba.approver_notified_at, aba.observer_notified_at, a.client_id, a.starts_at, a.ends_at, a.status AS appointment_status, c.display_name AS client_name, COALESCE((SELECT string_agg(aps.service_name_snapshot, ' + ' ORDER BY aps.position) FROM appointment_services aps WHERE aps.appointment_id = a.id), a.title) AS service_name, COALESCE((SELECT string_agg(ast.staff_name_snapshot, ' + ' ORDER BY ast.position) FROM appointment_staff ast WHERE ast.appointment_id = a.id), practitioner_approver.display_name, admin_approver.display_name) AS staff_name, COALESCE(admin_approver.display_name, practitioner_approver.display_name) AS approver_name, observer.display_name AS observer_name FROM appointment_booking_approvals aba JOIN appointments a ON a.id = aba.appointment_id JOIN clients c ON c.id = a.client_id LEFT JOIN staff practitioner_approver ON practitioner_approver.id = aba.approver_staff_id LEFT JOIN staff_admin_accounts admin_approver ON admin_approver.id = aba.approver_admin_id AND admin_approver.active = TRUE LEFT JOIN staff observer ON observer.id = aba.observer_staff_id WHERE aba.appointment_id = $1`, [appointmentId]);
+  return result.rows[0] || null;
+}
+
+async function adminContactForStaff(staffId, db = pool) {
+  if (!staffId) return null;
+  const result = await db.query(`SELECT id, staff_id, display_name, normalized_whatsapp FROM staff_admin_accounts WHERE staff_id = $1 AND active = TRUE AND normalized_whatsapp IS NOT NULL ORDER BY id LIMIT 1`, [staffId]);
+  return result.rows[0] || null;
+}
+
+async function adminContactForAdmin(adminId, db = pool) {
+  if (!adminId) return null;
+  const result = await db.query(`SELECT id, staff_id, display_name, normalized_whatsapp FROM staff_admin_accounts WHERE id = $1 AND active = TRUE AND normalized_whatsapp IS NOT NULL LIMIT 1`, [adminId]);
+  return result.rows[0] || null;
+}
+
+async function clientPhone(clientId, db = pool) {
+  const result = await db.query(`SELECT normalized_value FROM client_contacts WHERE client_id = $1 AND contact_type IN ('whatsapp', 'phone', 'mobile') AND normalized_value IS NOT NULL ORDER BY is_primary DESC, id LIMIT 1`, [clientId]);
+  return result.rows[0]?.normalized_value || null;
+}
+
+function approvalButtons(appointmentId) {
+  return [{ id: `${APPROVE_PREFIX}${appointmentId}`, title: 'Approve' }, { id: `${DECLINE_PREFIX}${appointmentId}`, title: 'Decline' }];
+}
+
+function isAuthorizedDecisionMaker(admin, context) {
+  if (!admin || !context) return false;
+  if (context.approver_admin_id && Number(context.approver_admin_id) === Number(admin.id)) return true;
+  if (context.approver_staff_id && Number(context.approver_staff_id) === Number(admin.staff_id)) return true;
+  return Boolean(context.observer_staff_id) && Number(context.observer_staff_id) === Number(admin.staff_id);
+}
+
+function approvalRequestBody(context) {
+  const dummyTest = String(context.client_name || '').trim().toLowerCase() === DUMMY_TEST_DISPLAY_NAME.toLowerCase();
+  const juvan = String(context.client_name || '').trim().toLowerCase() === JUVAN_DISPLAY_NAME.toLowerCase();
+  const jpControlled = dummyTest || juvan;
+  return [
+    dummyTest ? '*Dummy Test booking approval required*' : juvan ? '*Juvan Botha booking approval required*' : '*Booking approval required*',
+    '',
+    `Client: ${context.client_name}`,
+    `Treatment: ${context.service_name}`,
+    `With: ${context.staff_name}`,
+    `Time: ${fmtDateTime(context.starts_at)}`,
+    '',
+    'This time is being held and will remain unavailable until an authorized approver approves or declines the request.',
+    jpControlled ? 'JP is the sole required approver for this controlled CRM client journey.' : null,
+    !jpControlled && context.observer_staff_id ? 'For Abigail bookings, either Abigail or Christel may make the first decision.' : null,
+  ].filter(Boolean).join('\n');
+}
+
+async function sendApprovalRequest(to, context) {
+  return sendWhatsAppTemplate(to, 'shiloh_booking_approval_request_v1', [context.client_name, context.service_name, context.staff_name, fmtDateTime(context.starts_at), String(context.appointment_id)], TEMPLATE_LANGUAGE, [`${APPROVE_PREFIX}${context.appointment_id}`, `${DECLINE_PREFIX}${context.appointment_id}`]);
+}
+
+async function requestPractitionerApproval({ appointmentId }) {
+  const context = await approvalContext(appointmentId);
+  if (!context || context.status !== 'pending' || context.appointment_status === 'cancelled') return { sent: false, reason: 'not_pending' };
+  const approver = context.approver_admin_id ? await adminContactForAdmin(context.approver_admin_id) : await adminContactForStaff(context.approver_staff_id);
+  if (!approver) {
+    await pool.query(`INSERT INTO crm_audit_events (action, entity_type, entity_id, metadata) VALUES ('client.booking_approval.notification_blocked', 'appointment', $1, $2::jsonb)`, [appointmentId, JSON.stringify({ reason: 'approver_whatsapp_unavailable', approverStaffId: context.approver_staff_id || null, approverAdminId: context.approver_admin_id || null })]);
+    return { sent: false, reason: 'approver_whatsapp_unavailable' };
+  }
+  if (!context.approver_notified_at) {
+    await sendApprovalRequest(approver.normalized_whatsapp, context);
+    await pool.query(`UPDATE appointment_booking_approvals SET approver_notified_at = NOW(), updated_at = NOW() WHERE appointment_id = $1 AND status = 'pending'`, [appointmentId]);
+  }
+  if (context.observer_staff_id && !context.observer_notified_at) {
+    const observer = await adminContactForStaff(context.observer_staff_id);
+    if (observer) {
+      await sendApprovalRequest(observer.normalized_whatsapp, context);
+      await pool.query(`UPDATE appointment_booking_approvals SET observer_notified_at = NOW(), updated_at = NOW() WHERE appointment_id = $1 AND status = 'pending'`, [appointmentId]);
+    }
+  }
+  return { sent: true, approver: context.approver_name, secondaryApprover: context.observer_name || null };
+}
+
+function parseApprovalDecision(value = '') {
+  const text = String(value || '').trim().toLowerCase();
+  let match = text.match(/^booking_approval_approve_(\d+)$/);
+  if (match) return { appointmentId: Number(match[1]), decision: 'approved' };
+  match = text.match(/^booking_approval_decline_(\d+)$/);
+  if (match) return { appointmentId: Number(match[1]), decision: 'declined' };
+  return null;
+}
+
+async function resolveAdminByWhatsApp(sender, db = pool) {
+  const normalized = normalizePhone(sender);
+  const result = await db.query(`SELECT id, staff_id, display_name, normalized_whatsapp FROM staff_admin_accounts WHERE normalized_whatsapp = $1 AND active = TRUE ORDER BY id LIMIT 1`, [normalized]);
+  return result.rows[0] || null;
+}
+
+async function notifyOtherDecisionMaker(context, decision, decidingAdmin) {
+  if (!context?.observer_staff_id) return;
+  const otherStaffId = Number(decidingAdmin.staff_id) === Number(context.approver_staff_id) ? context.observer_staff_id : context.approver_staff_id;
+  const other = await adminContactForStaff(otherStaffId);
+  if (!other || Number(other.id) === Number(decidingAdmin.id)) return;
+  const template = process.env.WHATSAPP_BOOKING_APPROVAL_OUTCOME_TEMPLATE;
+  if (template) return sendWhatsAppTemplate(other.normalized_whatsapp, template, [context.client_name, context.service_name, fmtDateTime(context.starts_at), decidingAdmin.display_name, decision, String(context.appointment_id)], TEMPLATE_LANGUAGE);
+  return sendWhatsAppMessage(other.normalized_whatsapp, ['*Abigail booking request update*', '', `${context.client_name} — ${context.service_name} — ${fmtDateTime(context.starts_at)}`, `${decidingAdmin.display_name} has ${decision} the request.`, 'The first valid decision is final for this request.'].join('\n'));
+}
+
+async function approveBookingRequest(admin, context) {
+  const db = await pool.connect();
+  try {
+    await db.query('BEGIN');
+    const locked = await db.query(`SELECT aba.status, aba.approver_staff_id, aba.approver_admin_id, aba.observer_staff_id, a.status AS appointment_status FROM appointment_booking_approvals aba JOIN appointments a ON a.id = aba.appointment_id WHERE aba.appointment_id = $1 FOR UPDATE`, [context.appointment_id]);
+    const row = locked.rows[0];
+    if (!row) { await db.query('ROLLBACK'); return { handled: true, reply: 'That booking approval request no longer exists.' }; }
+    if (!isAuthorizedDecisionMaker(admin, row)) { await db.query('ROLLBACK'); return { handled: true, reply: 'You are not authorized to decide this booking request, so no decision was recorded.' }; }
+    if (row.status !== 'pending') { await db.query('ROLLBACK'); return { handled: true, reply: `This booking request has already been ${row.status}.` }; }
+    if (row.appointment_status === 'cancelled') {
+      await db.query(`UPDATE appointment_booking_approvals SET status = 'declined', decided_at = NOW(), decided_by_admin_id = $2, decision_note = 'appointment already cancelled', updated_at = NOW() WHERE appointment_id = $1`, [context.appointment_id, admin.id]);
+      await db.query('COMMIT');
+      return { handled: true, reply: 'This booking request is no longer active because the appointment was already cancelled.' };
+    }
+    await db.query(`UPDATE appointment_booking_approvals SET status = 'approved', decided_at = NOW(), decided_by_admin_id = $2, updated_at = NOW() WHERE appointment_id = $1 AND status = 'pending'`, [context.appointment_id, admin.id]);
+    await db.query(`INSERT INTO crm_audit_events (action, entity_type, entity_id, metadata) VALUES ('client.booking_approval.approved', 'appointment', $1, $2::jsonb)`, [context.appointment_id, JSON.stringify({ decisionMakerStaffId: admin.staff_id || null, decisionMakerAdminId: admin.id, decisionMakerName: admin.display_name })]);
+    await db.query('COMMIT');
+  } catch (error) {
+    try { await db.query('ROLLBACK'); } catch (_) {}
+    throw error;
+  } finally {
+    db.release();
+  }
+  const confirmation = await sendCustomerBookingConfirmationForAppointment(context.appointment_id);
+  try { await notifyOtherDecisionMaker(context, 'approved', admin); } catch (error) { logger.warn({ err: error, appointmentId: context.appointment_id }, 'Booking approval peer outcome notification failed'); }
+  return { handled: true, status: 'approved', reply: confirmation.sent ? `Approved by ${admin.display_name}. Appointment #${context.appointment_id} is confirmed and the client confirmation has been sent.` : `Approved by ${admin.display_name}. Appointment #${context.appointment_id} is confirmed. Client confirmation delivery status: ${confirmation.reason || 'not sent'}.` };
+}
+
+async function declineBookingRequest(admin, context) {
+  const db = await pool.connect();
+  let sharedEventId = null;
+  try {
+    await db.query('BEGIN');
+    const locked = await db.query(`SELECT aba.status, aba.approver_staff_id, aba.approver_admin_id, aba.observer_staff_id, a.status AS appointment_status, (SELECT event_id FROM appointment_calendar_events ace WHERE ace.appointment_id = a.id AND ace.provider = 'google_calendar' LIMIT 1) AS shared_event_id FROM appointment_booking_approvals aba JOIN appointments a ON a.id = aba.appointment_id WHERE aba.appointment_id = $1 FOR UPDATE`, [context.appointment_id]);
+    const row = locked.rows[0];
+    if (!row) { await db.query('ROLLBACK'); return { handled: true, reply: 'That booking approval request no longer exists.' }; }
+    if (!isAuthorizedDecisionMaker(admin, row)) { await db.query('ROLLBACK'); return { handled: true, reply: 'You are not authorized to decide this booking request, so no decision was recorded.' }; }
+    if (row.status !== 'pending') { await db.query('ROLLBACK'); return { handled: true, reply: `This booking request has already been ${row.status}.` }; }
+    sharedEventId = row.shared_event_id || null;
+    await db.query(`UPDATE appointment_booking_approvals SET status = 'declined', decided_at = NOW(), decided_by_admin_id = $2, updated_at = NOW() WHERE appointment_id = $1 AND status = 'pending'`, [context.appointment_id, admin.id]);
+    if (row.appointment_status !== 'cancelled') {
+      await db.query(`UPDATE appointments SET status = 'cancelled', updated_at = NOW() WHERE id = $1 AND status <> 'cancelled'`, [context.appointment_id]);
+      await db.query(`INSERT INTO appointment_status_history (appointment_id, from_status, to_status, changed_by, reason) VALUES ($1, $2, 'cancelled', $3, 'Authorized practitioner/supervisor declined client booking request')`, [context.appointment_id, row.appointment_status, `admin:${admin.id}`]);
+    }
+    await db.query(`INSERT INTO crm_audit_events (action, entity_type, entity_id, metadata) VALUES ('client.booking_approval.declined', 'appointment', $1, $2::jsonb)`, [context.appointment_id, JSON.stringify({ decisionMakerStaffId: admin.staff_id || null, decisionMakerAdminId: admin.id, decisionMakerName: admin.display_name })]);
+    await db.query('COMMIT');
+  } catch (error) {
+    try { await db.query('ROLLBACK'); } catch (_) {}
+    throw error;
+  } finally {
+    db.release();
+  }
+  if (sharedEventId) {
+    try { await cancelBookingEvent(sharedEventId); } catch (error) { logger.error({ err: error, appointmentId: context.appointment_id }, 'Declined booking shared-calendar release failed'); }
+  }
+  try { await cancelPractitionerBookingEvent({ appointmentId: context.appointment_id, staffName: context.staff_name }); } catch (error) { logger.error({ err: error, appointmentId: context.appointment_id }, 'Declined booking practitioner-calendar release failed'); }
+  const phone = await clientPhone(context.client_id);
+  if (phone) {
+    const template = process.env.WHATSAPP_BOOKING_DECLINED_TEMPLATE;
+    try {
+      if (template) await sendWhatsAppTemplate(phone, template, [context.client_name, context.service_name, fmtDateTime(context.starts_at), String(context.appointment_id)], TEMPLATE_LANGUAGE, ['BOOKING']);
+      else {
+        const body = ['*Booking request update*', '', `Your request for ${context.service_name} on ${fmtDateTime(context.starts_at)} could not be confirmed.`, 'The held time has been released. Nothing is booked.', '', 'Would you like to choose another available time? 🌿', 'Use the button below, or type *BOOKING*.'].join('\n');
+        await sendWhatsAppReplyButtons(phone, body, [{ id: 'BOOKING', title: 'Book another time' }]);
+      }
+    } catch (error) { logger.error({ err: error, appointmentId: context.appointment_id }, 'Declined booking client notification failed'); }
+  }
+  try { await notifyOtherDecisionMaker(context, 'declined', admin); } catch (error) { logger.warn({ err: error, appointmentId: context.appointment_id }, 'Booking decline peer outcome notification failed'); }
+  return { handled: true, status: 'declined', reply: `Declined by ${admin.display_name}. Appointment request #${context.appointment_id} was cancelled and the held time was released.` };
+}
+
+async function processClientBookingApprovalMessage(sender, text) {
+  const decision = parseApprovalDecision(text);
+  if (!decision) return { handled: false };
+  await ensureBookingApprovalTable();
+  const admin = await resolveAdminByWhatsApp(sender);
+  if (!admin) return { handled: true, reply: 'This approval action is restricted to an authorized Shiloh practitioner or supervisor.' };
+  const context = await approvalContext(decision.appointmentId);
+  if (!context) return { handled: true, reply: 'That booking approval request no longer exists.' };
+  if (!isAuthorizedDecisionMaker(admin, context)) return { handled: true, reply: 'You are not authorized to decide this booking request, so no decision was recorded.' };
+  return decision.decision === 'approved' ? approveBookingRequest(admin, context) : declineBookingRequest(admin, context);
+}
+
+module.exports = {
+  APPROVE_PREFIX,
+  DECLINE_PREFIX,
+  approvalButtons,
+  createPendingBookingApproval,
+  ensureBookingApprovalTable,
+  isAuthorizedDecisionMaker,
+  parseApprovalDecision,
+  processClientBookingApprovalMessage,
+  requestPractitionerApproval,
+  resolveClientApprovalPolicy,
+  resolveDummyTestApprovalPolicy,
+  resolveJuvanApprovalPolicy,
+};
