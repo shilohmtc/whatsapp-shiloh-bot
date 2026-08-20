@@ -12,8 +12,10 @@ async function ensureBookingApprovalInfrastructure(db = pool) {
       approver_admin_id BIGINT REFERENCES staff_admin_accounts(id),
       observer_staff_id BIGINT REFERENCES staff(id),
       status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'declined')),
+      approval_mode TEXT NOT NULL DEFAULT 'standard',
       requested_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       approver_notified_at TIMESTAMPTZ,
+      backup_notified_at TIMESTAMPTZ,
       observer_notified_at TIMESTAMPTZ,
       decided_at TIMESTAMPTZ,
       decided_by_admin_id BIGINT,
@@ -22,10 +24,28 @@ async function ensureBookingApprovalInfrastructure(db = pool) {
     )
   `);
   await db.query(`ALTER TABLE appointment_booking_approvals ADD COLUMN IF NOT EXISTS approver_admin_id BIGINT REFERENCES staff_admin_accounts(id)`);
+  await db.query(`ALTER TABLE appointment_booking_approvals ADD COLUMN IF NOT EXISTS approval_mode TEXT NOT NULL DEFAULT 'standard'`);
+  await db.query(`ALTER TABLE appointment_booking_approvals ADD COLUMN IF NOT EXISTS backup_notified_at TIMESTAMPTZ`);
   await db.query(`ALTER TABLE appointment_booking_approvals ALTER COLUMN approver_staff_id DROP NOT NULL`);
   await db.query(`CREATE INDEX IF NOT EXISTS idx_appointment_booking_approvals_status ON appointment_booking_approvals(status, requested_at)`);
   await db.query(`CREATE INDEX IF NOT EXISTS idx_appointment_booking_approvals_approver ON appointment_booking_approvals(approver_staff_id, status)`);
   await db.query(`CREATE INDEX IF NOT EXISTS idx_appointment_booking_approvals_admin_approver ON appointment_booking_approvals(approver_admin_id, status)`);
+
+  await db.query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+         WHERE conrelid='appointment_booking_approvals'::regclass
+           AND conname='appointment_booking_approvals_mode_check'
+      ) THEN
+        ALTER TABLE appointment_booking_approvals
+          ADD CONSTRAINT appointment_booking_approvals_mode_check
+          CHECK (approval_mode IN ('standard','controlled_juvan_primary_backup'));
+      END IF;
+    END;
+    $$
+  `);
 
   await db.query(`
     CREATE TABLE IF NOT EXISTS client_booking_approval_policies (
@@ -68,12 +88,14 @@ async function ensureBookingApprovalInfrastructure(db = pool) {
       observer_id BIGINT;
       required_approver_id BIGINT;
       required_approver_admin_id BIGINT;
+      required_approval_mode TEXT;
       controlled_client_id BIGINT;
       controlled_phone TEXT;
       policy_client_id BIGINT;
       targeted_policy_admin_id BIGINT;
       anchored_contact_count INTEGER;
       shared_active_contact_count INTEGER;
+      primary_admin_count INTEGER;
       dummy_count INTEGER;
       jp_count INTEGER;
     BEGIN
@@ -90,6 +112,7 @@ async function ensureBookingApprovalInfrastructure(db = pool) {
       observer_id := NULL;
       required_approver_id := NEW.staff_id;
       required_approver_admin_id := NULL;
+      required_approval_mode := 'standard';
       controlled_client_id := NULL;
       controlled_phone := NULL;
       policy_client_id := NULL;
@@ -113,7 +136,6 @@ async function ensureBookingApprovalInfrastructure(db = pool) {
         IF targeted_policy_admin_id IS NULL OR policy_client_id IS DISTINCT FROM controlled_client_id THEN
           RAISE EXCEPTION 'Controlled Juvan booking approval blocked: policy pointer does not match the current demo client';
         END IF;
-
         IF booking_client_status IS DISTINCT FROM 'active' THEN
           RAISE EXCEPTION 'Controlled Juvan booking approval blocked: current demo client is not active';
         END IF;
@@ -122,9 +144,8 @@ async function ensureBookingApprovalInfrastructure(db = pool) {
           INTO anchored_contact_count
           FROM client_contacts cc
          WHERE cc.client_id = booking_client_id
-           AND cc.contact_type IN ('whatsapp', 'mobile')
+           AND cc.contact_type IN ('whatsapp','mobile')
            AND regexp_replace(COALESCE(cc.normalized_value, cc.value, ''), '[^0-9]', '', 'g') = controlled_phone;
-
         IF anchored_contact_count < 1 THEN
           RAISE EXCEPTION 'Controlled Juvan booking approval blocked: exact demo phone is not attached to the current canonical client';
         END IF;
@@ -132,13 +153,10 @@ async function ensureBookingApprovalInfrastructure(db = pool) {
         SELECT COUNT(DISTINCT other.id)::int
           INTO shared_active_contact_count
           FROM client_contacts other_cc
-          JOIN clients other
-            ON other.id = other_cc.client_id
-           AND other.status = 'active'
+          JOIN clients other ON other.id = other_cc.client_id AND other.status = 'active'
          WHERE regexp_replace(COALESCE(other_cc.normalized_value, other_cc.value, ''), '[^0-9]', '', 'g') = controlled_phone
-           AND other_cc.contact_type IN ('whatsapp', 'mobile')
+           AND other_cc.contact_type IN ('whatsapp','mobile')
            AND other.id <> booking_client_id;
-
         IF shared_active_contact_count <> 0 THEN
           RAISE EXCEPTION 'Controlled Juvan booking approval blocked: exact demo phone is shared with another active CRM client';
         END IF;
@@ -153,20 +171,27 @@ async function ensureBookingApprovalInfrastructure(db = pool) {
            AND saa.calendar_scope = 'all_business'
            AND saa.service_scope = 'all_services'
            AND saa.normalized_whatsapp IS NOT NULL;
-
         IF jp_count <> 1 THEN
-          RAISE EXCEPTION 'Controlled Juvan booking approval blocked: Jean-Pierre approver no longer satisfies the guarded admin contract';
+          RAISE EXCEPTION 'Controlled Juvan booking approval blocked: Jean-Pierre backup approver no longer satisfies the guarded admin contract';
         END IF;
 
-        required_approver_id := NULL;
-        required_approver_admin_id := targeted_policy_admin_id;
-      ELSIF LOWER(TRIM(COALESCE(booking_client_name, ''))) = 'dummy test' THEN
         SELECT COUNT(*)::int
-          INTO dummy_count
-          FROM clients c
-         WHERE LOWER(TRIM(c.display_name)) = 'dummy test'
-           AND c.status = 'active';
+          INTO primary_admin_count
+          FROM staff_admin_accounts saa
+         WHERE saa.staff_id = NEW.staff_id
+           AND saa.active = TRUE
+           AND saa.normalized_whatsapp IS NOT NULL;
+        IF primary_admin_count < 1 THEN
+          RAISE EXCEPTION 'Controlled Juvan booking approval blocked: assigned Primary practitioner has no active Admin WhatsApp identity';
+        END IF;
 
+        required_approver_id := NEW.staff_id;
+        required_approver_admin_id := targeted_policy_admin_id;
+        required_approval_mode := 'controlled_juvan_primary_backup';
+      ELSIF LOWER(TRIM(COALESCE(booking_client_name, ''))) = 'dummy test' THEN
+        SELECT COUNT(*)::int INTO dummy_count
+          FROM clients c
+         WHERE LOWER(TRIM(c.display_name)) = 'dummy test' AND c.status = 'active';
         IF dummy_count <> 1 THEN
           RAISE EXCEPTION 'Dummy Test approval blocked: expected exactly one active CRM Dummy Test profile';
         END IF;
@@ -180,24 +205,21 @@ async function ensureBookingApprovalInfrastructure(db = pool) {
            AND saa.calendar_scope = 'all_business'
            AND saa.service_scope = 'all_services'
            AND saa.normalized_whatsapp IS NOT NULL;
-
         IF jp_count <> 1 OR required_approver_admin_id IS NULL THEN
           RAISE EXCEPTION 'Dummy Test approval blocked: expected exactly one active Jean-Pierre business_admin account with all_business/all_services scope and WhatsApp identity';
         END IF;
-
         required_approver_id := NULL;
       ELSIF LOWER(COALESCE(NEW.staff_name_snapshot, '')) = 'abigail' THEN
         SELECT id INTO observer_id
           FROM staff
-         WHERE LOWER(display_name) = 'christel'
-           AND status = 'active'
-         ORDER BY id
-         LIMIT 1;
+         WHERE LOWER(display_name) = 'christel' AND status = 'active'
+         ORDER BY id LIMIT 1;
       END IF;
 
       INSERT INTO appointment_booking_approvals
-        (appointment_id, approver_staff_id, approver_admin_id, observer_staff_id, status)
-      VALUES (NEW.appointment_id, required_approver_id, required_approver_admin_id, observer_id, 'pending')
+        (appointment_id, approver_staff_id, approver_admin_id, observer_staff_id, status, approval_mode)
+      VALUES
+        (NEW.appointment_id, required_approver_id, required_approver_admin_id, observer_id, 'pending', required_approval_mode)
       ON CONFLICT (appointment_id) DO NOTHING;
       RETURN NEW;
     END;

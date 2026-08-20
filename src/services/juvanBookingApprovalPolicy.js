@@ -10,12 +10,14 @@ const {
 const BASE_MIGRATION = '065_juvan_botha_jp_booking_approval.sql';
 const IDENTITY_MIGRATION = '066_controlled_juvan_demo_identity.sql';
 const REBIND_MIGRATION = '067_controlled_juvan_registration_rebind.sql';
+const PRIMARY_BACKUP_MIGRATION = '068_juvan_primary_backup_booking_approval.sql';
 const EXPECTED_APPROVER_NAME = 'Jean-Pierre';
 
 async function ensureJuvanBookingApprovalPolicy() {
   const baseMigration = await applyMigrationFile(BASE_MIGRATION);
   const identityMigration = await applyMigrationFile(IDENTITY_MIGRATION);
   const rebindMigration = await applyMigrationFile(REBIND_MIGRATION);
+  const primaryBackupMigration = await applyMigrationFile(PRIMARY_BACKUP_MIGRATION);
 
   const result = await pool.query(`
     SELECT d.demo_key,
@@ -78,6 +80,7 @@ async function ensureJuvanBookingApprovalPolicy() {
       { filename: BASE_MIGRATION, applied: baseMigration.applied === true, checksumVerified: baseMigration.checksumVerified === true },
       { filename: IDENTITY_MIGRATION, applied: identityMigration.applied === true, checksumVerified: identityMigration.checksumVerified === true },
       { filename: REBIND_MIGRATION, applied: rebindMigration.applied === true, checksumVerified: rebindMigration.checksumVerified === true },
+      { filename: PRIMARY_BACKUP_MIGRATION, applied: primaryBackupMigration.applied === true, checksumVerified: primaryBackupMigration.checksumVerified === true },
     ],
     demoKey: DEMO_KEY,
     bindingState: state.status,
@@ -86,6 +89,7 @@ async function ensureJuvanBookingApprovalPolicy() {
     phoneSuffix: String(row.normalized_phone).slice(-4),
     approverAdminId: String(row.approver_admin_id),
     approverName: EXPECTED_APPROVER_NAME,
+    approvalContract: 'assigned_practitioner_primary_jean_pierre_backup_first_decision_wins',
     approverWhatsAppConfigured: true,
   };
 }
@@ -94,6 +98,7 @@ module.exports = {
   BASE_MIGRATION,
   IDENTITY_MIGRATION,
   REBIND_MIGRATION,
+  PRIMARY_BACKUP_MIGRATION,
   POLICY_KEY,
   EXPECTED_CLIENT_NAME: EXPECTED_DISPLAY_NAME,
   EXPECTED_APPROVER_NAME,
