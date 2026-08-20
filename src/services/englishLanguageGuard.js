@@ -27,10 +27,16 @@ function isEnglishCompatibleClinicNavigation(text='') {
   return hintCount >= 2;
 }
 
+function isEnglishCompatibleControlToken(text='') {
+  const value = String(text || '').trim();
+  return /^admin_test_client_reset_(confirm|cancel):(chenique|juvan|dummy_test)$/i.test(value);
+}
+
 function needsLanguageCheck(text='') {
   const value=String(text||'').trim();
   if(!value) return false;
   if(isEnglishCompatibleClinicNavigation(value)) return false;
+  if(isEnglishCompatibleControlToken(value)) return false;
   const words=value.match(/[A-Za-zÀ-ÿ]+(?:['’-][A-Za-zÀ-ÿ]+)*/g)||[];
   // Names, confirmation tokens, menu numbers, dates and times must continue to work.
   return words.length >= 3 || /[^\u0000-\u024F\u2000-\u206F\u20A0-\u20CF\u2100-\u214F\u2190-\u21FF\u2600-\u27BF\uFE0F]/u.test(value);
@@ -63,4 +69,4 @@ async function guardEnglishOnly(text) {
   }
 }
 
-module.exports={guardEnglishOnly,ENGLISH_ONLY_REPLY,needsLanguageCheck,isEnglishCompatibleClinicNavigation};
+module.exports={guardEnglishOnly,ENGLISH_ONLY_REPLY,needsLanguageCheck,isEnglishCompatibleClinicNavigation,isEnglishCompatibleControlToken};
