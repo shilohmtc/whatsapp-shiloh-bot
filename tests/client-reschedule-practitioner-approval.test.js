@@ -24,7 +24,7 @@ test('pending request preserves original appointment and holds only the proposed
   assert.match(service, /'reschedule_hold'::text/);
   assert.match(patch, /getConflictsWithRescheduleHolds/);
   assert.match(patch, /checkAvailabilityWithRescheduleHolds/);
-  const create = service.match(/async function createPendingRescheduleRequest[\s\S]*?async function resolveAdminByWhatsApp/);
+  const create = service.match(/async function createPendingRescheduleRequest[\s\S]*?async function loadRequestContext/);
   assert.ok(create);
   assert.doesNotMatch(create[0], /UPDATE appointments SET starts_at=/);
   assert.match(create[0], /Your current appointment remains confirmed and unchanged until the requested change is approved/);
@@ -37,9 +37,10 @@ test('only one pending reschedule request may exist per appointment and it has n
 });
 
 test('request path revalidates canonical and connected-calendar availability under practitioner lock', () => {
-  const create = service.match(/async function createPendingRescheduleRequest[\s\S]*?async function resolveAdminByWhatsApp/);
+  const create = service.match(/async function createPendingRescheduleRequest[\s\S]*?async function loadRequestContext/);
   assert.ok(create);
   assert.match(create[0], /pg_advisory_xact_lock/);
+  assert.match(create[0], /loadAppointmentForRequest\(phone, appointment\.id, db, true\)/);
   assert.match(create[0], /validateCandidate/);
   assert.match(create[0], /validateExternalCalendars/);
   assert.match(service, /checkClinicHours/);
@@ -49,13 +50,17 @@ test('request path revalidates canonical and connected-calendar availability und
   assert.match(service, /checkPractitionerCalendarAvailability/);
 });
 
-test('same-practitioner single-service boundary fails closed for complex appointments', () => {
+test('same-practitioner single-service boundary and immutable snapshots fail closed', () => {
   assert.match(service, /staff_count/);
   assert.match(service, /service_count/);
   assert.match(service, /complex_practitioner_setup/);
   assert.match(service, /complex_service_setup/);
-  assert.match(service, /Number\(locked\.staff_id\) !== Number\(appointment\.staff_id\)/);
-  assert.match(service, /Number\(locked\.service_id \|\| 0\) !== Number\(appointment\.service_id \|\| 0\)/);
+  assert.match(service, /requested_service_id/);
+  assert.match(service, /current_service_id/);
+  assert.match(service, /current_staff_id/);
+  assert.match(service, /canonicalStillMatchesRequest/);
+  assert.match(service, /Number\(context\.current_service_id \|\| 0\) === Number\(context\.requested_service_id \|\| 0\)/);
+  assert.match(service, /new Date\(context\.current_starts_at\).*new Date\(context\.original_starts_at\)/s);
 });
 
 test('approval transport contract is frozen and uses deterministic decision payloads', () => {
@@ -81,12 +86,14 @@ test('approve revalidates before canonical mutation and decline never mutates ap
   const approve = service.match(/async function approveRequest[\s\S]*?async function declineRequest/);
   const decline = service.match(/async function declineRequest[\s\S]*?async function processRescheduleApprovalDecision/);
   assert.ok(approve && decline);
-  const lock = approve[0].indexOf('pg_advisory_xact_lock');
+  const snapshot = approve[0].indexOf('canonicalStillMatchesRequest');
+  const lock = approve[0].indexOf('pg_advisory_xact_lock', snapshot);
   const candidate = approve[0].indexOf('validateCandidate', lock);
   const external = approve[0].indexOf('validateExternalCalendars', candidate);
   const mutate = approve[0].indexOf('UPDATE appointments SET starts_at=', external);
-  assert.ok(lock >= 0 && candidate > lock && external > candidate && mutate > external);
+  assert.ok(snapshot >= 0 && lock > snapshot && candidate > lock && external > candidate && mutate > external);
   assert.doesNotMatch(decline[0], /UPDATE appointments SET starts_at=/);
+  assert.match(decline[0], /canonicalStillMatchesRequest/);
   assert.match(decline[0], /status='declined'/);
 });
 
@@ -100,6 +107,20 @@ test('approved reschedule synchronizes both calendar mirrors and compensates on 
 
 test('approved reschedule queues durable customer update and decline preserves original appointment', () => {
   assert.match(service, /appointment\.time_updated/);
-  assert.match(service, /queueCustomerChangeNotification\(locked\.appointment_id, 'time'\)/);
+  assert.match(service, /queueCustomerChangeNotification\(appointmentId, 'time'\)/);
   assert.match(service, /The client's original appointment is unchanged/);
+});
+
+test('client cancellation supersedes any pending reschedule hold immediately', () => {
+  assert.match(service, /supersedePendingRescheduleForAppointment/);
+  assert.match(patch, /priorIntent\?\.action === 'cancel'/);
+  assert.match(patch, /status\.rows\[0\]\?\.status === 'cancelled'/);
+  assert.match(patch, /client cancelled the original appointment/);
+});
+
+test('stale decline is superseded instead of sending outdated original-booking copy', () => {
+  const decline = service.match(/async function declineRequest[\s\S]*?async function processRescheduleApprovalDecision/);
+  assert.ok(decline);
+  assert.match(decline[0], /canonicalStillMatchesRequest/);
+  assert.match(decline[0], /stale reschedule request was closed without sending an outdated client message/);
 });
