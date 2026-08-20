@@ -4,6 +4,7 @@ const logger = require('../lib/logger');
 const LIVE_PENDING_WHERE = `
   request.status='pending'
   AND appointment.status<>'cancelled'
+  AND appointment.starts_at > NOW()
   AND appointment.starts_at IS NOT DISTINCT FROM request.original_starts_at
   AND appointment.ends_at IS NOT DISTINCT FROM request.original_ends_at
   AND (SELECT COUNT(*)::int FROM appointment_staff x WHERE x.appointment_id=appointment.id)=1
@@ -36,7 +37,7 @@ async function reconcileStalePendingRescheduleHolds({ db = pool, staffId = null 
     UPDATE appointment_reschedule_requests request
        SET status='superseded',
            decided_at=COALESCE(request.decided_at,NOW()),
-           decision_note='canonical appointment changed while reschedule approval was pending',
+           decision_note='canonical appointment changed or reached its start boundary while reschedule approval was pending',
            updated_at=NOW()
       FROM appointments appointment
      WHERE request.appointment_id=appointment.id
@@ -53,7 +54,7 @@ async function reconcileStalePendingRescheduleHolds({ db = pool, staffId = null 
         VALUES ('client.reschedule_approval.superseded','appointment',$1,$2::jsonb)
       `, [row.appointment_id, JSON.stringify({
         requestId: Number(row.id),
-        reason: 'canonical appointment changed while reschedule approval was pending',
+        reason: 'canonical appointment changed or reached its start boundary while reschedule approval was pending',
         reconciledAtChangeBoundary: true,
       })]);
     } catch (error) {
