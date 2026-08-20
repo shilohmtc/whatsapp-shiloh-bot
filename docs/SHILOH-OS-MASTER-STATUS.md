@@ -7,153 +7,176 @@ Purpose: permanent current-state source of truth. Historical implementation deta
 
 Operational truth is GitHub `main`, Render production, Shiloh CRM/Postgres, Google Calendar, Meta/WhatsApp provider evidence, and explicit real WhatsApp/human evidence. Never infer provider approval, attendance, approval decisions, CRM identity, Calendar state or handset behaviour.
 
-At the beginning of each new Shiloh OS chat: read this Master + `docs/SHILOH-OS-PROJECT-TRACKER.md` + the latest reconciliation, currently `docs/SHILOH-OS-RECONCILIATION-2026-08-20-CURRENT-MAIN-356.md`, plus `docs/SHILOH-OS-ENGINEERING-GOVERNANCE.md`, on current GitHub `main`; verify any production/provider/CRM/Calendar/human evidence that could have changed; then give the four-part checkpoint: (1) authoritative current state, (2) highest-priority continuation item, (3) why it is next, (4) remaining approval/evidence/provider gate.
+At the beginning of each new Shiloh OS chat: read this Master + `docs/SHILOH-OS-PROJECT-TRACKER.md` + the latest reconciliation, currently `docs/SHILOH-OS-RECONCILIATION-2026-08-20-CRM-DUMMY-RESET-COMPLETION.md`, plus `docs/SHILOH-OS-ENGINEERING-GOVERNANCE.md`, on current GitHub `main`; verify production/provider/CRM/Calendar/human evidence that could have changed; preserve newer authority; then continue only the owned controlled scope.
 
-Earlier dated reconciliations remain durable evidence where not superseded. In particular preserve `docs/SHILOH-OS-RECONCILIATION-2026-08-18-CHRISTEL-SERVICE-CATALOGUE-CORRECTION.md`, the specialist-workstream and Control-routing reconciliations, the booking-confirmation-v2 controlled submission, Juvan booking approval/v1 handset proof, client-welcome repair, booking-update activation/stale suppression and Meta booking-update approval. A newer current reconciliation does not erase them.
+Earlier dated reconciliations remain durable where not superseded. Preserve in particular `docs/SHILOH-OS-RECONCILIATION-2026-08-20-CURRENT-MAIN-356.md`, the Christel service-catalogue correction, specialist-workstream and Control-routing reconciliations, booking-confirmation-v2 controlled submission, Juvan booking approval/v1 handset proof, client-welcome repair, booking-update activation/stale suppression, Meta booking-update approval and all explicit fail-closed gates.
 
-Obtain explicit approval before the first new substantial controlled action. After that approval, continue the approved controlled unit through ordinary engineering/deploy/verification/reconciliation boundaries. Stop for material scope/risk expansion, contradictory authority, or a genuine fail-closed human/provider/evidence/safety/capability gate.
+Obtain explicit approval before the first new substantial controlled action. After that approval, continue the approved controlled unit through normal engineering/deploy/verification/reconciliation boundaries. Stop for material scope/risk expansion, contradictory authority, or a genuine fail-closed human/provider/evidence/safety/capability gate.
 
 ## Current production baseline
 
-Current accepted production application code is **PR #356 / `aed75d1fef36bda3d04f7ad2e0d6747e87017d88`**, **Complete reschedule approval Meta transport gate**.
+Current accepted **application** code is **PR #358 / `287579510e566d9b629df51b91c4b716b5d6a4e1`**, **Fix CRM reset interactive language gate**.
 
-- GitHub CI run **#1133** completed successfully.
-- Render production is running the exact #356 merge SHA on deploy **`dep-da3bvjajnfac73c6fca0`**, verified LIVE.
-- #356 freezes and registers exact Utility/`en` Meta contracts for `shiloh_reschedule_approval_request_v1` and `shiloh_reschedule_declined_v1`, adds targeted no-resubmit one-shot provisioning/readback, and preserves the existing approved success confirmation `shiloh_reschedule_confirmation_v1`.
-- Practitioner-approved client rescheduling remains **dark / not active** behind `WHATSAPP_RESCHEDULE_APPROVAL_ENABLED=false`.
-- #356 did not itself activate the feature, mutate an appointment/CRM/Calendar record, or authorize a handset journey.
+- GitHub CI run **#1139** completed **773 passed / 0 failed**.
+- Render deploy **`dep-da3cu21srm7s73961ir0`** reached **LIVE** on the exact #358 SHA.
+- `/health` returned HTTP 200 on the new instance.
+- Google Calendar provider health passed.
+- Existing booking-update/cancellation, staff-finalization and booking-confirmation-v1 template checks remained `APPROVED`, `already_exists`, `submitted=false`; no provider resubmission was caused by #358.
+- No Render environment/configuration change was used for #358 or its verification.
+- #358 is deliberately narrow: only the six exact already-authorized CRM test-client reset Confirm/Cancel control tokens bypass natural-language classification. Arbitrary machine-like text and ordinary non-English free text remain subject to the English-only guard. The #338 destructive reset transaction was not broadened or weakened.
 
-The accepted immediately preceding runtime lineage is:
+Relevant accepted runtime lineage remains:
 
-- **#350 / `bb26eb62a719f84cbe0471aa54530e71cb104da9`** — canonical Juvan Botha booking approval routes to exact Jean-Pierre admin approval by durable client-ID policy; existing CRM Dummy Test → JP and ordinary practitioner approval remain preserved.
-- **#352 / `1bb30464c68e45525e350133dc974ddcf192b6f0`** — genuine booking #585 proves Juvan→JP approval, approval-before-final-confirmation, exactly one v1 confirmation after approval, handset suppression of the four legacy supplemental groups, and matching shared/Christel Calendar mirrors. Do not recreate #585 for proof.
-- **#353 / `919559bd3694263d1f93ae103bac9f4fc0ac84d0`** — specialist-chat lifecycle operating convention.
-- **#354 / `a3bddd4daf47e6ba2faf143ae22b14597afb6f85`** — client self-service reschedule start-boundary guard; started/starting appointments fail closed and stale pending holds stop blocking after the original start boundary.
-- **#355 / `089e76a41115c8d7451fb7e2173fc25f52afb707`** — practitioner-approved client reschedules route to the existing exact approved reschedule confirmation with durable retry/claim/suppression handling; ordinary Admin time-change notifications remain on the generic booking-update path.
-- **#356 / `aed75d1fef36bda3d04f7ad2e0d6747e87017d88`** — exact reschedule approval/decline transport contracts and provider gate, feature still dark.
+- **#337** — universal client-welcome repair, genuine handset-proven.
+- **#338 / merge `31d49d27a74c570fb439bee62c9647275bf97f6b`** — hardened CRM Dummy Test reassignment transaction and confirmation safety boundary.
+- **#350** — canonical Juvan Botha client-ID policy to exact Jean-Pierre booking approval.
+- **#352** — genuine booking #585 proves Juvan→JP approval, one final v1 confirmation after approval and matching shared/Christel Calendar mirrors.
+- **#353** — specialist-chat lifecycle operating convention.
+- **#354** — client self-service reschedule start-boundary guard.
+- **#355** — practitioner-approved reschedule success confirmation with durable retry/claim/suppression.
+- **#356** — exact Meta approval-request/decline transport contracts; feature remains dark pending provider readiness.
+- **#358** — CRM reset structured-interaction language-boundary repair.
+
+PR #357 was documentation/shared-authority reconciliation through #356. It did not change application behaviour.
 
 ## Engineering governance — 🟢 AUTHORITATIVE
 
 Engineering Governance on current `main` includes:
 
-- **PR #340 / `aeb4e35361c34413d4310b1846c7043642a31cd2`** — mandatory copy-ready specialist-to-specialist handoffs, direct specialist continuation when ownership/authority are clear, and preservation of fail-closed gates.
-- **PR #353 / `919559bd3694263d1f93ae103bac9f4fc0ac84d0`** — specialist chat lifecycle convention: no fixed message/turn threshold; rotate based on practical chat health; prefer controlled-unit boundaries; fresh same-specialist chats independently re-read current authority; a continuation checkpoint is routing context only.
+- **#340** mandatory copy-ready specialist-to-specialist handoffs, direct specialist continuation when ownership/authority are clear, and preservation of fail-closed gates.
+- **#353** specialist chat lifecycle convention: no fixed turn threshold; rotate based on practical chat health and preferably at controlled-unit boundaries.
 
 Control & Reconciliation coordinates shared state, priorities, ownership, architecture/governance and reconciliation. It does not become a second implementation queue.
 
-The standing controlled-work sequence remains:
+The controlled-work sequence remains:
 
-`inspect authoritative state → implement → test/full applicable regression gate → repair until green → merge → verify Render/production/provider → reconcile Project Tracker → reconcile Master when durable state changed → final checkpoint`
+`inspect authoritative state → implement → test/full applicable regression gate → repair until green → merge → verify Render/production/provider → reconcile Project Tracker → reconcile Master when durable state changed → final specialist checkpoint`
 
-## Specialist workstream reconciliation — 🟢 ADOPTED
+## CRM Dummy Test number reassignment — 🟢 VERIFIED LIVE / HANDSET-PROVEN / COMPLETE
 
-Booking & Admin UX, WhatsApp / Meta Integration, CRM & Identity, and Production / DevOps independently verify applicable GitHub `main`, Master, Project Tracker, latest reconciliation and changing production/provider/human evidence before controlled work. A specialist unit is not complete merely because implementation, tests, a PR, merge or deployment exists: applicable production/provider verification, Tracker reconciliation, durable Master reconciliation when required and the final specialist checkpoint remain part of completion.
+Authoritative completion reconciliation: `docs/SHILOH-OS-RECONCILIATION-2026-08-20-CRM-DUMMY-RESET-COMPLETION.md`.
 
-Proposed, in-progress or unmerged work is never written as completed Master state. Blocked work stays fail-closed with its dependency. Control & Reconciliation uses reconciled authoritative evidence—not specialist-chat narrative—for cross-workstream continuity.
+The #338 reset contract remains authoritative:
 
-## Control checkpoint workstream routing — 🟢 ADOPTED
+- eligible target names are limited to Chenique, Juvan and Dummy Test / CRM Dummy Test;
+- only authorized Christel owner/business-admin or Jean-Pierre business-admin paths with the required scopes may perform the reset;
+- preview shows the actual matched CRM display name, CRM ID and WhatsApp/mobile identities to release;
+- a shared-active-CRM phone conflict blocks before Confirm;
+- confirmation re-resolves and locks the target and repeats the shared-active-client identity guard inside the transaction;
+- phone-bound booking intent, onboarding, booking-policy, optional conversation-session and legacy user-profile state is cleared where applicable;
+- only WhatsApp/mobile contact bindings are released;
+- zero residual WhatsApp/mobile bindings is a required pre-commit postcondition;
+- the CRM client is archived/inactivated rather than deleted;
+- appointments and CRM/audit history are preserved;
+- an `admin.test_client_reset` audit event is written atomically.
 
-Every Control & Reconciliation checkpoint that recommends a next controlled action records the owning workstream, exact specialist chat, why that workstream owns it, dependencies/observers, implementation status and a ready-to-copy continuation instruction. Routing context never replaces independent authoritative-state verification.
+A genuine first Confirm attempt at 11:45 SAST exposed an interactive-language routing defect and did **not** execute the reset. PR #358 repaired only that transport boundary and passed full CI 773/0.
 
-PR #340 does not make Control an intermediate stop between clear specialist owners. When ownership and shared authority are clear, the outgoing specialist's mandatory self-contained handoff is sufficient for direct continuation; Control remains the escalation point for unclear ownership, conflicting authority, cross-workstream prioritisation, governance/architecture and reconciliation disputes.
+After #358 was LIVE, a fresh authorized preview showed exactly:
 
-If a provider, approval, human-truth, genuine-journey or other external gate blocks the item, implementation remains blocked and ownership stays with the appropriate monitoring/provider workstream. It must not be routed prematurely merely to keep work moving.
+- **Dummy Test**
+- **CRM #835**
+- **WhatsApp +27 71 674 2646 — primary**
+
+The preview can only render after the unique-target and pre-confirm shared-active-identity checks pass.
+
+At **11:59:23.746 SAST**, production received the genuine interactive confirmation. At **11:59:24.417 SAST**, Shiloh sent the reset-complete response after the transaction committed. The committed result archived CRM #835, released exactly one WhatsApp/mobile contact record, cleared the bounded temporary phone state, preserved appointment/audit history and wrote the reset audit event.
+
+At **12:01:27.486 SAST**, the legitimately reassigned number sent a real `Hi` from masked suffix `2646`; at **12:01:28.537 SAST** Shiloh responded with the unregistered/new-client registration branch. The handset response carried no inherited Dummy Test name, CRM #835 identity, booking intent, onboarding continuation, policy state or prior conversation-session context.
+
+No appointment or booking was manufactured. **Do not reset CRM #835 again or replay the reassigned number merely to reproduce proof.**
+
+The Render read-only Postgres connector still fails before SQL execution at its SSL/TLS boundary. Do not infer direct row evidence from that failed connector; the accepted completion evidence is the guarded transactional runtime semantics, post-commit success response and genuine post-reset first-contact behaviour.
 
 ## Current highest-priority external gate — practitioner-approved client reschedule
 
-The application-side engineering through #356 is present in production, but the feature is **🟠 WAITING PROVIDER / NOT ACTIVE**.
+The application-side engineering through #356 is present, but the feature remains **🟠 WAITING PROVIDER / NOT ACTIVE** behind `WHATSAPP_RESCHEDULE_APPROVAL_ENABLED=false`.
 
-Last authoritative controlled Meta evidence for both required templates is:
+Last authoritative controlled Meta evidence remains:
 
 | Template | Status | Category | Language | Exact | duplicateCount | App configured |
 |---|---|---|---|---|---:|---|
 | `shiloh_reschedule_approval_request_v1` | **PENDING** | UTILITY | `en` | true | 0 | true |
 | `shiloh_reschedule_declined_v1` | **PENDING** | UTILITY | `en` | true | 0 | true |
 
-The successful-reschedule customer confirmation remains the existing `shiloh_reschedule_confirmation_v1` contract.
+Required activation readiness for **each** is `APPROVED / UTILITY / en / exact=true / duplicateCount=0 / configured=true`.
 
-Required activation gate for **each** approval/decline template is: `APPROVED / UTILITY / en / exact=true / duplicateCount=0 / configured=true`.
-
-While either template remains PENDING or otherwise fails readiness:
+While either fails that gate:
 
 - do not resubmit merely because it is PENDING;
 - do not enable `WHATSAPP_RESCHEDULE_APPROVAL_ENABLED`;
 - do not route activation to Production / DevOps;
-- do not run a Juvan reschedule journey or manufacture an appointment, practitioner decision, CRM/Calendar mutation or handset proof;
-- WhatsApp / Meta Integration remains the monitoring owner for a genuinely read-only provider refresh when an authorized read surface is available.
+- do not manufacture a Juvan reschedule, practitioner decision, CRM/Calendar mutation or handset proof;
+- WhatsApp / Meta Integration remains the monitoring owner for a genuinely read-only provider refresh when an authorized surface is available.
 
-Only after **both** templates independently satisfy the complete provider gate may provider approval be reconciled and a separate controlled activation be handed to Production / DevOps. Booking & Admin UX becomes actionable for genuine handset proof only after verified production activation.
+Only after both templates independently satisfy the complete provider gate may approval be reconciled and a separate controlled Production / DevOps activation begin.
 
 ## Juvan Botha booking approval — 🟢 VERIFIED LIVE / HANDSET-PROVEN
 
-Canonical production identity evidence established one active canonical **Juvan Botha / client ID 845**, one canonical WhatsApp/mobile identity, zero shared-active-client contact conflicts, and exact approver **Jean-Pierre admin ID 4** under the guarded business-admin/all-business/all-services/WhatsApp contract.
+Canonical production identity evidence established one active canonical **Juvan Botha / client ID 845**, one canonical WhatsApp/mobile identity, zero shared-active-client contact conflicts, and exact approver **Jean-Pierre admin ID 4**.
 
-Durable policy `juvan_botha_jp_booking_approval` matches by canonical `client_id=845`, never by display-name pattern. Duplicate/ambiguous Juvan identity, shared contact identity, missing policy or JP contract drift fails closed. Existing CRM Dummy Test → JP approval and ordinary practitioner approval behaviour remain unchanged.
+Policy `juvan_botha_jp_booking_approval` is keyed by canonical client ID, never display-name matching. Duplicate/ambiguous Juvan identity, shared contact, missing policy or JP contract drift fails closed.
 
-Genuine booking **#585**, Upper Back, Neck & Jaw Release with Christel, Friday 21 August 2026 16:00–17:00, proved the held/pending state, JP approval request, authorized JP approval, final v1 confirmation only after approval, and matching Google Calendar mirrors. Do not create/cancel/recreate #585 merely for evidence.
+Genuine booking **#585**, Upper Back, Neck & Jaw Release with Christel, Friday 21 August 2026 16:00–17:00, proved held/pending state, JP approval request, authorized JP approval, exactly one v1 confirmation after approval and matching shared/Christel Calendar mirrors. Do not create/cancel/recreate #585 merely for evidence.
 
 ## Booking confirmation templates
 
-### v1 — 🟢 LIVE / APPROVED / HANDSET-PROVEN POLISH
+### v1 — 🟢 LIVE / APPROVED / HANDSET-PROVEN
 
-`shiloh_booking_confirmation_v1` remains the production booking-confirmation selector and approved fallback. PR #348 suppresses only four redundant automatic post-template groups: separate Google Calendar CTA, Apple/Outlook CTA, Reschedule/Cancel block, and Book another/My appointments/Main menu block. The approved provider contract itself is unchanged. #352 handset evidence proved the intended reduced delivery after genuine booking #585.
-
-Do not restore those automatic groups without a new explicit Booking & Admin UX decision.
+`shiloh_booking_confirmation_v1` remains production selector and approved fallback. #348 suppresses four redundant automatic post-template groups without altering the approved provider contract; #352 handset evidence proved the intended reduced delivery.
 
 ### v2 — 🟠 WAITING META / NOT ACTIVE
 
-`shiloh_booking_confirmation_v2` was submitted exactly once under the controlled #343/#344 path. Last authoritative provider evidence remains **PENDING / UTILITY / `en` / exact / `duplicateCount=0`**. It remains non-sendable/inactive and production remains on v1. Do not resubmit or activate while PENDING. Synthetic CI fixture approval is not provider evidence.
+`shiloh_booking_confirmation_v2` was submitted exactly once under the controlled #343/#344 path. Last authoritative provider evidence remains **PENDING / UTILITY / en / exact / duplicateCount=0**. It is inactive/non-sendable and production stays on v1. Do not resubmit or activate while PENDING.
 
 ## Booking-update customer confirmations — 🟢 LIVE / ENABLED / 🟠 NATURAL DELIVERY EVIDENCE OPEN
 
-`shiloh_booking_update_v1` remains provider APPROVED, exact, duplicate-free, and production-enabled. The deterministic kill switch remains `WHATSAPP_BOOKING_UPDATE_ENABLED=false`.
+`shiloh_booking_update_v1` remains provider APPROVED, exact, duplicate-free and production-enabled. Deterministic kill switch: `WHATSAPP_BOOKING_UPDATE_ENABLED=false`.
 
-PR #332 terminally suppresses stale ended update rows with `appointment_already_ended` while preserving audit/history. Appointment #575 / audit 674 remains terminally suppressed historical evidence with `sent_at=null`; never release, delete, mark sent or reuse it as delivery proof. Successful delivery evidence must arise naturally from a genuine change to a still-future appointment.
+#332 terminally suppresses stale ended update rows. Appointment #575 / audit 674 remains terminally suppressed with `appointment_already_ended` and `sent_at=null`; never release, delete, mark sent or reuse it as delivery proof. Successful delivery evidence must arise naturally from a genuine still-future appointment change.
 
 ## Google Calendar — 🟢 VERIFIED HEALTHY / PERMANENT FAIL-CLOSED GUARD
 
-PR #302's Google Calendar provider guard and health probe remain permanent. Provider failure blocks booking writes cleanly. The production OAuth chain was reconciled and subsequent production restarts have verified Calendar health.
+#302's provider guard and proactive health probe remain permanent. Provider failure blocks booking writes cleanly. Genuine #570 and #585 are accepted Calendar synchronization evidence. Do not mutate them merely for proof.
 
-Real booking #570 previously proved practitioner-change Calendar synchronization. Genuine #585 proved the same deterministic booking event across the shared `Shiloh — Bookings` calendar and Christel's production mirror. Do not mutate either appointment merely for proof.
-
-Google Calendar remains a synchronized provider/mirror; canonical Shiloh appointment/CRM state remains authoritative.
+Google Calendar remains a synchronized provider/mirror; canonical Shiloh CRM/appointment state remains authoritative.
 
 ## Booking/Admin durable rules — preserve
 
-- Booking entitlement is fail-closed and remains the #318 contract: Christel+Abigail shared scope; Marietjie only; other linked Admins own practitioner only; JP is the explicit unlinked business-admin exception for Christel+Abigail only; other unlinked Admins have no booking catalogue.
-- The Admin who prepares a pending booking confirms it; do not reintroduce the superseded Christel↔Abigail cross-confirm handoff without a new explicit requirement.
-- Typed-time, clinic hours, practitioner schedule, CRM conflicts, pending holds, shared/practitioner Google Calendar conflicts and final confirmation guards remain authoritative.
+- #318 booking entitlement remains fail-closed: Christel+Abigail shared scope; Marietjie only; other linked Admins own practitioner; JP explicit unlinked business-admin exception for Christel+Abigail only; other unlinked Admins no booking catalogue.
+- The Admin who prepares a pending booking confirms it; do not reintroduce superseded Christel↔Abigail cross-confirm behaviour without a new requirement.
+- Typed-time, clinic-hours, practitioner schedule, CRM conflicts, pending holds, shared/practitioner Google Calendar conflicts and final confirmation guards remain authoritative.
 - Provisional new-client fast path remains name + South African mobile → duplicate check → provisional canonical client → review → explicit confirm; abandoned provisional clients are removed only when no appointment exists.
-- Existing full-label/hybrid WhatsApp choice presentation from #320/#322 remains accepted.
+- Existing full-label/hybrid WhatsApp choice presentation remains accepted.
 
 ## CRM & identity durable state
 
-CRM is authoritative for canonical client/practitioner/staff identity. Ambiguous canonical identity, duplicate/conflicting contact ownership, unresolved practitioner/staff identity and destructive changes lacking authority fail closed.
+CRM is authoritative for canonical client/practitioner/staff identity. Ambiguous identity, duplicate/conflicting contact ownership, unresolved practitioner/staff identity and destructive changes lacking authority fail closed.
 
-CRM Dummy Test reassignment hardening from #338 remains live: exact target resolution, preview of CRM ID/identities, shared-active check, re-resolution/locking on confirm, bounded temporary state cleanup, WhatsApp/mobile release only, archival with appointment/audit history preserved. Genuine reset/reassignment evidence remains separate and must not be manufactured.
+The completed CRM Dummy Test reassignment is now do-not-redo evidence as recorded above. The same guarded reset facility remains available only for the approved test-client identities and privileged admin path; a future reset requires a new genuine business need and fresh target verification.
 
 The historical #558 attendance exception remains unresolved with historical practitioner `SHILOH MTC`. Never infer Christel, Marietjie or another practitioner; establish human/authoritative truth before correction/finalization.
 
 ## Attendance finalization authority — 🟢 VERIFIED LIVE
 
-PR #324 is the accepted own-practitioner finalization authority and remains preserved by its dated reconciliation.
+#324 remains authoritative:
 
 - Christel finalizes Christel appointments only.
 - Abigail finalizes Abigail appointments only.
 - Marietjie finalizes Marietjie appointments only.
 - Jean-Pierre has no attendance/finalization authority.
 
-Exact active linked identity is required and conflicts fail closed. Historical attendance truth remains human-controlled; re-query before quoting current counts.
+Exact active linked identity is required and conflicts fail closed. Historical attendance truth remains human-controlled.
 
 ## Client welcome and discovery — 🟢 REPAIRED / HANDSET-PROVEN
 
-Universal welcome routing remains repaired through #337. A real Juvan `Hi` proved universal welcome first, then the registered-client branch. Subsequent genuine Browse treatments evidence proved the accepted two-page category presentation and SQT virtual family. Do not reset/replay welcome state or infer unrelated CRM/consent truth merely for evidence.
+Universal welcome routing remains repaired through #337. A real Juvan `Hi` proved welcome then registered-client branch; subsequent Browse treatments evidence proved accepted two-page category presentation and SQT virtual family. The CRM Dummy reset completion adds separate genuine evidence that a released number correctly enters the unregistered/new-client branch. Do not reset/replay either journey merely for proof.
 
-## Christel reviewed service catalogue — 🟢 VERIFIED LIVE through #328
+## Christel reviewed service catalogue — 🟢 VERIFIED LIVE
 
 Authoritative reconciliation: `docs/SHILOH-OS-RECONCILIATION-2026-08-18-CHRISTEL-SERVICE-CATALOGUE-CORRECTION.md`.
 
-Preserve the accepted #328 catalogue correction:
+Preserve #328:
 
 - service #27 Full Body Sports Massage inactive/unmapped, history preserved;
 - distinct #34 Sports Massage Full Body active at 120 minutes;
@@ -161,25 +184,21 @@ Preserve the accepted #328 catalogue correction:
 - reviewed canonical totals 60 / 90 / 90 for the approved three services;
 - no practitioner-specific duration override.
 
-Do not reactivate/remap #27, merge #27/#34, restore reviewed buffers, delete history, alter #34/#65 durations or bulk-publish Goldie wording. Goldie description exceptions remain a separate Control/business-approval gate.
+Do not reactivate/remap #27, merge #27/#34, restore reviewed buffers, delete history, alter #34/#65 duration or bulk-publish Goldie wording.
 
 ## Public catalogue — 🟢 VERIFIED LIVE
 
-`/book` remains the Shiloh-owned CRM-backed public service catalogue through accepted #301 state. Do not create a second static public service source of truth or redo superseded #284–#300 layout variants.
+`/book` remains the Shiloh-owned CRM-backed public service catalogue through accepted #301 state. Do not create a second static source of truth.
 
 ## Control audit boundary — preserve
 
-An earlier Control read-only verification mistakenly invoked Render's environment-update action three times with an empty merge set. No environment key/value changed, but same-commit API redeploys materialized, including `dep-da2ope3m8hqs73e3pr7g` and `dep-da2opi9s4bfs73fstcgg`. Preserve this as a governance/audit boundary breach. Control must use true read-only Render tools unless a future explicit governance override authorizes mutation.
+An earlier Control read-only verification mistakenly invoked Render environment update three times with an empty merge set, causing same-commit API redeploys without changing env key/value state. Preserve this as a governance/audit breach. Control must use true read-only Render tools absent explicit override.
 
 ## Google Business Profile provider access — 🟠 EXTERNAL/PROVIDER GATE
 
-Last-authoritative provider evidence remains: My Business Business Information API enabled; access/application submitted; API-specific quotas visible; general **Requests per minute** remains **0**. Google Business Profile approval and usable access are therefore **not positively established**.
+Last authoritative provider evidence remains: Business Information API enabled/application submitted/API-specific quotas visible; general **Requests per minute = 0**. Usable GBP approval/access is not positively established.
 
-Earlier PR #35 added GBP knowledge-sync scaffolding, including `src/services/googleBusinessProfileSync.js`. That scaffolding is **not evidence of provider approval** and does not authorize integration merely because code exists.
-
-This is **not an ordinary capacity/quota-increase task**. **Do not begin or resume GBP OAuth/API integration** until authoritative Google evidence confirms usable access or a usable general request quota greater than 0. When that gate closes, reopen from current GitHub `main`, reassess the existing scaffolding, and follow the full controlled-work completion protocol.
-
-Primary ownership is **Production / DevOps** for provider/configuration verification. **Control & Reconciliation** tracks the external dependency and protects shared authoritative state.
+Earlier GBP scaffolding is not evidence of approval and does not authorize integration. Do not begin/resume GBP OAuth/API integration until authoritative Google evidence confirms usable access or a usable general request quota greater than 0. Production / DevOps owns provider/config verification; Control tracks the dependency.
 
 ## Other standing gates
 
@@ -187,21 +206,24 @@ Primary ownership is **Production / DevOps** for provider/configuration verifica
 - Ozow remains waiting for merchant configuration and explicit business rules.
 - Destructive privacy execution remains fail-closed pending authority/evidence.
 - Follow-up/rating and birthday delivery evidence remain genuine-journey/eligibility gated.
+- Goldie description exceptions remain a separate Control/business-approval gate.
 
 ## Shiloh Visual Calendar — ⏸️ DEFERRED
 
-A future Shiloh Visual Calendar was discussed as a possible Admin UX layer over canonical Shiloh appointment state with Google Calendar remaining a synchronized mirror. The business decision is to **hold off for now**. Do not implement, prototype or add it to the active queue unless a later explicit controlled decision reactivates it. Existing Google Calendar integration remains unchanged.
+A future Shiloh Visual Calendar remains deliberately held. Do not implement/prototype/add it to active queue until a later explicit controlled decision. Existing Google Calendar integration remains unchanged.
 
 ## Superseded reconciliation branch
 
-PR #351, the older documentation-only “Reconcile Juvan JP booking approval” branch based on #350, is superseded and closed rather than merged because newer authoritative work #352–#356 changed the current state. Its historical #350 evidence remains preserved through Git history and #352; do not reopen/force-merge it into current authority.
+PR #351 remains superseded/closed because newer authority #352–#356 overtook it. Do not reopen or force-merge it.
 
 ## Exact continuation state
 
-**Authoritative current state:** production code is PR #356 / `aed75d1fef36bda3d04f7ad2e0d6747e87017d88`; CI #1133 succeeded; Render `dep-da3bvjajnfac73c6fca0` is LIVE on the exact SHA. Engineering Governance includes #340 mandatory handoffs and #353 specialist-chat lifecycle convention. Juvan→JP booking approval is handset-proven through #352. Reschedule start-boundary and approved-notification protections from #354/#355 are present. #356 Meta transport contracts are present, but practitioner-approved rescheduling remains feature-off.
+**Authoritative current application state:** PR #358 / `287579510e566d9b629df51b91c4b716b5d6a4e1`; CI #1139 passed 773/0; Render `dep-da3cu21srm7s73961ir0` LIVE; health and Google Calendar verified; provider continuity preserved.
 
-**Highest-priority next item:** WhatsApp / Meta Integration remains the monitoring owner for a future genuinely read-only provider refresh of `shiloh_reschedule_approval_request_v1` and `shiloh_reschedule_declined_v1` when an authorized read surface is available.
+**CRM Dummy Test reassignment:** complete, post-commit and handset-proven. Do not redo.
 
-**Why next:** all currently authorized application-side reschedule work is merged and production-live. The blocking dependency is external Meta approval, not more Booking & Admin UX or Production / DevOps implementation.
+**Highest-priority standing gate:** WhatsApp / Meta Integration remains monitoring owner for a future genuinely read-only provider refresh of `shiloh_reschedule_approval_request_v1` and `shiloh_reschedule_declined_v1`.
 
-**Remaining gate:** both reschedule approval/decline templates must independently prove `APPROVED / UTILITY / en / exact=true / duplicateCount=0 / configured=true`. Until then, no activation, no Production / DevOps handoff and no genuine Booking/Admin reschedule handset journey.
+**Why next:** the CRM number reassignment controlled unit is closed; the remaining reschedule dependency is external Meta approval rather than further CRM or Production implementation.
+
+**Remaining gate:** both reschedule templates must independently prove `APPROVED / UTILITY / en / exact=true / duplicateCount=0 / configured=true`. Until then, no activation and no genuine reschedule handset journey. All other standing fail-closed gates remain preserved.
