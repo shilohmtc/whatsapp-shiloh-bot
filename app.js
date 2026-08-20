@@ -69,6 +69,7 @@ const { startAttendanceFinalizationReminderScheduler } = require("./src/services
 const { startHistoricalFinalizationPromptScheduler } = require("./src/services/historicalFinalizationPrompt");
 const { ensureHistoricalFinalizationFinancialSchema } = require("./src/services/historicalFinalizationFinancialBootstrap");
 const { runConfiguredClientProvenanceAudit } = require("./src/services/clientProvenanceAudit");
+const { runDummyTestAppointmentCleanup } = require("./src/services/dummyTestAppointmentCleanup");
 const { submitStaffFinalizationTemplate, submitStaffFinalizationActionTemplate } = require("./src/services/staffFinalizationTemplateProvisioning");
 const { submitBookingConfirmationTemplate } = require("./src/services/bookingConfirmationTemplateProvisioning");
 const { submitBookingConfirmationV2Template } = require("./src/services/bookingConfirmationV2TemplateProvisioning");
@@ -126,6 +127,7 @@ async function start() {
   const mediHeelOwnership = await ensureChristelMediHeelOwnership(); logger.info(mediHeelOwnership, "Christel MediHeel ownership verified");
   const christelCatalogueCorrection = await ensureChristelServiceCatalogueCorrection(); logger.info(christelCatalogueCorrection, "Christel service catalogue correction verified");
   await ensureHistoricalFinalizationFinancialSchema(); logger.info({ initialized: true }, "Historical finalization financial schema verified");
+  const dummyTestCleanup = await runDummyTestAppointmentCleanup(); if (dummyTestCleanup.enabled) logger.info(dummyTestCleanup, "Dummy Test booking cleanup startup gate completed");
   try { await runConfiguredClientProvenanceAudit(logger); } catch (error) { logger.error({ err: error }, "Read-only CRM provenance audit failed"); }
   await provisionStaffFinalizationTemplateSafely(); await provisionStaffFinalizationActionTemplateSafely(); await provisionBookingConfirmationTemplateSafely(); await provisionBookingConfirmationV2IfExplicitlyEnabled(); await provisionClientLifecycleTemplatesIfExplicitlyEnabled();
   server = app.listen(PORT, () => { logger.info({ port: PORT }, "Shiloh started"); startConversationSessionCleanupScheduler(); startTemporarySessionCleanupScheduler(); startGoogleBusinessProfileSyncScheduler(); startAppointmentLifecycleScheduler(); startCustomerCareScheduler(); startBookingIntegrityScheduler(); startMandatoryDemoCleanupScheduler(); startAttendanceFinalizationReminderScheduler(); startHistoricalFinalizationPromptScheduler(); });
