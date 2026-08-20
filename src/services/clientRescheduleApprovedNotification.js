@@ -156,6 +156,20 @@ function canonicalOutcomeState(context) {
   return { deliverable: true, suppress: false, reason: null };
 }
 
+async function markApprovedRescheduleNotificationRetryableError(requestId, reason) {
+  await pool.query(`
+    UPDATE appointment_reschedule_requests
+       SET client_notification_claimed_at=NULL,
+           client_notification_last_error=$2,
+           updated_at=NOW()
+     WHERE id=$1
+       AND status='approved'
+       AND client_notified_at IS NULL
+       AND client_notification_suppressed_at IS NULL
+  `, [Number(requestId), String(reason).slice(0, 1000)]);
+  return { sent: false, reason };
+}
+
 async function suppressApprovedRescheduleNotification(requestId, reason) {
   const result = await pool.query(`
     UPDATE appointment_reschedule_requests
@@ -205,6 +219,7 @@ async function attemptApprovedRescheduleConfirmation(requestId, auditEventId = n
   const state = canonicalOutcomeState(context);
   if (!state.deliverable) {
     if (state.suppress) return suppressApprovedRescheduleNotification(requestId, state.reason);
+    if (state.reason === 'client_phone_not_found') return markApprovedRescheduleNotificationRetryableError(requestId, state.reason);
     return { sent: false, reason: state.reason };
   }
 
@@ -215,20 +230,14 @@ async function attemptApprovedRescheduleConfirmation(requestId, auditEventId = n
   const afterClaim = canonicalOutcomeState(context);
   if (!afterClaim.deliverable) {
     if (afterClaim.suppress) return suppressApprovedRescheduleNotification(requestId, afterClaim.reason);
+    if (afterClaim.reason === 'client_phone_not_found') return markApprovedRescheduleNotificationRetryableError(requestId, afterClaim.reason);
     await pool.query(`UPDATE appointment_reschedule_requests SET client_notification_claimed_at=NULL,updated_at=NOW() WHERE id=$1`, [Number(requestId)]);
     return { sent: false, reason: afterClaim.reason };
   }
 
   const configured = String(process.env.WHATSAPP_RESCHEDULE_CONFIRMATION_TEMPLATE || '').trim();
   if (configured !== TEMPLATE_NAME) {
-    await pool.query(`
-      UPDATE appointment_reschedule_requests
-         SET client_notification_claimed_at=NULL,
-             client_notification_last_error='reschedule_confirmation_template_not_configured',
-             updated_at=NOW()
-       WHERE id=$1
-    `, [Number(requestId)]);
-    return { sent: false, reason: 'template_not_configured' };
+    return markApprovedRescheduleNotificationRetryableError(requestId, 'reschedule_confirmation_template_not_configured');
   }
 
   try {
@@ -268,14 +277,7 @@ async function attemptApprovedRescheduleConfirmation(requestId, auditEventId = n
     return { sent: true, templateName: TEMPLATE_NAME };
   } catch (error) {
     const message = String(error.response?.data?.error?.message || error.message || error).slice(0, 1000);
-    await pool.query(`
-      UPDATE appointment_reschedule_requests
-         SET client_notification_claimed_at=NULL,
-             client_notification_last_error=$2,
-             updated_at=NOW()
-       WHERE id=$1
-         AND client_notified_at IS NULL
-    `, [Number(requestId), message]);
+    await markApprovedRescheduleNotificationRetryableError(requestId, message);
     logger.error({ err: error, appointmentId: Number(context.appointment_id), requestId: Number(requestId) }, 'Approved reschedule customer confirmation failed; retained for retry');
     return { sent: false, reason: 'send_failed' };
   }
@@ -302,7 +304,10 @@ async function flushApprovedRescheduleConfirmations() {
      WHERE status='approved'
        AND client_notified_at IS NULL
        AND client_notification_suppressed_at IS NULL
-       AND client_notification_claimed_at IS NULL
+       AND (
+         client_notification_claimed_at IS NULL
+         OR client_notification_claimed_at <= NOW() - INTERVAL '${CLAIM_STALE_MINUTES} minutes'
+       )
        AND updated_at <= NOW() - INTERVAL '5 minutes'
      ORDER BY updated_at,id
      LIMIT 25
@@ -345,6 +350,7 @@ module.exports = {
   latestApprovedRescheduleAudit,
   loadApprovedRequestContext,
   canonicalOutcomeState,
+  markApprovedRescheduleNotificationRetryableError,
   suppressApprovedRescheduleNotification,
   attemptApprovedRescheduleConfirmation,
   queueApprovedRescheduleConfirmation,
