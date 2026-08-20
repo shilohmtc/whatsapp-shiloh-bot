@@ -9,7 +9,7 @@ Operational truth is GitHub `main`, Render production, Shiloh CRM/Postgres, Goog
 
 At the beginning of each new Shiloh OS chat: read this Master + `docs/SHILOH-OS-PROJECT-TRACKER.md` + the latest reconciliation, currently `docs/SHILOH-OS-RECONCILIATION-2026-08-20-CURRENT-MAIN-356.md`, plus `docs/SHILOH-OS-ENGINEERING-GOVERNANCE.md`, on current GitHub `main`; verify any production/provider/CRM/Calendar/human evidence that could have changed; then give the four-part checkpoint: (1) authoritative current state, (2) highest-priority continuation item, (3) why it is next, (4) remaining approval/evidence/provider gate.
 
-Earlier dated reconciliations remain durable evidence where not superseded. In particular, preserve the booking-confirmation-v2 controlled submission, Juvan booking approval/v1 handset proof, client-welcome repair, booking-update activation/stale suppression, Meta booking-update approval and Christel catalogue correction. A newer reconciliation does not erase their evidence.
+Earlier dated reconciliations remain durable evidence where not superseded. In particular preserve `docs/SHILOH-OS-RECONCILIATION-2026-08-18-CHRISTEL-SERVICE-CATALOGUE-CORRECTION.md`, the specialist-workstream and Control-routing reconciliations, the booking-confirmation-v2 controlled submission, Juvan booking approval/v1 handset proof, client-welcome repair, booking-update activation/stale suppression and Meta booking-update approval. A newer current reconciliation does not erase them.
 
 Obtain explicit approval before the first new substantial controlled action. After that approval, continue the approved controlled unit through ordinary engineering/deploy/verification/reconciliation boundaries. Stop for material scope/risk expansion, contradictory authority, or a genuine fail-closed human/provider/evidence/safety/capability gate.
 
@@ -26,7 +26,7 @@ Current accepted production application code is **PR #356 / `aed75d1fef36bda3d04
 The accepted immediately preceding runtime lineage is:
 
 - **#350 / `bb26eb62a719f84cbe0471aa54530e71cb104da9`** — canonical Juvan Botha booking approval routes to exact Jean-Pierre admin approval by durable client-ID policy; existing CRM Dummy Test → JP and ordinary practitioner approval remain preserved.
-- **#352 / `1bb30464c68e45525e350133dc974ddcf192b6f0`** — documentation reconciliation of genuine booking #585 proving Juvan→JP approval, approval-before-final-confirmation, exactly one v1 confirmation after approval, handset suppression of the four legacy supplemental groups, and matching shared/Christel Calendar mirrors. Do not recreate #585 for proof.
+- **#352 / `1bb30464c68e45525e350133dc974ddcf192b6f0`** — genuine booking #585 proves Juvan→JP approval, approval-before-final-confirmation, exactly one v1 confirmation after approval, handset suppression of the four legacy supplemental groups, and matching shared/Christel Calendar mirrors. Do not recreate #585 for proof.
 - **#353 / `919559bd3694263d1f93ae103bac9f4fc0ac84d0`** — specialist-chat lifecycle operating convention.
 - **#354 / `a3bddd4daf47e6ba2faf143ae22b14597afb6f85`** — client self-service reschedule start-boundary guard; started/starting appointments fail closed and stale pending holds stop blocking after the original start boundary.
 - **#355 / `089e76a41115c8d7451fb7e2173fc25f52afb707`** — practitioner-approved client reschedules route to the existing exact approved reschedule confirmation with durable retry/claim/suppression handling; ordinary Admin time-change notifications remain on the generic booking-update path.
@@ -34,7 +34,7 @@ The accepted immediately preceding runtime lineage is:
 
 ## Engineering governance — 🟢 AUTHORITATIVE
 
-Engineering Governance on current `main` includes both:
+Engineering Governance on current `main` includes:
 
 - **PR #340 / `aeb4e35361c34413d4310b1846c7043642a31cd2`** — mandatory copy-ready specialist-to-specialist handoffs, direct specialist continuation when ownership/authority are clear, and preservation of fail-closed gates.
 - **PR #353 / `919559bd3694263d1f93ae103bac9f4fc0ac84d0`** — specialist chat lifecycle convention: no fixed message/turn threshold; rotate based on practical chat health; prefer controlled-unit boundaries; fresh same-specialist chats independently re-read current authority; a continuation checkpoint is routing context only.
@@ -44,6 +44,20 @@ Control & Reconciliation coordinates shared state, priorities, ownership, archit
 The standing controlled-work sequence remains:
 
 `inspect authoritative state → implement → test/full applicable regression gate → repair until green → merge → verify Render/production/provider → reconcile Project Tracker → reconcile Master when durable state changed → final checkpoint`
+
+## Specialist workstream reconciliation — 🟢 ADOPTED
+
+Booking & Admin UX, WhatsApp / Meta Integration, CRM & Identity, and Production / DevOps independently verify applicable GitHub `main`, Master, Project Tracker, latest reconciliation and changing production/provider/human evidence before controlled work. A specialist unit is not complete merely because implementation, tests, a PR, merge or deployment exists: applicable production/provider verification, Tracker reconciliation, durable Master reconciliation when required and the final specialist checkpoint remain part of completion.
+
+Proposed, in-progress or unmerged work is never written as completed Master state. Blocked work stays fail-closed with its dependency. Control & Reconciliation uses reconciled authoritative evidence—not specialist-chat narrative—for cross-workstream continuity.
+
+## Control checkpoint workstream routing — 🟢 ADOPTED
+
+Every Control & Reconciliation checkpoint that recommends a next controlled action records the owning workstream, exact specialist chat, why that workstream owns it, dependencies/observers, implementation status and a ready-to-copy continuation instruction. Routing context never replaces independent authoritative-state verification.
+
+PR #340 does not make Control an intermediate stop between clear specialist owners. When ownership and shared authority are clear, the outgoing specialist's mandatory self-contained handoff is sufficient for direct continuation; Control remains the escalation point for unclear ownership, conflicting authority, cross-workstream prioritisation, governance/architecture and reconciliation disputes.
+
+If a provider, approval, human-truth, genuine-journey or other external gate blocks the item, implementation remains blocked and ownership stays with the appropriate monitoring/provider workstream. It must not be routed prematurely merely to keep work moving.
 
 ## Current highest-priority external gate — practitioner-approved client reschedule
 
@@ -122,6 +136,8 @@ The historical #558 attendance exception remains unresolved with historical prac
 
 ## Attendance finalization authority — 🟢 VERIFIED LIVE
 
+PR #324 is the accepted own-practitioner finalization authority and remains preserved by its dated reconciliation.
+
 - Christel finalizes Christel appointments only.
 - Abigail finalizes Abigail appointments only.
 - Marietjie finalizes Marietjie appointments only.
@@ -133,7 +149,9 @@ Exact active linked identity is required and conflicts fail closed. Historical a
 
 Universal welcome routing remains repaired through #337. A real Juvan `Hi` proved universal welcome first, then the registered-client branch. Subsequent genuine Browse treatments evidence proved the accepted two-page category presentation and SQT virtual family. Do not reset/replay welcome state or infer unrelated CRM/consent truth merely for evidence.
 
-## Christel reviewed catalogue — 🟢 VERIFIED LIVE
+## Christel reviewed service catalogue — 🟢 VERIFIED LIVE through #328
+
+Authoritative reconciliation: `docs/SHILOH-OS-RECONCILIATION-2026-08-18-CHRISTEL-SERVICE-CATALOGUE-CORRECTION.md`.
 
 Preserve the accepted #328 catalogue correction:
 
@@ -153,9 +171,18 @@ Do not reactivate/remap #27, merge #27/#34, restore reviewed buffers, delete his
 
 An earlier Control read-only verification mistakenly invoked Render's environment-update action three times with an empty merge set. No environment key/value changed, but same-commit API redeploys materialized, including `dep-da2ope3m8hqs73e3pr7g` and `dep-da2opi9s4bfs73fstcgg`. Preserve this as a governance/audit boundary breach. Control must use true read-only Render tools unless a future explicit governance override authorizes mutation.
 
+## Google Business Profile provider access — 🟠 EXTERNAL/PROVIDER GATE
+
+Last-authoritative provider evidence remains: My Business Business Information API enabled; access/application submitted; API-specific quotas visible; general **Requests per minute** remains **0**. Google Business Profile approval and usable access are therefore **not positively established**.
+
+Earlier PR #35 added GBP knowledge-sync scaffolding, including `src/services/googleBusinessProfileSync.js`. That scaffolding is **not evidence of provider approval** and does not authorize integration merely because code exists.
+
+This is **not an ordinary capacity/quota-increase task**. **Do not begin or resume GBP OAuth/API integration** until authoritative Google evidence confirms usable access or a usable general request quota greater than 0. When that gate closes, reopen from current GitHub `main`, reassess the existing scaffolding, and follow the full controlled-work completion protocol.
+
+Primary ownership is **Production / DevOps** for provider/configuration verification. **Control & Reconciliation** tracks the external dependency and protects shared authoritative state.
+
 ## Other standing gates
 
-- Google Business Profile remains **🟠 WAITING PROVIDER**: Business Information API enabled, application submitted, API-specific quotas visible, but general Requests/min remains 0. Production / DevOps owns verification; do not start/resume GBP integration until usable provider access is positively established.
 - Google Contacts sync remains lower priority; CRM remains authoritative.
 - Ozow remains waiting for merchant configuration and explicit business rules.
 - Destructive privacy execution remains fail-closed pending authority/evidence.
