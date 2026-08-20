@@ -16,9 +16,9 @@ Purpose: concise operational dashboard. Master is the detailed current ledger; h
 
 ## Governance
 
-New specialist chat: independently read current GitHub `main`, Master, this Tracker, latest reconciliation `docs/SHILOH-OS-RECONCILIATION-2026-08-20-CRM-DUMMY-RESET-COMPLETION.md`, and Engineering Governance; verify changing production/provider/CRM/Calendar/human evidence; preserve newer authority; then continue only owned scope.
+New specialist chat: independently read current GitHub `main`, Master, this Tracker, latest reconciliation `docs/SHILOH-OS-RECONCILIATION-2026-08-20-ADMIN-BLOCK-TIME.md`, and Engineering Governance; verify changing production/provider/CRM/Calendar/human evidence; preserve newer authority; then continue only owned scope.
 
-Durable reconciliation anchors remain valid where not superseded, including `docs/SHILOH-OS-RECONCILIATION-2026-08-20-CURRENT-MAIN-356.md`, `docs/SHILOH-OS-RECONCILIATION-2026-08-18-CHRISTEL-SERVICE-CATALOGUE-CORRECTION.md`, specialist-workstream reconciliation and Control-routing reconciliation.
+Durable reconciliation anchors remain valid where not superseded, including `docs/SHILOH-OS-RECONCILIATION-2026-08-20-CRM-DUMMY-RESET-COMPLETION.md`, `docs/SHILOH-OS-RECONCILIATION-2026-08-20-CURRENT-MAIN-356.md`, `docs/SHILOH-OS-RECONCILIATION-2026-08-18-CHRISTEL-SERVICE-CATALOGUE-CORRECTION.md`, specialist-workstream reconciliation and Control-routing reconciliation.
 
 Engineering Governance includes **#340** mandatory copy-ready specialist handoffs and **#353** specialist-chat lifecycle convention. There is no fixed turn/message threshold for chat rotation. Direct specialist continuation is allowed when ownership is clear and authority is not contradictory; all fail-closed gates remain binding.
 
@@ -26,21 +26,22 @@ Control & Reconciliation uses reconciled authoritative evidence, not specialist-
 
 ## Production baseline
 
-**Current application:** PR **#358 / `287579510e566d9b629df51b91c4b716b5d6a4e1`**, *Fix CRM reset interactive language gate*.
+**Current application:** PR **#360 / `1090c284e3971e159ea740dbb3388d0e2f7431ec`**, *Add guarded practitioner block-time workflow*.
 
-**CI:** run **#1139**, **773 passed / 0 failed**.
+**CI:** run **#1148**, complete non-mutating regression test step passed.
 
-**Render:** `dep-da3cu21srm7s73961ir0` **LIVE** on exact #358 SHA.
+**Render:** `dep-da3dbm1srm7s7396eop0` **LIVE** on exact #360 SHA in confirmed workspace **My Workspace**. Service is `main` auto-deploy, health-check path `/health`; post-deploy Render metrics showed one running instance and an HTTP 200 response in the verification window. No manual deploy or environment/configuration mutation was used for #360 verification.
 
-PR #358 is a narrow transport-boundary repair: only the exact approved CRM reset Confirm/Cancel control tokens bypass natural-language classification. Free-form English-only enforcement and the #338 destructive reset transaction remain unchanged. Post-deploy `/health` is 200; Google Calendar provider health passed; existing booking-update/cancellation, staff-finalization and booking-confirmation-v1 templates remained APPROVED/already-existing with no resubmission.
+PR #360 adds a dedicated practitioner Block time workflow backed by canonical `calendar_blocks`, not fake appointments. Christel may block Myself/Abigail; Abigail and Marietjie are own-only; Jean-Pierre and other Admin identities have no Block time authority. Existing authoritative availability already excludes `calendar_blocks`.
 
-Practitioner-approved client rescheduling remains **feature-off** with `WHATSAPP_RESCHEDULE_APPROVAL_ENABLED=false`; #358 did not alter that gate.
+Practitioner-approved client rescheduling remains **feature-off** with `WHATSAPP_RESCHEDULE_APPROVAL_ENABLED=false`; #360 did not alter that gate.
 
 ## At-a-glance
 
 | ID | Workstream | State | Evidence / next action |
 |---|---|---|---|
-| DEPLOY-CONVERGENCE | GitHub ↔ Render | 🟢 VERIFIED | #358 / `287579510e56...`; CI #1139 773/0; Render `dep-da3cu21srm7s73961ir0` LIVE on exact SHA. |
+| DEPLOY-CONVERGENCE | GitHub ↔ Render | 🟢 VERIFIED | #360 / `1090c284e397...`; CI #1148 regression step passed; Render `dep-da3dbm1srm7s7396eop0` LIVE on exact SHA. |
+| ADMIN-BLOCK-TIME | Booking & Admin UX | 🟢 VERIFIED LIVE | #360 uses canonical `calendar_blocks`; Christel→Myself/Abigail, Abigail→self, Marietjie→self, JP/others→none; overlap and authority checks fail closed; no fake appointment/client message; future Shiloh-created blocks manageable, imported Goldie blocks read-only. Natural real-block handset evidence may arise later; do not manufacture one. |
 | CRM-DUMMY-RESET | CRM & Identity + Production / DevOps | 🟢 VERIFIED LIVE / HANDSET-PROVEN | #338 guarded reset contract + #358 interactive-language repair. Genuine preview proved Dummy Test / CRM #835 / +27 71 674 2646 with no pre-confirm shared-active conflict; genuine Confirm committed archive + one WhatsApp/mobile release + temporary-state cleanup + preserved appointment/audit history; real post-reset `Hi` from suffix `2646` entered brand-new registration with no inherited Dummy Test identity. Do not replay/reset merely for proof. |
 | GOVERNANCE-HANDOFF | Control + all specialists | 🟢 VERIFIED | #340 mandatory self-contained specialist handoffs; direct specialist continuation allowed when ownership/authority are clear. |
 | GOVERNANCE-CHAT-LIFECYCLE | Control + all specialists | 🟢 VERIFIED | #353 lifecycle convention authoritative: practical chat-health rotation, no arbitrary turn threshold, fresh same-specialist chat independently re-reads authority. |
@@ -59,7 +60,7 @@ Practitioner-approved client rescheduling remains **feature-off** with `WHATSAPP
 | META-BOOKING-UPDATE | WhatsApp / Meta + Production | 🟢 VERIFIED LIVE / ENABLED | `shiloh_booking_update_v1` approved/exact/duplicate-free and production-enabled. Kill switch `WHATSAPP_BOOKING_UPDATE_ENABLED=false`. |
 | CUSTOMER-CHANGE-EVIDENCE | Booking & Admin UX + WhatsApp | 🟠 WAITING GENUINE FUTURE DELIVERY | #575 / audit 674 terminally suppressed `appointment_already_ended`, `sent_at=null`; wait for a natural future appointment change. |
 | GOOGLE-CALENDAR-AUTH | Booking/Admin + Production | 🟢 VERIFIED HEALTHY | #302 fail-closed provider guard remains permanent. #570 and #585 are genuine sync evidence; do not mutate for proof. |
-| ADMIN-BOOKING-ENTITLEMENT | Booking & Admin UX | 🟢 VERIFIED LIVE | #318 fail-closed scope: Christel+Abigail shared; Marietjie only; other linked Admin own practitioner; JP explicit Christel+Abigail exception; other unlinked Admin none. |
+| ADMIN-BOOKING-ENTITLEMENT | Booking & Admin UX | 🟢 VERIFIED LIVE | #318 fail-closed scope: Christel+Abigail shared; Marietjie only; other linked Admin own practitioner; JP explicit Christel+Abigail exception; other unlinked Admin none. Block-time authority is separate and narrower. |
 | ADMIN-BOOKING-FAST-PATH | Booking & Admin UX | 🟢 VERIFIED | Existing lookup/provisional-client/typed-time/same-Admin confirm rules remain accepted. |
 | CLIENT-WELCOME-JUVAN | Booking & Admin UX | 🟢 REPAIRED / HANDSET-PROVEN | #337 genuine Juvan `Hi` proved universal welcome then registered branch; do not reset/replay. |
 | CLIENT-DISCOVERY-JUVAN | Booking & Admin UX | 🟢 HANDSET-PROVEN | Genuine two-page category discovery verified accepted ordering/SQT grouping. |
@@ -74,6 +75,21 @@ Practitioner-approved client rescheduling remains **feature-off** with `WHATSAPP
 | GCONTACTS | CRM & Identity | ⚪ READY / LOW PRIORITY | CRM remains authoritative. |
 | OZOW | Production / business | 🟠 WAITING | Merchant configuration + explicit business rules required. |
 | PRIVACY-DESTRUCTIVE | Control + CRM | 🟠 WAITING | Fail closed pending authority/evidence. |
+
+## Admin practitioner Block time — verified live
+
+Durable evidence: `docs/SHILOH-OS-RECONCILIATION-2026-08-20-ADMIN-BLOCK-TIME.md`.
+
+- #360 merged the dedicated Block time / Blocked time workflow using existing `calendar_blocks`.
+- Blocking authority is explicit: Christel→Myself/Abigail; Abigail→self; Marietjie→self; Jean-Pierre/others→none.
+- Missing/ambiguous practitioner identity fails closed and does not inherit broad booking authority.
+- Date, start, duration, reason and final review are required before create; overlap with an appointment or calendar block fails closed.
+- Future Shiloh-created blocks can be managed; imported Goldie blocks remain outside this edit/remove UI.
+- Client/Admin availability already excludes `calendar_blocks`, so a committed block removes that interval from authoritative availability.
+- No client identity, treatment, appointment, attendance, payment, revenue or client WhatsApp state is created by Block time.
+- CI #1148 passed the complete regression step after correcting a stale JP/Christel parity assertion to preserve the new explicit authority exception.
+- Render deploy `dep-da3dbm1srm7s7396eop0` is LIVE on exact #360 SHA. Verification used only read-only Render evidence.
+- No real block was manufactured for proof.
 
 ## CRM Dummy Test reassignment — complete / do not redo
 
@@ -98,10 +114,10 @@ Juvan booking #585 remains do-not-redo evidence. Booking confirmation v1 remains
 
 ## Exact continuation
 
-**Authoritative current state:** PR #358 / `287579510e566d9b629df51b91c4b716b5d6a4e1` is current production application code; CI #1139 passed 773/0; Render `dep-da3cu21srm7s73961ir0` is LIVE. CRM Dummy Test reassignment is complete and genuine-handset-proven.
+**Authoritative current state:** PR #360 / `1090c284e3971e159ea740dbb3388d0e2f7431ec` is current production application code; CI #1148 regression step passed; Render `dep-da3dbm1srm7s7396eop0` is LIVE. Admin practitioner Block time is verified live at the application/deployment boundary.
 
-**Highest-priority next item:** no CRM Dummy Test action remains. The standing executable priority remains blocked by external Meta review of the practitioner-approved reschedule approval/decline templates.
+**Highest-priority next item:** no further Block time implementation action remains. The standing executable priority remains blocked by external Meta review of the practitioner-approved reschedule approval/decline templates.
 
-**Why next:** the CRM number reassignment controlled unit is closed. The remaining reschedule dependency is provider approval, not additional Production / DevOps or CRM implementation.
+**Why next:** the Block time controlled unit is closed without manufactured business data. The remaining reschedule dependency is provider approval, not additional Booking/Admin implementation.
 
 **Remaining gate:** both reschedule templates must prove the full APPROVED readiness gate before a separate production activation; all other standing fail-closed gates remain preserved.
