@@ -53,18 +53,17 @@ test('pending approval remains an availability conflict until an explicit decisi
   assert.match(approval, /status[^\n]*(pending|approved|declined)/i);
 });
 
-test('CRM Dummy Test uses the existing guarded identity contract and requires JP as sole approver', () => {
-  assert.match(reset, /dummy_test:\s*'Dummy Test'/);
-  assert.match(reset, /lower\(trim\(display_name\)\)/i);
-  assert.match(reset, /rowCount !== 1/);
-  assert.match(approval, /Dummy Test/i);
+test('Dummy Test historical booking approval remains guarded even though Dummy reset eligibility is retired', () => {
+  assert.doesNotMatch(reset, /dummy_test:\s*'Dummy Test'/);
+  assert.doesNotMatch(reset, /Reset test client (?:CRM )?Dummy Test/i);
+  assert.match(approval, /resolveDummyTestApprovalPolicy/);
+  assert.match(approval, /Dummy Test approval blocked/i);
   assert.match(approval, /Jean-Pierre/i);
-  assert.match(approval, /dummy_test|dummy test/i);
   assert.match(approval, /business_admin/i);
   assert.match(approval, /all_business/i);
   assert.match(approval, /all_services/i);
-  assert.match(schema, /lower\(trim\(c\.display_name\)\).*dummy test/is);
-  assert.match(schema, /COUNT\(\*\).*clients.*dummy test/is);
+  assert.match(schema, /LOWER\(TRIM\(COALESCE\(booking_client_name, ''\)\)\) = 'dummy test'/i);
+  assert.match(schema, /COUNT\(\*\)::int[\s\S]*FROM clients c[\s\S]*dummy test/i);
   assert.match(schema, /Jean-Pierre/i);
   assert.match(schema, /business_admin/i);
   assert.match(schema, /RAISE EXCEPTION/i);

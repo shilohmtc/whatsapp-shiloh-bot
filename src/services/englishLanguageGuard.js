@@ -29,7 +29,8 @@ function isEnglishCompatibleClinicNavigation(text='') {
 
 function isEnglishCompatibleControlToken(text='') {
   const value = String(text || '').trim();
-  return /^admin_test_client_reset_(confirm|cancel):(chenique|juvan|dummy_test)$/i.test(value);
+  return /^admin_controlled_demo_reset_(confirm|cancel):juvan_botha$/i.test(value)
+    || /^admin_test_client_reset_(confirm|cancel):juvan$/i.test(value);
 }
 
 function needsLanguageCheck(text='') {
