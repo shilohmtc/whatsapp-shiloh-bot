@@ -16,41 +16,43 @@ Purpose: concise operational dashboard. Master is the detailed current ledger; h
 
 ## Governance
 
-New specialist chat: independently read current GitHub `main`, Master, this Tracker, latest reconciliation `docs/SHILOH-OS-RECONCILIATION-2026-08-20-BOOKING-ADMIN-JUVAN-PRIMARY-BACKUP-AND-MANAGE-CANCEL.md`, and Engineering Governance; verify changing production/provider/CRM/Calendar/human evidence; preserve newer authority; then continue only owned scope.
+New specialist chat: independently read current GitHub `main`, Master, this Tracker, latest reconciliation `docs/SHILOH-OS-RECONCILIATION-2026-08-20-ADMIN-UX-STANDARDIZATION.md`, and Engineering Governance; verify changing production/provider/CRM/Calendar/human evidence; preserve newer authority; then continue only owned scope.
 
-Durable reconciliation anchors remain valid where not superseded, including `docs/SHILOH-OS-RECONCILIATION-2026-08-20-CONTROLLED-JUVAN-DEMO-IDENTITY.md`, `docs/SHILOH-OS-RECONCILIATION-2026-08-20-DUMMY-TEST-BOOKING-CLEANUP.md`, `docs/SHILOH-OS-RECONCILIATION-2026-08-20-ADMIN-BLOCK-TIME.md`, `docs/SHILOH-OS-RECONCILIATION-2026-08-20-CRM-DUMMY-RESET-COMPLETION.md`, `docs/SHILOH-OS-RECONCILIATION-2026-08-20-CURRENT-MAIN-356.md`, `docs/SHILOH-OS-RECONCILIATION-2026-08-18-CHRISTEL-SERVICE-CATALOGUE-CORRECTION.md`, specialist-workstream reconciliation and Control-routing reconciliation.
+Durable reconciliation anchors remain valid where not superseded, including `docs/SHILOH-OS-RECONCILIATION-2026-08-20-BOOKING-ADMIN-JUVAN-PRIMARY-BACKUP-AND-MANAGE-CANCEL.md`, `docs/SHILOH-OS-RECONCILIATION-2026-08-20-CONTROLLED-JUVAN-DEMO-IDENTITY.md`, `docs/SHILOH-OS-RECONCILIATION-2026-08-20-DUMMY-TEST-BOOKING-CLEANUP.md`, `docs/SHILOH-OS-RECONCILIATION-2026-08-20-ADMIN-BLOCK-TIME.md`, `docs/SHILOH-OS-RECONCILIATION-2026-08-20-CRM-DUMMY-RESET-COMPLETION.md`, `docs/SHILOH-OS-RECONCILIATION-2026-08-20-CURRENT-MAIN-356.md`, `docs/SHILOH-OS-RECONCILIATION-2026-08-18-CHRISTEL-SERVICE-CATALOGUE-CORRECTION.md`, specialist-workstream reconciliation and Control-routing reconciliation.
 
-Engineering Governance includes **#340** mandatory copy-ready specialist handoffs and **#353** specialist-chat lifecycle convention. Direct specialist continuation is allowed when ownership is clear and authority is not contradictory; all fail-closed gates remain binding.
+Engineering Governance includes **#340** mandatory copy-ready specialist handoffs, **#353** specialist-chat lifecycle convention, and **#370** bounded execution / anti-thrashing. Direct specialist continuation is allowed when ownership is clear and authority is not contradictory; all fail-closed gates remain binding.
 
 Control & Reconciliation uses reconciled authoritative evidence, not specialist-chat narrative, for continuity. **Keep ownership with the appropriate monitoring/provider workstream**; do not route blocked work to implementation merely to keep work moving.
 
 ## Production baseline
 
-**Current application:** PR **#367 / `9219bdef30e5452bc225a86d4f644d76149b528d`**, *Expose guarded cancellation in Manage booking*, built on #366 Juvan Primary/Backup approval.
+**Current application:** PR **#373 / `afbd6cde6bd338422bca6a9223c7a2a023b660d9`**, *Polish Shiloh Admin welcome prompt*, built on #371/#372 Admin UX standardization and the previously verified #367/#366 booking authority.
 
-**CI:** run **#1166**, full non-mutating regression suite passed **800 / 800**, zero failures and zero skipped.
+**CI:** PR #373 run **#1177** completed successfully. Earlier #371 and #372 CI gates also completed successfully before merge.
 
-**Render:** deploy **`dep-da3fnb49v7es73fp3360`** is **LIVE** on exact #367 merge SHA in confirmed workspace **My Workspace**. Startup completed normally, repeated `/health` returned 200, Google Calendar health passed, and migrations 065/066/067/068 were checksum-valid.
+**Render:** deploy **`dep-da3jr7hsrm7s739dhvk0`** is **LIVE** on exact #373 merge SHA in confirmed workspace **My Workspace**. Startup completed normally, repeated `/health` returned 200, Google Calendar health passed, and migrations 065/066/067/068 were checksum-valid.
 
 Current Juvan production resolver remains BOUND to the current canonical pointer, presently client **845**, phone suffix **1564**, Jean-Pierre admin **4**. Current approval contract is assigned practitioner **Primary** + Jean-Pierre **Backup** + exactly one atomic first decision wins. Historical client 845 is not a permanent identity key.
 
-Practitioner-approved client rescheduling remains **feature-off** with `WHATSAPP_RESCHEDULE_APPROVAL_ENABLED=false`. No genuine Juvan reset/re-registration, booking approval/decline, or appointment cancellation was manufactured for #366/#367 proof.
+Practitioner-approved client rescheduling remains **feature-off**. No CRM row, Calendar event, appointment, provider template or genuine WhatsApp journey was manufactured for the #371-#373 presentation-only unit.
 
 ## At-a-glance
 
 | ID | Workstream | State | Evidence / next action |
 |---|---|---|---|
-| DEPLOY-CONVERGENCE | GitHub ↔ Render | 🟢 VERIFIED | #367 / `9219bdef30e...`; CI #1166 passed 800/800; Render `dep-da3fnb49v7es73fp3360` LIVE; repeated `/health` 200 and Google Calendar health passed. |
+| DEPLOY-CONVERGENCE | GitHub ↔ Render | 🟢 VERIFIED | #373 / `afbd6cde6bd3...`; CI #1177 success; Render `dep-da3jr7hsrm7s739dhvk0` LIVE on exact merge SHA; repeated `/health` 200 and Google Calendar health passed. |
 | CONTROLLED-JUVAN-DEMO | CRM & Identity | 🟢 VERIFIED LIVE / FOUNDATION | #364 anchors `juvan_botha` to exact business-controlled phone with nullable current-client pointer and JP-only reset. Current pointer presently client 845 / suffix 1564, but downstream code must resolve the current controlled identity rather than name-match or hard-code 845. |
 | BOOKING-JUVAN-PRIMARY-BACKUP | Booking & Admin UX | 🟢 VERIFIED LIVE | #366 / `53b5e0c...`; CI #1164 passed 796/796; migration 068 applied/checksum-verified. Assigned practitioner = Primary, JP = Backup, current controlled Juvan identity revalidated at decision time, first atomic terminal decision wins, already-decided state blocks a second authoritative decision. JP-only Reset Juvan presentation delegates to #364 CRM reset. |
 | JUVAN-JP-BOOKING-APPROVAL-HIST | Booking & Admin UX | 🟢 HISTORICAL / SUPERSEDED | Genuine #585 remains do-not-redo evidence of the prior JP-sole behavior. #366 supersedes that runtime behavior; preserve #585 as historical evidence only. |
 | ADMIN-MANAGE-BOOKING-CANCEL | Booking & Admin UX | 🟢 VERIFIED LIVE | #367 adds appointment-scoped `Cancel booking — Cancel this appointment safely` before Back. It delegates to canonical Admin cancellation; reason and explicit confirmation remain required; no duplicated cancellation SQL. No real cancellation was manufactured for proof. |
+| ADMIN-UX-STANDARDIZATION | Booking & Admin UX | 🟢 VERIFIED LIVE | #371-#373 standardize Admin copy without changing WhatsApp-native typography or authority. `Shiloh Admin 🌿` + personalized welcome remain; landing prompt is `What would you like to manage today?`; `New booking`, `Manage booking`, and `Cancel new booking` are standardized; existing-appointment `Cancel booking` remains canonical. Admin category `Massage & Body` is presented as `Body Treatments`, with Neo Pelvic Therapy, Vaginal Tightening & Rejuvenation, and Ozone & Far Infrared grouped there from authoritative service rows. |
 | ADMIN-CANCEL-RETURN-CONTEXT | Booking & Admin UX | ⚪ PROPOSED / NOT IMPLEMENTED | Proposed UX: when cancellation originates from a selected client's Manage Client journey, return to that same client's management screen after success; standalone Manage booking should offer bounded next actions. Requires separate explicit implementation authorization. |
 | DUMMY-TEST-BOOKING-CLEANUP | Booking & Admin UX | 🟢 VERIFIED LIVE / COMPLETE | Exact archived/reset CRM #835 cleanup. #582/#583 newly cancelled; #561/#565/#566/#574 already cancelled; #564 no-show preserved. Three lifecycle rows terminalized; 2026 shared/Abigail/Marietjie/primary Calendar searches return zero Dummy Test events. One-shot flag false. |
 | ADMIN-BLOCK-TIME | Booking & Admin UX | 🟢 VERIFIED LIVE | #360 uses canonical `calendar_blocks`; Christel→Myself/Abigail, Abigail→self, Marietjie→self, JP/others→none; overlap/authority fail closed; no fake appointment/client message. |
 | CRM-DUMMY-RESET | CRM & Identity + Production / DevOps | 🟢 HISTORICAL COMPLETE / RETIRED AS REUSABLE | #338/#358 genuine Dummy Test reset archived CRM #835 and released its former phone; #362 cleaned remaining operational bookings. Dummy Test and Chenique are retired from reusable reset eligibility. |
 | GOVERNANCE-HANDOFF | Control + all specialists | 🟢 VERIFIED | #340 mandatory self-contained specialist handoffs; direct continuation allowed when authority and ownership are clear. |
 | GOVERNANCE-CHAT-LIFECYCLE | Control + all specialists | 🟢 VERIFIED | #353 practical chat-health rotation; no arbitrary turn threshold. |
+| GOVERNANCE-BOUNDED-EXECUTION | Control + all specialists | 🟢 VERIFIED | #370 requires bounded execution and anti-thrashing: preserve completed inspection, stop redundant read-only loops, and move to artifact/result or a specific proven blocker. |
 | CONTROL-CHECKPOINT-ROUTING | Control & Reconciliation | 🟢 VERIFIED | Owner/chat/reason/dependencies/status/copy-ready continuation remains mandatory; blocked work stays with monitoring/provider ownership. |
 | SPECIALIST-RECONCILIATION | All specialist workstreams | 🟢 VERIFIED | Verification → regression/merge → production/provider evidence → Tracker/Master reconciliation → final checkpoint remains authoritative. |
 | CONTROL-READONLY-BOUNDARY | Control & Reconciliation | 🟢 AUDIT RECORDED / DO NOT NORMALIZE | Earlier empty Render env-update calls caused same-commit redeploys but no env-value changes. Use true read-only Render tools absent explicit override. |
@@ -64,7 +66,7 @@ Practitioner-approved client rescheduling remains **feature-off** with `WHATSAPP
 | META-BOOKING-CONFIRM-V2 | WhatsApp / Meta Integration | 🟠 WAITING PROVIDER / NOT ACTIVE | Last authority remains PENDING / UTILITY / en / exact / duplicateCount=0 after one controlled submission; production stays v1. |
 | META-BOOKING-UPDATE | WhatsApp / Meta + Production | 🟢 VERIFIED LIVE / ENABLED | `shiloh_booking_update_v1` approved/exact/duplicate-free and production-enabled. Kill switch `WHATSAPP_BOOKING_UPDATE_ENABLED=false`. |
 | CUSTOMER-CHANGE-EVIDENCE | Booking & Admin UX + WhatsApp | 🟠 WAITING GENUINE FUTURE DELIVERY | #575 / audit 674 terminally suppressed `appointment_already_ended`, `sent_at=null`; wait for a natural still-future appointment change. |
-| GOOGLE-CALENDAR-AUTH | Booking/Admin + Production | 🟢 VERIFIED HEALTHY | #302 fail-closed provider guard remains permanent. #570/#585 are genuine sync evidence; #362 verified Dummy Test mirror cleanup; #367 startup health passed. No fake #367 cancellation proof. |
+| GOOGLE-CALENDAR-AUTH | Booking/Admin + Production | 🟢 VERIFIED HEALTHY | #302 fail-closed provider guard remains permanent. #570/#585 are genuine sync evidence; #362 verified Dummy Test mirror cleanup; #373 startup health passed. No fake cancellation or booking was manufactured for #371-#373 proof. |
 | ADMIN-BOOKING-ENTITLEMENT | Booking & Admin UX | 🟢 VERIFIED LIVE | #318 scope: Christel+Abigail shared; Marietjie only; linked Admin own practitioner; JP explicit Christel+Abigail exception; other unlinked Admin none. Block-time authority remains separate/narrower. |
 | ADMIN-BOOKING-FAST-PATH | Booking & Admin UX | 🟢 VERIFIED | Existing lookup/provisional-client/typed-time/same-Admin confirm rules remain accepted. |
 | CLIENT-WELCOME-JUVAN | Booking & Admin UX | 🟢 HANDSET EVIDENCE PRESERVED | #337 genuine Juvan `Hi` proved registered-client welcome; #364 clears phone-level welcome state only during a future authorized reset. Do not reset merely for proof. |
@@ -81,6 +83,17 @@ Practitioner-approved client rescheduling remains **feature-off** with `WHATSAPP
 | OZOW | Production / business | 🟠 WAITING | Merchant configuration + explicit business rules required. |
 | PRIVACY-DESTRUCTIVE | Control + CRM | 🟠 WAITING | Fail closed pending authority/evidence. |
 
+## Admin UX standardization — verified live
+
+Durable evidence: `docs/SHILOH-OS-RECONCILIATION-2026-08-20-ADMIN-UX-STANDARDIZATION.md`.
+
+- #371 established the Admin copy-standardization layer and Body Treatments presentation grouping without altering CRM service authority or booking mutation semantics.
+- #372 completed `Cancel new booking` presentation for the final pending-new-booking confirmation while preserving existing-appointment `Cancel booking`.
+- #373 keeps `Shiloh Admin 🌿` and the personalized greeting, replacing the redundant landing prompts with `What would you like to manage today?`.
+- Final #373 CI #1177 completed successfully; Render `dep-da3jr7hsrm7s739dhvk0` is LIVE on exact merge SHA `afbd6cde6bd338422bca6a9223c7a2a023b660d9`.
+- Startup passed Google Calendar health, reverified Juvan BOUND Primary/Backup authority and checksum-valid migrations, preserved reschedule feature-off state, and repeated `/health` returned 200.
+- No CRM, Calendar, provider-template or genuine handset mutation was manufactured for this presentation unit.
+
 ## Booking/Admin Juvan Primary/Backup + Manage booking cancellation — verified live
 
 Durable evidence: `docs/SHILOH-OS-RECONCILIATION-2026-08-20-BOOKING-ADMIN-JUVAN-PRIMARY-BACKUP-AND-MANAGE-CANCEL.md`.
@@ -89,13 +102,11 @@ Durable evidence: `docs/SHILOH-OS-RECONCILIATION-2026-08-20-BOOKING-ADMIN-JUVAN-
 - Current Juvan approval is assigned practitioner Primary + JP Backup, revalidated from current controlled identity/appointment truth, with exactly one atomic first terminal decision.
 - `Reset Juvan` is JP-only in Admin presentation and delegates to the existing #364 CRM reset contract.
 - Genuine #585 remains historical evidence of prior JP-sole behavior and was not recreated.
-- #367 merged as `9219bdef30e5452bc225a86d4f644d76149b528d`; CI #1166 passed 800/800; Render `dep-da3fnb49v7es73fp3360` is LIVE.
-- Manage booking now exposes an appointment-scoped, restart-safe Cancel booking action before Back.
+- #367 merged as `9219bdef30e5452bc225a86d4f644d76149b528d`; CI #1166 passed 800/800; its guarded Manage booking cancellation authority remains current beneath the later presentation-only Admin UX changes.
+- Manage booking exposes an appointment-scoped, restart-safe Cancel booking action before Back.
 - The action delegates to canonical Admin cancellation; selecting it is non-destructive, reason is required, and explicit confirmation remains mandatory before mutation.
 - Existing status/history/audit/Google Calendar cancellation safeguards remain owned by the canonical cancellation service.
-- The plain-text `cancel booking` pending-new-booking command remains unchanged.
 - No genuine appointment cancellation was manufactured for #367 proof.
-- #367 startup preserved Google Calendar health and `WHATSAPP_RESCHEDULE_APPROVAL_ENABLED=false`.
 
 ## Controlled Juvan reusable demo identity — verified live foundation
 
@@ -106,7 +117,7 @@ Durable identity evidence remains `docs/SHILOH-OS-RECONCILIATION-2026-08-20-CONT
 - Reset is exact Jean-Pierre business-admin only, atomically archives/releases/unbinds and preserves appointments/audit history.
 - While UNBOUND, only normal exact-phone WhatsApp onboarding may atomically bind the newly created canonical client and approval-policy pointer.
 - The read-only resolver fails closed on client/contact/policy/shared-active drift and is the required downstream identity source.
-- No genuine Juvan reset/new registration/rebind was executed in #364/#366/#367.
+- No genuine Juvan reset/new registration/rebind was executed merely for #371-#373 proof.
 
 ## Dummy Test booking cleanup — complete / do not replay
 
@@ -147,9 +158,11 @@ Booking confirmation v1 remains live; v2 remains provider-gated. Booking update 
 
 ## Exact continuation
 
-**Authoritative current state:** PR #367 / `9219bdef30e5452bc225a86d4f644d76149b528d` is current production application code; CI #1166 passed 800/800; Render deploy `dep-da3fnb49v7es73fp3360` is LIVE. Google Calendar health passed and `/health` returned 200.
+**Authoritative current state:** PR #373 / `afbd6cde6bd338422bca6a9223c7a2a023b660d9` is current production application code; CI #1177 completed successfully; Render deploy `dep-da3jr7hsrm7s739dhvk0` is LIVE on exact merge SHA. Google Calendar health passed and repeated `/health` returned 200.
 
-**Booking/Admin completed state:** #366 Primary/Backup approval and JP-only Reset Juvan presentation are verified live; #367 Manage booking guarded cancellation is verified live. Current controlled Juvan identity remains phone-anchored/current-pointer based; do not name-match or permanently hard-code client 845.
+**Booking/Admin completed state:** #366 Primary/Backup approval and JP-only Reset Juvan presentation remain verified live; #367 Manage booking guarded cancellation remains verified live; #371-#373 Admin UX presentation standardization is verified live. Current controlled Juvan identity remains phone-anchored/current-pointer based; do not name-match or permanently hard-code client 845.
+
+**Admin presentation:** keep `Shiloh Admin 🌿`, personalized `Welcome back, <Admin> 👋`, and `What would you like to manage today?`; keep `Body Treatments`, `New booking`, `Manage booking`, and `Cancel new booking` semantics from #371-#373. Existing appointment cancellation remains `Cancel booking` through the canonical #367 flow.
 
 **Proposed but not implemented:** context-aware post-cancellation return to the same Manage Client screen requires separate explicit authorization.
 
