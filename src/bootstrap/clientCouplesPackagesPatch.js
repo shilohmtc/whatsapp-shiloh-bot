@@ -1,3 +1,4 @@
+require('./clientMultiStaffAppointmentChangePatch');
 const discovery = require('../services/clientDiscoveryPackages');
 const couplesBooking = require('../services/clientCouplesMassageBooking');
 
