@@ -7,13 +7,13 @@ const routerPath = 'src/services/adminInteractiveMenu.js';
 const serviceSource = fs.readFileSync(servicePath, 'utf8');
 const routerSource = fs.readFileSync(routerPath, 'utf8');
 const {
-  TEST_CLIENTS,
-  TEST_CLIENT_ALIASES,
-  canResetTestClients,
+  CONFIRM_ID,
+  CANCEL_ID,
+  canResetJuvan,
   targetFromText,
   confirmationInteractive,
-  previewTargetRelease,
-  resetTargetClient,
+  resolveBoundJuvan,
+  resetControlledJuvan,
 } = require(`../${servicePath}`);
 
 function compact(sql) {
@@ -29,30 +29,41 @@ function scriptedDb(handler) {
       calls.push({ text, params });
       return handler(text, params, calls);
     },
-    release() {
-      released = true;
-    },
+    release() { released = true; },
   };
   return { db, calls, wasReleased: () => released };
 }
 
-const crmDummy = { id: 4242, display_name: 'CRM Dummy Test', status: 'active' };
+const demo = {
+  demo_key: 'juvan_botha',
+  normalized_phone: '27760891564',
+  current_client_id: 845,
+  expected_display_name: 'Juvan Botha',
+  active: true,
+};
+const juvan = { id: 845, display_name: 'Juvan Botha', status: 'active' };
 const targetContact = {
-  id: 9001,
+  id: 9101,
   contact_type: 'whatsapp',
-  normalized_value: '27821234567',
+  normalized_value: '27760891564',
   is_primary: true,
 };
 
-function previewDb({ conflict = false } = {}) {
+function previewDb({ conflict = false, unbound = false, extraPhone = false } = {}) {
   return scriptedDb((sql) => {
-    if (sql.includes('FROM clients') && sql.includes("status='active'")) {
-      return { rowCount: 1, rows: [crmDummy] };
+    if (sql.includes('FROM controlled_demo_identities')) {
+      return { rowCount: 1, rows: [{ ...demo, current_client_id: unbound ? null : 845 }] };
+    }
+    if (sql.includes('FROM clients') && sql.includes('WHERE id=$1')) {
+      return { rowCount: 1, rows: [juvan] };
     }
     if (sql.includes('FROM client_contacts') && sql.includes('WHERE client_id=$1')) {
-      return { rowCount: 1, rows: [targetContact] };
+      const rows = extraPhone
+        ? [targetContact, { ...targetContact, id: 9102, contact_type: 'mobile', normalized_value: '27820000000', is_primary: false }]
+        : [targetContact];
+      return { rowCount: rows.length, rows };
     }
-    if (sql.includes('SELECT DISTINCT cc.client_id')) {
+    if (sql.includes('SELECT DISTINCT cc.client_id') && sql.includes("c.status='active'")) {
       return conflict
         ? { rowCount: 1, rows: [{ client_id: 777, display_name: 'Other Active Client' }] }
         : { rowCount: 0, rows: [] };
@@ -61,128 +72,150 @@ function previewDb({ conflict = false } = {}) {
   });
 }
 
-function transactionDb({ conflict = false, residualCount = 0 } = {}) {
+function transactionDb({ conflict = false, residualCount = 0, policyDrift = false } = {}) {
   return scriptedDb((sql) => {
-    if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') return { rowCount: 0, rows: [] };
-    if (sql.includes('FROM clients') && sql.includes("status='active'") && sql.includes('FOR UPDATE')) {
-      return { rowCount: 1, rows: [crmDummy] };
+    if (['BEGIN', 'COMMIT', 'ROLLBACK'].includes(sql)) return { rowCount: 0, rows: [] };
+    if (sql.includes('FROM controlled_demo_identities') && sql.includes('FOR UPDATE')) {
+      return { rowCount: 1, rows: [demo] };
+    }
+    if (sql.includes('FROM clients') && sql.includes('WHERE id=$1') && sql.includes('FOR UPDATE')) {
+      return { rowCount: 1, rows: [juvan] };
     }
     if (sql.includes('FROM client_contacts') && sql.includes('WHERE client_id=$1') && sql.includes('FOR UPDATE')) {
       return { rowCount: 1, rows: [targetContact] };
     }
-    if (sql.includes('SELECT DISTINCT cc.client_id')) {
+    if (sql.includes('SELECT DISTINCT cc.client_id') && sql.includes("c.status='active'")) {
       return conflict
         ? { rowCount: 1, rows: [{ client_id: 777, display_name: 'Other Active Client' }] }
         : { rowCount: 0, rows: [] };
     }
+    if (sql.includes('FROM client_booking_approval_policies') && sql.includes('FOR UPDATE')) {
+      return {
+        rowCount: 1,
+        rows: [{ policy_key: 'juvan_botha_jp_booking_approval', client_id: policyDrift ? 999 : 845, approver_admin_id: 4, active: true }],
+      };
+    }
     if (sql.startsWith('DELETE FROM booking_intents')) return { rowCount: 1, rows: [] };
     if (sql.startsWith('DELETE FROM client_onboarding_sessions')) return { rowCount: 1, rows: [] };
     if (sql.startsWith('DELETE FROM booking_policy_acceptances')) return { rowCount: 1, rows: [] };
-    if (sql.startsWith('SELECT to_regclass')) return { rowCount: 1, rows: [{ table_name: null }] };
+    if (sql.startsWith('SELECT to_regclass')) return { rowCount: 1, rows: [{ table_name: sql }] };
+    if (sql.startsWith('DELETE FROM conversation_sessions')) return { rowCount: 1, rows: [] };
+    if (sql.startsWith('DELETE FROM user_profiles')) return { rowCount: 1, rows: [] };
+    if (sql.startsWith('DELETE FROM client_whatsapp_welcome_deliveries')) return { rowCount: 1, rows: [] };
     if (sql.startsWith('DELETE FROM client_contacts')) return { rowCount: 1, rows: [] };
     if (sql.startsWith('SELECT COUNT(*)::int AS count FROM client_contacts')) {
       return { rowCount: 1, rows: [{ count: residualCount }] };
     }
     if (sql.startsWith('UPDATE clients SET status=')) return { rowCount: 1, rows: [] };
+    if (sql.startsWith('UPDATE controlled_demo_identities SET current_client_id=NULL')) return { rowCount: 1, rows: [] };
+    if (sql.startsWith('UPDATE client_booking_approval_policies SET client_id=NULL')) return { rowCount: 1, rows: [] };
     if (sql.startsWith('INSERT INTO crm_audit_events')) return { rowCount: 1, rows: [] };
     throw new Error(`Unexpected transaction SQL: ${sql}`);
   });
 }
 
-test('test-client reset eligibility remains restricted to the approved identities', () => {
-  assert.deepEqual(TEST_CLIENTS, { chenique: 'Chenique', juvan: 'Juvan', dummy_test: 'Dummy Test' });
-  assert.deepEqual(TEST_CLIENT_ALIASES.dummy_test, ['Dummy Test', 'CRM Dummy Test']);
-  assert.equal(targetFromText('Reset test client Chenique').key, 'chenique');
-  assert.equal(targetFromText('Reset test client Juvan').key, 'juvan');
-  assert.equal(targetFromText('Reset test client Dummy Test').key, 'dummy_test');
-  assert.equal(targetFromText('Reset test client CRM Dummy Test').key, 'dummy_test');
-  assert.equal(targetFromText('admin_test_client_reset_confirm:dummy_test').key, 'dummy_test');
-  assert.equal(targetFromText('Reset test client Abigail'), null);
-  assert.equal(targetFromText('Reset test client Other Client'), null);
+test('Juvan is the only supported reusable reset identity and old targets are retired', () => {
+  assert.equal(targetFromText('Reset Juvan').mode, 'preview');
+  assert.equal(targetFromText('Reset test client Juvan').mode, 'preview');
+  assert.equal(targetFromText(CONFIRM_ID).mode, 'confirm');
+  assert.equal(targetFromText(CANCEL_ID).mode, 'cancel');
+  assert.equal(targetFromText('admin_test_client_reset_confirm:juvan').mode, 'confirm');
+  assert.equal(targetFromText('Reset test client Chenique'), null);
+  assert.equal(targetFromText('Reset test client Dummy Test'), null);
+  assert.equal(targetFromText('Reset test client CRM Dummy Test'), null);
+  assert.equal(targetFromText('admin_test_client_reset_confirm:dummy_test'), null);
+  assert.doesNotMatch(serviceSource, /TEST_CLIENT_ALIASES|TEST_CLIENTS/);
 });
 
-test('only Christel owner/admin and Jean-Pierre business admin can reset test clients', () => {
-  assert.equal(canResetTestClients({ display_name: 'Christel', business_role: 'owner', calendar_scope: 'all_business', service_scope: 'all_services' }), true);
-  assert.equal(canResetTestClients({ display_name: 'Jean-Pierre', business_role: 'business_admin', calendar_scope: 'all_business', service_scope: 'all_services' }), true);
-  assert.equal(canResetTestClients({ display_name: 'Abigail', business_role: 'employee_practitioner', calendar_scope: 'own', service_scope: 'own_services' }), false);
-  assert.equal(canResetTestClients({ display_name: 'Marietjie', business_role: 'tenant_practitioner', calendar_scope: 'own', service_scope: 'own_services' }), false);
+test('only exact Jean-Pierre business-admin authority can reset Juvan', () => {
+  assert.equal(canResetJuvan({ display_name: 'Jean-Pierre', business_role: 'business_admin', calendar_scope: 'all_business', service_scope: 'all_services' }), true);
+  assert.equal(canResetJuvan({ display_name: 'Christel', business_role: 'owner', calendar_scope: 'all_business', service_scope: 'all_services' }), false);
+  assert.equal(canResetJuvan({ display_name: 'Jean-Pierre', business_role: 'business_admin', calendar_scope: 'all_business', service_scope: 'own_services' }), false);
 });
 
-test('preview shows the actual CRM Dummy Test profile and intended phone identity before confirmation', async () => {
+test('preview resolves the durable current client pointer and shows the actual Juvan CRM identity', async () => {
   const { db } = previewDb();
-  const preview = await previewTargetRelease('dummy_test', db);
+  const preview = await resolveBoundJuvan(db);
   assert.equal(preview.status, 'ready');
-  assert.equal(preview.client.display_name, 'CRM Dummy Test');
-  assert.deepEqual(preview.phones, ['27821234567']);
+  assert.equal(preview.client.id, 845);
+  assert.equal(preview.client.display_name, 'Juvan Botha');
+  assert.deepEqual(preview.phones, ['27760891564']);
 
-  const interactive = confirmationInteractive('dummy_test', preview.client, preview.contacts);
-  assert.match(interactive.body, /CRM profile: CRM Dummy Test/);
-  assert.match(interactive.body, /CRM ID: #4242/);
-  assert.match(interactive.body, /WhatsApp: \+27821234567 — primary/);
-  assert.match(interactive.body, /Confirm only if this is the exact CRM profile and phone identity intended for reassignment/);
-  assert.doesNotMatch(interactive.body, /^\*Reset Dummy Test test client\?\*/m);
+  const interactive = confirmationInteractive(preview.client, preview.contacts);
+  assert.match(interactive.body, /CRM profile: Juvan Botha/);
+  assert.match(interactive.body, /CRM ID: #845/);
+  assert.match(interactive.body, /WhatsApp: \+27760891564 — primary/);
+  assert.match(interactive.body, /controlled Juvan identity will remain unbound/i);
+  assert.doesNotMatch(serviceSource, /WHERE lower\(trim\(display_name\)\)/i);
 });
 
-test('preview fails closed before Confirm when the target phone is shared with another active client', async () => {
-  const { db, calls } = previewDb({ conflict: true });
-  const preview = await previewTargetRelease('dummy_test', db);
-  assert.equal(preview.status, 'identity_conflict');
-  assert.equal(preview.client.display_name, 'CRM Dummy Test');
-  assert.deepEqual(preview.phones, ['27821234567']);
-  assert.equal(preview.conflicts[0].client_id, 777);
-  assert.ok(calls.some(({ text }) => text.includes('SELECT DISTINCT cc.client_id')));
+test('preview fails closed for unbound, shared-active, or additional-phone identity drift', async () => {
+  assert.equal((await resolveBoundJuvan(previewDb({ unbound: true }).db)).status, 'unbound');
+  assert.equal((await resolveBoundJuvan(previewDb({ conflict: true }).db)).status, 'identity_conflict');
+  assert.equal((await resolveBoundJuvan(previewDb({ extraPhone: true }).db)).status, 'identity_drift');
 });
 
-test('transaction rechecks shared-active identity after confirmation and rolls back on a race', async () => {
+test('transaction rechecks the shared-active identity and rolls back before mutation on a race', async () => {
   const { db, calls, wasReleased } = transactionDb({ conflict: true });
-  const result = await resetTargetClient(
-    { id: 12, display_name: 'Jean-Pierre' },
-    'dummy_test',
+  const result = await resetControlledJuvan(
+    { id: 4, display_name: 'Jean-Pierre', business_role: 'business_admin', calendar_scope: 'all_business', service_scope: 'all_services' },
     { connect: async () => db }
   );
-
   assert.equal(result.status, 'identity_conflict');
-  assert.ok(calls.some(({ text }) => text.includes('SELECT DISTINCT cc.client_id')));
   assert.ok(calls.some(({ text }) => text === 'ROLLBACK'));
   assert.equal(calls.some(({ text }) => text.startsWith('DELETE FROM client_contacts')), false);
-  assert.equal(calls.some(({ text }) => text.startsWith('UPDATE clients SET status=')), false);
+  assert.equal(calls.some(({ text }) => text.startsWith('UPDATE controlled_demo_identities')), false);
   assert.equal(wasReleased(), true);
 });
 
-test('residual WhatsApp/mobile binding fails the postcondition and rolls the transaction back', async () => {
+test('transaction refuses a stale Juvan approval-policy pointer', async () => {
+  const { db, calls } = transactionDb({ policyDrift: true });
+  const result = await resetControlledJuvan(
+    { id: 4, display_name: 'Jean-Pierre', business_role: 'business_admin', calendar_scope: 'all_business', service_scope: 'all_services' },
+    { connect: async () => db }
+  );
+  assert.equal(result.status, 'policy_drift');
+  assert.ok(calls.some(({ text }) => text === 'ROLLBACK'));
+  assert.equal(calls.some(({ text }) => text.startsWith('DELETE FROM client_contacts')), false);
+});
+
+test('residual WhatsApp/mobile binding rolls back before archive, pointer unbind, or audit', async () => {
   const { db, calls, wasReleased } = transactionDb({ residualCount: 1 });
   await assert.rejects(
-    resetTargetClient(
-      { id: 12, display_name: 'Jean-Pierre' },
-      'dummy_test',
+    resetControlledJuvan(
+      { id: 4, display_name: 'Jean-Pierre', business_role: 'business_admin', calendar_scope: 'all_business', service_scope: 'all_services' },
       { connect: async () => db }
     ),
     /identity release postcondition failed/
   );
-
-  assert.ok(calls.some(({ text }) => text.startsWith('DELETE FROM client_contacts')));
   assert.ok(calls.some(({ text }) => text === 'ROLLBACK'));
-  assert.equal(calls.some(({ text }) => text === 'COMMIT'), false);
   assert.equal(calls.some(({ text }) => text.startsWith('UPDATE clients SET status=')), false);
+  assert.equal(calls.some(({ text }) => text.startsWith('UPDATE controlled_demo_identities')), false);
   assert.equal(calls.some(({ text }) => text.startsWith('INSERT INTO crm_audit_events')), false);
   assert.equal(wasReleased(), true);
 });
 
-test('successful reset releases only phone identity, archives the client and preserves appointments/audit history', async () => {
-  const { db, calls, wasReleased } = transactionDb({ residualCount: 0 });
-  const result = await resetTargetClient(
-    { id: 12, display_name: 'Jean-Pierre' },
-    'dummy_test',
+test('successful reset clears bounded phone state, archives old client, unbinds pointers, and preserves history', async () => {
+  const { db, calls, wasReleased } = transactionDb();
+  const result = await resetControlledJuvan(
+    { id: 4, display_name: 'Jean-Pierre', business_role: 'business_admin', calendar_scope: 'all_business', service_scope: 'all_services' },
     { connect: async () => db }
   );
-
   assert.equal(result.status, 'reset');
-  assert.ok(calls.some(({ text }) => text.startsWith('DELETE FROM booking_intents')));
-  assert.ok(calls.some(({ text }) => text.startsWith('DELETE FROM client_onboarding_sessions')));
-  assert.ok(calls.some(({ text }) => text.startsWith('DELETE FROM booking_policy_acceptances')));
-  assert.ok(calls.some(({ text }) => text.startsWith('DELETE FROM client_contacts')));
-  assert.ok(calls.some(({ text }) => text.startsWith('UPDATE clients SET status=')));
-  assert.ok(calls.some(({ text }) => text.startsWith('INSERT INTO crm_audit_events')));
+  assert.equal(result.client.id, 845);
+  for (const prefix of [
+    'DELETE FROM booking_intents',
+    'DELETE FROM client_onboarding_sessions',
+    'DELETE FROM booking_policy_acceptances',
+    'DELETE FROM conversation_sessions',
+    'DELETE FROM user_profiles',
+    'DELETE FROM client_whatsapp_welcome_deliveries',
+    'DELETE FROM client_contacts',
+    'UPDATE clients SET status=',
+    'UPDATE controlled_demo_identities SET current_client_id=NULL',
+    'UPDATE client_booking_approval_policies SET client_id=NULL',
+    'INSERT INTO crm_audit_events',
+  ]) assert.ok(calls.some(({ text }) => text.startsWith(prefix)), `missing ${prefix}`);
   assert.ok(calls.some(({ text }) => text === 'COMMIT'));
   assert.equal(calls.some(({ text }) => /^DELETE FROM clients\b/.test(text)), false);
   assert.equal(calls.some(({ text }) => /^DELETE FROM appointments\b/.test(text)), false);
@@ -190,17 +223,14 @@ test('successful reset releases only phone identity, archives the client and pre
 
   const auditCall = calls.find(({ text }) => text.startsWith('INSERT INTO crm_audit_events'));
   const metadata = JSON.parse(auditCall.params[2]);
-  assert.equal(metadata.displayName, 'CRM Dummy Test');
+  assert.equal(metadata.demoKey, 'juvan_botha');
   assert.equal(metadata.preservedAppointmentHistory, true);
-  assert.equal(metadata.releasedIdentityCount, 1);
+  assert.equal(metadata.controlledIdentityUnbound, true);
+  assert.equal(metadata.clearedWelcomeDeliveries, 1);
   assert.equal(wasReleased(), true);
 });
 
-test('temporary phone state cleanup and explicit confirmation route remain wired', () => {
-  assert.match(serviceSource, /DELETE FROM conversation_sessions WHERE phone = ANY/);
-  assert.match(serviceSource, /DELETE FROM user_profiles[\s\S]*regexp_replace\(phone::text, '\[\^0-9\]'/);
-  assert.match(serviceSource, /admin_test_client_reset_confirm:/);
-  assert.match(serviceSource, /processAdminTestClientResetMessage/);
+test('router remains wired to the CRM reset handler while final menu ownership stays separate', () => {
   assert.match(routerSource, /processAdminTestClientResetMessage\(sender, action\.command\)/);
   assert.match(routerSource, /const testClientReset = await processAdminTestClientResetMessage\(sender, text\)/);
 });
