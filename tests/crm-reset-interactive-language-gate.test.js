@@ -9,13 +9,21 @@ const {
 
 const webhookSource = fs.readFileSync('src/controllers/webhookController.js', 'utf8');
 
-test('CRM reset Confirm and Cancel control tokens bypass natural-language classification', () => {
-  for (const target of ['chenique', 'juvan', 'dummy_test']) {
-    for (const action of ['confirm', 'cancel']) {
-      const token = `admin_test_client_reset_${action}:${target}`;
-      assert.equal(isEnglishCompatibleControlToken(token), true);
-      assert.equal(needsLanguageCheck(token), false);
-    }
+test('controlled Juvan reset Confirm and Cancel tokens bypass natural-language classification', () => {
+  for (const action of ['confirm', 'cancel']) {
+    const token = `admin_controlled_demo_reset_${action}:juvan_botha`;
+    assert.equal(isEnglishCompatibleControlToken(token), true);
+    assert.equal(needsLanguageCheck(token), false);
+  }
+});
+
+test('legacy in-flight Juvan buttons remain safe during transition but retired targets do not bypass', () => {
+  for (const action of ['confirm', 'cancel']) {
+    const legacy = `admin_test_client_reset_${action}:juvan`;
+    assert.equal(isEnglishCompatibleControlToken(legacy), true);
+    assert.equal(needsLanguageCheck(legacy), false);
+    assert.equal(isEnglishCompatibleControlToken(`admin_test_client_reset_${action}:chenique`), false);
+    assert.equal(isEnglishCompatibleControlToken(`admin_test_client_reset_${action}:dummy_test`), false);
   }
 });
 
