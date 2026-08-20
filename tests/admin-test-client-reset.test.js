@@ -145,7 +145,7 @@ test('preview resolves the durable current client pointer and shows the actual J
   assert.match(interactive.body, /CRM profile: Juvan Botha/);
   assert.match(interactive.body, /CRM ID: #845/);
   assert.match(interactive.body, /WhatsApp: \+27760891564 — primary/);
-  assert.match(interactive.body, /controlled Juvan identity will remain unbound/i);
+  assert.match(interactive.body, /controlled demo identity will remain unbound/i);
   assert.doesNotMatch(serviceSource, /WHERE lower\(trim\(display_name\)\)/i);
 });
 
