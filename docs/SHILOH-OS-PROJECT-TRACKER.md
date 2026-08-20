@@ -18,7 +18,13 @@ Purpose: concise operational dashboard. Master is the detailed current ledger; h
 
 New specialist chat: independently read current GitHub `main`, Master, this Tracker, latest reconciliation `docs/SHILOH-OS-RECONCILIATION-2026-08-20-CURRENT-MAIN-356.md`, and Engineering Governance; verify changing production/provider/CRM/Calendar/human evidence; preserve newer authority; then continue only owned scope.
 
+Durable reconciliation anchors remain valid where not superseded, including `docs/SHILOH-OS-RECONCILIATION-2026-08-18-CHRISTEL-SERVICE-CATALOGUE-CORRECTION.md`, the specialist-workstream reconciliation and Control-routing reconciliation.
+
 Engineering Governance includes **#340** mandatory copy-ready specialist handoffs and **#353** specialist-chat lifecycle convention. There is no fixed turn/message threshold for chat rotation. Direct specialist continuation is allowed when ownership is clear and authority is not contradictory; all fail-closed gates remain binding.
+
+Control & Reconciliation uses reconciled authoritative evidence, not specialist-chat narrative, for continuity.
+
+If an item is blocked by a provider, approval, human-truth, genuine-journey or other external gate, implementation must not proceed. **Keep ownership with the appropriate monitoring/provider workstream** and have Control & Reconciliation track the dependency instead of routing implementation prematurely.
 
 ## Production baseline
 
@@ -37,6 +43,8 @@ Practitioner-approved client rescheduling remains **feature-off** with `WHATSAPP
 | DEPLOY-CONVERGENCE | GitHub ↔ Render | 🟢 VERIFIED | #356 / `aed75d1f...`; CI #1133 success; Render `dep-da3bvjajnfac73c6fca0` LIVE on exact SHA. |
 | GOVERNANCE-HANDOFF | Control + all specialists | 🟢 VERIFIED | #340 mandatory self-contained specialist handoffs; direct specialist continuation allowed when ownership/authority are clear. |
 | GOVERNANCE-CHAT-LIFECYCLE | Control + all specialists | 🟢 VERIFIED | #353 lifecycle convention authoritative: practical chat-health rotation, no arbitrary turn threshold, fresh same-specialist chat independently re-reads authority. |
+| CONTROL-CHECKPOINT-ROUTING | Control & Reconciliation | 🟢 VERIFIED | Durable Control checkpoint routing contract remains adopted: owner/chat/reason/dependencies/status/copy-ready continuation; blocked work stays with monitoring/provider ownership. |
+| SPECIALIST-RECONCILIATION | All four specialist workstreams | 🟢 VERIFIED | Mandatory specialist verification → applicable regression/merge/production-provider verification → Tracker/Master reconciliation → final specialist checkpoint remains authoritative. |
 | CONTROL-READONLY-BOUNDARY | Control & Reconciliation | 🟢 AUDIT RECORDED / DO NOT NORMALIZE | Earlier Control Render verification incorrectly invoked env-update with empty merge set and caused same-commit redeploys including `dep-da2ope3...` / `dep-da2opi9...`; no env values changed. Control uses true read-only Render tools absent explicit override. |
 | PR351-SUPERSESSION | Control & Reconciliation | 🟢 CLOSED / SUPERSEDED | PR #351 was based on #350 and became stale after #352–#356. Closed rather than force-merged; current reconciliation supersedes it. |
 | JUVAN-JP-BOOKING-APPROVAL | Booking & Admin UX | 🟢 VERIFIED LIVE / HANDSET-PROVEN | #350 canonical client-ID policy routes Juvan client 845 to exact JP admin 4; #352 genuine #585 proves pending-before-approval, authorized JP approval, final v1 confirmation only after approval, and matching Calendar mirrors. Do not recreate #585. |
@@ -55,14 +63,14 @@ Practitioner-approved client rescheduling remains **feature-off** with `WHATSAPP
 | CRM-DUMMY-RESET | CRM & Identity | 🟢 RUNTIME GUARD LIVE / 🟠 GENUINE RESET EVIDENCE OPEN | #338 guarded reassignment workflow merged. Genuine authorized reset/post-reset first-contact evidence remains separate; do not manufacture. |
 | CLIENT-WELCOME-JUVAN | Booking & Admin UX | 🟢 REPAIRED / HANDSET-PROVEN | #337 genuine Juvan `Hi` proved universal welcome then registered branch; do not reset/replay state. |
 | CLIENT-DISCOVERY-JUVAN | Booking & Admin UX | 🟢 HANDSET-PROVEN | Genuine two-page category discovery verified accepted ordering/SQT grouping; no need to redo. |
-| ATT-AUTH | Booking/Admin + CRM | 🟢 VERIFIED LIVE | Christel→Christel, Abigail→Abigail, Marietjie→Marietjie; JP→none. Exact active linked identity required; conflicts fail closed. |
+| ATT-AUTH | Booking/Admin + CRM | 🟢 VERIFIED LIVE | PR #324 own-practitioner authority: Christel→Christel, Abigail→Abigail, Marietjie→Marietjie, JP→none. CI #1041 passed 662/0; exact active linked identity required; conflicts fail closed. |
 | A1-HIST-REVIEW | Booking/Admin + CRM | 🔵 HUMAN TRUTH | Historical attendance remains explicit human truth; re-query before quoting current counts. |
 | A1-558 | CRM & Identity | 🔴 HOLD | Appointment #558 historical practitioner `SHILOH MTC`; never infer practitioner. Establish authoritative/human truth first. |
-| CHRISTEL-CATALOGUE | CRM & Identity | 🟢 VERIFIED LIVE | #328: #27 inactive/unmapped/history preserved; #34 120 min; #65 50 min/package retained; reviewed totals 60/90/90; no practitioner overrides. Do not redo/bulk-publish Goldie wording. |
+| CHRISTEL-CATALOGUE-CORRECTION | CRM & Identity | 🟢 VERIFIED LIVE | #328: #27 inactive/unmapped/history preserved; #34 120 min; #65 50 min/package retained; reviewed totals 60/90/90; no practitioner overrides. Durable evidence: `docs/SHILOH-OS-RECONCILIATION-2026-08-18-CHRISTEL-SERVICE-CATALOGUE-CORRECTION.md`. Do not redo/bulk-publish Goldie wording. |
 | PUBLIC-CATALOGUE | Booking & Admin UX | 🟢 VERIFIED LIVE | `/book` remains accepted CRM-backed #301 public catalogue; no duplicate static source. |
 | GOLDIE-DESCRIPTIONS | Control / business approval | 🟠 WAITING APPROVAL | Phone-number/treatment-identity/medical-claim/misplaced-text exceptions remain gated; do not bulk publish. |
 | VISUAL-CALENDAR | Booking & Admin UX | ⏸️ DEFERRED | Shiloh Visual Calendar explicitly held off for now. Do not implement/prototype/add to active queue unless later reactivated. Existing Google Calendar integration unchanged. |
-| GBP-PROVIDER | Production / DevOps | 🟠 WAITING PROVIDER | Business Information API enabled/application submitted/API-specific quotas visible; general Requests/min remains 0. No GBP integration until positive usable access. |
+| GBP-PROVIDER | Production / DevOps | 🟠 WAITING PROVIDER | Business Information API enabled/application submitted/API-specific quotas visible; general Requests/min remains 0; access is **not confirmed/usable**. Do not treat as quota-increase work or start OAuth/API integration. Reopen only when usable Google access or a usable general request quota greater than 0 is authoritatively established; Control & Reconciliation tracks the dependency. |
 | GCONTACTS | CRM & Identity | ⚪ READY / LOW PRIORITY | CRM remains authoritative. |
 | OZOW | Production / business | 🟠 WAITING | Merchant configuration + explicit business rules required. |
 | PRIVACY-DESTRUCTIVE | Control + CRM | 🟠 WAITING | Fail closed pending authority/evidence. |
@@ -110,11 +118,15 @@ OAuth/provider health remains verified; #302 provider guard is permanent. Calend
 
 ## CRM / attendance state
 
-CRM remains canonical identity authority. Ambiguity and destructive changes fail closed. #338 Dummy Test reset hardening remains live, with genuine reset evidence separate. Attendance finalization remains own-practitioner-only; JP has none. #558 remains a fail-closed practitioner identity exception.
+CRM remains canonical identity authority. Ambiguity and destructive changes fail closed. #338 Dummy Test reset hardening remains live, with genuine reset evidence separate. Attendance finalization remains own-practitioner-only under PR #324; JP has none. #558 remains a fail-closed practitioner identity exception.
 
 ## Catalogue state
 
-Public catalogue remains CRM-projected `/book` #301. Christel reviewed correction #328 remains authoritative. Goldie wording publication is a separate approval gate and must not be conflated with catalogue correction.
+Public catalogue remains CRM-projected `/book` #301. Christel reviewed correction #328 and `docs/SHILOH-OS-RECONCILIATION-2026-08-18-CHRISTEL-SERVICE-CATALOGUE-CORRECTION.md` remain authoritative. Goldie wording publication is a separate approval gate and must not be conflated with catalogue correction.
+
+## Google Business Profile provider gate
+
+Current state remains **🟠 WAITING PROVIDER / pending Google**. General **Requests/min** remains **0**, access is **not confirmed/usable**, and Production / DevOps owns provider verification while Control & Reconciliation tracks the dependency. **Do not treat as quota-increase work or start OAuth/API integration**. Reopen only after authoritative Google evidence establishes usable access or a usable general request quota greater than 0.
 
 ## Deferred roadmap
 
