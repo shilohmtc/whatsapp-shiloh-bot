@@ -6,10 +6,11 @@ const originalGet=axios.get;
 const env={...process.env};
 test.afterEach(()=>{axios.get=originalGet;process.env={...env};resetTemplateInventoryCache();});
 
-test('complete registry contains all 15 exact expected/current/legacy identities',()=>{
- assert.equal(CONTRACTS.length,15); assert.equal(new Set(CONTRACTS.map(x=>x.contract.name)).size,15);
+test('complete registry contains all 16 exact expected/current/legacy identities',()=>{
+ assert.equal(CONTRACTS.length,16); assert.equal(new Set(CONTRACTS.map(x=>x.contract.name)).size,16);
  assert.equal(CONTRACTS.find(x=>x.key==='birthday_v2').contract.name,'shiloh_birthday_wish_v2');
  assert.equal(CONTRACTS.find(x=>x.key==='birthday_v1').sendable,false);
+ const bookingV2=CONTRACTS.find(x=>x.key==='booking_confirmation_v2');assert.equal(bookingV2.contract.name,'shiloh_booking_confirmation_v2');assert.equal(bookingV2.sendable,false);
 });
 test('contract comparison detects copy, variable, button, and ordering drift',()=>{
  const entry=CONTRACTS.find(x=>x.key==='booking_approval_request');

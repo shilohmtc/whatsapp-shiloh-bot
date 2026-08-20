@@ -1,6 +1,7 @@
 const { pool } = require('../db/pool');
 const { sendWhatsAppTemplate } = require('./whatsapp');
 const { processAppointmentReminderConfirmationMessage } = require('./appointmentReminderConfirmation');
+const { processBookingConfirmationV2Action } = require('./bookingConfirmationV2Actions');
 const logger = require('../lib/logger');
 
 const LANGUAGE_CODE = process.env.WHATSAPP_TEMPLATE_LANGUAGE || 'en';
@@ -64,6 +65,8 @@ async function syncCompletedLoyaltyVisits(){const inserted=await pool.query(`INS
 async function loyaltyStatus(clientId){await syncCompletedLoyaltyVisits();const visits=await pool.query(`SELECT COUNT(*)::int AS n FROM loyalty_visits WHERE client_id=$1`,[clientId]);const rewards=await pool.query(`SELECT COUNT(*)::int AS n FROM loyalty_rewards WHERE client_id=$1 AND status='available'`,[clientId]);const n=Number(visits.rows[0]?.n||0),available=Number(rewards.rows[0]?.n||0),toward=n%5;return{visits:n,available,toward,remaining:toward===0?5:5-toward};}
 
 async function processCustomerCareMessage(phone,text){
+  const bookingConfirmationV2=await processBookingConfirmationV2Action(phone,text);
+  if(bookingConfirmationV2.handled)return bookingConfirmationV2;
   const reminderConfirmation=await processAppointmentReminderConfirmationMessage(phone,text);
   if(reminderConfirmation.handled)return reminderConfirmation;
   const n=clean(text);const birthdayOn=/^(birthday (messages|wishes) on|enable birthday (messages|wishes)|birthday on)$/.test(n);const birthdayOff=/^(birthday (messages|wishes) off|disable birthday (messages|wishes)|birthday off)$/.test(n);const loyalty=/^(loyalty|my loyalty|loyalty status|rewards|my rewards)$/.test(n);const myAppointments=isMyAppointmentsIntent(n);if(!birthdayOn&&!birthdayOff&&!loyalty&&!myAppointments)return{handled:false};const client=await clientForPhone(phone);if(!client)return{handled:true,reply:'I could not safely match this WhatsApp number to exactly one active Shiloh client profile. Please ask the clinic team to verify your profile.'};if(myAppointments){const rows=await listUpcomingAppointments(client.id);return{handled:true,reply:appointmentsReply(client,rows),appointments:rows,interactive:{type:'button',body:appointmentsReply(client,rows),buttons:appointmentActionButtons(rows)}};}if(birthdayOn){await setBirthdayOptIn(client.id,true);return{handled:true,reply:`🎂 Birthday wishes are now *on* for ${client.display_name}. You can switch them off any time by sending *BIRTHDAY OFF*.`};}if(birthdayOff){await setBirthdayOptIn(client.id,false);return{handled:true,reply:'Birthday wishes are now *off*. 🌿'};}const status=await loyaltyStatus(client.id);const lines=[`🌿 *Shiloh Loyalty*`,``,`${client.display_name}, you currently have *${status.visits} qualifying completed visit${status.visits===1?'':'s'}* recorded in Shiloh.`];if(status.available>0)lines.push(`🎁 Available 10% reward${status.available===1?'':'s'}: *${status.available}*.`);else lines.push(`✨ Visits toward your next 10% reward: *${status.toward}/5*.`);lines.push('',`Rewards are based on qualifying visits recorded as completed in Shiloh.`);return{handled:true,reply:lines.join('\n')};}

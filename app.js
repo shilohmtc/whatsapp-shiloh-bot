@@ -70,6 +70,7 @@ const { ensureHistoricalFinalizationFinancialSchema } = require("./src/services/
 const { runConfiguredClientProvenanceAudit } = require("./src/services/clientProvenanceAudit");
 const { submitStaffFinalizationTemplate, submitStaffFinalizationActionTemplate } = require("./src/services/staffFinalizationTemplateProvisioning");
 const { submitBookingConfirmationTemplate } = require("./src/services/bookingConfirmationTemplateProvisioning");
+const { submitBookingConfirmationV2Template } = require("./src/services/bookingConfirmationV2TemplateProvisioning");
 const { DEFINITIONS: CLIENT_LIFECYCLE_TEMPLATE_DEFINITIONS, getClientLifecycleTemplateStatus, submitClientLifecycleTemplate } = require("./src/services/clientLifecycleTemplateProvisioning");
 
 const app = express();
@@ -85,6 +86,25 @@ app.use((err, req, res, next) => { const log = req.log || logger; log.error({ er
 async function provisionStaffFinalizationTemplateSafely() { try { const result = await submitStaffFinalizationTemplate(); logger.info({ ok: result?.ok === true, submitted: result?.submitted === true, reason: result?.reason || null, templateName: result?.templateName || null, providerStatus: result?.provider?.status || result?.template?.status || null, providerCategory: result?.provider?.category || result?.template?.category || null }, "Staff finalization WhatsApp template provisioning checked"); } catch (error) { logger.warn({ err: error }, "Staff finalization WhatsApp template provisioning failed; reminders remain fail-closed"); } }
 async function provisionStaffFinalizationActionTemplateSafely() { try { const result = await submitStaffFinalizationActionTemplate(); logger.info({ ok: result?.ok === true, submitted: result?.submitted === true, reason: result?.reason || null, templateName: result?.templateName || null, providerStatus: result?.provider?.status || result?.template?.status || null, providerCategory: result?.provider?.category || result?.template?.category || null }, "Staff finalization action template provisioning checked"); } catch (error) { logger.warn({ err: error }, "Staff finalization action template provisioning failed; button prompt remains fail-closed"); } }
 async function provisionBookingConfirmationTemplateSafely() { try { const result = await submitBookingConfirmationTemplate(); logger.info({ ok: result?.ok === true, submitted: result?.submitted === true, reason: result?.reason || null, templateName: result?.templateName || null, configuredTemplateName: result?.configuredTemplateName || null, providerStatus: result?.provider?.status || result?.template?.status || null, providerCategory: result?.provider?.category || result?.template?.category || null }, "Booking confirmation WhatsApp template provisioning checked"); } catch (error) { logger.warn({ err: error }, "Booking confirmation WhatsApp template provisioning failed; plain-text confirmation remains active"); } }
+async function provisionBookingConfirmationV2IfExplicitlyEnabled() {
+  if (String(process.env.META_BOOKING_CONFIRMATION_V2_PROVISION_ON_START || '').toLowerCase() !== 'true') return;
+  try {
+    const result = await submitBookingConfirmationV2Template();
+    logger.info({
+      ok: result?.ok === true,
+      submitted: result?.submitted === true,
+      reason: result?.reason || null,
+      templateName: result?.templateName || null,
+      providerStatus: result?.provider?.status || result?.template?.status || null,
+      providerCategory: result?.provider?.category || result?.template?.category || null,
+      providerLanguage: result?.template?.language || null,
+      exact: result?.template?.exact ?? null,
+      duplicateCount: result?.duplicateCount ?? result?.template?.duplicateCount ?? null,
+    }, "Booking confirmation v2 one-shot provisioning checked");
+  } catch (error) {
+    logger.error({ err: error, metaError: error.response?.data?.error }, "Booking confirmation v2 one-shot provisioning failed");
+  }
+}
 async function provisionClientLifecycleTemplatesIfExplicitlyEnabled() {
   if (String(process.env.META_LIFECYCLE_PROVISION_ON_START || '').toLowerCase() !== 'true') return;
   try {
@@ -105,7 +125,7 @@ async function start() {
   const christelCatalogueCorrection = await ensureChristelServiceCatalogueCorrection(); logger.info(christelCatalogueCorrection, "Christel service catalogue correction verified");
   await ensureHistoricalFinalizationFinancialSchema(); logger.info({ initialized: true }, "Historical finalization financial schema verified");
   try { await runConfiguredClientProvenanceAudit(logger); } catch (error) { logger.error({ err: error }, "Read-only CRM provenance audit failed"); }
-  await provisionStaffFinalizationTemplateSafely(); await provisionStaffFinalizationActionTemplateSafely(); await provisionBookingConfirmationTemplateSafely(); await provisionClientLifecycleTemplatesIfExplicitlyEnabled();
+  await provisionStaffFinalizationTemplateSafely(); await provisionStaffFinalizationActionTemplateSafely(); await provisionBookingConfirmationTemplateSafely(); await provisionBookingConfirmationV2IfExplicitlyEnabled(); await provisionClientLifecycleTemplatesIfExplicitlyEnabled();
   server = app.listen(PORT, () => { logger.info({ port: PORT }, "Shiloh started"); startConversationSessionCleanupScheduler(); startTemporarySessionCleanupScheduler(); startGoogleBusinessProfileSyncScheduler(); startAppointmentLifecycleScheduler(); startCustomerCareScheduler(); startBookingIntegrityScheduler(); startMandatoryDemoCleanupScheduler(); startAttendanceFinalizationReminderScheduler(); startHistoricalFinalizationPromptScheduler(); });
 }
 start().catch((error) => { logger.fatal({ err: error }, "Shiloh failed during startup"); process.exit(1); });
