@@ -130,6 +130,25 @@ test('interactive presentation standardizes headings, category labels and back c
   assert.equal(result.rows[1].description, 'Return to the main Admin menu');
 });
 
+test('Shiloh Admin welcome keeps branding and personalized greeting while removing redundant prompts', () => {
+  const result = standardizeInteractive({
+    type: 'list',
+    body: '*Shiloh Admin 🌿*\nWelcome back, Jean-Pierre 👋\n\nWhat would you like to do today?\n\nChoose a section below.',
+    rows: [],
+  });
+
+  assert.equal(
+    result.body,
+    '*Shiloh Admin 🌿*\nWelcome back, Jean-Pierre 👋\n\nWhat would you like to manage today?'
+  );
+});
+
+test('Admin welcome polish does not rewrite non-Admin messages with similar wording', () => {
+  const body = '*Client menu*\n\nWhat would you like to do today?\n\nChoose a section below.';
+  const result = standardizeInteractive({ type: 'list', body, rows: [] });
+  assert.equal(result.body, body);
+});
+
 test('Admin UX standardization preload runs after the existing Block time patch', () => {
   const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'));
   for (const scriptName of ['start', 'dev']) {
