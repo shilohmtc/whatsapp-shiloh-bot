@@ -76,6 +76,24 @@ Across every workstream, the shared source of truth is GitHub `main`, `docs/SHIL
 
 Before controlled work, a specialist chat must read the applicable authoritative repository state and verify any production/provider facts that could have changed. Chat history is navigation context only when authoritative repository evidence exists; it must not be used to reconstruct or override project truth. Do not redo completed or superseded work.
 
+## Bounded execution / anti-thrashing rule
+
+Authoritative inspection is a start-of-unit control, not a substitute for execution. Once the owning workstream, scope, relevant authority and genuine gates are known, the specialist must move to the smallest reversible step that can produce the requested outcome or test the implementation hypothesis.
+
+A **read-only cycle** is a sequence of repository, log, provider, connector or resource reads performed without producing a materially new execution artifact or materially new evidence. Two consecutive read-only cycles that do not add material evidence trigger a mandatory execution checkpoint. At that checkpoint the specialist must do exactly one of the following before continuing broad inspection:
+
+- produce the next bounded output artifact, edit, commit, targeted test result or other concrete work product;
+- state a specific blocker or unresolved gate and cite the evidence that proves execution cannot safely continue; or
+- if the chat itself is materially degraded, produce the same-specialist continuation checkpoint required by the Specialist chat lifecycle operating convention.
+
+Repeating the same repository searches, reopening the same authority documents, or narrating preparation does not count as progress. Re-inspection after the initial authoritative pass is justified only when there is a concrete reason, including: authoritative state changed; an edit/test exposed an unexpected dependency; the requested scope materially changed; a production/provider/human-truth fact could have changed and is required for the next step; or a safety/irreversibility boundary requires fresh verification.
+
+Task type must govern tool use. A source-data transformation, export, spreadsheet, document or other output-artifact request must not be converted into a repository-audit exercise unless repository authority is actually required to interpret or safely produce that output. Conversely, implementation work must not skip the initial authoritative-state inspection merely to satisfy this execution rule.
+
+Progress updates should be milestone-based. Prefer updates tied to a concrete artifact, changed file, test/CI result, PR, merge/deploy result or proven blocker. Repeated status narration without a new artifact or new evidence is not an acceptable substitute for forward motion.
+
+This rule does not create a fixed wall-clock deadline, does not weaken approval/provider/human-truth/safety gates, and does not change the controlled-work completion protocol. It prevents redundant inspection after those controls have already been satisfied.
+
 ## Specialist chat lifecycle operating convention
 
 There is no fixed message, prompt, input or turn count at which a Shiloh OS specialist chat must be replaced. Chat age alone is not a reason to rotate, and a responsive specialist chat may continue across multiple controlled units.
