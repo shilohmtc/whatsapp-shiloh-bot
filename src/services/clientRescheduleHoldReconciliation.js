@@ -1,6 +1,36 @@
 const { pool } = require('../db/pool');
 const logger = require('../lib/logger');
 
+const LIVE_PENDING_WHERE = `
+  request.status='pending'
+  AND appointment.status<>'cancelled'
+  AND appointment.starts_at IS NOT DISTINCT FROM request.original_starts_at
+  AND appointment.ends_at IS NOT DISTINCT FROM request.original_ends_at
+  AND (SELECT COUNT(*)::int FROM appointment_staff x WHERE x.appointment_id=appointment.id)=1
+  AND (SELECT staff_id FROM appointment_staff x WHERE x.appointment_id=appointment.id ORDER BY x.position,x.id LIMIT 1) IS NOT DISTINCT FROM request.approver_staff_id
+  AND (SELECT COUNT(*)::int FROM appointment_services x WHERE x.appointment_id=appointment.id)=1
+  AND (SELECT service_id FROM appointment_services x WHERE x.appointment_id=appointment.id ORDER BY x.position,x.id LIMIT 1) IS NOT DISTINCT FROM request.service_id
+`;
+
+async function livePendingRescheduleConflicts({ db = pool, staffId, startsAt, endsAt, excludeRequestId = null }) {
+  const result = await db.query(`
+    SELECT 'reschedule_hold'::text AS conflict_type,
+           request.id,
+           request.proposed_starts_at AS starts_at,
+           request.proposed_ends_at AS ends_at,
+           'Pending client reschedule approval'::text AS label
+      FROM appointment_reschedule_requests request
+      JOIN appointments appointment ON appointment.id=request.appointment_id
+     WHERE ${LIVE_PENDING_WHERE}
+       AND request.approver_staff_id=$1
+       AND request.proposed_starts_at<$3
+       AND request.proposed_ends_at>$2
+       AND ($4::bigint IS NULL OR request.id<>$4)
+     ORDER BY request.proposed_starts_at,request.id
+  `, [staffId, startsAt, endsAt, excludeRequestId]);
+  return result.rows;
+}
+
 async function reconcileStalePendingRescheduleHolds({ db = pool, staffId = null } = {}) {
   const result = await db.query(`
     UPDATE appointment_reschedule_requests request
@@ -12,15 +42,7 @@ async function reconcileStalePendingRescheduleHolds({ db = pool, staffId = null 
      WHERE request.appointment_id=appointment.id
        AND request.status='pending'
        AND ($1::bigint IS NULL OR request.approver_staff_id=$1)
-       AND (
-         appointment.status='cancelled'
-         OR appointment.starts_at IS DISTINCT FROM request.original_starts_at
-         OR appointment.ends_at IS DISTINCT FROM request.original_ends_at
-         OR (SELECT COUNT(*)::int FROM appointment_staff x WHERE x.appointment_id=appointment.id)<>1
-         OR (SELECT staff_id FROM appointment_staff x WHERE x.appointment_id=appointment.id ORDER BY x.position,x.id LIMIT 1) IS DISTINCT FROM request.approver_staff_id
-         OR (SELECT COUNT(*)::int FROM appointment_services x WHERE x.appointment_id=appointment.id)<>1
-         OR (SELECT service_id FROM appointment_services x WHERE x.appointment_id=appointment.id ORDER BY x.position,x.id LIMIT 1) IS DISTINCT FROM request.service_id
-       )
+       AND NOT (${LIVE_PENDING_WHERE})
      RETURNING request.id,request.appointment_id
   `, [staffId == null ? null : Number(staffId)]);
 
@@ -32,7 +54,7 @@ async function reconcileStalePendingRescheduleHolds({ db = pool, staffId = null 
       `, [row.appointment_id, JSON.stringify({
         requestId: Number(row.id),
         reason: 'canonical appointment changed while reschedule approval was pending',
-        reconciledBeforeAvailability: true,
+        reconciledAtChangeBoundary: true,
       })]);
     } catch (error) {
       logger.error({ err: error, requestId: Number(row.id), appointmentId: Number(row.appointment_id) }, 'Stale reschedule hold audit failed');
@@ -42,4 +64,4 @@ async function reconcileStalePendingRescheduleHolds({ db = pool, staffId = null 
   return { superseded: result.rowCount, requestIds: result.rows.map((row) => Number(row.id)) };
 }
 
-module.exports = { reconcileStalePendingRescheduleHolds };
+module.exports = { livePendingRescheduleConflicts, reconcileStalePendingRescheduleHolds };
