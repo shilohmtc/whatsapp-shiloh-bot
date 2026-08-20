@@ -1,5 +1,6 @@
 const { canPresentAdminBooking } = require('./adminBookingEntitlement');
 const { canAccessOwnFinalization } = require('./attendanceFinalizationAuthority');
+const { canPresentBlockTime } = require('./adminBlockTime');
 
 function has(admin, permission) {
   return admin?.permissions?.[permission] === true;
@@ -31,6 +32,18 @@ function appointmentsInteractive(admin) {
       id: 'admin_appointment_booking',
       title: 'Make a booking',
       description: 'Book using authoritative availability',
+    });
+  }
+  if (canPresentBlockTime(admin)) {
+    rows.push({
+      id: 'admin_appointment_block_time',
+      title: 'Block time',
+      description: 'Make practitioner time unavailable for booking',
+    });
+    rows.push({
+      id: 'admin_block_manage',
+      title: 'Blocked time',
+      description: 'View, edit or remove upcoming Shiloh blocks',
     });
   }
   if (has(admin, 'booking:update') && has(admin, 'appointment:view')) {
