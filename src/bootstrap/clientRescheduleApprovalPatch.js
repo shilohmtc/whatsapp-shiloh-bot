@@ -6,6 +6,7 @@ const {
   pendingRescheduleConflicts,
   createPendingRescheduleRequest,
   processRescheduleApprovalDecision,
+  supersedePendingRescheduleForAppointment,
 } = require('../services/clientRescheduleApproval');
 
 const originalGetConflicts = adminAvailability.getConflicts;
@@ -55,7 +56,20 @@ appointmentChange.processAppointmentChangeMessage = async function practitionerA
     await appointmentChange.clearIntent(phone);
     return { handled: true, ...result };
   }
-  return originalProcessAppointmentChangeMessage(phone, text, ...rest);
+
+  const result = await originalProcessAppointmentChangeMessage(phone, text, ...rest);
+  if (
+    priorIntent?.action === 'cancel'
+    && priorIntent?.appointment_id
+    && priorIntent?.status === 'awaiting_confirmation'
+    && isClientConfirmation(text)
+  ) {
+    const status = await pool.query('SELECT status FROM appointments WHERE id=$1', [Number(priorIntent.appointment_id)]);
+    if (status.rows[0]?.status === 'cancelled') {
+      await supersedePendingRescheduleForAppointment(priorIntent.appointment_id, 'client cancelled the original appointment');
+    }
+  }
+  return result;
 };
 
 const originalProcessBookingApprovalMessage = bookingApproval.processClientBookingApprovalMessage;
