@@ -1,4 +1,5 @@
 const { processAdminBookingUpdateMessage } = require('./adminBookingUpdate');
+const { processAdminAppointmentCancellationMessage, hasPendingCancellationIntent } = require('./adminAppointmentCancellation');
 const { pool } = require('../db/pool');
 const { checkClinicHours } = require('./clinicHours');
 const { checkAuthoritativeSchedule } = require('./adminAvailability');
@@ -13,6 +14,7 @@ function scopeId(id, appointmentId) {
   const raw = String(id || '');
   if (!appointmentId) return raw;
   if (raw === 'manage_change_service') return `manage_change_service_${appointmentId}`;
+  if (raw === 'manage_cancel_booking') return `manage_cancel_booking_${appointmentId}`;
   if (raw === 'manage_booking_menu') return `manage_booking_menu_${appointmentId}`;
   if (raw === 'manage_booking_back') return `manage_booking_back_${appointmentId}`;
   const servicePick = raw.match(/^manage_service_pick_(\d+)$/i);
@@ -22,8 +24,23 @@ function scopeId(id, appointmentId) {
   return raw;
 }
 
+function addCancellationRow(rows) {
+  if (!Array.isArray(rows)) return rows;
+  const isManageMenu = rows.some((row) => row?.id === 'manage_change_service')
+    && rows.some((row) => row?.id === 'manage_change_price')
+    && rows.some((row) => row?.id === 'manage_booking_back');
+  if (!isManageMenu || rows.some((row) => row?.id === 'manage_cancel_booking')) return rows;
+  const next = [...rows];
+  const backIndex = next.findIndex((row) => row?.id === 'manage_booking_back');
+  const cancelRow = { id: 'manage_cancel_booking', title: 'Cancel booking', description: 'Cancel this appointment safely' };
+  if (backIndex >= 0) next.splice(backIndex, 0, cancelRow);
+  else next.push(cancelRow);
+  return next;
+}
+
 function scopeRows(rows, appointmentId) {
-  return Array.isArray(rows) ? rows.map((row) => ({ ...row, id: scopeId(row.id, appointmentId) })) : rows;
+  const prepared = addCancellationRow(rows);
+  return Array.isArray(prepared) ? prepared.map((row) => ({ ...row, id: scopeId(row.id, appointmentId) })) : prepared;
 }
 
 function scopeAdminBookingInteractive(result) {
@@ -160,7 +177,18 @@ async function changeToPackageService(sender, appointmentId, serviceId) {
 
 async function processStatelessAdminBookingUpdateMessage(sender, text) {
   const raw = String(text || '').trim();
-  let match = raw.match(/^manage_change_service_(\d+)$/i);
+
+  let match = raw.match(/^manage_cancel_booking_(\d+)$/i);
+  if (match) {
+    return processAdminAppointmentCancellationMessage(sender, `cancel appointment #${Number(match[1])}`);
+  }
+
+  if (await hasPendingCancellationIntent(sender)) {
+    const cancellation = await processAdminAppointmentCancellationMessage(sender, raw);
+    if (cancellation?.handled) return cancellation;
+  }
+
+  match = raw.match(/^manage_change_service_(\d+)$/i);
   if (match) {
     const appointmentId = Number(match[1]);
     const primed = await primeAppointment(sender, appointmentId);
@@ -205,4 +233,4 @@ async function processStatelessAdminBookingUpdateMessage(sender, text) {
   return { handled: false };
 }
 
-module.exports = { appointmentIdFromBody, scopeAdminBookingInteractive, processStatelessAdminBookingUpdateMessage, activePackageChoices, addPackageChoices };
+module.exports = { appointmentIdFromBody, scopeAdminBookingInteractive, processStatelessAdminBookingUpdateMessage, activePackageChoices, addPackageChoices, addCancellationRow };
