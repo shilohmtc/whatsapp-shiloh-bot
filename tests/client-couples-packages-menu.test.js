@@ -28,7 +28,7 @@ test('Couples & Packages submenu puts Couples Massage first and canonical Sports
   ]);
   assert.equal(menu.rows[0].id, patch.COUPLES_MASSAGE_ACTION_ID);
   assert.equal(menu.rows[1].id, patch.SPORTS_PACKAGE_ACTION_ID);
-  assert.equal(menu.rows[1].description, '4 sessions • R1,400 • valid 30 days');
+  assert.equal(menu.rows[1].description, '4 sessions • R1400 • valid 30 days');
   assert.equal(menu.rows[2].description, 'Back to Massage Treatments');
 });
 
