@@ -6,11 +6,13 @@ const originalGet=axios.get;
 const env={...process.env};
 test.afterEach(()=>{axios.get=originalGet;process.env={...env};resetTemplateInventoryCache();});
 
-test('complete registry contains all 16 exact expected/current/legacy identities',()=>{
- assert.equal(CONTRACTS.length,16); assert.equal(new Set(CONTRACTS.map(x=>x.contract.name)).size,16);
+test('complete registry contains all 18 exact expected/current/legacy identities',()=>{
+ assert.equal(CONTRACTS.length,18); assert.equal(new Set(CONTRACTS.map(x=>x.contract.name)).size,18);
  assert.equal(CONTRACTS.find(x=>x.key==='birthday_v2').contract.name,'shiloh_birthday_wish_v2');
  assert.equal(CONTRACTS.find(x=>x.key==='birthday_v1').sendable,false);
  const bookingV2=CONTRACTS.find(x=>x.key==='booking_confirmation_v2');assert.equal(bookingV2.contract.name,'shiloh_booking_confirmation_v2');assert.equal(bookingV2.sendable,false);
+ assert.equal(CONTRACTS.find(x=>x.key==='reschedule_approval_request').contract.name,'shiloh_reschedule_approval_request_v1');
+ assert.equal(CONTRACTS.find(x=>x.key==='reschedule_declined').contract.name,'shiloh_reschedule_declined_v1');
 });
 test('contract comparison detects copy, variable, button, and ordering drift',()=>{
  const entry=CONTRACTS.find(x=>x.key==='booking_approval_request');
@@ -32,6 +34,34 @@ test('send gate rejects arbitrary names, disabled booking update and legacy iden
  process.env.WHATSAPP_BOOKING_UPDATE_TEMPLATE='shiloh_booking_update_v1';
  await assert.rejects(()=>assertTemplateSendAllowed('shiloh_booking_update_v1'),/gate is disabled/);
 });
+test('reschedule approval transport stays disabled even when provider-ready until feature activation',async()=>{
+ process.env.WHATSAPP_BUSINESS_ACCOUNT_ID='hidden';
+ process.env.WHATSAPP_RESCHEDULE_APPROVAL_REQUEST_TEMPLATE='shiloh_reschedule_approval_request_v1';
+ process.env.WHATSAPP_RESCHEDULE_DECLINED_TEMPLATE='shiloh_reschedule_declined_v1';
+ process.env.WHATSAPP_RESCHEDULE_APPROVAL_ENABLED='false';
+ const request=CONTRACTS.find(x=>x.key==='reschedule_approval_request');
+ const declined=CONTRACTS.find(x=>x.key==='reschedule_declined');
+ axios.get=async()=>({data:{data:[{id:'request',status:'APPROVED',...request.contract},{id:'declined',status:'APPROVED',...declined.contract}]}});
+ const report=await inspectMetaTemplateInventory();
+ assert.equal(report.templates.find(x=>x.key==='reschedule_approval_request').ready,true);
+ assert.equal(report.templates.find(x=>x.key==='reschedule_declined').ready,true);
+ await assert.rejects(()=>assertTemplateSendAllowed(request.contract.name),/Reschedule-approval delivery gate is disabled/);
+ await assert.rejects(()=>assertTemplateSendAllowed(declined.contract.name),/Reschedule-approval delivery gate is disabled/);
+});
+test('reschedule approval readiness fails closed on pending mismatch duplicates and wrong configuration',async()=>{
+ process.env.WHATSAPP_BUSINESS_ACCOUNT_ID='hidden';
+ process.env.WHATSAPP_RESCHEDULE_APPROVAL_REQUEST_TEMPLATE='wrong_template';
+ process.env.WHATSAPP_RESCHEDULE_DECLINED_TEMPLATE='shiloh_reschedule_declined_v1';
+ const request=CONTRACTS.find(x=>x.key==='reschedule_approval_request');
+ const declined=CONTRACTS.find(x=>x.key==='reschedule_declined');
+ const drift={...declined.contract,components:structuredClone(declined.contract.components)};drift.components[0].text=drift.components[0].text.replace('not approved','declined');
+ axios.get=async()=>({data:{data:[{id:'r1',status:'PENDING',...request.contract},{id:'r2',status:'PENDING',...request.contract},{id:'d1',status:'APPROVED',...drift}]}});
+ const report=await inspectMetaTemplateInventory();
+ const requestState=report.templates.find(x=>x.key==='reschedule_approval_request');
+ const declinedState=report.templates.find(x=>x.key==='reschedule_declined');
+ assert.equal(requestState.configured,false);assert.equal(requestState.provider.duplicateCount,1);assert.equal(requestState.ready,false);
+ assert.equal(declinedState.contract.exact,false);assert.equal(declinedState.ready,false);
+});
 test('fetchAllTemplates requests every provider page',async()=>{let n=0;axios.get=async()=>({data:n++?{data:[{name:'b'}]}:{data:[{name:'a'}],paging:{next:'next'}}});assert.deepEqual((await fetchAllTemplates('x')).map(x=>x.name),['a','b']);});
 
 test('realistic Meta fixture ignores managed metadata but detects semantic drift',()=>{
@@ -47,7 +77,7 @@ test('realistic Meta fixture ignores managed metadata but detects semantic drift
 });
 
 test('every current operational contract validates exactly and drift fails',()=>{
- const current=CONTRACTS.filter(x=>x.sendable);assert.equal(current.length,12);
+ const current=CONTRACTS.filter(x=>x.sendable);assert.equal(current.length,14);
  for(const entry of current){const provider={...entry.contract,components:structuredClone(entry.contract.components)};assert.equal(compareContract(entry,provider).exact,true,entry.key);provider.category=entry.contract.category==='UTILITY'?'MARKETING':'UTILITY';assert.equal(compareContract(entry,provider).exact,false,entry.key);}
 });
 
