@@ -26,10 +26,11 @@ async function ensureBookingApprovalInfrastructure(db = pool) {
   await db.query(`CREATE INDEX IF NOT EXISTS idx_appointment_booking_approvals_status ON appointment_booking_approvals(status, requested_at)`);
   await db.query(`CREATE INDEX IF NOT EXISTS idx_appointment_booking_approvals_approver ON appointment_booking_approvals(approver_staff_id, status)`);
   await db.query(`CREATE INDEX IF NOT EXISTS idx_appointment_booking_approvals_admin_approver ON appointment_booking_approvals(approver_admin_id, status)`);
+
   await db.query(`
     CREATE TABLE IF NOT EXISTS client_booking_approval_policies (
       policy_key TEXT PRIMARY KEY,
-      client_id BIGINT NOT NULL UNIQUE REFERENCES clients(id) ON DELETE RESTRICT,
+      client_id BIGINT UNIQUE REFERENCES clients(id) ON DELETE RESTRICT,
       approver_admin_id BIGINT NOT NULL REFERENCES staff_admin_accounts(id) ON DELETE RESTRICT,
       expected_display_name TEXT NOT NULL,
       active BOOLEAN NOT NULL DEFAULT TRUE,
@@ -37,7 +38,22 @@ async function ensureBookingApprovalInfrastructure(db = pool) {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
+  await db.query(`ALTER TABLE client_booking_approval_policies ALTER COLUMN client_id DROP NOT NULL`);
   await db.query(`CREATE INDEX IF NOT EXISTS idx_client_booking_approval_policies_active_client ON client_booking_approval_policies(client_id, active)`);
+
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS controlled_demo_identities (
+      demo_key TEXT PRIMARY KEY,
+      normalized_phone TEXT NOT NULL UNIQUE,
+      current_client_id BIGINT REFERENCES clients(id) ON DELETE RESTRICT,
+      expected_display_name TEXT NOT NULL,
+      active BOOLEAN NOT NULL DEFAULT TRUE,
+      last_bound_at TIMESTAMPTZ,
+      last_unbound_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
 
   await db.query(`
     CREATE OR REPLACE FUNCTION create_client_booking_approval_hold()
@@ -52,9 +68,11 @@ async function ensureBookingApprovalInfrastructure(db = pool) {
       observer_id BIGINT;
       required_approver_id BIGINT;
       required_approver_admin_id BIGINT;
+      controlled_client_id BIGINT;
+      controlled_phone TEXT;
+      policy_client_id BIGINT;
       targeted_policy_admin_id BIGINT;
-      active_target_count INTEGER;
-      target_contact_count INTEGER;
+      anchored_contact_count INTEGER;
       shared_active_contact_count INTEGER;
       dummy_count INTEGER;
       jp_count INTEGER;
@@ -72,56 +90,57 @@ async function ensureBookingApprovalInfrastructure(db = pool) {
       observer_id := NULL;
       required_approver_id := NEW.staff_id;
       required_approver_admin_id := NULL;
+      controlled_client_id := NULL;
+      controlled_phone := NULL;
+      policy_client_id := NULL;
       targeted_policy_admin_id := NULL;
 
-      SELECT p.approver_admin_id
-        INTO targeted_policy_admin_id
-        FROM client_booking_approval_policies p
-       WHERE p.policy_key = 'juvan_botha_jp_booking_approval'
-         AND p.client_id = booking_client_id
-         AND p.active = TRUE
+      SELECT d.current_client_id, d.normalized_phone
+        INTO controlled_client_id, controlled_phone
+        FROM controlled_demo_identities d
+       WHERE d.demo_key = 'juvan_botha'
+         AND d.active = TRUE
        LIMIT 1;
 
-      IF targeted_policy_admin_id IS NOT NULL THEN
-        IF booking_client_status IS DISTINCT FROM 'active'
-           OR LOWER(TRIM(COALESCE(booking_client_name, ''))) <> 'juvan botha' THEN
-          RAISE EXCEPTION 'Juvan Botha approval blocked: persisted canonical client identity drifted';
+      IF controlled_client_id IS NOT NULL AND booking_client_id = controlled_client_id THEN
+        SELECT p.client_id, p.approver_admin_id
+          INTO policy_client_id, targeted_policy_admin_id
+          FROM client_booking_approval_policies p
+         WHERE p.policy_key = 'juvan_botha_jp_booking_approval'
+           AND p.active = TRUE
+         LIMIT 1;
+
+        IF targeted_policy_admin_id IS NULL OR policy_client_id IS DISTINCT FROM controlled_client_id THEN
+          RAISE EXCEPTION 'Controlled Juvan booking approval blocked: policy pointer does not match the current demo client';
+        END IF;
+
+        IF booking_client_status IS DISTINCT FROM 'active' THEN
+          RAISE EXCEPTION 'Controlled Juvan booking approval blocked: current demo client is not active';
         END IF;
 
         SELECT COUNT(*)::int
-          INTO active_target_count
-          FROM clients c
-         WHERE c.status = 'active'
-           AND LOWER(TRIM(c.display_name)) = 'juvan botha';
-        IF active_target_count <> 1 THEN
-          RAISE EXCEPTION 'Juvan Botha approval blocked: canonical CRM identity is no longer unique';
-        END IF;
-
-        SELECT COUNT(DISTINCT cc.normalized_value)::int
-          INTO target_contact_count
+          INTO anchored_contact_count
           FROM client_contacts cc
          WHERE cc.client_id = booking_client_id
            AND cc.contact_type IN ('whatsapp', 'mobile')
-           AND NULLIF(TRIM(cc.normalized_value), '') IS NOT NULL;
-        IF target_contact_count < 1 THEN
-          RAISE EXCEPTION 'Juvan Botha approval blocked: canonical client has no WhatsApp/mobile identity';
+           AND regexp_replace(COALESCE(cc.normalized_value, cc.value, ''), '[^0-9]', '', 'g') = controlled_phone;
+
+        IF anchored_contact_count < 1 THEN
+          RAISE EXCEPTION 'Controlled Juvan booking approval blocked: exact demo phone is not attached to the current canonical client';
         END IF;
 
         SELECT COUNT(DISTINCT other.id)::int
           INTO shared_active_contact_count
-          FROM client_contacts target_cc
-          JOIN client_contacts other_cc
-            ON other_cc.normalized_value = target_cc.normalized_value
-           AND other_cc.contact_type IN ('whatsapp', 'mobile')
+          FROM client_contacts other_cc
           JOIN clients other
             ON other.id = other_cc.client_id
            AND other.status = 'active'
-         WHERE target_cc.client_id = booking_client_id
-           AND target_cc.contact_type IN ('whatsapp', 'mobile')
-           AND NULLIF(TRIM(target_cc.normalized_value), '') IS NOT NULL
+         WHERE regexp_replace(COALESCE(other_cc.normalized_value, other_cc.value, ''), '[^0-9]', '', 'g') = controlled_phone
+           AND other_cc.contact_type IN ('whatsapp', 'mobile')
            AND other.id <> booking_client_id;
+
         IF shared_active_contact_count <> 0 THEN
-          RAISE EXCEPTION 'Juvan Botha approval blocked: canonical WhatsApp/mobile identity is shared with another active client';
+          RAISE EXCEPTION 'Controlled Juvan booking approval blocked: exact demo phone is shared with another active CRM client';
         END IF;
 
         SELECT COUNT(*)::int
@@ -134,14 +153,13 @@ async function ensureBookingApprovalInfrastructure(db = pool) {
            AND saa.calendar_scope = 'all_business'
            AND saa.service_scope = 'all_services'
            AND saa.normalized_whatsapp IS NOT NULL;
+
         IF jp_count <> 1 THEN
-          RAISE EXCEPTION 'Juvan Botha approval blocked: persisted Jean-Pierre approver no longer satisfies the guarded admin contract';
+          RAISE EXCEPTION 'Controlled Juvan booking approval blocked: Jean-Pierre approver no longer satisfies the guarded admin contract';
         END IF;
 
         required_approver_id := NULL;
         required_approver_admin_id := targeted_policy_admin_id;
-      ELSIF LOWER(TRIM(COALESCE(booking_client_name, ''))) = 'juvan botha' THEN
-        RAISE EXCEPTION 'Juvan Botha approval blocked: canonical client policy is missing';
       ELSIF LOWER(TRIM(COALESCE(booking_client_name, ''))) = 'dummy test' THEN
         SELECT COUNT(*)::int
           INTO dummy_count
