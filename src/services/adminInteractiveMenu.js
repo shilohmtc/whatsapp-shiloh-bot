@@ -28,7 +28,7 @@ const ACTIONS = [
   { key: 'manage_booking', labels: ['Manage a booking'], command: 'Manage a booking', description: 'Reschedule or cancel an existing appointment' },
   { key: 'finalize', labels: ['Finalize past visits'], command: 'Finalize past appointments', description: 'Completed, No-show, Reschedule or leave unresolved' },
   { key: 'client', labels: ['Find a client', 'Find my client', 'Client details', 'My client details'], command: 'Find a client', description: 'View full authorized CRM client details' },
-  { key: 'reset_juvan', labels: ['Reset Juvan profile'], command: 'Reset test client Juvan', description: 'Reset dedicated booking-test client' },
+  { key: 'reset_juvan', labels: ['Reset Juvan', 'Reset Juvan profile'], command: 'Reset test client Juvan', description: 'Preview and confirm the controlled Juvan reset' },
   { key: 'walkin', labels: ['Add a walk-in'], command: 'Add a walk-in', description: 'Register a walk-in client' },
   { key: 'staff_services', labels: ['Staff services', 'My services'], command: 'Staff services', description: 'View authorized service mappings' },
   { key: 'pricing', labels: ['Services & pricing', 'My services & pricing'], command: 'Services & pricing', description: 'View or manage service pricing' },
@@ -137,12 +137,12 @@ function enrichPrivilegedReportsMenu(result) {
   const jeanPierre = isJeanPierreBusinessAdmin(result.admin);
   const christel = isChristelOwnerAdmin(result.admin);
   const marietjie = isMarietjieAdmin(result.admin);
-  let body = String(result.interactive.body);
+  let body = String(result.interactive.body).replace(/\n?\d+️⃣\s+Reset Juvan(?: profile)?/giu, '');
   if (canAccessFinalization(result.admin) && result.admin?.permissions?.['booking:update'] === true && result.admin?.permissions?.['appointment:view'] === true && !/Finalize past visits/i.test(body)) body += '\n\n*Appointments*\n93️⃣ Finalize past visits';
   if (!jeanPierre && !christel && !marietjie) return { ...result, interactive: { ...result.interactive, body } };
   if (jeanPierre && !/Christel earnings/i.test(body)) body += '\n\n*Reports*\n98️⃣ 💰 Christel earnings';
   if (!/Marietjie earnings/i.test(body)) body += '\n\n*Reports*\n99️⃣ 💰 Marietjie earnings';
-  if ((jeanPierre || christel) && !/Reset Juvan profile/i.test(body)) body += '\n\n*Clients*\n95️⃣ Reset Juvan profile';
+  if (jeanPierre && !/Reset Juvan/i.test(body)) body += '\n\n*Clients*\n95️⃣ Reset Juvan';
   return { ...result, interactive: { ...result.interactive, body } };
 }
 function enrichJeanPierreMenu(result) { return enrichPrivilegedReportsMenu(result); }
