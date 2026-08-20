@@ -53,52 +53,71 @@ async function getMigrationStatus() {
   }
 }
 
-async function applyPendingMigrations() {
+async function applyMigrationFile(filename) {
+  const safeFilename = String(filename || "").trim();
+  if (!/^\d+_.+\.sql$/.test(safeFilename) || !migrationFiles().includes(safeFilename)) {
+    throw new Error(`Unknown migration file: ${safeFilename || "(empty)"}`);
+  }
+
+  const fullPath = path.join(MIGRATIONS_DIR, safeFilename);
+  const sql = fs.readFileSync(fullPath, "utf8");
+  const hash = checksum(sql);
   const client = await pool.connect();
-  const result = { applied: [], skipped: [] };
 
   try {
     await ensureMigrationTable(client);
+    const existing = await client.query(
+      "SELECT checksum, applied_at FROM schema_migrations WHERE filename = $1",
+      [safeFilename]
+    );
 
-    for (const filename of migrationFiles()) {
-      const fullPath = path.join(MIGRATIONS_DIR, filename);
-      const sql = fs.readFileSync(fullPath, "utf8");
-      const hash = checksum(sql);
-      const existing = await client.query(
-        "SELECT checksum FROM schema_migrations WHERE filename = $1",
-        [filename]
-      );
-
-      if (existing.rowCount > 0) {
-        if (existing.rows[0].checksum !== hash) {
-          throw new Error(`Migration ${filename} has changed after being applied`);
-        }
-        result.skipped.push(filename);
-        continue;
+    if (existing.rowCount > 0) {
+      if (existing.rows[0].checksum !== hash) {
+        throw new Error(`Migration ${safeFilename} has changed after being applied`);
       }
-
-      await client.query("BEGIN");
-      try {
-        if (sql.trim()) await client.query(sql);
-        await client.query(
-          "INSERT INTO schema_migrations (filename, checksum) VALUES ($1, $2)",
-          [filename, hash]
-        );
-        await client.query("COMMIT");
-        result.applied.push(filename);
-      } catch (error) {
-        await client.query("ROLLBACK");
-        throw error;
-      }
+      return {
+        filename: safeFilename,
+        applied: false,
+        checksumVerified: true,
+        appliedAt: existing.rows[0].applied_at || null,
+      };
     }
 
-    return result;
+    await client.query("BEGIN");
+    try {
+      if (sql.trim()) await client.query(sql);
+      const recorded = await client.query(
+        "INSERT INTO schema_migrations (filename, checksum) VALUES ($1, $2) RETURNING applied_at",
+        [safeFilename, hash]
+      );
+      await client.query("COMMIT");
+      return {
+        filename: safeFilename,
+        applied: true,
+        checksumVerified: true,
+        appliedAt: recorded.rows[0]?.applied_at || null,
+      };
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    }
   } finally {
     client.release();
   }
 }
 
+async function applyPendingMigrations() {
+  const result = { applied: [], skipped: [] };
+  for (const filename of migrationFiles()) {
+    const migration = await applyMigrationFile(filename);
+    if (migration.applied) result.applied.push(filename);
+    else result.skipped.push(filename);
+  }
+  return result;
+}
+
 module.exports = {
   getMigrationStatus,
+  applyMigrationFile,
   applyPendingMigrations,
 };
