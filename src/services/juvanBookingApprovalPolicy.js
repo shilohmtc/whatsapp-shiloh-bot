@@ -20,6 +20,7 @@ async function ensureJuvanBookingApprovalPolicy() {
            saa.business_role,
            saa.calendar_scope,
            saa.service_scope,
+           (saa.normalized_whatsapp IS NOT NULL) AS approver_whatsapp_configured,
            (SELECT COUNT(*)::int
               FROM clients named
              WHERE named.status='active'
@@ -60,6 +61,7 @@ async function ensureJuvanBookingApprovalPolicy() {
     && Number(row.canonical_contact_count) >= 1
     && Number(row.shared_active_contact_count) === 0
     && row.approver_active === true
+    && row.approver_whatsapp_configured === true
     && String(row.approver_name || '').trim().toLowerCase() === EXPECTED_APPROVER_NAME.toLowerCase()
     && row.business_role === 'business_admin'
     && row.calendar_scope === 'all_business'
@@ -83,6 +85,7 @@ async function ensureJuvanBookingApprovalPolicy() {
     sharedActiveContactCount: Number(row.shared_active_contact_count),
     approverAdminId: String(row.approver_admin_id),
     approverName: EXPECTED_APPROVER_NAME,
+    approverWhatsAppConfigured: true,
   };
 }
 
