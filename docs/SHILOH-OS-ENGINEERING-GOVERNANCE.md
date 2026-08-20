@@ -181,7 +181,7 @@ Control & Reconciliation treats the reconciled repository and verified productio
 
 If a genuine approval, provider, human-truth, safety, production or capability gate prevents the reconciliation boundary from being reached, the specialist must record the blocked state, evidence, dependency and owning/observing workstream in the applicable authoritative tracker/reconciliation surface. It must not declare the unit complete or write unverified state into the Master.
 
-## controlled-work completion protocol
+## Controlled-work completion protocol
 
 After the initial approval for a substantial controlled workstream, continue automatically through every available applicable stage:
 
