@@ -67,10 +67,12 @@ test('same-practitioner single-service boundary and immutable snapshots fail clo
 test('ordinary availability filters stale holds read-only and does not reconcile by mutation', () => {
   const live = holdReconciliation.match(/async function livePendingRescheduleConflicts[\s\S]*?async function reconcileStalePendingRescheduleHolds/);
   assert.ok(live);
-  assert.match(live[0], /appointment\.starts_at IS NOT DISTINCT FROM request\.original_starts_at/);
-  assert.match(live[0], /appointment\.ends_at IS NOT DISTINCT FROM request\.original_ends_at/);
-  assert.match(live[0], /request\.approver_staff_id/);
-  assert.match(live[0], /request\.service_id/);
+  assert.match(holdReconciliation, /const LIVE_PENDING_WHERE/);
+  assert.match(holdReconciliation, /appointment\.starts_at IS NOT DISTINCT FROM request\.original_starts_at/);
+  assert.match(holdReconciliation, /appointment\.ends_at IS NOT DISTINCT FROM request\.original_ends_at/);
+  assert.match(holdReconciliation, /request\.approver_staff_id/);
+  assert.match(holdReconciliation, /request\.service_id/);
+  assert.match(live[0], /WHERE \$\{LIVE_PENDING_WHERE\}/);
   assert.doesNotMatch(live[0], /UPDATE appointment_reschedule_requests/);
   assert.match(patch, /livePendingRescheduleConflicts/);
 });
