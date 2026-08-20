@@ -1,6 +1,6 @@
 # Shiloh OS — Engineering Governance
 
-Updated: 2026-08-19
+Updated: 2026-08-20
 Purpose: permanent engineering operating rules that apply across Shiloh OS continuation work.
 
 ## Workstream operating model
@@ -75,6 +75,29 @@ The checkpoint routing block uses this structure:
 Across every workstream, the shared source of truth is GitHub `main`, `docs/SHILOH-OS-MASTER-STATUS.md`, `docs/SHILOH-OS-PROJECT-TRACKER.md`, the latest reconciliation evidence identified by those documents, and verified production/provider state.
 
 Before controlled work, a specialist chat must read the applicable authoritative repository state and verify any production/provider facts that could have changed. Chat history is navigation context only when authoritative repository evidence exists; it must not be used to reconstruct or override project truth. Do not redo completed or superseded work.
+
+## Specialist chat lifecycle operating convention
+
+There is no fixed message, prompt, input or turn count at which a Shiloh OS specialist chat must be replaced. Chat age alone is not a reason to rotate, and a responsive specialist chat may continue across multiple controlled units.
+
+Use practical conversation health rather than a numeric threshold. Noticeable sustained sluggishness, repeated very large tool/diff/log cycles, accumulated context that makes continuation materially less crisp, or a chat becoming difficult to use reliably are valid signals that a fresh chat may be preferable. Ordinary temporary network, provider or tool latency is not by itself evidence that the specialist chat needs replacement.
+
+Prefer rotation at a controlled-unit boundary. When the current controlled unit can safely reach its normal checkpoint, complete the applicable verification/reconciliation boundary first, preserve completed/do-not-redo state, then continue in a fresh chat for the **same specialist workstream** using a self-contained continuation block. Starting a fresh chat does not create a new project, change ownership, reopen completed work or weaken any approval/provider/human-truth/evidence gate.
+
+The fresh same-specialist chat must independently re-read current GitHub `main`, Master Status, Project Tracker, latest reconciliation and Engineering Governance, verify any changing production/provider/human evidence, and preserve newer authority. The copied continuation block is navigation/routing context only; repository and verified operational evidence remain authoritative.
+
+Do not rotate chats mechanically after an arbitrary number of messages. Do not interrupt a healthy active controlled unit solely because the chat is old or large. Conversely, do not keep using a materially degraded chat merely to preserve conversation continuity when a clean same-specialist continuation would be safer and clearer.
+
+If a specialist chat becomes practically unusable before the controlled unit reaches completion, it must **not** falsely declare the unit complete. Instead, produce a same-specialist continuation checkpoint that distinguishes:
+
+- verified authoritative work already completed and not to be redone;
+- in-progress or unmerged work that is not yet authoritative;
+- tests/CI/deploy/provider evidence already obtained;
+- unresolved gates, blockers or safety boundaries;
+- exact branch/PR/commit references where applicable; and
+- the next controlled action.
+
+The user may then open a fresh chat for that same specialist and paste the continuation checkpoint. The receiving chat independently verifies authority before resuming. Control & Reconciliation is not required merely because a specialist chat was rotated; Control remains the escalation point only for the ownership, authority, prioritisation, governance and reconciliation cases defined elsewhere in this document.
 
 ## Specialist workstream reconciliation rule
 
@@ -158,7 +181,7 @@ Control & Reconciliation treats the reconciled repository and verified productio
 
 If a genuine approval, provider, human-truth, safety, production or capability gate prevents the reconciliation boundary from being reached, the specialist must record the blocked state, evidence, dependency and owning/observing workstream in the applicable authoritative tracker/reconciliation surface. It must not declare the unit complete or write unverified state into the Master.
 
-## Controlled-work completion protocol
+## controlled-work completion protocol
 
 After the initial approval for a substantial controlled workstream, continue automatically through every available applicable stage:
 
