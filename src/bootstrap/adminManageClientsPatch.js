@@ -1,34 +1,22 @@
-const mobileMenu = require('../services/adminMobileMenu');
+const interactiveMenu = require('../services/adminInteractiveMenu');
 const manageClients = require('../services/adminManageClients');
 
-const originalProcessAdminMobileMenuMessage = mobileMenu.processAdminMobileMenuMessage;
+if (!interactiveMenu.__adminManageClientsPatched) {
+  const original = interactiveMenu.processAdminInteractiveMenuMessage;
+  interactiveMenu.processAdminInteractiveMenuMessage = async function processAdminInteractiveMenuWithManageClients(sender, text) {
+    const raw = String(text || '').trim();
 
-mobileMenu.processAdminMobileMenuMessage = async function processAdminMobileMenuMessageWithManageClients(sender, text) {
-  const managed = await manageClients.processAdminManageClientsMessage(sender, text);
-  if (managed?.handled) return managed;
-  const result = await originalProcessAdminMobileMenuMessage(sender, text);
-  return manageClients.decorateAdminMenuResult(result);
-};
+    // Preserve already-delivered legacy client buttons while promoting the new action.
+    if (/^admin_action_(?:client|manage_clients)$/i.test(raw)) {
+      return manageClients.processAdminManageClientsMessage(sender, 'Manage clients');
+    }
 
-// Load the polished interactive menu only after the mobile export above is patched,
-// so its captured mobile dispatcher includes Manage clients from first require.
-const interactiveMenu = require('../services/adminInteractiveMenu');
-const clientAction = interactiveMenu.ACTIONS.find((action) => action.key === 'client');
-if (clientAction && !interactiveMenu.ACTIONS.some((action) => action.key === 'manage_clients')) {
-  clientAction.key = 'manage_clients';
-  clientAction.labels = ['Manage clients', 'Manage client', 'Find a client', 'Find my client', 'Client details', 'My client details'];
-  clientAction.command = 'Manage clients';
-  clientAction.description = 'Select an authorized CRM client and manage bookings';
+    const managed = await manageClients.processAdminManageClientsMessage(sender, text);
+    if (managed?.handled) return managed;
 
-  // Keep already-delivered admin_action_client buttons safe during the transition.
-  interactiveMenu.ACTIONS.push({
-    key: 'client',
-    labels: ['Legacy client action compatibility'],
-    command: 'Manage clients',
-    description: 'Open Manage clients',
-  });
+    return manageClients.decorateAdminMenuResult(await original(sender, text));
+  };
+  Object.defineProperty(interactiveMenu, '__adminManageClientsPatched', { value: true, enumerable: false });
 }
 
-module.exports = {
-  originalProcessAdminMobileMenuMessage,
-};
+module.exports = {};
