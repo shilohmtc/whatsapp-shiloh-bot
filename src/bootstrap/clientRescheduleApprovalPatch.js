@@ -72,6 +72,28 @@ appointmentChange.processAppointmentChangeMessage = async function practitionerA
   return result;
 };
 
+// Require this only after appointmentChange has been wrapped so its internal import captures the guarded route.
+const rescheduleAvailability = require('../services/clientRescheduleAvailability');
+const originalProcessRescheduleAvailabilityMessage = rescheduleAvailability.processClientRescheduleAvailabilityMessage;
+rescheduleAvailability.processClientRescheduleAvailabilityMessage = async function approvalAwareReschedulePresentation(phone, text, ...rest) {
+  const result = await originalProcessRescheduleAvailabilityMessage(phone, text, ...rest);
+  if (!featureEnabled() || result?.interactive?.type !== 'button') return result;
+  const buttons = Array.isArray(result.interactive.buttons) ? result.interactive.buttons : [];
+  const confirmIndex = buttons.findIndex((button) => button?.id === 'yes' && button?.title === 'Confirm reschedule');
+  if (confirmIndex < 0 || !String(result.interactive.body || '').includes('Please confirm this reschedule:')) return result;
+
+  const nextButtons = buttons.map((button, index) => (
+    index === confirmIndex ? { ...button, title: 'Request change' } : button
+  ));
+  const nextBody = String(result.interactive.body)
+    .replace('Please confirm this reschedule:', '*Request this reschedule?*')
+    .replace(
+      'Nothing has changed yet.',
+      'Your current appointment remains confirmed. The requested new time will only replace it after the practitioner approves the change.'
+    );
+  return { ...result, interactive: { ...result.interactive, body: nextBody, buttons: nextButtons } };
+};
+
 const originalProcessBookingApprovalMessage = bookingApproval.processClientBookingApprovalMessage;
 bookingApproval.processClientBookingApprovalMessage = async function bookingOrRescheduleApproval(sender, text, ...rest) {
   const reschedule = await processRescheduleApprovalDecision(sender, text);
