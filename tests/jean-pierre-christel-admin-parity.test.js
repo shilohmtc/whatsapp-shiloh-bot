@@ -44,12 +44,19 @@ test('Jean-Pierre business admin controls the shared Christel and Abigail pricin
   assert.equal(pricingOwner(jeanPierre), 'christel');
 });
 
-test('JP appointment menu matches Christel operational actions except finalization', () => {
+test('JP appointment parity excludes practitioner-only finalization and block-time authority', () => {
   const jpIds = appointmentsInteractive(jeanPierre).rows.map((row) => row.id);
   const christelIds = appointmentsInteractive(christel).rows.map((row) => row.id);
-  assert.ok(christelIds.includes('admin_appointment_finalize'));
-  assert.ok(!jpIds.includes('admin_appointment_finalize'));
-  assert.deepEqual(jpIds, christelIds.filter((id) => id !== 'admin_appointment_finalize'));
+  const practitionerOnly = [
+    'admin_appointment_finalize',
+    'admin_appointment_block_time',
+    'admin_block_manage',
+  ];
+  for (const id of practitionerOnly) {
+    assert.ok(christelIds.includes(id));
+    assert.ok(!jpIds.includes(id));
+  }
+  assert.deepEqual(jpIds, christelIds.filter((id) => !practitionerOnly.includes(id)));
 });
 
 test('all three practitioner Admin menus expose own finalization while JP remains excluded', () => {
