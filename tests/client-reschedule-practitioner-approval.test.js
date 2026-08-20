@@ -5,6 +5,7 @@ const path = require('node:path');
 
 const root = path.join(__dirname, '..');
 const service = fs.readFileSync(path.join(root, 'src', 'services', 'clientRescheduleApproval.js'), 'utf8');
+const holdReconciliation = fs.readFileSync(path.join(root, 'src', 'services', 'clientRescheduleHoldReconciliation.js'), 'utf8');
 const patch = fs.readFileSync(path.join(root, 'src', 'bootstrap', 'clientRescheduleApprovalPatch.js'), 'utf8');
 const migration = fs.readFileSync(path.join(root, 'migrations', '064_client_reschedule_practitioner_approval.sql'), 'utf8');
 const pkg = fs.readFileSync(path.join(root, 'package.json'), 'utf8');
@@ -21,7 +22,7 @@ test('pending request preserves original appointment and holds only the proposed
   assert.match(migration, /proposed_starts_at TIMESTAMPTZ NOT NULL/);
   assert.match(migration, /WHERE status = 'pending'/);
   assert.match(service, /pendingRescheduleConflicts/);
-  assert.match(service, /'reschedule_hold'::text/);
+  assert.match(holdReconciliation, /'reschedule_hold'::text/);
   assert.match(patch, /getConflictsWithRescheduleHolds/);
   assert.match(patch, /checkAvailabilityWithRescheduleHolds/);
   const create = service.match(/async function createPendingRescheduleRequest[\s\S]*?async function loadRequestContext/);
@@ -61,6 +62,27 @@ test('same-practitioner single-service boundary and immutable snapshots fail clo
   assert.match(service, /canonicalStillMatchesRequest/);
   assert.match(service, /Number\(context\.current_service_id \|\| 0\) === Number\(context\.requested_service_id \|\| 0\)/);
   assert.match(service, /new Date\(context\.current_starts_at\).*new Date\(context\.original_starts_at\)/s);
+});
+
+test('ordinary availability filters stale holds read-only and does not reconcile by mutation', () => {
+  const live = holdReconciliation.match(/async function livePendingRescheduleConflicts[\s\S]*?async function reconcileStalePendingRescheduleHolds/);
+  assert.ok(live);
+  assert.match(live[0], /appointment\.starts_at IS NOT DISTINCT FROM request\.original_starts_at/);
+  assert.match(live[0], /appointment\.ends_at IS NOT DISTINCT FROM request\.original_ends_at/);
+  assert.match(live[0], /request\.approver_staff_id/);
+  assert.match(live[0], /request\.service_id/);
+  assert.doesNotMatch(live[0], /UPDATE appointment_reschedule_requests/);
+  assert.match(patch, /livePendingRescheduleConflicts/);
+});
+
+test('explicit change boundaries reconcile stale pending requests so they cannot block later validation', () => {
+  assert.match(holdReconciliation, /async function reconcileStalePendingRescheduleHolds/);
+  assert.match(holdReconciliation, /status='superseded'/);
+  assert.match(holdReconciliation, /canonical appointment changed while reschedule approval was pending/);
+  const clientRequest = patch.indexOf('await reconcileStalePendingRescheduleHolds();');
+  const create = patch.indexOf('await createPendingRescheduleRequest', clientRequest);
+  assert.ok(clientRequest >= 0 && create > clientRequest);
+  assert.match(patch, /reschedule_approval_\(\?:approve\|decline\)_\\d\+/);
 });
 
 test('approval transport contract is frozen and uses deterministic decision payloads', () => {
