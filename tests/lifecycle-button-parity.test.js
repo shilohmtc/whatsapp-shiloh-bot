@@ -5,6 +5,7 @@ const path = require('node:path');
 
 const { cancellationSuccessInteractive } = require('../src/services/appointmentChange');
 const { commandForClientBookingButton } = require('../src/services/clientBookingInteractive');
+const { shouldSendLegacyConfirmationSupplements } = require('../src/services/customerBookingConfirmation');
 
 test('successful cancellation exposes canonical Book another button with typed BOOK fallback', () => {
   const interactive = cancellationSuccessInteractive({
@@ -23,7 +24,7 @@ test('successful cancellation exposes canonical Book another button with typed B
   assert.equal(commandForClientBookingButton(interactive.buttons[0].id), 'booking');
 });
 
-test('booking confirmation template and in-session branches share the same supplemental action block', () => {
+test('live v1 skips legacy supplements while fallback delivery retains the canonical action block', () => {
   const source = fs.readFileSync(
     path.join(__dirname, '../src/services/customerBookingConfirmation.js'),
     'utf8'
@@ -31,16 +32,22 @@ test('booking confirmation template and in-session branches share the same suppl
 
   const templateBranch = source.indexOf('if(template){');
   const plainBranch = source.indexOf('}else{', templateBranch);
-  const googleAction = source.indexOf("confirmationActions.googleCalendar=await sendOptionalConfirmationAction('google_calendar'", plainBranch);
-  const changeAction = source.indexOf("confirmationActions.changeButtons=await sendOptionalConfirmationAction('booking_change_buttons'", plainBranch);
-  const postBookAction = source.indexOf("confirmationActions.postConfirmationMenu=await sendOptionalConfirmationAction('post_confirmation_menu'", plainBranch);
+  const suppression = source.indexOf('const supplementalActionsSuppressed=!shouldSendLegacyConfirmationSupplements(template);', plainBranch);
+  const guard = source.indexOf('if(!supplementalActionsSuppressed){', suppression);
+  const googleAction = source.indexOf("confirmationActions.googleCalendar=await sendOptionalConfirmationAction('google_calendar'", guard);
+  const changeAction = source.indexOf("confirmationActions.changeButtons=await sendOptionalConfirmationAction('booking_change_buttons'", guard);
+  const postBookAction = source.indexOf("confirmationActions.postConfirmationMenu=await sendOptionalConfirmationAction('post_confirmation_menu'", guard);
 
   assert.ok(templateBranch >= 0, 'template delivery branch must remain present');
   assert.ok(plainBranch > templateBranch, 'plain-message fallback branch must remain present');
-  assert.ok(googleAction > plainBranch, 'calendar CTA actions must run after the delivery branch joins');
-  assert.ok(changeAction > googleAction, 'Reschedule/Cancel buttons must share the joined action path');
-  assert.ok(postBookAction > changeAction, 'post-confirmation navigation must share the joined action path');
+  assert.ok(suppression > plainBranch, 'suppression policy must be evaluated only after primary delivery');
+  assert.ok(guard > suppression, 'legacy action block must be guarded');
+  assert.ok(googleAction > guard, 'calendar CTA must remain available to non-v1 fallback delivery');
+  assert.ok(changeAction > googleAction, 'Reschedule/Cancel must remain in the fallback action block');
+  assert.ok(postBookAction > changeAction, 'post-confirmation navigation must remain in the fallback action block');
 
+  assert.equal(shouldSendLegacyConfirmationSupplements('shiloh_booking_confirmation_v1'), false);
+  assert.equal(shouldSendLegacyConfirmationSupplements(undefined), true);
   assert.equal((source.match(/confirmationActions\.googleCalendar=await/g) || []).length, 1);
   assert.equal((source.match(/confirmationActions\.changeButtons=await/g) || []).length, 1);
 });

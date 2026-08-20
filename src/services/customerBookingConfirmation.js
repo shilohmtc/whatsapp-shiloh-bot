@@ -10,12 +10,14 @@ const { postConfirmationButtons } = require('./clientBookingInteractive');
 const { createAppointment: enrollAppointmentLifecycle } = require('./appointmentLifecycle');
 const logger = require('../lib/logger');
 
+const LIVE_BOOKING_CONFIRMATION_V1 = 'shiloh_booking_confirmation_v1';
 let deliveryTableReady = false;
 
 function fmtDate(v){return new Intl.DateTimeFormat('en-ZA',{timeZone:'Africa/Johannesburg',weekday:'long',day:'2-digit',month:'long',year:'numeric'}).format(new Date(v));}
 function fmtTime(v){return new Intl.DateTimeFormat('en-ZA',{timeZone:'Africa/Johannesburg',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(v));}
 function googleStamp(v){return new Date(v).toISOString().replace(/[-:]/g,'').replace(/\.\d{3}Z$/,'Z');}
 function baseUrl(){return String(process.env.SHILOH_PUBLIC_BASE_URL||process.env.RENDER_EXTERNAL_URL||'').replace(/\/$/,'');}
+function shouldSendLegacyConfirmationSupplements(template){return String(template||'').trim()!==LIVE_BOOKING_CONFIRMATION_V1;}
 
 async function ensureDeliveryTable(){
   if(deliveryTableReady)return;
@@ -107,20 +109,23 @@ async function sendCustomerBookingConfirmation(data){
       providerAccepted=true;
     }
 
-    const actionContext={appointmentId,clientId};
-    confirmationActions.googleCalendar=await sendOptionalConfirmationAction('google_calendar',()=>sendWhatsAppCtaUrl(phone,'Add to Google Calendar','Google Calendar',google),actionContext);
-    if(ics){
-      confirmationActions.appleOutlook=await sendOptionalConfirmationAction('apple_outlook_calendar',()=>sendWhatsAppCtaUrl(phone,'Add to Apple / Outlook','Apple / Outlook',ics),actionContext);
+    const supplementalActionsSuppressed=!shouldSendLegacyConfirmationSupplements(template);
+    if(!supplementalActionsSuppressed){
+      const actionContext={appointmentId,clientId};
+      confirmationActions.googleCalendar=await sendOptionalConfirmationAction('google_calendar',()=>sendWhatsAppCtaUrl(phone,'Add to Google Calendar','Google Calendar',google),actionContext);
+      if(ics){
+        confirmationActions.appleOutlook=await sendOptionalConfirmationAction('apple_outlook_calendar',()=>sendWhatsAppCtaUrl(phone,'Add to Apple / Outlook','Apple / Outlook',ics),actionContext);
+      }
+      confirmationActions.changeButtons=await sendOptionalConfirmationAction('booking_change_buttons',()=>sendWhatsAppReplyButtons(phone,'*Need to make a change?*\nUse a button below, or type *RESCHEDULE* or *CANCEL*.',[
+        {id:'client_reschedule_booking',title:'Reschedule'},
+        {id:'client_cancel_booking',title:'Cancel booking'},
+      ]),actionContext);
+      confirmationActions.postConfirmationMenu=await sendOptionalConfirmationAction('post_confirmation_menu',()=>sendWhatsAppReplyButtons(phone,'*What would you like to do next?*\nYou can also type *BOOK ANOTHER TREATMENT*, *MY APPOINTMENTS*, or *MAIN MENU*.',postConfirmationButtons()),actionContext);
     }
-    confirmationActions.changeButtons=await sendOptionalConfirmationAction('booking_change_buttons',()=>sendWhatsAppReplyButtons(phone,'*Need to make a change?*\nUse a button below, or type *RESCHEDULE* or *CANCEL*.',[
-      {id:'client_reschedule_booking',title:'Reschedule'},
-      {id:'client_cancel_booking',title:'Cancel booking'},
-    ]),actionContext);
-    confirmationActions.postConfirmationMenu=await sendOptionalConfirmationAction('post_confirmation_menu',()=>sendWhatsAppReplyButtons(phone,'*What would you like to do next?*\nYou can also type *BOOK ANOTHER TREATMENT*, *MY APPOINTMENTS*, or *MAIN MENU*.',postConfirmationButtons()),actionContext);
 
     await markBookingConfirmationSent(appointmentId);
-    await pool.query(`INSERT INTO crm_audit_events (action,entity_type,entity_id,metadata) VALUES ('customer.booking_confirmation_sent','appointment',$1,$2::jsonb)`,[appointmentId,JSON.stringify({clientId,calendarLinks:true,template:Boolean(template),lifecycleEnrolled:true,idempotentDelivery:true,confirmationActions})]);
-    return {sent:true,phone,confirmationActions};
+    await pool.query(`INSERT INTO crm_audit_events (action,entity_type,entity_id,metadata) VALUES ('customer.booking_confirmation_sent','appointment',$1,$2::jsonb)`,[appointmentId,JSON.stringify({clientId,calendarLinks:true,template:Boolean(template),lifecycleEnrolled:true,idempotentDelivery:true,supplementalActionsSuppressed,confirmationActions})]);
+    return {sent:true,phone,supplementalActionsSuppressed,confirmationActions};
   }catch(error){
     if(claimed&&!providerAccepted){
       try{await releaseBookingConfirmationClaim(appointmentId);}catch(releaseError){logger.error({err:releaseError,appointmentId},'Booking confirmation claim release failed');}
@@ -154,4 +159,4 @@ async function sendCustomerBookingConfirmationForAppointment(appointmentId){
   return sendCustomerBookingConfirmation({appointmentId:a.id,clientId:a.client_id,clientName:a.client_name,serviceName:a.service_name,staffName:a.staff_name,locationName:a.location_name,startsAt:a.starts_at,endsAt:a.ends_at,source:a.source||'shiloh'});
 }
 
-module.exports={sendCustomerBookingConfirmation,sendCustomerBookingConfirmationForAppointment,googleCalendarUrl,claimBookingConfirmation,releaseBookingConfirmationClaim,markBookingConfirmationSent,ensureDeliveryTable,ensureToken,practitionerApprovalStatus};
+module.exports={sendCustomerBookingConfirmation,sendCustomerBookingConfirmationForAppointment,googleCalendarUrl,claimBookingConfirmation,releaseBookingConfirmationClaim,markBookingConfirmationSent,ensureDeliveryTable,ensureToken,practitionerApprovalStatus,shouldSendLegacyConfirmationSupplements};
