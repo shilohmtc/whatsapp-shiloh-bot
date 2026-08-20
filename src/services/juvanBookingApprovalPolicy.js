@@ -1,65 +1,66 @@
 const { pool } = require('../db/pool');
 const { applyMigrationFile } = require('./migrations');
+const {
+  DEMO_KEY,
+  POLICY_KEY,
+  EXPECTED_DISPLAY_NAME,
+  resolveCurrentControlledDemoClient,
+} = require('./controlledDemoIdentity');
 
-const MIGRATION = '065_juvan_botha_jp_booking_approval.sql';
-const POLICY_KEY = 'juvan_botha_jp_booking_approval';
-const EXPECTED_CLIENT_NAME = 'Juvan Botha';
+const BASE_MIGRATION = '065_juvan_botha_jp_booking_approval.sql';
+const IDENTITY_MIGRATION = '066_controlled_juvan_demo_identity.sql';
+const REBIND_MIGRATION = '067_controlled_juvan_registration_rebind.sql';
 const EXPECTED_APPROVER_NAME = 'Jean-Pierre';
 
 async function ensureJuvanBookingApprovalPolicy() {
-  const migration = await applyMigrationFile(MIGRATION);
+  const baseMigration = await applyMigrationFile(BASE_MIGRATION);
+  const identityMigration = await applyMigrationFile(IDENTITY_MIGRATION);
+  const rebindMigration = await applyMigrationFile(REBIND_MIGRATION);
+
   const result = await pool.query(`
-    SELECT p.client_id,
+    SELECT d.demo_key,
+           d.normalized_phone,
+           d.current_client_id,
+           d.expected_display_name,
+           d.active AS demo_active,
+           p.client_id AS policy_client_id,
            p.approver_admin_id,
-           p.expected_display_name,
-           p.active,
-           c.display_name,
-           c.status AS client_status,
+           p.active AS policy_active,
            saa.display_name AS approver_name,
            saa.active AS approver_active,
            saa.business_role,
            saa.calendar_scope,
            saa.service_scope,
-           (saa.normalized_whatsapp IS NOT NULL) AS approver_whatsapp_configured,
-           (SELECT COUNT(*)::int
-              FROM clients named
-             WHERE named.status='active'
-               AND LOWER(TRIM(named.display_name))='juvan botha') AS active_name_count,
-           (SELECT COUNT(DISTINCT cc.normalized_value)::int
-              FROM client_contacts cc
-             WHERE cc.client_id=p.client_id
-               AND cc.contact_type IN ('whatsapp','mobile')
-               AND NULLIF(TRIM(cc.normalized_value),'') IS NOT NULL) AS canonical_contact_count,
-           (SELECT COUNT(DISTINCT other.id)::int
-              FROM client_contacts target_cc
-              JOIN client_contacts other_cc
-                ON other_cc.normalized_value=target_cc.normalized_value
-               AND other_cc.contact_type IN ('whatsapp','mobile')
-              JOIN clients other
-                ON other.id=other_cc.client_id
-               AND other.status='active'
-             WHERE target_cc.client_id=p.client_id
-               AND target_cc.contact_type IN ('whatsapp','mobile')
-               AND NULLIF(TRIM(target_cc.normalized_value),'') IS NOT NULL
-               AND other.id<>p.client_id) AS shared_active_contact_count
-      FROM client_booking_approval_policies p
-      JOIN clients c ON c.id=p.client_id
-      JOIN staff_admin_accounts saa ON saa.id=p.approver_admin_id
-     WHERE p.policy_key=$1
-  `, [POLICY_KEY]);
+           (saa.normalized_whatsapp IS NOT NULL) AS approver_whatsapp_configured
+      FROM controlled_demo_identities d
+      JOIN client_booking_approval_policies p
+        ON p.policy_key=$2
+      JOIN staff_admin_accounts saa
+        ON saa.id=p.approver_admin_id
+     WHERE d.demo_key=$1
+       AND d.active=TRUE
+  `, [DEMO_KEY, POLICY_KEY]);
 
   if (result.rowCount !== 1) {
-    throw new Error('Juvan Botha approval policy verification failed: expected exactly one persisted policy');
+    throw new Error('Controlled Juvan demo identity verification failed: expected one identity and approval policy');
   }
 
   const row = result.rows[0];
-  const valid = row.active === true
-    && row.client_status === 'active'
-    && String(row.display_name || '').trim().toLowerCase() === EXPECTED_CLIENT_NAME.toLowerCase()
-    && String(row.expected_display_name || '').trim().toLowerCase() === EXPECTED_CLIENT_NAME.toLowerCase()
-    && Number(row.active_name_count) === 1
-    && Number(row.canonical_contact_count) >= 1
-    && Number(row.shared_active_contact_count) === 0
+  const state = await resolveCurrentControlledDemoClient(pool);
+  if (!['bound', 'unbound'].includes(state.status)) {
+    throw new Error(`Controlled Juvan demo identity verification failed: ${state.status}`);
+  }
+
+  const pointerAligned = state.status === 'bound'
+    ? String(row.current_client_id || '') === String(row.policy_client_id || '')
+      && String(row.current_client_id || '') === String(state.client?.id || '')
+    : row.current_client_id == null && row.policy_client_id == null;
+
+  const valid = row.demo_active === true
+    && row.policy_active === true
+    && pointerAligned
+    && /^\d+$/.test(String(row.normalized_phone || ''))
+    && String(row.expected_display_name || '').trim().toLowerCase() === EXPECTED_DISPLAY_NAME.toLowerCase()
     && row.approver_active === true
     && row.approver_whatsapp_configured === true
     && String(row.approver_name || '').trim().toLowerCase() === EXPECTED_APPROVER_NAME.toLowerCase()
@@ -68,21 +69,21 @@ async function ensureJuvanBookingApprovalPolicy() {
     && row.service_scope === 'all_services';
 
   if (!valid) {
-    throw new Error('Juvan Botha approval policy verification failed: canonical client or Jean-Pierre approval invariants drifted');
+    throw new Error('Controlled Juvan demo identity verification failed: identity, policy, or Jean-Pierre authority drifted');
   }
 
   return {
     initialized: true,
-    migration: MIGRATION,
-    applied: migration.applied === true,
-    checksumVerified: migration.checksumVerified === true,
-    appliedAt: migration.appliedAt || null,
-    policyKey: POLICY_KEY,
-    clientId: String(row.client_id),
-    displayName: EXPECTED_CLIENT_NAME,
-    activeNameCount: Number(row.active_name_count),
-    canonicalContactCount: Number(row.canonical_contact_count),
-    sharedActiveContactCount: Number(row.shared_active_contact_count),
+    migrations: [
+      { filename: BASE_MIGRATION, applied: baseMigration.applied === true, checksumVerified: baseMigration.checksumVerified === true },
+      { filename: IDENTITY_MIGRATION, applied: identityMigration.applied === true, checksumVerified: identityMigration.checksumVerified === true },
+      { filename: REBIND_MIGRATION, applied: rebindMigration.applied === true, checksumVerified: rebindMigration.checksumVerified === true },
+    ],
+    demoKey: DEMO_KEY,
+    bindingState: state.status,
+    currentClientId: state.client?.id ? String(state.client.id) : null,
+    currentDisplayName: state.client?.display_name || null,
+    phoneSuffix: String(row.normalized_phone).slice(-4),
     approverAdminId: String(row.approver_admin_id),
     approverName: EXPECTED_APPROVER_NAME,
     approverWhatsAppConfigured: true,
@@ -90,9 +91,11 @@ async function ensureJuvanBookingApprovalPolicy() {
 }
 
 module.exports = {
-  MIGRATION,
+  BASE_MIGRATION,
+  IDENTITY_MIGRATION,
+  REBIND_MIGRATION,
   POLICY_KEY,
-  EXPECTED_CLIENT_NAME,
+  EXPECTED_CLIENT_NAME: EXPECTED_DISPLAY_NAME,
   EXPECTED_APPROVER_NAME,
   ensureJuvanBookingApprovalPolicy,
 };
