@@ -30,6 +30,9 @@ function isEnglishCompatibleClinicNavigation(text='') {
 function isEnglishCompatibleControlToken(text='') {
   const value = String(text || '').trim();
   return /^admin_controlled_demo_reset_(confirm|cancel):juvan_botha$/i.test(value)
+    || /^admin_controlled_demo_reset_choose:(clean_bookings|identity_only)$/i.test(value)
+    || /^admin_controlled_demo_reset_preview_clean:\d+:[a-f0-9]{20}:\d+$/i.test(value)
+    || /^admin_controlled_demo_reset_confirm_clean:\d+:[a-f0-9]{20}$/i.test(value)
     || /^admin_test_client_reset_(confirm|cancel):juvan$/i.test(value);
 }
 

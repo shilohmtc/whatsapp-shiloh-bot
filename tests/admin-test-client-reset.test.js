@@ -9,9 +9,13 @@ const routerSource = fs.readFileSync(routerPath, 'utf8');
 const {
   CONFIRM_ID,
   CANCEL_ID,
+  CLEAN_CHOICE_ID,
+  IDENTITY_CHOICE_ID,
   canResetJuvan,
   targetFromText,
+  resetChoiceInteractive,
   confirmationInteractive,
+  cleanupPreviewInteractive,
   resolveBoundJuvan,
   resetControlledJuvan,
 } = require(`../${servicePath}`);
@@ -72,7 +76,7 @@ function previewDb({ conflict = false, unbound = false, extraPhone = false } = {
   });
 }
 
-function transactionDb({ conflict = false, residualCount = 0, policyDrift = false } = {}) {
+function transactionDb({ conflict = false, residualCount = 0, policyDrift = false, outstanding = [] } = {}) {
   return scriptedDb((sql) => {
     if (['BEGIN', 'COMMIT', 'ROLLBACK'].includes(sql)) return { rowCount: 0, rows: [] };
     if (sql.includes('FROM controlled_demo_identities') && sql.includes('FOR UPDATE')) {
@@ -94,6 +98,9 @@ function transactionDb({ conflict = false, residualCount = 0, policyDrift = fals
         rowCount: 1,
         rows: [{ policy_key: 'juvan_botha_jp_booking_approval', client_id: policyDrift ? 999 : 845, approver_admin_id: 4, active: true }],
       };
+    }
+    if (sql.includes('FROM appointments') && sql.includes("LOWER(status) NOT IN ('cancelled','completed','no_show')")) {
+      return { rowCount: outstanding.length, rows: outstanding };
     }
     if (sql.startsWith('DELETE FROM booking_intents')) return { rowCount: 1, rows: [] };
     if (sql.startsWith('DELETE FROM client_onboarding_sessions')) return { rowCount: 1, rows: [] };
@@ -119,12 +126,51 @@ test('Juvan is the only supported reusable reset identity and old targets are re
   assert.equal(targetFromText('Reset test client Juvan').mode, 'preview');
   assert.equal(targetFromText(CONFIRM_ID).mode, 'confirm');
   assert.equal(targetFromText(CANCEL_ID).mode, 'cancel');
+  assert.equal(targetFromText(CLEAN_CHOICE_ID).mode, 'clean_preview');
+  assert.equal(targetFromText(IDENTITY_CHOICE_ID).mode, 'identity_preview');
+  assert.deepEqual(targetFromText('admin_controlled_demo_reset_preview_clean:845:0123456789abcdefabcd:2'), { mode: 'clean_preview_page', clientId: 845, digest: '0123456789abcdefabcd', page: 2 });
+  assert.deepEqual(targetFromText('admin_controlled_demo_reset_confirm_clean:845:0123456789abcdefabcd'), { mode: 'clean_confirm', clientId: 845, digest: '0123456789abcdefabcd' });
   assert.equal(targetFromText('admin_test_client_reset_confirm:juvan').mode, 'confirm');
   assert.equal(targetFromText('Reset test client Chenique'), null);
   assert.equal(targetFromText('Reset test client Dummy Test'), null);
   assert.equal(targetFromText('Reset test client CRM Dummy Test'), null);
   assert.equal(targetFromText('admin_test_client_reset_confirm:dummy_test'), null);
   assert.doesNotMatch(serviceSource, /TEST_CLIENT_ALIASES|TEST_CLIENTS/);
+});
+
+test('Reset Juvan first offers exactly cleanup, identity-only, or cancel outcomes', () => {
+  const interactive = resetChoiceInteractive(juvan, [targetContact]);
+  assert.equal(interactive.type, 'button');
+  assert.deepEqual(interactive.buttons.map((button) => button.id), [CLEAN_CHOICE_ID, IDENTITY_CHOICE_ID, CANCEL_ID]);
+  assert.match(interactive.body, /Clean bookings and reset/);
+  assert.match(interactive.body, /Reset identity only/);
+  assert.match(interactive.body, /Cancel — change nothing/);
+});
+
+test('cleanup preview includes exact operational booking fields and requires JP confirmation only on the final page', () => {
+  const resolved = { client: juvan, contacts: [targetContact] };
+  const appointments = [{
+    id: 901,
+    status: 'confirmed',
+    startsAt: '2026-08-25T08:00:00.000Z',
+    endsAt: '2026-08-25T09:00:00.000Z',
+    serviceName: 'Sports Massage',
+    staff: [{ staffId: 1, staffName: 'Christel' }, { staffId: 2, staffName: 'Abigail' }],
+    sharedCalendar: { calendarId: 'shared', eventId: 'known-event', syncStatus: 'synced' },
+    retryOnly: false,
+  }];
+  const rendered = cleanupPreviewInteractive(resolved, appointments, 0);
+  assert.equal(rendered.status, 'ready');
+  assert.match(rendered.interactive.body, /CRM profile: Juvan Botha/);
+  assert.match(rendered.interactive.body, /CRM ID: #845/);
+  assert.match(rendered.interactive.body, /Appointment #901/);
+  assert.match(rendered.interactive.body, /Status: confirmed/);
+  assert.match(rendered.interactive.body, /Service: Sports Massage/);
+  assert.match(rendered.interactive.body, /Practitioner: Christel \+ Abigail/);
+  assert.match(rendered.interactive.body, /Calendar: Shared known-event \(synced\)/);
+  assert.match(rendered.interactive.body, /Jean-Pierre: confirm only/);
+  assert.match(rendered.interactive.buttons[0].id, /^admin_controlled_demo_reset_confirm_clean:845:/);
+  assert.ok(rendered.interactive.body.length <= 1024);
 });
 
 test('only exact Jean-Pierre business-admin authority can reset Juvan', () => {
@@ -228,6 +274,21 @@ test('successful reset clears bounded phone state, archives old client, unbinds 
   assert.equal(metadata.controlledIdentityUnbound, true);
   assert.equal(metadata.clearedWelcomeDeliveries, 1);
   assert.equal(wasReleased(), true);
+});
+
+test('cleanup path adds a fail-closed outstanding-booking recheck without changing identity-only behavior', async () => {
+  const admin = { id: 4, display_name: 'Jean-Pierre', business_role: 'business_admin', calendar_scope: 'all_business', service_scope: 'all_services' };
+  const guarded = transactionDb({ outstanding: [{ id: 999, status: 'confirmed' }] });
+  const blocked = await resetControlledJuvan(admin, { connect: async () => guarded.db }, { requireNoOperationalAppointments: true });
+  assert.equal(blocked.status, 'booking_cleanup_race');
+  assert.deepEqual(blocked.outstandingAppointmentIds, [999]);
+  assert.equal(guarded.calls.some(({ text }) => text.startsWith('DELETE FROM client_contacts')), false);
+  assert.equal(guarded.calls.some(({ text }) => text.startsWith('UPDATE controlled_demo_identities')), false);
+
+  const identityOnly = transactionDb({ outstanding: [{ id: 999, status: 'confirmed' }] });
+  const reset = await resetControlledJuvan(admin, { connect: async () => identityOnly.db });
+  assert.equal(reset.status, 'reset');
+  assert.equal(identityOnly.calls.some(({ text }) => text.includes('FROM appointments')), false);
 });
 
 test('router remains wired to the CRM reset handler while final menu ownership stays separate', () => {

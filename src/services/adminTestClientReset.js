@@ -5,10 +5,20 @@ const {
   normalizeControlledPhone,
   getControlledDemoIdentity,
 } = require('./controlledDemoIdentity');
+const {
+  loadCleanupAppointments,
+  appointmentDigest,
+  paginatePreview,
+  cleanControlledJuvanBookings,
+} = require('./controlledJuvanBookingCleanup');
 
 const CONTROLLED_DEMO_NAME = 'Juvan Botha';
 const CONFIRM_ID = 'admin_controlled_demo_reset_confirm:juvan_botha';
 const CANCEL_ID = 'admin_controlled_demo_reset_cancel:juvan_botha';
+const CLEAN_CHOICE_ID = 'admin_controlled_demo_reset_choose:clean_bookings';
+const IDENTITY_CHOICE_ID = 'admin_controlled_demo_reset_choose:identity_only';
+const CLEAN_PAGE_PREFIX = 'admin_controlled_demo_reset_preview_clean:';
+const CLEAN_CONFIRM_PREFIX = 'admin_controlled_demo_reset_confirm_clean:';
 
 function normalizedAdminName(admin) {
   return String(admin?.display_name || '').trim().toLowerCase();
@@ -36,11 +46,60 @@ async function getAdmin(sender, db = pool) {
 function targetFromText(text = '') {
   const raw = String(text || '').trim();
   if (/^reset (?:test client )?juvan(?: botha| profile)?$/i.test(raw)) return { mode: 'preview' };
+  if (raw === CLEAN_CHOICE_ID) return { mode: 'clean_preview', page: 0 };
+  if (raw === IDENTITY_CHOICE_ID) return { mode: 'identity_preview' };
+  let match = raw.match(/^admin_controlled_demo_reset_preview_clean:(\d+):([a-f0-9]{20}):(\d+)$/i);
+  if (match) return { mode: 'clean_preview_page', clientId: Number(match[1]), digest: match[2].toLowerCase(), page: Number(match[3]) };
+  match = raw.match(/^admin_controlled_demo_reset_confirm_clean:(\d+):([a-f0-9]{20})$/i);
+  if (match) return { mode: 'clean_confirm', clientId: Number(match[1]), digest: match[2].toLowerCase() };
   if (/^admin_controlled_demo_reset_confirm:juvan_botha$/i.test(raw)
       || /^admin_test_client_reset_confirm:juvan$/i.test(raw)) return { mode: 'confirm' };
   if (/^admin_controlled_demo_reset_cancel:juvan_botha$/i.test(raw)
       || /^admin_test_client_reset_cancel:juvan$/i.test(raw)) return { mode: 'cancel' };
   return null;
+}
+
+function resetChoiceInteractive(client, contacts = []) {
+  return {
+    type: 'button',
+    body: [
+      '*Reset controlled Juvan demo*',
+      '',
+      `CRM profile: ${client.display_name}`,
+      `CRM ID: #${client.id}`,
+      `Controlled identity: ${contacts.map((contact) => `${contact.contact_type} ${previewPhone(contact.normalized_value)}`).join(', ')}`,
+      '',
+      'Choose one explicit outcome:',
+      '• Clean bookings and reset — cancel non-final bookings, remove Calendar mirrors, then reset identity.',
+      '• Reset identity only — preserve every appointment and use the existing reset.',
+      '• Cancel — change nothing.',
+    ].join('\n'),
+    buttons: [
+      { id: CLEAN_CHOICE_ID, title: 'Clean bookings/reset' },
+      { id: IDENTITY_CHOICE_ID, title: 'Reset identity only' },
+      { id: CANCEL_ID, title: 'Cancel' },
+    ],
+  };
+}
+
+function cleanupPreviewInteractive(resolved, appointments, page = 0) {
+  const digest = appointmentDigest(resolved.client.id, appointments);
+  const pages = paginatePreview(resolved.client, resolved.contacts, appointments);
+  if (!Number.isInteger(page) || page < 0 || page >= pages.length) {
+    return { status: 'preview_changed', reply: 'That booking-cleanup preview page is no longer valid. Open Reset Juvan and review the current preview again.' };
+  }
+  const finalPage = page === pages.length - 1;
+  const body = `${pages[page]}\n\nPage ${page + 1} of ${pages.length}.${finalPage ? '\nJean-Pierre: confirm only if every appointment and Calendar mirror above is correct.' : ''}`;
+  const buttons = finalPage
+    ? [
+      { id: `${CLEAN_CONFIRM_PREFIX}${resolved.client.id}:${digest}`, title: 'Clean & reset' },
+      { id: CANCEL_ID, title: 'Cancel' },
+    ]
+    : [
+      { id: `${CLEAN_PAGE_PREFIX}${resolved.client.id}:${digest}:${page + 1}`, title: 'Next appointments' },
+      { id: CANCEL_ID, title: 'Cancel' },
+    ];
+  return { status: 'ready', digest, pages, interactive: { type: 'button', body, buttons } };
 }
 
 async function releaseContactsForClient(clientId, db = pool, lock = false) {
@@ -170,7 +229,7 @@ function resolutionReply(status) {
   return 'Reset blocked: the controlled Juvan demo identity could not be resolved safely.';
 }
 
-async function resetControlledJuvan(admin, poolAdapter = pool) {
+async function resetControlledJuvan(admin, poolAdapter = pool, options = {}) {
   if (!canResetJuvan(admin)) {
     return { status: 'unauthorized', reply: 'Reset Juvan is restricted to Jean-Pierre business administration.' };
   }
@@ -208,6 +267,24 @@ async function resetControlledJuvan(admin, poolAdapter = pool) {
     if (phones.length !== 1 || phones[0] !== controlledPhone) {
       await db.query('ROLLBACK');
       return { status: 'identity_drift', reply: resolutionReply('identity_drift') };
+    }
+
+    if (options.requireNoOperationalAppointments === true) {
+      const outstanding = await db.query(`
+        SELECT id,status
+          FROM appointments
+         WHERE client_id=$1
+           AND LOWER(status) NOT IN ('cancelled','completed','no_show')
+         ORDER BY id
+         FOR UPDATE`, [client.id]);
+      if (outstanding.rowCount) {
+        await db.query('ROLLBACK');
+        return {
+          status: 'booking_cleanup_race',
+          outstandingAppointmentIds: outstanding.rows.map((row) => Number(row.id)),
+          reply: 'Identity reset paused: the Juvan appointment set changed after Calendar cleanup. The identity remains bound. Open Reset Juvan and retry the guarded cleanup.',
+        };
+      }
     }
 
     await db.query('DELETE FROM booking_intents WHERE phone = ANY($1::text[])', [phones]);
@@ -352,7 +429,74 @@ async function processAdminTestClientResetMessage(sender, text) {
     if (preview.status !== 'ready') {
       return { handled: true, admin, reply: resolutionReply(preview.status) };
     }
+    return { handled: true, admin, interactive: resetChoiceInteractive(preview.client, preview.contacts) };
+  }
+
+  if (target.mode === 'identity_preview') {
+    const preview = await resolveBoundJuvan(pool, false);
+    if (preview.status !== 'ready') {
+      return { handled: true, admin, reply: resolutionReply(preview.status) };
+    }
     return { handled: true, admin, interactive: confirmationInteractive(preview.client, preview.contacts) };
+  }
+
+  if (target.mode === 'clean_preview' || target.mode === 'clean_preview_page') {
+    const preview = await resolveBoundJuvan(pool, false);
+    if (preview.status !== 'ready') {
+      return { handled: true, admin, reply: resolutionReply(preview.status) };
+    }
+    const appointments = await loadCleanupAppointments(preview.client.id, pool, false);
+    const digest = appointmentDigest(preview.client.id, appointments);
+    if (target.mode === 'clean_preview_page'
+        && (Number(preview.client.id) !== target.clientId || digest !== target.digest)) {
+      return { handled: true, admin, reply: 'Booking cleanup blocked: the controlled Juvan profile or appointment preview changed. Open Reset Juvan and review the current preview again.' };
+    }
+    const rendered = cleanupPreviewInteractive(preview, appointments, target.page || 0);
+    return rendered.interactive
+      ? { handled: true, admin, interactive: rendered.interactive }
+      : { handled: true, admin, reply: rendered.reply };
+  }
+
+  if (target.mode === 'clean_confirm') {
+    const cleanup = await cleanControlledJuvanBookings({
+      admin,
+      expectedClientId: target.clientId,
+      expectedDigest: target.digest,
+      resolveBoundJuvan,
+    });
+    if (cleanup.status === 'calendar_partial') {
+      const appointments = [...new Set(cleanup.unresolved.map((item) => item.appointmentId).filter(Boolean))];
+      return {
+        handled: true,
+        admin,
+        status: cleanup.status,
+        reply: [
+          '⚠️ Booking cleanup committed, but Calendar cleanup is incomplete.',
+          `Cancelled appointment records: ${cleanup.cancelledAppointmentIds.length ? cleanup.cancelledAppointmentIds.map((id) => `#${id}`).join(', ') : 'none newly cancelled on this retry'}.`,
+          `Unresolved Calendar appointments: ${appointments.length ? appointments.map((id) => `#${id}`).join(', ') : 'Calendar cleanup audit'}.`,
+          'Juvan’s controlled identity remains bound and was not reset.',
+          'Safe retry: open *Reset Juvan*, choose *Clean bookings and reset*, review the current retry preview, and confirm again after the Calendar provider is healthy.',
+        ].join('\n'),
+      };
+    }
+    if (cleanup.status !== 'bookings_clean') {
+      return { handled: true, admin, status: cleanup.status, reply: cleanup.reply || 'Booking cleanup was blocked safely. Nothing was reset.' };
+    }
+    const reset = await resetControlledJuvan(admin, pool, { requireNoOperationalAppointments: true });
+    if (reset.status !== 'reset') return { handled: true, admin, status: reset.status, reply: reset.reply };
+    return {
+      handled: true,
+      admin,
+      status: 'cleaned_and_reset',
+      reply: [
+        `✅ ${reset.client.display_name} bookings cleaned and controlled identity reset complete.`,
+        `Appointments cleaned: ${cleanup.appointmentIds.length}; newly cancelled: ${cleanup.cancelledAppointmentIds.length}.`,
+        'Completed, no-show, already-cancelled and CRM/audit history were preserved.',
+        'Shared and assigned-practitioner Google Calendar cleanup completed with no unresolved mirrors.',
+        'No Juvan cancellation message was sent.',
+        `Old CRM profile #${reset.client.id} is archived; the exact controlled phone can now complete normal new-client registration.`,
+      ].join('\n'),
+    };
   }
 
   const result = await resetControlledJuvan(admin);
@@ -363,6 +507,10 @@ module.exports = {
   CONTROLLED_DEMO_NAME,
   CONFIRM_ID,
   CANCEL_ID,
+  CLEAN_CHOICE_ID,
+  IDENTITY_CHOICE_ID,
+  CLEAN_PAGE_PREFIX,
+  CLEAN_CONFIRM_PREFIX,
   canResetJuvan,
   targetFromText,
   releaseContactsForClient,
@@ -370,7 +518,9 @@ module.exports = {
   findSharedActiveIdentity,
   resolveBoundJuvan,
   previewPhone,
+  resetChoiceInteractive,
   confirmationInteractive,
+  cleanupPreviewInteractive,
   optionalPhoneCleanup,
   resetControlledJuvan,
   processAdminTestClientResetMessage,

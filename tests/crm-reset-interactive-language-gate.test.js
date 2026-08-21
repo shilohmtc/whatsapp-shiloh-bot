@@ -17,6 +17,19 @@ test('controlled Juvan reset Confirm and Cancel tokens bypass natural-language c
   }
 });
 
+test('guarded cleanup choice, pagination, and confirmation tokens bypass language classification narrowly', () => {
+  for (const token of [
+    'admin_controlled_demo_reset_choose:clean_bookings',
+    'admin_controlled_demo_reset_choose:identity_only',
+    'admin_controlled_demo_reset_preview_clean:845:0123456789abcdefabcd:2',
+    'admin_controlled_demo_reset_confirm_clean:845:0123456789abcdefabcd',
+  ]) {
+    assert.equal(isEnglishCompatibleControlToken(token), true);
+    assert.equal(needsLanguageCheck(token), false);
+  }
+  assert.equal(isEnglishCompatibleControlToken('admin_controlled_demo_reset_confirm_clean:845:anything'), false);
+});
+
 test('legacy in-flight Juvan buttons remain safe during transition but retired targets do not bypass', () => {
   for (const action of ['confirm', 'cancel']) {
     const legacy = `admin_test_client_reset_${action}:juvan`;
