@@ -16,7 +16,7 @@ Purpose: concise operational dashboard. Master is the detailed current ledger; h
 
 ## Governance
 
-New specialist chat: independently read current GitHub `main`, Master, this Tracker, latest reconciliation `docs/SHILOH-OS-RECONCILIATION-2026-08-21-BOOKING-CONFIRMATION-V2-ACTIVATION.md`, and Engineering Governance; verify changing production/provider/CRM/Calendar/human evidence; preserve newer authority; then continue only owned scope.
+New specialist chat: independently read current GitHub `main`, Master, this Tracker, latest reconciliation `docs/SHILOH-OS-RECONCILIATION-2026-08-21-GUARDED-JUVAN-BOOKING-CLEANUP.md`, and Engineering Governance; verify changing production/provider/CRM/Calendar/human evidence; preserve newer authority; then continue only owned scope.
 
 Durable reconciliation anchors remain valid where not superseded, including `docs/SHILOH-OS-RECONCILIATION-2026-08-20-CLIENT-COUPLES-AND-PACKAGES.md`, `docs/SHILOH-OS-RECONCILIATION-2026-08-20-ABIGAIL-JAW-RELEASE-MAPPING.md`, `docs/SHILOH-OS-RECONCILIATION-2026-08-20-ADMIN-UX-STANDARDIZATION.md`, `docs/SHILOH-OS-RECONCILIATION-2026-08-20-BOOKING-ADMIN-JUVAN-PRIMARY-BACKUP-AND-MANAGE-CANCEL.md`, `docs/SHILOH-OS-RECONCILIATION-2026-08-20-CONTROLLED-JUVAN-DEMO-IDENTITY.md`, `docs/SHILOH-OS-RECONCILIATION-2026-08-20-DUMMY-TEST-BOOKING-CLEANUP.md`, `docs/SHILOH-OS-RECONCILIATION-2026-08-20-ADMIN-BLOCK-TIME.md`, `docs/SHILOH-OS-RECONCILIATION-2026-08-20-CRM-DUMMY-RESET-COMPLETION.md`, `docs/SHILOH-OS-RECONCILIATION-2026-08-20-CURRENT-MAIN-356.md`, `docs/SHILOH-OS-RECONCILIATION-2026-08-18-CHRISTEL-SERVICE-CATALOGUE-CORRECTION.md`, specialist-workstream reconciliation and Control-routing reconciliation.
 
@@ -26,11 +26,11 @@ Control & Reconciliation uses reconciled authoritative evidence, not specialist-
 
 ## Production baseline
 
-**Current application:** PR **#384 / `aed805842818983eb5d4e3ca50054627eea7fe0c`**, *Initialize booking confirmation evidence schema*, built on PR #383's guarded v2 activation and preserving PR #382 reschedule activation plus the #380 Couples Massage lineage.
+**Current application:** PR **#388 / `e4833a743945db63b8cce3731d593f76c9f17921`**, *Guarded Juvan booking cleanup before optional identity reset*, built on PR #387 provider-log redaction and preserving PR #385 Meta reconciliation, PR #383/#384 booking-confirmation-v2 activation/evidence, PR #382 reschedule activation and the #380 Couples Massage lineage.
 
-**CI:** PR #383 run **#1204** passed **832/832**; PR #384 run **#1206** completed successfully.
+**CI:** PR #388 run **#1214** passed the full non-mutating regression gate; focused local coverage passed **52/52** and full local regression passed **850/850**.
 
-**Render application baseline:** final deploy **`dep-da43g9mk1f9s73ajl33g`** reached **LIVE** on exact #384 merge SHA in confirmed workspace **My Workspace**. It retains `WHATSAPP_BOOKING_CONFIRMATION_TEMPLATE=shiloh_booking_confirmation_v2`, restores both one-shot audit/provision flags to `false`, verifies migration 071 evidence columns, returns `/health` `status=ok / database=ok`, and has no error/fatal logs. PR #382's reschedule configuration remains enabled.
+**Render application baseline:** deploy **`dep-da450l9t0dsc73a7dbo0`** reached **LIVE** on exact #388 merge SHA in confirmed workspace **My Workspace**. It retains the completed Meta-template activation and `WHATSAPP_BOOKING_CONFIRMATION_TEMPLATE=shiloh_booking_confirmation_v2`; `/health` reports `status=ok / database=ok`, Google Calendar health passed and no error/fatal logs were present. PR #387 redaction and all earlier provider/runtime gates remain preserved.
 
 Migration **070_couples_massage_self_service.sql** applied and checksum-verified. Production now has canonical service **#66 Couples Massage**, category Massage, **90 minutes**, price **R1080**, with exact active/client-bookable practitioner mappings **Abigail staff #1 + Christel staff #3**. Companion contact authority is appointment-scoped `booking_backup` with `marketingConsent=false`.
 
@@ -42,8 +42,9 @@ Practitioner-approved client rescheduling is **provider-verified and production-
 
 | ID | Workstream | State | Evidence / next action |
 |---|---|---|---|
-| DEPLOY-CONVERGENCE | GitHub ↔ Render | 🟢 VERIFIED | Current application authority #384 / `aed805842818...`; #383 CI #1204 passed 832/832; #384 CI #1206 passed; final Render `dep-da43g9mk1f9s73ajl33g` LIVE on exact merge SHA; migration 071 verified; v2 selected; `/health` status/database ok; no error/fatal logs. |
+| DEPLOY-CONVERGENCE | GitHub ↔ Render | 🟢 VERIFIED | Current application authority #388 / `e4833a743945...`; CI #1214 passed; Render `dep-da450l9t0dsc73a7dbo0` LIVE on exact merge SHA; Calendar health and `/health` status/database ok; no error/fatal logs. PR #387 redaction and completed Meta-template activation remain preserved. |
 | CONTROLLED-JUVAN-DEMO | CRM & Identity | 🟢 VERIFIED LIVE / FOUNDATION | #364 anchors `juvan_botha` to exact business-controlled phone with nullable current-client pointer and JP-only reset. Current pointer presently client 845 / suffix 1564, but downstream code must resolve the current controlled identity rather than name-match or hard-code 845. |
+| CONTROLLED-JUVAN-BOOKING-CLEANUP | Booking & Admin UX | 🟢 VERIFIED LIVE | #388 / `e4833a743945...`; CI #1214 passed. Reset Juvan offers Clean bookings and reset / unchanged Reset identity only / Cancel. Clean path previews exact current-pointer appointments/mirrors, cancels only non-final through history/audit, terminalizes related pending state, sends no customer message, removes shared/all assigned-practitioner Calendar mirrors, retains identity on unresolved cleanup and safely retries. No real reset/cancellation/event was manufactured. |
 | BOOKING-JUVAN-PRIMARY-BACKUP | Booking & Admin UX | 🟢 VERIFIED LIVE | #366 / `53b5e0c...`; CI #1164 passed 796/796; migration 068 applied/checksum-verified. Assigned practitioner = Primary, JP = Backup, current controlled Juvan identity revalidated at decision time, first atomic terminal decision wins, already-decided state blocks a second authoritative decision. JP-only Reset Juvan presentation delegates to #364 CRM reset. |
 | JUVAN-JP-BOOKING-APPROVAL-HIST | Booking & Admin UX | 🟢 HISTORICAL / SUPERSEDED | Genuine #585 remains do-not-redo evidence of the prior JP-sole behavior. #366 supersedes that runtime behavior; preserve #585 as historical evidence only. |
 | ADMIN-MANAGE-BOOKING-CANCEL | Booking & Admin UX | 🟢 VERIFIED LIVE | #367 canonical reason + explicit-confirmation cancellation remains; #380 hardens it for multi-staff appointments by locking every assigned practitioner and clearing all practitioner Calendar mirrors. No real cancellation was manufactured for proof. |
@@ -159,6 +160,18 @@ Durable identity evidence remains `docs/SHILOH-OS-RECONCILIATION-2026-08-20-CONT
 - The read-only resolver fails closed on client/contact/policy/shared-active drift and is the required downstream identity source.
 - No genuine Juvan reset/new registration/rebind was executed merely for #380 proof.
 
+## Guarded Juvan booking cleanup — verified live
+
+Durable evidence: `docs/SHILOH-OS-RECONCILIATION-2026-08-21-GUARDED-JUVAN-BOOKING-CLEANUP.md`.
+
+- #388 adds **Clean bookings and reset**, unchanged **Reset identity only**, and **Cancel** to the JP-only Reset Juvan workflow.
+- The clean preview uses the exact current phone-anchored pointer and includes every non-final appointment's ID, status, service, practitioner(s), date/time and known shared/practitioner Calendar mirrors. Confirmation is bound to the exact preview state.
+- Only non-final operational appointments are cancelled through canonical history/audit handling. Completed/no-show/already-cancelled and all appointment rows remain preserved; related pending approval, reschedule, lifecycle/reminder and notification state is terminalized without customer cancellation messaging.
+- Stored/current deterministic shared and every recognized assigned-practitioner Calendar mirror are removed. Any unresolved mirror retains the identity binding and returns a safe idempotent retry path; identity reset runs only after zero unresolved mirrors and a final transaction-time appointment recheck.
+- PR #364's identity-only lifecycle is unchanged. No historical client ID, display-name lookup or one-shot flag is used.
+- CI #1214 passed; Render `dep-da450l9t0dsc73a7dbo0` reached LIVE on exact merge `e4833a743945db63b8cce3731d593f76c9f17921`; Calendar health and `/health` passed with no error/fatal logs.
+- No real reset, appointment cancellation, customer message or Calendar event deletion was manufactured for proof.
+
 ## Dummy Test booking cleanup — complete / do not replay
 
 Durable evidence: `docs/SHILOH-OS-RECONCILIATION-2026-08-20-DUMMY-TEST-BOOKING-CLEANUP.md`.
@@ -217,9 +230,9 @@ Booking confirmation v2 is live behind the exact centralized contract gate; v1 r
 
 ## Exact continuation
 
-**Authoritative current state:** PR #384 / `aed805842818983eb5d4e3ca50054627eea7fe0c` is current production application code. PR #383 CI #1204 passed 832/832 and PR #384 CI #1206 passed. Final deploy `dep-da43g9mk1f9s73ajl33g` reached LIVE on exact merge SHA with migration 071 verified, booking-confirmation v2 selected, one-shot flags false, `/health` status/database ok and no error/fatal logs. PR #382 reschedule activation and PR #380 Couples Massage remain preserved lineage.
+**Authoritative current state:** PR #388 / `e4833a743945db63b8cce3731d593f76c9f17921` is current production application code. CI #1214 passed. Deploy `dep-da450l9t0dsc73a7dbo0` reached LIVE on exact merge SHA; `/health` status/database and Google Calendar health passed with no error/fatal logs. PR #387 provider-log redaction, PR #385 Meta reconciliation, booking-confirmation v2 selection/evidence, PR #382 reschedule activation and PR #380 Couples Massage remain preserved lineage.
 
-**Booking/Admin completed state:** #366 Primary/Backup approval and JP-only Reset Juvan presentation remain verified live; #367 Manage booking guarded cancellation remains verified live with #380 multi-staff safety; #371-#373 Admin UX presentation standardization remains verified live; #375/#376 remove service #31 `Upper Back, Neck & Jaw Release` from Abigail only; #378 established Couples & Packages navigation; #380 establishes atomic Couples Massage self-service. Current controlled Juvan identity remains phone-anchored/current-pointer based; do not name-match or permanently hard-code client 845.
+**Booking/Admin completed state:** #366 Primary/Backup approval remains verified live; #388 makes JP-only Reset Juvan offer guarded booking cleanup, unchanged identity-only reset or Cancel. The clean path preserves appointment history/rows, sends no customer cancellation message, removes shared/all assigned-practitioner Calendar mirrors and retains the identity on unresolved cleanup. #367 Manage booking guarded cancellation remains verified live with #380 multi-staff safety; #371-#373 Admin UX presentation standardization remains verified live; #375/#376 remove service #31 `Upper Back, Neck & Jaw Release` from Abigail only; #378 established Couples & Packages navigation; #380 establishes atomic Couples Massage self-service. Current controlled Juvan identity remains phone-anchored/current-pointer based; do not name-match or permanently hard-code client 845.
 
 **Client Massage Treatments:** keep **Couples & Packages** as the first special option, with **Couples Massage**, **Sports Massage Package**, then **Back**. Couples Massage is **90 minutes / R1,080 / Abigail + Christel**, offers only shared full-duration availability, requires lead client + companion name/mobile + Booking Policy acceptance, and commits both practitioner allocations atomically. Companion mobile is booking-only backup / no marketing; automatic fallback messaging is not claimed. Sports Massage Package continues to resolve canonical `sports-massage-monthly` authority.
 
@@ -235,4 +248,4 @@ Booking confirmation v2 is live behind the exact centralized contract gate; v1 r
 
 **Practitioner-approved rescheduling:** the Meta provider and Production activation gates are closed. Both exact templates are approved, exact, duplicate-free and configured; `WHATSAPP_RESCHEDULE_APPROVAL_ENABLED=true` is live and the one-shot verifier is false. Booking & Admin UX may observe the first genuine client/practitioner journey when natural business use occurs; do not manufacture a Juvan reschedule, decision or CRM/Calendar mutation for evidence.
 
-**Remaining genuine-device gate:** a real Juvan reset→new registration→canonical rebind remains intentionally unproven and must occur only under later explicit authorization. All other standing fail-closed gates remain preserved.
+**Remaining genuine-device gate:** a real Juvan booking cleanup/reset→new registration→canonical rebind remains intentionally unproven and may occur only when Jean-Pierre genuinely intends that operational action. Do not manufacture or cancel an appointment for verification. All other standing fail-closed gates remain preserved.
