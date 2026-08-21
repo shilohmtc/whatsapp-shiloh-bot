@@ -75,6 +75,7 @@ const { submitBookingConfirmationTemplate } = require("./src/services/bookingCon
 const { submitBookingConfirmationV2Template } = require("./src/services/bookingConfirmationV2TemplateProvisioning");
 const { DEFINITIONS: CLIENT_LIFECYCLE_TEMPLATE_DEFINITIONS, getClientLifecycleTemplateStatus, submitClientLifecycleTemplate } = require("./src/services/clientLifecycleTemplateProvisioning");
 const { inspectMetaTemplateInventory } = require("./src/services/metaTemplateContracts");
+const { ensureDeliveryTable: ensureBookingConfirmationDeliverySchema } = require("./src/services/customerBookingConfirmation");
 
 const app = express();
 app.disable("x-powered-by");
@@ -141,6 +142,7 @@ async function start() {
   const mediHeelOwnership = await ensureChristelMediHeelOwnership(); logger.info(mediHeelOwnership, "Christel MediHeel ownership verified");
   const christelCatalogueCorrection = await ensureChristelServiceCatalogueCorrection(); logger.info(christelCatalogueCorrection, "Christel service catalogue correction verified");
   await ensureHistoricalFinalizationFinancialSchema(); logger.info({ initialized: true }, "Historical finalization financial schema verified");
+  await ensureBookingConfirmationDeliverySchema(); logger.info({ initialized: true, migration: '071_booking_confirmation_template_evidence.sql', templateEvidenceColumns: true }, "Booking confirmation delivery evidence schema verified");
   const dummyTestCleanup = await runDummyTestAppointmentCleanup(); if (dummyTestCleanup.enabled) logger.info(dummyTestCleanup, "Dummy Test booking cleanup startup gate completed");
   try { await runConfiguredClientProvenanceAudit(logger); } catch (error) { logger.error({ err: error }, "Read-only CRM provenance audit failed"); }
   await provisionStaffFinalizationTemplateSafely(); await provisionStaffFinalizationActionTemplateSafely(); await provisionBookingConfirmationTemplateSafely(); await provisionBookingConfirmationV2IfExplicitlyEnabled(); await provisionClientLifecycleTemplatesIfExplicitlyEnabled(); await auditMetaTemplateInventoryIfExplicitlyEnabled();
