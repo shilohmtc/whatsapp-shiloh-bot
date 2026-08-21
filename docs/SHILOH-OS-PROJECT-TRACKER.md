@@ -30,7 +30,7 @@ Control & Reconciliation uses reconciled authoritative evidence, not specialist-
 
 **CI:** PR #380 final run **#1196** completed successfully.
 
-**Render:** deploy **`dep-da3l8gtbedkc73dn51e0`** is **LIVE** on exact #380 merge SHA in confirmed workspace **My Workspace**. Render checked out the exact commit, build/startup completed normally, repeated `/health` returned 200, and Google Calendar provider health passed.
+**Render application baseline:** deploy **`dep-da3l8gtbedkc73dn51e0`** reached **LIVE** on exact #380 merge SHA in confirmed workspace **My Workspace**. Configuration activation deploy **`dep-da433gbncjis73aucgv0`** later reached **LIVE** on GitHub `main` `d15857c65e1765faaaa22e101261323f7374bb46` without changing application code; `/health` returned 200 with database `ok`.
 
 Migration **070_couples_massage_self_service.sql** applied and checksum-verified. Production now has canonical service **#66 Couples Massage**, category Massage, **90 minutes**, price **R1080**, with exact active/client-bookable practitioner mappings **Abigail staff #1 + Christel staff #3**. Companion contact authority is appointment-scoped `booking_backup` with `marketingConsent=false`.
 
@@ -42,7 +42,7 @@ Practitioner-approved client rescheduling is **provider-verified and production-
 
 | ID | Workstream | State | Evidence / next action |
 |---|---|---|---|
-| DEPLOY-CONVERGENCE | GitHub ↔ Render | 🟢 VERIFIED | #380 / `2e387e5f1000...`; CI #1196 success; Render `dep-da3l8gtbedkc73dn51e0` LIVE on exact merge SHA; migration 070 applied/checksum-verified; repeated `/health` 200 and Google Calendar health passed. |
+| DEPLOY-CONVERGENCE | GitHub ↔ Render | 🟢 VERIFIED | Application authority remains #380 / `2e387e5f1000...` with CI #1196 success. Configuration activation deploy `dep-da433gbncjis73aucgv0` reached LIVE on then-current GitHub `main` `d15857c...`; `/health` returned 200/database `ok`. |
 | CONTROLLED-JUVAN-DEMO | CRM & Identity | 🟢 VERIFIED LIVE / FOUNDATION | #364 anchors `juvan_botha` to exact business-controlled phone with nullable current-client pointer and JP-only reset. Current pointer presently client 845 / suffix 1564, but downstream code must resolve the current controlled identity rather than name-match or hard-code 845. |
 | BOOKING-JUVAN-PRIMARY-BACKUP | Booking & Admin UX | 🟢 VERIFIED LIVE | #366 / `53b5e0c...`; CI #1164 passed 796/796; migration 068 applied/checksum-verified. Assigned practitioner = Primary, JP = Backup, current controlled Juvan identity revalidated at decision time, first atomic terminal decision wins, already-decided state blocks a second authoritative decision. JP-only Reset Juvan presentation delegates to #364 CRM reset. |
 | JUVAN-JP-BOOKING-APPROVAL-HIST | Booking & Admin UX | 🟢 HISTORICAL / SUPERSEDED | Genuine #585 remains do-not-redo evidence of the prior JP-sole behavior. #366 supersedes that runtime behavior; preserve #585 as historical evidence only. |
@@ -195,7 +195,7 @@ Booking confirmation v1 remains live; v2 remains provider-gated. Booking update 
 
 ## Exact continuation
 
-**Authoritative current state:** PR #380 / `2e387e5f1000774d97046a516c1c7d19e93cd947` is current production application code; CI #1196 completed successfully; Render deploy `dep-da3l8gtbedkc73dn51e0` is LIVE on exact merge SHA. Migration 070 applied/checksum-verified, Google Calendar health passed and repeated `/health` returned 200.
+**Authoritative current state:** PR #380 / `2e387e5f1000774d97046a516c1c7d19e93cd947` remains current production application code; CI #1196 completed successfully. Its application deploy `dep-da3l8gtbedkc73dn51e0` reached LIVE on exact merge SHA. Configuration activation deploy `dep-da433gbncjis73aucgv0` later reached LIVE on then-current GitHub `main` `d15857c...`, with migration 064/070 invariants preserved and `/health` returning 200/database `ok`.
 
 **Booking/Admin completed state:** #366 Primary/Backup approval and JP-only Reset Juvan presentation remain verified live; #367 Manage booking guarded cancellation remains verified live with #380 multi-staff safety; #371-#373 Admin UX presentation standardization remains verified live; #375/#376 remove service #31 `Upper Back, Neck & Jaw Release` from Abigail only; #378 established Couples & Packages navigation; #380 establishes atomic Couples Massage self-service. Current controlled Juvan identity remains phone-anchored/current-pointer based; do not name-match or permanently hard-code client 845.
 
