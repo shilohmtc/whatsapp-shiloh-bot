@@ -85,7 +85,7 @@ Practitioner-approved client rescheduling is **provider-verified and production-
 | CHRISTEL-CATALOGUE-CORRECTION | CRM & Identity | 🟢 VERIFIED LIVE | #328: #27 inactive/unmapped/history preserved; #34 120 min; #65 50 min/package retained; reviewed totals 60/90/90; no practitioner overrides. |
 | ABIGAIL-JAW-RELEASE-MAPPING | Booking & Admin UX | 🟢 VERIFIED LIVE | #375/#376: service #31 `Upper Back, Neck & Jaw Release` remains active; migration 069 applied/checksum-verified; Abigail staff #1 has `abigailMapped=false`; Christel staff #3 is the remaining active/client-bookable mapping; 13 linked appointments preserved. |
 | PUBLIC-CATALOGUE | Booking & Admin UX | 🟢 VERIFIED LIVE | `/book` remains accepted CRM-backed #301 public catalogue. #380 adds Couples Massage as one canonical Shiloh-owned CRM service row rather than a second static catalogue; WhatsApp exposes it through Couples & Packages rather than an ordinary single-practitioner row. |
-| GOLDIE-DESCRIPTIONS | Control / business approval | 🟠 WAITING APPROVAL | Phone/treatment-identity/medical-claim/misplaced-text exceptions remain gated; do not bulk publish. |
+| GOLDIE-DESCRIPTIONS | CRM & Identity → Control / business approval | 🟠 SOURCE VERIFIED / RECOVERY + APPROVAL HELD | Verified `export (33).csv` (`fdcba9cf…`) matches the comparison `Services.csv` (`f5f15b77…`) on all 52 Goldie IDs/names; 49 descriptions are nonblank, with no missing/unmatched rows or exact duplicates. Three blanks and truncation/contact/treatment-identity/medical-claim/punctuation/corrupted/misplaced-text exceptions remain recovery- or approval-gated. Preserve retired Full Body Sports Massage blank; do not bulk publish. |
 | VISUAL-CALENDAR | Booking & Admin UX | ⏸️ DEFERRED | Explicitly held; existing Google Calendar integration unchanged. |
 | GBP-PROVIDER | Production / DevOps + Control & Reconciliation | 🟠 WAITING PROVIDER | General Requests/min remains 0; usable GBP read/write API access remains **not confirmed/usable**. **Do not treat as quota-increase work or start OAuth/API integration.** Production / DevOps owns provider/config verification and Control & Reconciliation tracks the dependency. Reopen only when authoritative Google evidence shows a **usable general request quota greater than 0** or equivalent explicit usable-access approval. |
 | GCONTACTS | CRM & Identity | ⚪ READY / LOW PRIORITY | CRM remains authoritative. |
@@ -220,6 +220,27 @@ The recommended resolution is **create new** for each service, using exactly tho
 
 Preserve service #49 **Waxing** as inactive, unmapped and non-bookable at 60 minutes / R80–R500 with three historical and zero future appointments. Preserve service #62 **Eyebrow wax shape & Tint** as inactive, unmapped and non-bookable at 40 minutes / R150 with four historical and zero future appointments. Preserve both historical services and every linked appointment. Do not retire, rename, replace or remap broad Waxing by inference. Existing permanent-makeup brow/lip services and Lip Plump services are unrelated, and Abigail's service authority remains unchanged.
 
+## Goldie service-description export — source verified / recovery and publication held
+
+The completed CRM read-only audit verified source export `export (33).csv` at SHA-256 `fdcba9cf4145d0e4925630d65a103a9d0fa6ba3c618e33fb7c428aae27c84d16` against comparison `Services.csv` at SHA-256 `f5f15b774b766b111236176e44040e7fc99bb1624f71b07117ea861380697e08`. All **52/52** Goldie service IDs and names match exactly; **49** descriptions are nonblank; no rows are missing or unmatched; and no exact description is duplicated across services. The audit is complete and must not be repeated merely for reconciliation.
+
+Three descriptions are blank:
+
+1. `90baece3-1520-4368-b772-eaba08e1a511` — **Lymphatic Drainage Reset Package**
+2. `d42f5e34-b3c1-4ff3-9206-0fc97823d02e` — **Facial Lymphatic Drainage Massage**
+3. `1d734e8b-d21e-44c3-9a3f-b2a7165a7787` — **Full Body Sports Massage**
+
+Preserve the retired **Full Body Sports Massage** blank; do not author or publish a replacement description. Source recovery remains required for the two active/non-retired blank descriptions before business review.
+
+Known exception evidence remains fail-closed:
+
+- `b39dcaf1-7894-40e0-8a51-c7ab4eba553a` — **Lower Back & Hip & Psoas Release** is hard-truncated at exactly 1,000 characters and ends `deep physica`; recover authoritative source text rather than completing it by inference.
+- **Ozone & Far Infrared Therapy** contains a duplicated contact fragment.
+- **Bamboo Sports Massage Area Specific** contains a full-body treatment-identity conflict.
+- Additional phone-number, medical-claim, punctuation, corrupted and misplaced-text exceptions remain approval-gated.
+
+This evidence does not authorize a Shiloh catalogue or production-data mutation. Do not bulk-publish descriptions. CRM & Identity owns read-only source recovery and an exact exception/approval matrix; Control & Reconciliation and business own wording/publication approval. Implementation remains blocked until each affected description has authoritative recovered text where required and explicit business approval.
+
 ## Provider credential rotation — verified complete
 
 The exposed Meta WhatsApp Cloud API bearer credential was identified by non-secret ownership and consumer evidence as Render `WHATSAPP_TOKEN` for the single `shiloh-whatsapp-bot` service. PR #387 first closed the serialization defect that had allowed nested Axios request headers to reach logs; CI #1212 passed all 835 tests and the production log window was clean before replacement installation.
@@ -230,7 +251,7 @@ Post-revocation Render deploy `dep-da47v6n40ujc73d1qeug` reached LIVE on the the
 
 ## Other preserved state
 
-Booking confirmation v2 is live behind the exact centralized contract gate; v1 remains the explicit rollback. Genuine v2 handset delivery is not yet evidenced and may arise only from a natural booking. Booking update activation is complete but natural delivery evidence remains open. Google Calendar remains synchronized/fail-closed. Attendance stays own-practitioner only and #558 stays HOLD. Christel catalogue correction remains authoritative. Abigail is no longer eligible for service #31 Jaw Release; Christel remains the verified current mapping. Couples & Packages remains the client navigation owner; Couples Massage is now self-service under the exact #380 dual-practitioner contract. GBP, Ozow, privacy and Goldie-description gates remain unchanged.
+Booking confirmation v2 is live behind the exact centralized contract gate; v1 remains the explicit rollback. Genuine v2 handset delivery is not yet evidenced and may arise only from a natural booking. Booking update activation is complete but natural delivery evidence remains open. Google Calendar remains synchronized/fail-closed. Attendance stays own-practitioner only and #558 stays HOLD. Christel catalogue correction remains authoritative. Abigail is no longer eligible for service #31 Jaw Release; Christel remains the verified current mapping. Couples & Packages remains the client navigation owner; Couples Massage is now self-service under the exact #380 dual-practitioner contract. GBP, Ozow and privacy gates remain unchanged. Goldie description source identity is verified, while recovery and publication approvals remain fail-closed.
 
 ## Exact continuation
 
@@ -247,6 +268,8 @@ Booking confirmation v2 is live behind the exact centralized contract gate; v1 r
 **Proposed but not implemented:** context-aware post-cancellation return to the same Manage Client screen requires separate explicit authorization.
 
 **Marietjie waxing audit:** the six-service production audit is complete/read-only and must not be repeated. No matching canonical rows exist; six new rows are recommended with exact requested names/prices/durations and zero buffers. Implementation remains held for explicit Full Face Wax included-area and brow-shaping truth. Preserve inactive historical services #49/#62, their seven linked historical appointments, unrelated services and Abigail's authority.
+
+**Goldie descriptions:** the 52-service export identity is verified by exact ID/name comparison and recorded hashes; 49 descriptions are nonblank. Preserve the retired Full Body Sports Massage blank. Recover the two other blanks and the hard-truncated Psoas text from authoritative source evidence, review all contact/treatment-identity/medical-claim/punctuation/corrupted/misplaced-text exceptions, and obtain explicit business approval before any publication. Do not bulk publish or infer missing text.
 
 **Provider credential security:** rotation is complete and must not be redone. Dedicated Meta system user `Shiloh` owns the final least-privilege WhatsApp token; all former `Employee` tokens are revoked; only Render `WHATSAPP_TOKEN` changed. Post-revocation production/provider health and log redaction are verified. Preserve PR #385 contracts, PR #387 redaction and the dedicated production-only asset boundary.
 
