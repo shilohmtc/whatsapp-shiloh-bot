@@ -85,7 +85,7 @@ Practitioner-approved client rescheduling is **provider-verified and production-
 | CHRISTEL-CATALOGUE-CORRECTION | CRM & Identity | 🟢 VERIFIED LIVE | #328: #27 inactive/unmapped/history preserved; #34 120 min; #65 50 min/package retained; reviewed totals 60/90/90; no practitioner overrides. |
 | ABIGAIL-JAW-RELEASE-MAPPING | Booking & Admin UX | 🟢 VERIFIED LIVE | #375/#376: service #31 `Upper Back, Neck & Jaw Release` remains active; migration 069 applied/checksum-verified; Abigail staff #1 has `abigailMapped=false`; Christel staff #3 is the remaining active/client-bookable mapping; 13 linked appointments preserved. |
 | PUBLIC-CATALOGUE | Booking & Admin UX | 🟢 VERIFIED LIVE | `/book` remains accepted CRM-backed #301 public catalogue. #380 adds Couples Massage as one canonical Shiloh-owned CRM service row rather than a second static catalogue; WhatsApp exposes it through Couples & Packages rather than an ordinary single-practitioner row. |
-| GOLDIE-DESCRIPTIONS | CRM & Identity → Control / business approval | 🟠 SOURCE VERIFIED / RECOVERY + APPROVAL HELD | Verified `export (33).csv` (`fdcba9cf…`) matches the comparison `Services.csv` (`f5f15b77…`) on all 52 Goldie IDs/names; 49 descriptions are nonblank, with no missing/unmatched rows or exact duplicates. Three blanks and truncation/contact/treatment-identity/medical-claim/punctuation/corrupted/misplaced-text exceptions remain recovery- or approval-gated. Preserve retired Full Body Sports Massage blank; do not bulk publish. |
+| GOLDIE-DESCRIPTIONS | CRM & Identity → Control / business approval | 🟠 SOURCE + EDITOR VERIFIED / SUPPORT + APPROVAL HELD | Verified `export (33).csv` (`fdcba9cf…`) matches `Services.csv` (`f5f15b77…`) on all 52 IDs/names; 49 descriptions are nonblank. Goldie editor evidence now confirms the two active/non-retired Description fields are genuinely empty and the Psoas editor value exactly matches the 1,000-character truncated export. Only the Psoas missing tail still requires Goldie Support/backend history; all wording/contact/identity/claim/editorial decisions remain approval-gated. Preserve retired Full Body Sports Massage blank; do not bulk publish. |
 | VISUAL-CALENDAR | Booking & Admin UX | ⏸️ DEFERRED | Explicitly held; existing Google Calendar integration unchanged. |
 | GBP-PROVIDER | Production / DevOps + Control & Reconciliation | 🟠 WAITING PROVIDER | General Requests/min remains 0; usable GBP read/write API access remains **not confirmed/usable**. **Do not treat as quota-increase work or start OAuth/API integration.** Production / DevOps owns provider/config verification and Control & Reconciliation tracks the dependency. Reopen only when authoritative Google evidence shows a **usable general request quota greater than 0** or equivalent explicit usable-access approval. |
 | GCONTACTS | CRM & Identity | ⚪ READY / LOW PRIORITY | CRM remains authoritative. |
@@ -218,28 +218,33 @@ The completed production audit established that no exact or normalized canonical
 
 The recommended resolution is **create new** for each service, using exactly those client-facing names with processing time `0` and extra time `0`. Business intent to add the six services under Marietjie is recorded, but controlled implementation approval is **not closed**: Full Face Wax still requires explicit human truth for its included areas and whether brow shaping is included. The complete six-service creation unit therefore remains fail-closed on hold. No CRM implementation instruction is issued yet.
 
-Preserve service #49 **Waxing** as inactive, unmapped and non-bookable at 60 minutes / R80–R500 with three historical and zero future appointments. Preserve service #62 **Eyebrow wax shape & Tint** as inactive, unmapped and non-bookable at 40 minutes / R150 with four historical and zero future appointments. Preserve both historical services and every linked appointment. Do not retire, rename, replace or remap broad Waxing by inference. Existing permanent-makeup brow/lip services and Lip Plump services are unrelated, and Abigail's service authority remains unchanged.
+Preserve service #49 **Waxing** as inactive, unmapped and non-bookable at 60 minutes / R80–R500 with three historical and zero future appointments. Preserve service #62 **Eyebrow wax shape & Tint** as inactive, unmapped and non-bookable at 40 minutes / R150 with four historical and zero future appointments. Preserve both historical services and every linked appointment. Do not retire, rename, replace or remap broad Waxing by inference. Existing permanen## Goldie service-description export — source and editor verified / support and publication held
 
-## Goldie service-description export — source verified / recovery and publication held
+The completed CRM read-only audit verified source export `export (33).csv` at SHA-256 `fdcba9cf4145d0e4925630d65a103a9d0fa6ba3c618e33fb7c428aae27c84d16` against comparison `Services.csv` at SHA-256 `f5f15b774b766b111236176e44040e7fc99bb1624f71b07117ea861380697e08`. All **52/52** Goldie service IDs and names match exactly; **49** descriptions are nonblank; no rows are missing or unmatched; and no exact description is duplicated across services. The 52-service audit is complete and must not be repeated merely for reconciliation.
 
-The completed CRM read-only audit verified source export `export (33).csv` at SHA-256 `fdcba9cf4145d0e4925630d65a103a9d0fa6ba3c618e33fb7c428aae27c84d16` against comparison `Services.csv` at SHA-256 `f5f15b774b766b111236176e44040e7fc99bb1624f71b07117ea861380697e08`. All **52/52** Goldie service IDs and names match exactly; **49** descriptions are nonblank; no rows are missing or unmatched; and no exact description is duplicated across services. The audit is complete and must not be repeated merely for reconciliation.
+Goldie editor evidence captured on 2026-08-21 now closes the editor-recovery question for the two active/non-retired blanks:
 
-Three descriptions are blank:
+1. `90baece3-1520-4368-b772-eaba08e1a511` — **Lymphatic Drainage Reset Package**: the internal Service description field is empty. Screenshot SHA-256 `cfde9dbaf723f68c77713e836c7edc1ba1eb011f5b91c302539e37ba20fc07af`.
+2. `d42f5e34-b3c1-4ff3-9206-0fc97823d02e` — **Facial Lymphatic Drainage Massage**: the internal Service description field is empty. Screenshot SHA-256 `2b0fe100ebbd37f77c37c97334e57fa57b9cbb2cdf7b23d47b08a280c3094561`.
 
-1. `90baece3-1520-4368-b772-eaba08e1a511` — **Lymphatic Drainage Reset Package**
-2. `d42f5e34-b3c1-4ff3-9206-0fc97823d02e` — **Facial Lymphatic Drainage Massage**
-3. `1d734e8b-d21e-44c3-9a3f-b2a7165a7787` — **Full Body Sports Massage**
+In both screens, `Enter service description` is placeholder UI, not stored text. These blanks no longer require another Goldie editor check. Business must explicitly decide whether each field should remain blank or receive separately authored and approved wording. The Reset Package service photo contains secondary marketing copy about three consecutive lymphatic-drainage treatments, a complete reset and a 25% three-session saving; that image is not the internal Description field and must not be copied or published as description text by inference.
 
-Preserve the retired **Full Body Sports Massage** blank; do not author or publish a replacement description. Source recovery remains required for the two active/non-retired blank descriptions before business review.
+Preserve the retired `1d734e8b-d21e-44c3-9a3f-b2a7165a7787` **Full Body Sports Massage** Description as blank; do not author or publish a replacement.
 
-Known exception evidence remains fail-closed:
+The Psoas editor route is exhausted but the missing tail remains unresolved:
 
-- `b39dcaf1-7894-40e0-8a51-c7ab4eba553a` — **Lower Back & Hip & Psoas Release** is hard-truncated at exactly 1,000 characters and ends `deep physica`; recover authoritative source text rather than completing it by inference.
-- **Ozone & Far Infrared Therapy** contains a duplicated contact fragment.
+- `b39dcaf1-7894-40e0-8a51-c7ab4eba553a` — **Lower Back & Hip & Psoas Release** was copied verbatim from the Goldie editor. It is exactly **1,000 characters**, matches the exported Description byte-for-byte, ends `deep physica`, and has SHA-256 `bfe27a01b504bd4545c16824d2a722097aba122095b94b4b5202dc3231aff352`.
+- Therefore the editor does not contain an accessible missing tail. Goldie Support/backend history must provide the uncapped stored value and any prior value, or explicitly confirm that the source field itself is truncated. Do not infer or autocomplete the ending.
+
+Known approval exceptions remain fail-closed:
+
+- **Ozone & Far Infrared Therapy** contains a duplicated practitioner contact fragment plus phone-number and treatment-claim exceptions.
 - **Bamboo Sports Massage Area Specific** contains a full-body treatment-identity conflict.
-- Additional phone-number, medical-claim, punctuation, corrupted and misplaced-text exceptions remain approval-gated.
+- Additional phone-number, medical/treatment-claim, punctuation, corrupted and misplaced-text exceptions remain individually approval-gated in the CRM approval matrix.
 
-This evidence does not authorize a Shiloh catalogue or production-data mutation. Do not bulk-publish descriptions. CRM & Identity owns read-only source recovery and an exact exception/approval matrix; Control & Reconciliation and business own wording/publication approval. Implementation remains blocked until each affected description has authoritative recovered text where required and explicit business approval.
+This evidence does not authorize a Shiloh catalogue or production-data mutation. Do not bulk-publish descriptions. CRM & Identity has completed the read-only editor evidence unit; Goldie Support owns the remaining Psoas source dependency, and Control & Reconciliation/business own blank-field, wording and publication decisions. Implementation remains blocked until the Psoas source question and every applicable business approval are closed.
+
+ked until each affected description has authoritative recovered text where required and explicit business approval.
 
 ## Provider credential rotation — verified complete
 
@@ -269,7 +274,7 @@ Booking confirmation v2 is live behind the exact centralized contract gate; v1 r
 
 **Marietjie waxing audit:** the six-service production audit is complete/read-only and must not be repeated. No matching canonical rows exist; six new rows are recommended with exact requested names/prices/durations and zero buffers. Implementation remains held for explicit Full Face Wax included-area and brow-shaping truth. Preserve inactive historical services #49/#62, their seven linked historical appointments, unrelated services and Abigail's authority.
 
-**Goldie descriptions:** the 52-service export identity is verified by exact ID/name comparison and recorded hashes; 49 descriptions are nonblank. Preserve the retired Full Body Sports Massage blank. Recover the two other blanks and the hard-truncated Psoas text from authoritative source evidence, review all contact/treatment-identity/medical-claim/punctuation/corrupted/misplaced-text exceptions, and obtain explicit business approval before any publication. Do not bulk publish or infer missing text.
+**Goldie descriptions:** the 52-service export identity is verified by exact ID/name comparison and recorded hashes; 49 descriptions are nonblank. Goldie editor evidence now confirms the Lymphatic Drainage Reset Package and Facial Lymphatic Drainage Massage internal Description fields are empty; do not recheck them or treat placeholder/photo text as description content. Preserve retired Full Body Sports Massage blank. The Psoas editor value exactly matches the 1,000-character truncated export, so Goldie Support/backend history owns the only remaining source-recovery dependency. Review every contact/treatment-identity/medical-claim/punctuation/corrupted/misplaced-text exception and obtain explicit business approval before publication. Do not bulk publish or infer missing text.
 
 **Provider credential security:** rotation is complete and must not be redone. Dedicated Meta system user `Shiloh` owns the final least-privilege WhatsApp token; all former `Employee` tokens are revoked; only Render `WHATSAPP_TOKEN` changed. Post-revocation production/provider health and log redaction are verified. Preserve PR #385 contracts, PR #387 redaction and the dedicated production-only asset boundary.
 
