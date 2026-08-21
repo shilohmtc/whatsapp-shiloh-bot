@@ -16,7 +16,7 @@ Purpose: concise operational dashboard. Master is the detailed current ledger; h
 
 ## Governance
 
-New specialist chat: independently read current GitHub `main`, Master, this Tracker, latest reconciliation `docs/SHILOH-OS-RECONCILIATION-2026-08-21-META-RESCHEDULE-ACTIVATION.md`, and Engineering Governance; verify changing production/provider/CRM/Calendar/human evidence; preserve newer authority; then continue only owned scope.
+New specialist chat: independently read current GitHub `main`, Master, this Tracker, latest reconciliation `docs/SHILOH-OS-RECONCILIATION-2026-08-21-BOOKING-CONFIRMATION-V2-ACTIVATION.md`, and Engineering Governance; verify changing production/provider/CRM/Calendar/human evidence; preserve newer authority; then continue only owned scope.
 
 Durable reconciliation anchors remain valid where not superseded, including `docs/SHILOH-OS-RECONCILIATION-2026-08-20-CLIENT-COUPLES-AND-PACKAGES.md`, `docs/SHILOH-OS-RECONCILIATION-2026-08-20-ABIGAIL-JAW-RELEASE-MAPPING.md`, `docs/SHILOH-OS-RECONCILIATION-2026-08-20-ADMIN-UX-STANDARDIZATION.md`, `docs/SHILOH-OS-RECONCILIATION-2026-08-20-BOOKING-ADMIN-JUVAN-PRIMARY-BACKUP-AND-MANAGE-CANCEL.md`, `docs/SHILOH-OS-RECONCILIATION-2026-08-20-CONTROLLED-JUVAN-DEMO-IDENTITY.md`, `docs/SHILOH-OS-RECONCILIATION-2026-08-20-DUMMY-TEST-BOOKING-CLEANUP.md`, `docs/SHILOH-OS-RECONCILIATION-2026-08-20-ADMIN-BLOCK-TIME.md`, `docs/SHILOH-OS-RECONCILIATION-2026-08-20-CRM-DUMMY-RESET-COMPLETION.md`, `docs/SHILOH-OS-RECONCILIATION-2026-08-20-CURRENT-MAIN-356.md`, `docs/SHILOH-OS-RECONCILIATION-2026-08-18-CHRISTEL-SERVICE-CATALOGUE-CORRECTION.md`, specialist-workstream reconciliation and Control-routing reconciliation.
 
@@ -26,11 +26,11 @@ Control & Reconciliation uses reconciled authoritative evidence, not specialist-
 
 ## Production baseline
 
-**Current application:** PR **#380 / `2e387e5f1000774d97046a516c1c7d19e93cd947`**, *Add atomic Couples Massage self-service*, built on the verified #378 Couples & Packages navigation, #376/#375 Abigail Jaw Release correction and #373/#371/#372 Admin UX lineage.
+**Current application:** PR **#384 / `aed805842818983eb5d4e3ca50054627eea7fe0c`**, *Initialize booking confirmation evidence schema*, built on PR #383's guarded v2 activation and preserving PR #382 reschedule activation plus the #380 Couples Massage lineage.
 
-**CI:** PR #380 final run **#1196** completed successfully.
+**CI:** PR #383 run **#1204** passed **832/832**; PR #384 run **#1206** completed successfully.
 
-**Render application baseline:** deploy **`dep-da3l8gtbedkc73dn51e0`** reached **LIVE** on exact #380 merge SHA in confirmed workspace **My Workspace**. Configuration activation deploy **`dep-da433gbncjis73aucgv0`** later reached **LIVE** on GitHub `main` `d15857c65e1765faaaa22e101261323f7374bb46` without changing application code; `/health` returned 200 with database `ok`.
+**Render application baseline:** final deploy **`dep-da43g9mk1f9s73ajl33g`** reached **LIVE** on exact #384 merge SHA in confirmed workspace **My Workspace**. It retains `WHATSAPP_BOOKING_CONFIRMATION_TEMPLATE=shiloh_booking_confirmation_v2`, restores both one-shot audit/provision flags to `false`, verifies migration 071 evidence columns, returns `/health` `status=ok / database=ok`, and has no error/fatal logs. PR #382's reschedule configuration remains enabled.
 
 Migration **070_couples_massage_self_service.sql** applied and checksum-verified. Production now has canonical service **#66 Couples Massage**, category Massage, **90 minutes**, price **R1080**, with exact active/client-bookable practitioner mappings **Abigail staff #1 + Christel staff #3**. Companion contact authority is appointment-scoped `booking_backup` with `marketingConsent=false`.
 
@@ -42,7 +42,7 @@ Practitioner-approved client rescheduling is **provider-verified and production-
 
 | ID | Workstream | State | Evidence / next action |
 |---|---|---|---|
-| DEPLOY-CONVERGENCE | GitHub ↔ Render | 🟢 VERIFIED | Application authority remains #380 / `2e387e5f1000...` with CI #1196 success. Configuration activation deploy `dep-da433gbncjis73aucgv0` reached LIVE on then-current GitHub `main` `d15857c...`; `/health` returned 200/database `ok`. |
+| DEPLOY-CONVERGENCE | GitHub ↔ Render | 🟢 VERIFIED | Current application authority #384 / `aed805842818...`; #383 CI #1204 passed 832/832; #384 CI #1206 passed; final Render `dep-da43g9mk1f9s73ajl33g` LIVE on exact merge SHA; migration 071 verified; v2 selected; `/health` status/database ok; no error/fatal logs. |
 | CONTROLLED-JUVAN-DEMO | CRM & Identity | 🟢 VERIFIED LIVE / FOUNDATION | #364 anchors `juvan_botha` to exact business-controlled phone with nullable current-client pointer and JP-only reset. Current pointer presently client 845 / suffix 1564, but downstream code must resolve the current controlled identity rather than name-match or hard-code 845. |
 | BOOKING-JUVAN-PRIMARY-BACKUP | Booking & Admin UX | 🟢 VERIFIED LIVE | #366 / `53b5e0c...`; CI #1164 passed 796/796; migration 068 applied/checksum-verified. Assigned practitioner = Primary, JP = Backup, current controlled Juvan identity revalidated at decision time, first atomic terminal decision wins, already-decided state blocks a second authoritative decision. JP-only Reset Juvan presentation delegates to #364 CRM reset. |
 | JUVAN-JP-BOOKING-APPROVAL-HIST | Booking & Admin UX | 🟢 HISTORICAL / SUPERSEDED | Genuine #585 remains do-not-redo evidence of the prior JP-sole behavior. #366 supersedes that runtime behavior; preserve #585 as historical evidence only. |
@@ -66,8 +66,8 @@ Practitioner-approved client rescheduling is **provider-verified and production-
 | BOOKING-RESCHEDULE-HANDSET | Booking & Admin UX | 🟠 WAITING GENUINE JOURNEY | Production activation is complete. Observe client/practitioner handset delivery only through natural business use; do not manufacture a Juvan reschedule, decision or CRM/Calendar mutation. |
 | RESCHEDULE-START-BOUNDARY | Booking & Admin UX | 🟢 VERIFIED LIVE | #354 blocks self-service at/after appointment start and expires stale holds at original start boundary. |
 | RESCHEDULE-APPROVED-CONFIRM | Booking & Admin UX + WhatsApp | 🟢 VERIFIED ACTIVE PATH | #355 uses exact `shiloh_reschedule_confirmation_v1` with durable retry/claim/suppression; the path is now production-enabled, with genuine delivery evidence awaiting natural use. |
-| META-BOOKING-CONFIRM-V1 | WhatsApp / Meta Integration | 🟢 VERIFIED LIVE / HANDSET-PROVEN | v1 remains approved/configured; #348 reduced automatic supplements and #352 genuine handset evidence proved the intended delivery. |
-| META-BOOKING-CONFIRM-V2 | WhatsApp / Meta Integration | 🟠 WAITING PROVIDER / NOT ACTIVE | Last authority remains PENDING / UTILITY / en / exact / duplicateCount=0 after one controlled submission; production stays v1. |
+| META-BOOKING-CONFIRM-V1 | WhatsApp / Meta Integration | 🟢 VERIFIED APPROVED / ROLLBACK | V1 remains exact, APPROVED and duplicate-free; #348/#352 delivery polish and genuine handset proof remain do-not-redo historical evidence. It is inactive only because the single production selector now names v2; reselecting v1 is the rollback. |
+| META-BOOKING-CONFIRM-V2 | WhatsApp / Meta Integration + Production / DevOps | 🟢 VERIFIED LIVE / ENABLED | Fresh provider gate APPROVED / UTILITY / en / exact / duplicateCount=0. #383 exact five-parameter + three-button routing and fail-closed selector; #384 migration 071 evidence persistence; full 18-identity audit clean; final deploy `dep-da43g9mk1f9s73ajl33g` LIVE with v2 ready=true. Genuine handset delivery remains natural-use evidence only. |
 | META-BOOKING-UPDATE | WhatsApp / Meta + Production | 🟢 VERIFIED LIVE / ENABLED | `shiloh_booking_update_v1` approved/exact/duplicate-free and production-enabled. Kill switch `WHATSAPP_BOOKING_UPDATE_ENABLED=false`. |
 | CUSTOMER-CHANGE-EVIDENCE | Booking & Admin UX + WhatsApp | 🟠 WAITING GENUINE FUTURE DELIVERY | #575 / audit 674 terminally suppressed `appointment_already_ended`, `sent_at=null`; wait for a natural still-future appointment change. |
 | GOOGLE-CALENDAR-AUTH | Booking/Admin + Production | 🟢 VERIFIED HEALTHY | #302 fail-closed provider guard remains permanent. #570/#585 are genuine sync evidence; #362 verified Dummy Test mirror cleanup; #380 startup health passed. Couples booking commit rechecks shared + both practitioner calendars and cancellation clears all assigned mirrors. No Calendar event was manufactured for proof. |
@@ -185,17 +185,17 @@ Durable evidence: `docs/SHILOH-OS-RECONCILIATION-2026-08-20-CRM-DUMMY-RESET-COMP
 - #362 subsequently cleaned the preserved operational bookings.
 - #364 retires Dummy Test, CRM Dummy Test and Chenique from active reusable reset eligibility.
 
-## Practitioner-approved client reschedule gate
+## Practitioner-approved client reschedule — verified live
 
-Application engineering remains present through #356, but activation is not authorized. Both required Meta templates must independently prove `APPROVED / UTILITY / en / exact=true / duplicateCount=0 / configured=true` before Production activation. Current owner remains `Shiloh OS — WhatsApp / Meta Integration` for genuinely read-only provider monitoring.
+PR #382 remains completed/do-not-redo authority: both exact templates are APPROVED / UTILITY / en / exact / duplicate-free and production is enabled with `WHATSAPP_RESCHEDULE_APPROVAL_ENABLED=true`. The first genuine handset journey remains natural-use evidence only.
 
 ## Other preserved state
 
-Booking confirmation v1 remains live; v2 remains provider-gated. Booking update activation is complete but natural delivery evidence remains open. Google Calendar remains synchronized/fail-closed. Attendance stays own-practitioner only and #558 stays HOLD. Christel catalogue correction remains authoritative. Abigail is no longer eligible for service #31 Jaw Release; Christel remains the verified current mapping. Couples & Packages remains the client navigation owner; Couples Massage is now self-service under the exact #380 dual-practitioner contract. GBP, Ozow, privacy and Goldie-description gates remain unchanged.
+Booking confirmation v2 is live behind the exact centralized contract gate; v1 remains the explicit rollback. Genuine v2 handset delivery is not yet evidenced and may arise only from a natural booking. Booking update activation is complete but natural delivery evidence remains open. Google Calendar remains synchronized/fail-closed. Attendance stays own-practitioner only and #558 stays HOLD. Christel catalogue correction remains authoritative. Abigail is no longer eligible for service #31 Jaw Release; Christel remains the verified current mapping. Couples & Packages remains the client navigation owner; Couples Massage is now self-service under the exact #380 dual-practitioner contract. GBP, Ozow, privacy and Goldie-description gates remain unchanged.
 
 ## Exact continuation
 
-**Authoritative current state:** PR #380 / `2e387e5f1000774d97046a516c1c7d19e93cd947` remains current production application code; CI #1196 completed successfully. Its application deploy `dep-da3l8gtbedkc73dn51e0` reached LIVE on exact merge SHA. Configuration activation deploy `dep-da433gbncjis73aucgv0` later reached LIVE on then-current GitHub `main` `d15857c...`, with migration 064/070 invariants preserved and `/health` returning 200/database `ok`.
+**Authoritative current state:** PR #384 / `aed805842818983eb5d4e3ca50054627eea7fe0c` is current production application code. PR #383 CI #1204 passed 832/832 and PR #384 CI #1206 passed. Final deploy `dep-da43g9mk1f9s73ajl33g` reached LIVE on exact merge SHA with migration 071 verified, booking-confirmation v2 selected, one-shot flags false, `/health` status/database ok and no error/fatal logs. PR #382 reschedule activation and PR #380 Couples Massage remain preserved lineage.
 
 **Booking/Admin completed state:** #366 Primary/Backup approval and JP-only Reset Juvan presentation remain verified live; #367 Manage booking guarded cancellation remains verified live with #380 multi-staff safety; #371-#373 Admin UX presentation standardization remains verified live; #375/#376 remove service #31 `Upper Back, Neck & Jaw Release` from Abigail only; #378 established Couples & Packages navigation; #380 establishes atomic Couples Massage self-service. Current controlled Juvan identity remains phone-anchored/current-pointer based; do not name-match or permanently hard-code client 845.
 
