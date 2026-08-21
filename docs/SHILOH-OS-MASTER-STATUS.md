@@ -7,7 +7,7 @@ Purpose: permanent current-state source of truth. Historical implementation deta
 
 Operational truth is GitHub `main`, Render production, Shiloh CRM/Postgres, Google Calendar, Meta/WhatsApp provider evidence, and explicit real WhatsApp/human evidence. Never infer provider approval, attendance, approval decisions, CRM identity, Calendar state or handset behaviour.
 
-At the beginning of each new Shiloh OS chat: read this Master + `docs/SHILOH-OS-PROJECT-TRACKER.md` + the latest reconciliation, currently `docs/SHILOH-OS-RECONCILIATION-2026-08-21-PROVIDER-CREDENTIAL-ROTATION.md`, plus `docs/SHILOH-OS-ENGINEERING-GOVERNANCE.md`, on current GitHub `main`; verify production/provider/CRM/Calendar/human evidence that could have changed; preserve newer authority; then continue only the owned controlled scope.
+At the beginning of each new Shiloh OS chat: read this Master + `docs/SHILOH-OS-PROJECT-TRACKER.md` + the latest reconciliation, currently `docs/SHILOH-OS-RECONCILIATION-2026-08-21-GOLDIE-DESCRIPTION-BUSINESS-APPROVAL.md`, plus `docs/SHILOH-OS-ENGINEERING-GOVERNANCE.md`, on current GitHub `main`; verify production/provider/CRM/Calendar/human evidence that could have changed; preserve newer authority; then continue only the owned controlled scope.
 
 Earlier dated reconciliations remain durable where not superseded. Preserve in particular `docs/SHILOH-OS-RECONCILIATION-2026-08-20-CLIENT-COUPLES-AND-PACKAGES.md`, `docs/SHILOH-OS-RECONCILIATION-2026-08-20-ABIGAIL-JAW-RELEASE-MAPPING.md`, `docs/SHILOH-OS-RECONCILIATION-2026-08-20-ADMIN-UX-STANDARDIZATION.md`, `docs/SHILOH-OS-RECONCILIATION-2026-08-20-BOOKING-ADMIN-JUVAN-PRIMARY-BACKUP-AND-MANAGE-CANCEL.md`, `docs/SHILOH-OS-RECONCILIATION-2026-08-20-CONTROLLED-JUVAN-DEMO-IDENTITY.md`, `docs/SHILOH-OS-RECONCILIATION-2026-08-20-DUMMY-TEST-BOOKING-CLEANUP.md`, `docs/SHILOH-OS-RECONCILIATION-2026-08-20-ADMIN-BLOCK-TIME.md`, `docs/SHILOH-OS-RECONCILIATION-2026-08-20-CRM-DUMMY-RESET-COMPLETION.md`, `docs/SHILOH-OS-RECONCILIATION-2026-08-20-CURRENT-MAIN-356.md`, the Christel service-catalogue correction, specialist-workstream and Control-routing reconciliations, booking-confirmation-v2 controlled submission, Juvan booking approval/v1 handset proof, client-welcome repair, booking-update activation/stale suppression, Meta booking-update approval and all explicit fail-closed gates.
 
@@ -476,6 +476,24 @@ Preserve #328:
 
 Do not reactivate/remap #27, merge #27/#34, restore reviewed buffers, delete history, alter #34/#65 duration, re-add Abigail to #31 without explicit business authority, change Couples service #66 duration/price/practitioners without explicit business authority, or bulk-publish Goldie wording.
 
+
+## Goldie description publication authority — 🟠 BUSINESS POLICY APPROVED / DRAFTING + EXTERNAL GATES
+
+Authoritative reconciliation: `docs/SHILOH-OS-RECONCILIATION-2026-08-21-GOLDIE-DESCRIPTION-BUSINESS-APPROVAL.md`.
+
+PR #392/#393 source and editor evidence is complete and must not be repeated. The two active lymphatic Description fields are genuinely blank, the Reset Package photo is secondary marketing evidence only, the Psoas editor/export value is exactly 1,000 characters and ends `deep physica`, and retired Full Body Sports Massage remains intentionally blank.
+
+Durable publication rules approved on 2026-08-21:
+
+- Preserve the two active lymphatic blanks for now and preserve the retired Sports Massage blank; future new copy requires separate exact approval.
+- Never infer, autocomplete or normalize missing source text from a photo, placeholder, truncated field, corrupted wording or nearby service.
+- Practitioner personal phone numbers do not belong in public service descriptions; use Shiloh's controlled clinic contact journey.
+- Imported Goldie text is source evidence, not publication approval.
+- Clinical or treatment efficacy, recovery, safety, outcome or duration claims require retained substantiation and qualified clinical/compliance review. Otherwise use neutral factual wording or keep the description unpublished.
+- Mechanical corrections and controlled rewrites may be drafted, but exact final wording must be approved before any catalogue or production mutation.
+
+Psoas remains unpublished pending Goldie Support's uncapped stored value/history or explicit confirmation that no longer value exists. Bamboo remains unpublished pending exact business truth for Area Specific versus Full Body. No bulk publication is authorized.
+
 ## Public catalogue — 🟢 VERIFIED LIVE
 
 `/book` remains the Shiloh-owned CRM-backed public service catalogue through accepted #301 state. #371's Admin Body Treatments presentation and #378/#380 WhatsApp navigation do not create a second static source of truth.
@@ -500,7 +518,7 @@ Do not begin or resume GBP OAuth/API integration until authoritative Google evid
 - Ozow remains waiting for merchant configuration and explicit business rules.
 - Destructive privacy execution remains fail-closed pending authority/evidence.
 - Follow-up/rating and birthday delivery evidence remain genuine-journey/eligibility gated.
-- Goldie description exceptions remain a separate Control/business-approval gate.
+- Goldie source/editor recovery is complete except for the Psoas backend-history dependency. D1–D11 publication policy is approved; CRM drafting is controlled, while Psoas source, Bamboo identity, qualified claim review and exact final wording remain fail-closed before publication.
 
 ## Shiloh Visual Calendar — ⏸️ DEFERRED
 
