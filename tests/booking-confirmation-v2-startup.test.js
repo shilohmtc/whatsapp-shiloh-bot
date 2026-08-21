@@ -26,3 +26,11 @@ test('full Meta inventory audit is explicit, read-only and startup guarded', () 
   assert.match(appSource, /inspectMetaTemplateInventory/);
   assert.match(appSource, /Sanitized Meta template inventory audit completed/);
 });
+
+
+test('booking confirmation delivery evidence schema is initialized before startup delivery', () => {
+  assert.match(appSource, /ensureDeliveryTable: ensureBookingConfirmationDeliverySchema/);
+  assert.match(appSource, /await ensureBookingConfirmationDeliverySchema\(\)/);
+  assert.match(appSource, /071_booking_confirmation_template_evidence\.sql/);
+  assert.match(appSource, /Booking confirmation delivery evidence schema verified/);
+});
