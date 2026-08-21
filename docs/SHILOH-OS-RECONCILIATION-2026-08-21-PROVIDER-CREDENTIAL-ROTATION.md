@@ -6,7 +6,7 @@ Status: 🟢 VERIFIED COMPLETE
 
 ## Scope and authoritative baseline
 
-This reconciliation closes the provider-credential security hold introduced by Tracker reconciliation PR #386. It was performed against GitHub `main` `ae3825925277205512a4db0d9e13964fb3e79ea5`, the current Master, Project Tracker, latest guarded-Juvan reconciliation and Engineering Governance.
+This reconciliation closes the provider-credential security hold introduced by Tracker reconciliation PR #386. It was performed against the then-current GitHub `main` `ae3825925277205512a4db0d9e13964fb3e79ea5`, the current Master, Project Tracker, latest guarded-Juvan reconciliation and Engineering Governance.
 
 Current accepted application code remains PR #388 / `e4833a743945db63b8cce3731d593f76c9f17921`. PR #389 and this reconciliation are documentation-only. The rotation preserves PR #385's completed Meta template contracts and production behaviour, plus every newer Juvan, booking, Calendar, CRM and human-truth boundary.
 
