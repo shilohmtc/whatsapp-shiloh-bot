@@ -7,7 +7,7 @@ Purpose: permanent current-state source of truth. Historical implementation deta
 
 Operational truth is GitHub `main`, Render production, Shiloh CRM/Postgres, Google Calendar, Meta/WhatsApp provider evidence, and explicit real WhatsApp/human evidence. Never infer provider approval, attendance, approval decisions, CRM identity, Calendar state or handset behaviour.
 
-At the beginning of each new Shiloh OS chat: read this Master + `docs/SHILOH-OS-PROJECT-TRACKER.md` + the latest reconciliation, currently `docs/SHILOH-OS-RECONCILIATION-2026-08-21-META-RESCHEDULE-ACTIVATION.md`, plus `docs/SHILOH-OS-ENGINEERING-GOVERNANCE.md`, on current GitHub `main`; verify production/provider/CRM/Calendar/human evidence that could have changed; preserve newer authority; then continue only the owned controlled scope.
+At the beginning of each new Shiloh OS chat: read this Master + `docs/SHILOH-OS-PROJECT-TRACKER.md` + the latest reconciliation, currently `docs/SHILOH-OS-RECONCILIATION-2026-08-21-BOOKING-CONFIRMATION-V2-ACTIVATION.md`, plus `docs/SHILOH-OS-ENGINEERING-GOVERNANCE.md`, on current GitHub `main`; verify production/provider/CRM/Calendar/human evidence that could have changed; preserve newer authority; then continue only the owned controlled scope.
 
 Earlier dated reconciliations remain durable where not superseded. Preserve in particular `docs/SHILOH-OS-RECONCILIATION-2026-08-20-CLIENT-COUPLES-AND-PACKAGES.md`, `docs/SHILOH-OS-RECONCILIATION-2026-08-20-ABIGAIL-JAW-RELEASE-MAPPING.md`, `docs/SHILOH-OS-RECONCILIATION-2026-08-20-ADMIN-UX-STANDARDIZATION.md`, `docs/SHILOH-OS-RECONCILIATION-2026-08-20-BOOKING-ADMIN-JUVAN-PRIMARY-BACKUP-AND-MANAGE-CANCEL.md`, `docs/SHILOH-OS-RECONCILIATION-2026-08-20-CONTROLLED-JUVAN-DEMO-IDENTITY.md`, `docs/SHILOH-OS-RECONCILIATION-2026-08-20-DUMMY-TEST-BOOKING-CLEANUP.md`, `docs/SHILOH-OS-RECONCILIATION-2026-08-20-ADMIN-BLOCK-TIME.md`, `docs/SHILOH-OS-RECONCILIATION-2026-08-20-CRM-DUMMY-RESET-COMPLETION.md`, `docs/SHILOH-OS-RECONCILIATION-2026-08-20-CURRENT-MAIN-356.md`, the Christel service-catalogue correction, specialist-workstream and Control-routing reconciliations, booking-confirmation-v2 controlled submission, Juvan booking approval/v1 handset proof, client-welcome repair, booking-update activation/stale suppression, Meta booking-update approval and all explicit fail-closed gates.
 
@@ -15,11 +15,11 @@ Obtain explicit approval before the first new substantial controlled action. Aft
 
 ## Current production baseline
 
-Current accepted **application** code is **PR #380 / `2e387e5f1000774d97046a516c1c7d19e93cd947`**, **Add atomic Couples Massage self-service**, built on #378 Couples & Packages navigation, the verified #376/#375 Abigail Jaw Release correction, #373/#371/#372 Admin UX presentation authority, and existing #367/#366 booking authority.
+Current accepted **application** code is **PR #384 / `aed805842818983eb5d4e3ca50054627eea7fe0c`**, **Initialize booking confirmation evidence schema**, built on PR #383's guarded booking-confirmation-v2 activation and preserving PR #382's completed reschedule-template activation plus the accepted #380 Couples Massage lineage.
 
-- GitHub CI run **#1196** for #380 completed successfully.
-- Render deploy **`dep-da3l8gtbedkc73dn51e0`** reached **LIVE** on exact #380 merge SHA in confirmed workspace **My Workspace**.
-- Render checked out exact commit `2e387e5f1000774d97046a516c1c7d19e93cd947`; build/startup completed normally and `npm start` preloaded the existing `clientCouplesPackagesPatch.js`, which now loads the Couples self-service and multi-staff client cancellation safety layer.
+- GitHub CI run **#1204** for PR #383 passed **832/832**; CI **#1206** for PR #384 also completed successfully.
+- Final Render deploy **`dep-da43g9mk1f9s73ajl33g`** reached **LIVE** on exact PR #384 merge SHA in confirmed workspace **My Workspace**, with `WHATSAPP_BOOKING_CONFIRMATION_TEMPLATE=shiloh_booking_confirmation_v2` and both one-shot audit/provision flags restored to `false`.
+- Render checked out exact commit `aed805842818983eb5d4e3ca50054627eea7fe0c`; build/startup completed normally, migration 071 evidence columns were verified, `/health` returned `status=ok / database=ok`, and no error/fatal logs were present. The prior Couples self-service and multi-staff cancellation lineage remains loaded unchanged.
 - Production migration **070_couples_massage_self_service.sql** applied and checksum-verified.
 - Production service **#66 `Couples Massage`** is active in canonical Massage at **90 minutes / R1080**, with no hidden processing/extra-time buffer.
 - Exact Couples Massage practitioner mappings are **Abigail staff #1 + Christel staff #3**, both active/client-bookable; unexpected extra mappings fail closed.
@@ -351,11 +351,13 @@ Genuine booking **#585** remains historical evidence of the superseded JP-sole b
 
 ### v1 — 🟢 LIVE / APPROVED / HANDSET-PROVEN
 
-`shiloh_booking_confirmation_v1` remains production selector and approved fallback. #348 suppresses four redundant automatic post-template groups without altering the approved provider contract; #352 handset evidence proved the intended reduced delivery.
+`shiloh_booking_confirmation_v1` remains exact, provider APPROVED and duplicate-free as the explicit single-selector rollback. #348/#352 remain authoritative historical v1 delivery-polish and genuine handset evidence; do not redo them.
 
-### v2 — 🟠 WAITING META / NOT ACTIVE
+### v2 — 🟢 PROVIDER VERIFIED / PRODUCTION ENABLED
 
-`shiloh_booking_confirmation_v2` was submitted exactly once under the controlled #343/#344 path. Last authoritative provider evidence remains **PENDING / UTILITY / en / exact / duplicateCount=0**. It is inactive/non-sendable and production stays on v1. Do not resubmit or activate while PENDING.
+`shiloh_booking_confirmation_v2` is the live production selector. Fresh provider verification on 2026-08-21 returned **APPROVED / UTILITY / en / exact / duplicateCount=0** with the frozen five-variable body and exact button order `Add to calendar` → `Manage booking` → `My appointments`. PR #383 activates only this exact contract through the centralized fail-closed gate, reuses canonical appointment-scoped handlers, suppresses redundant supplement messages, and preserves v1 as rollback. PR #384/startup migration 071 persists the accepted template name and provider message ID.
+
+The full 18-identity production audit returned every current operational contract exact/approved/duplicate-free and ready under its active configuration; legacy `shiloh_birthday_wish_v1`, `appointment_followup` and `appointment_reminder` remain `sendable=false / ready=false`. API quality remains `UNKNOWN`; the separate WhatsApp Manager screenshot records `Active — Quality pending`. Genuine v2 handset delivery remains open for natural booking use only and must not be manufactured.
 
 ## Booking-update customer confirmations — 🟢 LIVE / ENABLED / 🟠 NATURAL DELIVERY EVIDENCE OPEN
 
