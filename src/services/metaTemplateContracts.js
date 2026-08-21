@@ -22,7 +22,7 @@ const CONTRACTS = Object.freeze([
   ['reschedule_confirmation','WHATSAPP_RESCHEDULE_CONFIRMATION_TEMPLATE',definition('reschedule_confirmation'),true],
   ['appointment_reminder_actions','WHATSAPP_REMINDER_ACTIONS_TEMPLATE',buildReminderActionTemplateDefinition(),true],
   ['booking_confirmation','WHATSAPP_BOOKING_CONFIRMATION_TEMPLATE',buildBookingConfirmationTemplateDefinition(),true],
-  ['booking_confirmation_v2','WHATSAPP_BOOKING_CONFIRMATION_TEMPLATE',buildBookingConfirmationV2TemplateDefinition(),false],
+  ['booking_confirmation_v2','WHATSAPP_BOOKING_CONFIRMATION_TEMPLATE',buildBookingConfirmationV2TemplateDefinition(),true],
   ['staff_finalization','WHATSAPP_STAFF_FINALIZATION_TEMPLATE',buildStaffFinalizationTemplateDefinition(),true,true],
   ['birthday_v2','WHATSAPP_BIRTHDAY_TEMPLATE',buildBirthdayTemplateDefinition(),true],
   ['birthday_v1',null,{name:'shiloh_birthday_wish_v1',language:'en',category:'MARKETING',components:null},false],

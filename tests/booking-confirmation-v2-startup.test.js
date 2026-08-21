@@ -12,9 +12,17 @@ test('booking confirmation v2 provisioning is explicit one-shot only', () => {
   assert.match(appSource, /submitBookingConfirmationV2Template/);
 });
 
-test('booking confirmation v1 remains the live production fallback during v2 submission', () => {
+test('booking confirmation v1 remains an explicit fallback while v2 is selected only by configuration', () => {
   assert.match(liveConfirmation, /WHATSAPP_BOOKING_CONFIRMATION_TEMPLATE/);
-  assert.match(liveConfirmation, /sendWhatsAppTemplate\(phone,template,\[clientName\|\|'there',serviceName,staffName,date,time,google,ics\|\|google\]/);
-  assert.doesNotMatch(liveConfirmation, /shiloh_booking_confirmation_v2/);
-  assert.doesNotMatch(liveConfirmation, /bookingConfirmationV2QuickReplyPayloads/);
+  assert.match(liveConfirmation, /LIVE_BOOKING_CONFIRMATION_V1 = 'shiloh_booking_confirmation_v1'/);
+  assert.match(liveConfirmation, /LIVE_BOOKING_CONFIRMATION_V2 = 'shiloh_booking_confirmation_v2'/);
+  assert.match(liveConfirmation, /bookingConfirmationV2QuickReplyPayloads\(appointmentId\)/);
+  assert.match(liveConfirmation, /bodyParameters:\[clientName\|\|'there',serviceName,staffName,date,time\]/);
+  assert.match(liveConfirmation, /bodyParameters:\[clientName\|\|'there',serviceName,staffName,date,time,google,ics\|\|google\]/);
+});
+
+test('full Meta inventory audit is explicit, read-only and startup guarded', () => {
+  assert.match(appSource, /META_TEMPLATE_INVENTORY_AUDIT_ON_START/);
+  assert.match(appSource, /inspectMetaTemplateInventory/);
+  assert.match(appSource, /Sanitized Meta template inventory audit completed/);
 });

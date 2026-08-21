@@ -11,7 +11,7 @@ const {
   manageBookingInteractive,
   processBookingConfirmationV2Action,
 } = require('../src/services/bookingConfirmationV2Actions');
-const { CONTRACTS, configuredTemplateName, assertTemplateSendAllowed } = require('../src/services/metaTemplateContracts');
+const { CONTRACTS, configuredTemplateName, assertTemplateSendAllowed, resetTemplateInventoryCache } = require('../src/services/metaTemplateContracts');
 
 const originalGet = axios.get;
 const originalPost = axios.post;
@@ -118,15 +118,26 @@ test('Manage booking first tap is non-mutating and reuses guarded canonical book
   assert.deepEqual(result.interactive, expected);
 });
 
-test('v2 is inventory-visible but cannot become a send contract merely because it exists', async () => {
+test('v2 is sendable only when explicitly selected and the exact provider gate passes', async () => {
   const entry = CONTRACTS.find((item) => item.key === 'booking_confirmation_v2');
   assert.ok(entry);
   assert.equal(entry.contract.name, 'shiloh_booking_confirmation_v2');
   assert.equal(entry.env, 'WHATSAPP_BOOKING_CONFIRMATION_TEMPLATE');
-  assert.equal(entry.sendable, false);
+  assert.equal(entry.sendable, true);
+
   process.env.WHATSAPP_BOOKING_CONFIRMATION_TEMPLATE = 'shiloh_booking_confirmation_v1';
   assert.equal(configuredTemplateName(entry), 'shiloh_booking_confirmation_v1');
-  await assert.rejects(() => assertTemplateSendAllowed('shiloh_booking_confirmation_v2'), /not an approved Shiloh send contract/);
+  await assert.rejects(() => assertTemplateSendAllowed('shiloh_booking_confirmation_v2'), /configuration does not match contract/);
+
+  process.env.WHATSAPP_BUSINESS_ACCOUNT_ID = 'waba-test';
+  process.env.WHATSAPP_BOOKING_CONFIRMATION_TEMPLATE = 'shiloh_booking_confirmation_v2';
+  const exact = provisioning.buildBookingConfirmationV2TemplateDefinition();
+  axios.get = async () => ({ data: { data: [{ id: 'provider-1', status: 'APPROVED', ...exact }] } });
+  resetTemplateInventoryCache();
+  const state = await assertTemplateSendAllowed('shiloh_booking_confirmation_v2', 'en');
+  assert.equal(state.ready, true);
+  assert.equal(state.provider.duplicateCount, 0);
+  assert.equal(state.contract.exact, true);
 });
 
 test('controlled submission does not resubmit an exact existing provider contract', async () => {

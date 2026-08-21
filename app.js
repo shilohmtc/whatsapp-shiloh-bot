@@ -74,6 +74,7 @@ const { submitStaffFinalizationTemplate, submitStaffFinalizationActionTemplate }
 const { submitBookingConfirmationTemplate } = require("./src/services/bookingConfirmationTemplateProvisioning");
 const { submitBookingConfirmationV2Template } = require("./src/services/bookingConfirmationV2TemplateProvisioning");
 const { DEFINITIONS: CLIENT_LIFECYCLE_TEMPLATE_DEFINITIONS, getClientLifecycleTemplateStatus, submitClientLifecycleTemplate } = require("./src/services/clientLifecycleTemplateProvisioning");
+const { inspectMetaTemplateInventory } = require("./src/services/metaTemplateContracts");
 
 const app = express();
 app.disable("x-powered-by");
@@ -107,6 +108,19 @@ async function provisionBookingConfirmationV2IfExplicitlyEnabled() {
     logger.error({ err: error, metaError: error.response?.data?.error }, "Booking confirmation v2 one-shot provisioning failed");
   }
 }
+async function auditMetaTemplateInventoryIfExplicitlyEnabled() {
+  if (String(process.env.META_TEMPLATE_INVENTORY_AUDIT_ON_START || '').toLowerCase() !== 'true') return;
+  try {
+    const report = await inspectMetaTemplateInventory();
+    logger.info({
+      ok: report?.ok === true,
+      reason: report?.reason || null,
+      templates: report?.templates || [],
+    }, "Sanitized Meta template inventory audit completed");
+  } catch (error) {
+    logger.error({ err: error, metaError: error.response?.data?.error }, "Sanitized Meta template inventory audit failed");
+  }
+}
 async function provisionClientLifecycleTemplatesIfExplicitlyEnabled() {
   if (String(process.env.META_LIFECYCLE_PROVISION_ON_START || '').toLowerCase() !== 'true') return;
   try {
@@ -129,7 +143,7 @@ async function start() {
   await ensureHistoricalFinalizationFinancialSchema(); logger.info({ initialized: true }, "Historical finalization financial schema verified");
   const dummyTestCleanup = await runDummyTestAppointmentCleanup(); if (dummyTestCleanup.enabled) logger.info(dummyTestCleanup, "Dummy Test booking cleanup startup gate completed");
   try { await runConfiguredClientProvenanceAudit(logger); } catch (error) { logger.error({ err: error }, "Read-only CRM provenance audit failed"); }
-  await provisionStaffFinalizationTemplateSafely(); await provisionStaffFinalizationActionTemplateSafely(); await provisionBookingConfirmationTemplateSafely(); await provisionBookingConfirmationV2IfExplicitlyEnabled(); await provisionClientLifecycleTemplatesIfExplicitlyEnabled();
+  await provisionStaffFinalizationTemplateSafely(); await provisionStaffFinalizationActionTemplateSafely(); await provisionBookingConfirmationTemplateSafely(); await provisionBookingConfirmationV2IfExplicitlyEnabled(); await provisionClientLifecycleTemplatesIfExplicitlyEnabled(); await auditMetaTemplateInventoryIfExplicitlyEnabled();
   server = app.listen(PORT, () => { logger.info({ port: PORT }, "Shiloh started"); startConversationSessionCleanupScheduler(); startTemporarySessionCleanupScheduler(); startGoogleBusinessProfileSyncScheduler(); startAppointmentLifecycleScheduler(); startCustomerCareScheduler(); startBookingIntegrityScheduler(); startMandatoryDemoCleanupScheduler(); startAttendanceFinalizationReminderScheduler(); startHistoricalFinalizationPromptScheduler(); });
 }
 start().catch((error) => { logger.fatal({ err: error }, "Shiloh failed during startup"); process.exit(1); });
