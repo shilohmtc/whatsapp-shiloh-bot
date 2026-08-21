@@ -12,7 +12,7 @@ test('GBP remains a pending external provider gate at zero general request quota
   for (const doc of [master, tracker, reconciliation]) {
     assert.match(doc, /Requests per minute|Requests\/min/);
     assert.match(doc, /0/);
-    assert.match(doc, /pending Google|WAITING PROVIDER|EXTERNAL\/PROVIDER GATE/i);
+    assert.match(doc, /pending Google|WAITING PROVIDER|EXTERNAL\s*\/\s*PROVIDER GATE/i);
   }
   assert.match(master, /not positively established/);
   assert.match(tracker, /not confirmed\/usable/);
