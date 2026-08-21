@@ -6,18 +6,33 @@ const {
   sendWhatsAppCtaUrl,
   sendWhatsAppReplyButtons,
 } = require('./whatsapp');
-const { postConfirmationButtons } = require('./clientBookingInteractive');
+const { postConfirmationButtons, bookingConfirmationV2QuickReplyPayloads } = require('./clientBookingInteractive');
 const { createAppointment: enrollAppointmentLifecycle } = require('./appointmentLifecycle');
 const logger = require('../lib/logger');
 
 const LIVE_BOOKING_CONFIRMATION_V1 = 'shiloh_booking_confirmation_v1';
+const LIVE_BOOKING_CONFIRMATION_V2 = 'shiloh_booking_confirmation_v2';
+const CURRENT_BOOKING_CONFIRMATION_TEMPLATES = new Set([LIVE_BOOKING_CONFIRMATION_V1, LIVE_BOOKING_CONFIRMATION_V2]);
 let deliveryTableReady = false;
 
 function fmtDate(v){return new Intl.DateTimeFormat('en-ZA',{timeZone:'Africa/Johannesburg',weekday:'long',day:'2-digit',month:'long',year:'numeric'}).format(new Date(v));}
 function fmtTime(v){return new Intl.DateTimeFormat('en-ZA',{timeZone:'Africa/Johannesburg',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(v));}
 function googleStamp(v){return new Date(v).toISOString().replace(/[-:]/g,'').replace(/\.\d{3}Z$/,'Z');}
 function baseUrl(){return String(process.env.SHILOH_PUBLIC_BASE_URL||process.env.RENDER_EXTERNAL_URL||'').replace(/\/$/,'');}
-function shouldSendLegacyConfirmationSupplements(template){return String(template||'').trim()!==LIVE_BOOKING_CONFIRMATION_V1;}
+function shouldSendLegacyConfirmationSupplements(template){return !CURRENT_BOOKING_CONFIRMATION_TEMPLATES.has(String(template||'').trim());}
+function bookingConfirmationTemplatePayload({template,appointmentId,clientName,serviceName,staffName,date,time,google,ics}){
+  if(String(template||'').trim()===LIVE_BOOKING_CONFIRMATION_V2){
+    return {
+      bodyParameters:[clientName||'there',serviceName,staffName,date,time],
+      quickReplyPayloads:bookingConfirmationV2QuickReplyPayloads(appointmentId),
+    };
+  }
+  return {
+    bodyParameters:[clientName||'there',serviceName,staffName,date,time,google,ics||google],
+    quickReplyPayloads:[],
+  };
+}
+function providerMessageId(response){return response?.messages?.[0]?.id||null;}
 
 async function ensureDeliveryTable(){
   if(deliveryTableReady)return;
@@ -29,8 +44,15 @@ async function ensureDeliveryTable(){
       claimed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       sent_at TIMESTAMPTZ,
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      template_name TEXT,
+      provider_message_id TEXT,
       PRIMARY KEY (appointment_id,message_kind)
     )
+  `);
+  await pool.query(`
+    ALTER TABLE customer_message_deliveries
+      ADD COLUMN IF NOT EXISTS template_name TEXT,
+      ADD COLUMN IF NOT EXISTS provider_message_id TEXT
   `);
   deliveryTableReady=true;
 }
@@ -52,8 +74,8 @@ async function releaseBookingConfirmationClaim(appointmentId){
   await pool.query(`DELETE FROM customer_message_deliveries WHERE appointment_id=$1 AND message_kind='booking_confirmation' AND status='sending'`,[appointmentId]);
 }
 
-async function markBookingConfirmationSent(appointmentId){
-  await pool.query(`UPDATE customer_message_deliveries SET status='sent',sent_at=NOW(),updated_at=NOW() WHERE appointment_id=$1 AND message_kind='booking_confirmation' AND status='sending'`,[appointmentId]);
+async function markBookingConfirmationSent(appointmentId,{templateName=null,providerMessageId=null}={}){
+  await pool.query(`UPDATE customer_message_deliveries SET status='sent',sent_at=NOW(),updated_at=NOW(),template_name=$2,provider_message_id=$3 WHERE appointment_id=$1 AND message_kind='booking_confirmation' AND status='sending'`,[appointmentId,templateName,providerMessageId]);
 }
 
 async function ensureToken(appointmentId){
@@ -83,6 +105,7 @@ async function sendCustomerBookingConfirmation(data){
   const {appointmentId,clientId,clientName,serviceName,staffName,locationName,startsAt,endsAt,source='shiloh'}=data;
   let claimed=false;
   let providerAccepted=false;
+  let acceptedProviderMessageId=null;
   try{
     const contact=await pool.query(`SELECT normalized_value FROM client_contacts WHERE client_id=$1 AND contact_type IN ('whatsapp','phone','mobile') AND normalized_value IS NOT NULL ORDER BY is_primary DESC, id LIMIT 1`,[clientId]);
     const phone=contact.rows[0]?.normalized_value;if(!phone)return {sent:false,reason:'no_phone'};
@@ -99,13 +122,16 @@ async function sendCustomerBookingConfirmation(data){
 
     let confirmationActions={googleCalendar:false,appleOutlook:false,changeButtons:false,postConfirmationMenu:false};
     if(template){
-      await sendWhatsAppTemplate(phone,template,[clientName||'there',serviceName,staffName,date,time,google,ics||google],process.env.WHATSAPP_TEMPLATE_LANGUAGE||'en');
+      const payload=bookingConfirmationTemplatePayload({template,appointmentId,clientName,serviceName,staffName,date,time,google,ics});
+      const response=await sendWhatsAppTemplate(phone,template,payload.bodyParameters,process.env.WHATSAPP_TEMPLATE_LANGUAGE||'en',payload.quickReplyPayloads);
+      acceptedProviderMessageId=providerMessageId(response);
       providerAccepted=true;
     }else{
       const lines=['*Booking confirmed 🌿*','',`Hi ${clientName||'there'}, your appointment is confirmed.`,'',`✨ *Service:* ${serviceName}`,`👤 *With:* ${staffName}`,`📅 *Date:* ${date}`,`🕙 *Time:* ${time}`];
       if(locationName)lines.push(`📍 *Location:* ${locationName}`);
       lines.push('','We look forward to seeing you. 🌿');
-      await sendWhatsAppMessage(phone,lines.join('\n'));
+      const response=await sendWhatsAppMessage(phone,lines.join('\n'));
+      acceptedProviderMessageId=providerMessageId(response);
       providerAccepted=true;
     }
 
@@ -123,9 +149,9 @@ async function sendCustomerBookingConfirmation(data){
       confirmationActions.postConfirmationMenu=await sendOptionalConfirmationAction('post_confirmation_menu',()=>sendWhatsAppReplyButtons(phone,'*What would you like to do next?*\nYou can also type *BOOK ANOTHER TREATMENT*, *MY APPOINTMENTS*, or *MAIN MENU*.',postConfirmationButtons()),actionContext);
     }
 
-    await markBookingConfirmationSent(appointmentId);
-    await pool.query(`INSERT INTO crm_audit_events (action,entity_type,entity_id,metadata) VALUES ('customer.booking_confirmation_sent','appointment',$1,$2::jsonb)`,[appointmentId,JSON.stringify({clientId,calendarLinks:true,template:Boolean(template),lifecycleEnrolled:true,idempotentDelivery:true,supplementalActionsSuppressed,confirmationActions})]);
-    return {sent:true,phone,supplementalActionsSuppressed,confirmationActions};
+    await markBookingConfirmationSent(appointmentId,{templateName:template||null,providerMessageId:acceptedProviderMessageId});
+    await pool.query(`INSERT INTO crm_audit_events (action,entity_type,entity_id,metadata) VALUES ('customer.booking_confirmation_sent','appointment',$1,$2::jsonb)`,[appointmentId,JSON.stringify({clientId,calendarLinks:true,template:Boolean(template),templateName:template||null,providerMessageId:acceptedProviderMessageId,lifecycleEnrolled:true,idempotentDelivery:true,supplementalActionsSuppressed,confirmationActions})]);
+    return {sent:true,phone,templateName:template||null,providerMessageId:acceptedProviderMessageId,supplementalActionsSuppressed,confirmationActions};
   }catch(error){
     if(claimed&&!providerAccepted){
       try{await releaseBookingConfirmationClaim(appointmentId);}catch(releaseError){logger.error({err:releaseError,appointmentId},'Booking confirmation claim release failed');}
@@ -159,4 +185,4 @@ async function sendCustomerBookingConfirmationForAppointment(appointmentId){
   return sendCustomerBookingConfirmation({appointmentId:a.id,clientId:a.client_id,clientName:a.client_name,serviceName:a.service_name,staffName:a.staff_name,locationName:a.location_name,startsAt:a.starts_at,endsAt:a.ends_at,source:a.source||'shiloh'});
 }
 
-module.exports={sendCustomerBookingConfirmation,sendCustomerBookingConfirmationForAppointment,googleCalendarUrl,claimBookingConfirmation,releaseBookingConfirmationClaim,markBookingConfirmationSent,ensureDeliveryTable,ensureToken,practitionerApprovalStatus,shouldSendLegacyConfirmationSupplements};
+module.exports={sendCustomerBookingConfirmation,sendCustomerBookingConfirmationForAppointment,googleCalendarUrl,claimBookingConfirmation,releaseBookingConfirmationClaim,markBookingConfirmationSent,ensureDeliveryTable,ensureToken,practitionerApprovalStatus,shouldSendLegacyConfirmationSupplements,bookingConfirmationTemplatePayload,providerMessageId,LIVE_BOOKING_CONFIRMATION_V1,LIVE_BOOKING_CONFIRMATION_V2};
