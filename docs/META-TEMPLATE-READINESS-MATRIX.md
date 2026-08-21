@@ -25,7 +25,7 @@ The production Shiloh_MTC WhatsApp Manager evidence below was captured on 18 Aug
 
 Meta's default `hello_world` is visible but is not a Shiloh operational template and is excluded from the 16-template contract inventory.
 
-## Booking confirmation v2 controlled submission — 2026-08-20
+## Booking confirmation v2 controlled submission — historical 2026-08-20
 
 The local contract for `shiloh_booking_confirmation_v2` was frozen before provider submission. PR #343 registered the exact contract in the central inventory as deliberately non-sendable and wired only canonical, non-mutating first-tap handlers. `Add to calendar` delegates to the existing Google Calendar / Apple-Outlook CTA path with appointment/client-phone ownership revalidation. `Manage booking` delegates to the existing guarded `Reschedule`, `Cancel booking`, and `My appointments` actions. `My appointments` remains the existing deterministic appointment view. `shiloh_booking_confirmation_v1` remained the live production selector throughout.
 
@@ -46,7 +46,7 @@ Only after those gates were green, `META_BOOKING_CONFIRMATION_V2_PROVISION_ON_ST
 
 The one-shot provisioning flag was immediately restored to `false`; flag-off deploy `dep-da383pdg1s2s73d1a40g` reached LIVE. Its normal v1 startup check reconfirmed `shiloh_booking_confirmation_v1` as configured, **APPROVED / UTILITY / already_exists**, with `submitted=false`. There was no v2 provisioning log on that restart.
 
-**Activation remains blocked.** PENDING is not APPROVED. A later activation decision requires a fresh read-only provider check proving APPROVED + exact name/language/category/components + `duplicateCount=0`, followed by a separately reviewed code/config change that deliberately makes v2 sendable and selects it. Do not re-submit while the exact provider identity exists, and do not manufacture a booking or handset interaction for evidence.
+**Historical gate at that checkpoint:** activation was blocked while PENDING. That gate was later closed by the fresh 2026-08-21 APPROVED/exact/duplicate-free verification and controlled activation recorded below. The original submission evidence remains historical; do not resubmit or manufacture a booking/handset interaction for proof.
 
 ## Booking confirmation v2 production activation — 2026-08-21
 
