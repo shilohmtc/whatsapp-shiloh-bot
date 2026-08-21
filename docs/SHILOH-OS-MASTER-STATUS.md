@@ -7,7 +7,7 @@ Purpose: permanent current-state source of truth. Historical implementation deta
 
 Operational truth is GitHub `main`, Render production, Shiloh CRM/Postgres, Google Calendar, Meta/WhatsApp provider evidence, and explicit real WhatsApp/human evidence. Never infer provider approval, attendance, approval decisions, CRM identity, Calendar state or handset behaviour.
 
-At the beginning of each new Shiloh OS chat: read this Master + `docs/SHILOH-OS-PROJECT-TRACKER.md` + the latest reconciliation, currently `docs/SHILOH-OS-RECONCILIATION-2026-08-21-GUARDED-JUVAN-BOOKING-CLEANUP.md`, plus `docs/SHILOH-OS-ENGINEERING-GOVERNANCE.md`, on current GitHub `main`; verify production/provider/CRM/Calendar/human evidence that could have changed; preserve newer authority; then continue only the owned controlled scope.
+At the beginning of each new Shiloh OS chat: read this Master + `docs/SHILOH-OS-PROJECT-TRACKER.md` + the latest reconciliation, currently `docs/SHILOH-OS-RECONCILIATION-2026-08-21-PROVIDER-CREDENTIAL-ROTATION.md`, plus `docs/SHILOH-OS-ENGINEERING-GOVERNANCE.md`, on current GitHub `main`; verify production/provider/CRM/Calendar/human evidence that could have changed; preserve newer authority; then continue only the owned controlled scope.
 
 Earlier dated reconciliations remain durable where not superseded. Preserve in particular `docs/SHILOH-OS-RECONCILIATION-2026-08-20-CLIENT-COUPLES-AND-PACKAGES.md`, `docs/SHILOH-OS-RECONCILIATION-2026-08-20-ABIGAIL-JAW-RELEASE-MAPPING.md`, `docs/SHILOH-OS-RECONCILIATION-2026-08-20-ADMIN-UX-STANDARDIZATION.md`, `docs/SHILOH-OS-RECONCILIATION-2026-08-20-BOOKING-ADMIN-JUVAN-PRIMARY-BACKUP-AND-MANAGE-CANCEL.md`, `docs/SHILOH-OS-RECONCILIATION-2026-08-20-CONTROLLED-JUVAN-DEMO-IDENTITY.md`, `docs/SHILOH-OS-RECONCILIATION-2026-08-20-DUMMY-TEST-BOOKING-CLEANUP.md`, `docs/SHILOH-OS-RECONCILIATION-2026-08-20-ADMIN-BLOCK-TIME.md`, `docs/SHILOH-OS-RECONCILIATION-2026-08-20-CRM-DUMMY-RESET-COMPLETION.md`, `docs/SHILOH-OS-RECONCILIATION-2026-08-20-CURRENT-MAIN-356.md`, the Christel service-catalogue correction, specialist-workstream and Control-routing reconciliations, booking-confirmation-v2 controlled submission, Juvan booking approval/v1 handset proof, client-welcome repair, booking-update activation/stale suppression, Meta booking-update approval and all explicit fail-closed gates.
 
@@ -20,6 +20,7 @@ Current accepted **application** code is **PR #388 / `e4833a743945db63b8cce3731d
 - GitHub CI run **#1214** for PR #388 passed the full non-mutating regression gate; focused local coverage passed **52/52** and the local full regression passed **850/850**.
 - Final application deploy **`dep-da450l9t0dsc73a7dbo0`** reached **LIVE** on exact PR #388 merge SHA in confirmed workspace **My Workspace**. The production selector remains `WHATSAPP_BOOKING_CONFIRMATION_TEMPLATE=shiloh_booking_confirmation_v2`; the completed Meta-template activation is unchanged.
 - Render checked out exact commit `e4833a743945db63b8cce3731d593f76c9f17921`; build/startup completed normally, Google Calendar health passed, `/health` returned `status=ok / database=ok`, and no error/fatal logs were present. PR #387's credential-log redaction and all earlier Couples, reschedule and booking-confirmation safeguards remain loaded unchanged.
+- Provider credential rotation is complete. The post-revocation verification deploy `dep-da47v6n40ujc73d1qeug` reached LIVE on current documentation-only `main` `ae3825925277205512a4db0d9e13964fb3e79ea5`; accepted application code remains PR #388. The dedicated Meta system user `Shiloh` owns the final production-only token with exactly `whatsapp_business_management` and `whatsapp_business_messaging`; all former generic `Employee` tokens are revoked. Root/health and Meta provider checks passed, and the verified log window contained zero errors and zero credential values.
 - Production migration **070_couples_massage_self_service.sql** applied and checksum-verified.
 - Production service **#66 `Couples Massage`** is active in canonical Massage at **90 minutes / R1080**, with no hidden processing/extra-time buffer.
 - Exact Couples Massage practitioner mappings are **Abigail staff #1 + Christel staff #3**, both active/client-bookable; unexpected extra mappings fail closed.
@@ -57,7 +58,7 @@ Relevant accepted runtime lineage remains:
 - **#376 / `5e187c6b531881d82ea1bfe1840b0b891d11518f`** — checksum-tracked startup application and explicit post-state verification of migration 069; CI #1183 successful.
 - **#378 / `aa7f692b35bc7acaafbea74d45f752c2b99a886d`** — established current Couples & Packages client navigation and preserved the canonical Sports Massage Package authority; its assisted-only Couples placeholder is superseded by #380.
 - **#380 / `2e387e5f1000774d97046a516c1c7d19e93cd947`** — accepted Couples Massage lineage: canonical service #66, 90 min/R1080, exact Abigail+Christel simultaneous availability and atomic booking, appointment-scoped companion backup contact/no marketing, dual-practitioner Calendar safety and multi-staff cancellation hardening; CI #1196 successful.
-- **#387 / `8e124ec8a06183576db67ce6e3b27eca28b7d85e`** — provider credential log redaction; preserves the urgent external credential-rotation gate without printing sensitive values.
+- **#387 / `8e124ec8a06183576db67ce6e3b27eca28b7d85e`** — provider credential log redaction; CI #1212 passed 835 tests. The former external rotation gate is now closed by the verified dedicated-system-user rotation and old-token revocation recorded in the latest reconciliation.
 - **#388 / `e4833a743945db63b8cce3731d593f76c9f17921`** — optional JP-only guarded Juvan booking cleanup before identity reset: exact current-pointer preview, canonical non-final cancellation/history/audit, related-state terminalization, no customer messaging, shared/all-practitioner Calendar cleanup, partial-state retry and identity-release gating; CI #1214 passed.
 
 PR #357 and #359 were documentation/shared-authority reconciliations and did not broaden unrelated application behaviour.
@@ -83,6 +84,29 @@ Reconciliation from specialist branches is part of the same controlled unit, not
 ## Control checkpoint workstream routing — 🟢 ADOPTED
 
 Control checkpoints must identify the owning workstream, exact specialist chat, why that workstream owns the next boundary, dependencies/observers, Proceed or Blocked status, and a self-contained copy-ready continuation. Routing context is never a substitute for independently re-reading authoritative state. Blocked work remains with the appropriate monitoring/provider workstream rather than being routed to implementation, and existing approved fail-closed gates remain binding.
+
+## Provider credential rotation — 🟢 VERIFIED COMPLETE
+
+Authoritative reconciliation: `docs/SHILOH-OS-RECONCILIATION-2026-08-21-PROVIDER-CREDENTIAL-ROTATION.md`.
+
+The credential exposed in historic Render logs was the Meta WhatsApp Cloud API bearer secret stored as `WHATSAPP_TOKEN`. Legitimate runtime ownership is bounded to the single `shiloh-whatsapp-bot` Render service and its WhatsApp transport/template-verification modules. No credential value is recorded in GitHub, chat or reconciliation evidence.
+
+PR #387 repaired the root logging defect before replacement installation by preventing nested Axios `config`, `request` and `response` objects from being serialized while preserving safe code/status evidence. CI #1212 passed all 835 tests, including frozen PR #385 Meta-template contracts.
+
+Durable provider authority is now:
+
+- Meta business `406573210678288`;
+- production app `Shiloh_MTC`;
+- production WABA `4002592316709920`;
+- dedicated Employee-access system user `Shiloh`, ID `61593365711509`;
+- only the production app and production WABA assigned; Test WABA excluded;
+- final never-expiring token permissions exactly `whatsapp_business_management` and `whatsapp_business_messaging`;
+- only Render secret `WHATSAPP_TOKEN` updated; and
+- all tokens belonging to former generic system user `Employee`, ID `61593165503862`, revoked after replacement verification.
+
+Post-revocation Render deploy `dep-da47v6n40ujc73d1qeug` reached LIVE on current `main` `ae3825925277205512a4db0d9e13964fb3e79ea5`. Root and health probes returned 200. Booking-update, cancellation, staff-finalization and booking-confirmation provider checks remained APPROVED, including configured booking-confirmation v2. The verified window contained zero errors and zero Authorization, Bearer, Meta-token-like or `WHATSAPP_TOKEN` values. No real customer message or booking was created.
+
+Historic retained log entries were not destroyed. Render exposes no supported individual-entry deletion control; they remain subject to the provider's retention window. Preserve required audit evidence and do not attempt unsupported destructive cleanup.
 
 ## Admin practitioner Block time — 🟢 VERIFIED LIVE
 
@@ -488,7 +512,9 @@ PR #351 remains superseded/closed because newer authority #352–#356 overtook i
 
 ## Exact continuation state
 
-**Authoritative current application state:** PR #388 / `e4833a743945db63b8cce3731d593f76c9f17921`; CI #1214 passed the full non-mutating regression gate. Render deploy `dep-da450l9t0dsc73a7dbo0` is **LIVE** on exact merge SHA, `/health` reports status/database ok, Google Calendar health passed and no error/fatal logs were present. PR #387 credential-log redaction, PR #385 Meta reconciliation, booking-confirmation v2 selection/evidence, #382 reschedule activation, #380 Couples Massage and all standing fail-closed invariants remain preserved.
+**Authoritative current application state:** PR #388 / `e4833a743945db63b8cce3731d593f76c9f17921`; CI #1214 passed the full non-mutating regression gate. Current `main` is documentation-only PR #389 / `ae3825925277205512a4db0d9e13964fb3e79ea5`. Post-revocation Render deploy `dep-da47v6n40ujc73d1qeug` is **LIVE** on that current-main commit; `/` and `/health` returned 200, Meta provider checks remained approved, and the verified window contained no errors or credential values. PR #387 credential-log redaction, PR #385 Meta reconciliation, booking-confirmation v2 selection/evidence, #382 reschedule activation, #380 Couples Massage and all standing fail-closed invariants remain preserved.
+
+**Provider credential security:** complete/do-not-redo. Dedicated Meta system user `Shiloh` owns the final production-only, least-privilege WhatsApp token; all former generic `Employee` tokens are revoked; only Render `WHATSAPP_TOKEN` changed. Preserve the two-scope permission boundary, production-only asset assignments and PR #387 redaction. Historic retained logs remain under Render retention and must not be destroyed by unsupported means.
 
 **Client Massage Treatments:** **Couples & Packages** is the first special option. Inside: **Couples Massage**, **Sports Massage Package**, **Back**. Couples Massage is now self-service under exact authority: service #66, 90 min, R1,080, Abigail + Christel required together, simultaneous full-duration availability, one lead client + companion name/mobile, Booking Policy acceptance and atomic dual-practitioner commit. Companion mobile is booking-only backup/no marketing; automatic fallback messaging is not claimed. Sports Massage Package reuses canonical `sports-massage-monthly` authority: package-session service #65, 4 sessions, R1400, 30 days, 24-hour cancellation notice, established entitlement/enquiry/session flows.
 
