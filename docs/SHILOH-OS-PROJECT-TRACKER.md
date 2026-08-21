@@ -53,6 +53,9 @@ Practitioner-approved client rescheduling is **provider-verified and production-
 | ADMIN-CANCEL-RETURN-CONTEXT | Booking & Admin UX | ⚪ PROPOSED / NOT IMPLEMENTED | Proposed UX: when cancellation originates from a selected client's Manage Client journey, return to that same client's management screen after success; standalone Manage booking should offer bounded next actions. Requires separate explicit implementation authorization. |
 | DUMMY-TEST-BOOKING-CLEANUP | Booking & Admin UX | 🟢 VERIFIED LIVE / COMPLETE | Exact archived/reset CRM #835 cleanup. #582/#583 newly cancelled; #561/#565/#566/#574 already cancelled; #564 no-show preserved. Three lifecycle rows terminalized; 2026 shared/Abigail/Marietjie/primary Calendar searches return zero Dummy Test events. One-shot flag false. |
 | ADMIN-BLOCK-TIME | Booking & Admin UX | 🟢 VERIFIED LIVE | #360 uses canonical `calendar_blocks`; Christel→Myself/Abigail, Abigail→self, Marietjie→self, JP/others→none; overlap/authority fail closed; no fake appointment/client message. |
+| MARIETJIE-WAXING-AUDIT | CRM & Identity | 🟢 VERIFIED READ-ONLY | Production audit found no exact/normalized canonical match for Brow Wax, Brow Tint, Upper Lip Wax, Lower Lip Wax, Lower Lip & Chin Wax or Full Face Wax. Recommended disposition is six new canonical services with the requested names/prices/durations and zero processing/extra time. No catalogue row changed. |
+| MARIETJIE-WAXING-CREATE | Control & Reconciliation → CRM & Identity | 🟠 WAITING BUSINESS SCOPE | Business intent to add the six services is recorded, but controlled implementation approval remains open because Full Face Wax included areas and brow-shaping inclusion are unresolved. Hold the complete six-service creation unit; do not implement, rename, retire, replace or remap by inference. |
+| PROVIDER-CREDENTIAL-ROTATION | Production / DevOps | 🔴 DEFECT / HOLD | A provider credential was exposed in historic Render logs. Rotate/revoke it through the approved secret path and verify Authorization-value redaction without printing either credential. Preserve completed PR #385 Meta contracts; Control reconciliation itself performs no Render or catalogue mutation. |
 | CRM-DUMMY-RESET | CRM & Identity + Production / DevOps | 🟢 HISTORICAL COMPLETE / RETIRED AS REUSABLE | #338/#358 genuine Dummy Test reset archived CRM #835 and released its former phone; #362 cleaned remaining operational bookings. Dummy Test and Chenique are retired from reusable reset eligibility. |
 | GOVERNANCE-HANDOFF | Control + all specialists | 🟢 VERIFIED | #340 mandatory self-contained specialist handoffs; direct continuation allowed when authority and ownership are clear. |
 | GOVERNANCE-CHAT-LIFECYCLE | Control + all specialists | 🟢 VERIFIED | #353 practical chat-health rotation; no arbitrary turn threshold. |
@@ -189,6 +192,25 @@ Durable evidence: `docs/SHILOH-OS-RECONCILIATION-2026-08-20-CRM-DUMMY-RESET-COMP
 
 PR #382 remains completed/do-not-redo authority: both exact templates are APPROVED / UTILITY / en / exact / duplicate-free and production is enabled with `WHATSAPP_RESCHEDULE_APPROVAL_ENABLED=true`. The first genuine handset journey remains natural-use evidence only.
 
+## Marietjie detailed waxing audit — verified read-only / implementation held
+
+The completed production audit established that no exact or normalized canonical service exists for:
+
+- **Brow Wax — R80 — 15 minutes**
+- **Brow Tint — R80 — 15 minutes**
+- **Upper Lip Wax — R80 — 15 minutes**
+- **Lower Lip Wax — R80 — 15 minutes**
+- **Lower Lip & Chin Wax — R120 — 20 minutes**
+- **Full Face Wax — R500 — 60 minutes**
+
+The recommended resolution is **create new** for each service, using exactly those client-facing names with processing time `0` and extra time `0`. Business intent to add the six services under Marietjie is recorded, but controlled implementation approval is **not closed**: Full Face Wax still requires explicit human truth for its included areas and whether brow shaping is included. The complete six-service creation unit therefore remains fail-closed on hold. No CRM implementation instruction is issued yet.
+
+Preserve service #49 **Waxing** as inactive, unmapped and non-bookable at 60 minutes / R80–R500 with three historical and zero future appointments. Preserve service #62 **Eyebrow wax shape & Tint** as inactive, unmapped and non-bookable at 40 minutes / R150 with four historical and zero future appointments. Preserve both historical services and every linked appointment. Do not retire, rename, replace or remap broad Waxing by inference. Existing permanent-makeup brow/lip services and Lip Plump services are unrelated, and Abigail's service authority remains unchanged.
+
+## Provider credential exposure — Production / DevOps remediation assigned
+
+Historic Render logs exposed a provider credential. Production / DevOps owns the approved security remediation: rotate/revoke the exposed value, update only the appropriate current Render secret through the controlled path, verify provider/runtime health, and verify that Authorization values are redacted in current and future logs without printing either the old or replacement credential. This dependency must not change or reopen the completed PR #385 Meta template contracts. No credential, Render environment or production mutation occurred during this Control reconciliation.
+
 ## Other preserved state
 
 Booking confirmation v2 is live behind the exact centralized contract gate; v1 remains the explicit rollback. Genuine v2 handset delivery is not yet evidenced and may arise only from a natural booking. Booking update activation is complete but natural delivery evidence remains open. Google Calendar remains synchronized/fail-closed. Attendance stays own-practitioner only and #558 stays HOLD. Christel catalogue correction remains authoritative. Abigail is no longer eligible for service #31 Jaw Release; Christel remains the verified current mapping. Couples & Packages remains the client navigation owner; Couples Massage is now self-service under the exact #380 dual-practitioner contract. GBP, Ozow, privacy and Goldie-description gates remain unchanged.
@@ -206,6 +228,10 @@ Booking confirmation v2 is live behind the exact centralized contract gate; v1 r
 **Admin presentation:** keep `Shiloh Admin 🌿`, personalized `Welcome back, <Admin> 👋`, and `What would you like to manage today?`; keep `Body Treatments`, `New booking`, `Manage booking`, and `Cancel new booking` semantics from #371-#373. Existing appointment cancellation remains `Cancel booking` through the canonical #367 flow.
 
 **Proposed but not implemented:** context-aware post-cancellation return to the same Manage Client screen requires separate explicit authorization.
+
+**Marietjie waxing audit:** the six-service production audit is complete/read-only and must not be repeated. No matching canonical rows exist; six new rows are recommended with exact requested names/prices/durations and zero buffers. Implementation remains held for explicit Full Face Wax included-area and brow-shaping truth. Preserve inactive historical services #49/#62, their seven linked historical appointments, unrelated services and Abigail's authority.
+
+**Provider credential security:** Production / DevOps owns urgent rotation/revocation of the credential exposed in historic Render logs plus Authorization-value redaction verification. Preserve PR #385 template contracts and do not print credential values.
 
 **Practitioner-approved rescheduling:** the Meta provider and Production activation gates are closed. Both exact templates are approved, exact, duplicate-free and configured; `WHATSAPP_RESCHEDULE_APPROVAL_ENABLED=true` is live and the one-shot verifier is false. Booking & Admin UX may observe the first genuine client/practitioner journey when natural business use occurs; do not manufacture a Juvan reschedule, decision or CRM/Calendar mutation for evidence.
 
