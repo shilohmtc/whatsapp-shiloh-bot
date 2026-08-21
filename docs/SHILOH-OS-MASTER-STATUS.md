@@ -56,7 +56,7 @@ Relevant accepted runtime lineage remains:
 - **#375 / `6337ba701f1bc3e534219ec20c5dd20d5dce837b`** — guarded migration 069 for the exact Abigail/service #31 practitioner-mapping correction; CI #1181 successful.
 - **#376 / `5e187c6b531881d82ea1bfe1840b0b891d11518f`** — checksum-tracked startup application and explicit post-state verification of migration 069; CI #1183 successful.
 - **#378 / `aa7f692b35bc7acaafbea74d45f752c2b99a886d`** — established current Couples & Packages client navigation and preserved the canonical Sports Massage Package authority; its assisted-only Couples placeholder is superseded by #380.
-- **#380 / `2e387e5f1000774d97046a516c1c7d19e93cd947`** — current application: canonical Couples Massage service #66, 90 min/R1080, exact Abigail+Christel simultaneous availability and atomic booking, appointment-scoped companion backup contact/no marketing, dual-practitioner Calendar safety and multi-staff cancellation hardening; CI #1196 successful; Render `dep-da3l8gtbedkc73dn51e0` LIVE.
+- **#380 / `2e387e5f1000774d97046a516c1c7d19e93cd947`** — accepted Couples Massage lineage: canonical service #66, 90 min/R1080, exact Abigail+Christel simultaneous availability and atomic booking, appointment-scoped companion backup contact/no marketing, dual-practitioner Calendar safety and multi-staff cancellation hardening; CI #1196 successful.
 
 PR #357 and #359 were documentation/shared-authority reconciliations and did not broaden unrelated application behaviour.
 
@@ -482,7 +482,7 @@ PR #351 remains superseded/closed because newer authority #352–#356 overtook i
 
 ## Exact continuation state
 
-**Authoritative current application state:** PR #380 / `2e387e5f1000774d97046a516c1c7d19e93cd947`; CI #1196 completed successfully; Render deploy `dep-da3l8gtbedkc73dn51e0` **LIVE** on exact merge SHA. Migration 070 applied/checksum-verified, Google Calendar health passed and repeated `/health` checks returned 200.
+**Authoritative current application state:** PR #384 / `aed805842818983eb5d4e3ca50054627eea7fe0c`; PR #383 CI #1204 passed 832/832 and PR #384 CI #1206 passed. Final Render deploy `dep-da43g9mk1f9s73ajl33g` is **LIVE** on exact merge SHA with booking-confirmation v2 selected, migration 071 verified, one-shot flags false, `/health` status/database ok and no error/fatal logs. The #380 Couples Massage, #382 reschedule activation and all standing fail-closed invariants remain preserved.
 
 **Client Massage Treatments:** **Couples & Packages** is the first special option. Inside: **Couples Massage**, **Sports Massage Package**, **Back**. Couples Massage is now self-service under exact authority: service #66, 90 min, R1,080, Abigail + Christel required together, simultaneous full-duration availability, one lead client + companion name/mobile, Booking Policy acceptance and atomic dual-practitioner commit. Companion mobile is booking-only backup/no marketing; automatic fallback messaging is not claimed. Sports Massage Package reuses canonical `sports-massage-monthly` authority: package-session service #65, 4 sessions, R1400, 30 days, 24-hour cancellation notice, established entitlement/enquiry/session flows.
 
