@@ -1,13 +1,13 @@
 # Shiloh OS — Master Project Status
 
-Updated: 2026-08-20
+Updated: 2026-08-21
 Purpose: permanent current-state source of truth. Historical implementation detail remains in Git history and dated reconciliation files; do not redo accepted or superseded work.
 
 ## Authority and continuation protocol
 
 Operational truth is GitHub `main`, Render production, Shiloh CRM/Postgres, Google Calendar, Meta/WhatsApp provider evidence, and explicit real WhatsApp/human evidence. Never infer provider approval, attendance, approval decisions, CRM identity, Calendar state or handset behaviour.
 
-At the beginning of each new Shiloh OS chat: read this Master + `docs/SHILOH-OS-PROJECT-TRACKER.md` + the latest reconciliation, currently `docs/SHILOH-OS-RECONCILIATION-2026-08-20-COUPLES-MASSAGE-SELF-SERVICE.md`, plus `docs/SHILOH-OS-ENGINEERING-GOVERNANCE.md`, on current GitHub `main`; verify production/provider/CRM/Calendar/human evidence that could have changed; preserve newer authority; then continue only the owned controlled scope.
+At the beginning of each new Shiloh OS chat: read this Master + `docs/SHILOH-OS-PROJECT-TRACKER.md` + the latest reconciliation, currently `docs/SHILOH-OS-RECONCILIATION-2026-08-21-META-RESCHEDULE-ACTIVATION.md`, plus `docs/SHILOH-OS-ENGINEERING-GOVERNANCE.md`, on current GitHub `main`; verify production/provider/CRM/Calendar/human evidence that could have changed; preserve newer authority; then continue only the owned controlled scope.
 
 Earlier dated reconciliations remain durable where not superseded. Preserve in particular `docs/SHILOH-OS-RECONCILIATION-2026-08-20-CLIENT-COUPLES-AND-PACKAGES.md`, `docs/SHILOH-OS-RECONCILIATION-2026-08-20-ABIGAIL-JAW-RELEASE-MAPPING.md`, `docs/SHILOH-OS-RECONCILIATION-2026-08-20-ADMIN-UX-STANDARDIZATION.md`, `docs/SHILOH-OS-RECONCILIATION-2026-08-20-BOOKING-ADMIN-JUVAN-PRIMARY-BACKUP-AND-MANAGE-CANCEL.md`, `docs/SHILOH-OS-RECONCILIATION-2026-08-20-CONTROLLED-JUVAN-DEMO-IDENTITY.md`, `docs/SHILOH-OS-RECONCILIATION-2026-08-20-DUMMY-TEST-BOOKING-CLEANUP.md`, `docs/SHILOH-OS-RECONCILIATION-2026-08-20-ADMIN-BLOCK-TIME.md`, `docs/SHILOH-OS-RECONCILIATION-2026-08-20-CRM-DUMMY-RESET-COMPLETION.md`, `docs/SHILOH-OS-RECONCILIATION-2026-08-20-CURRENT-MAIN-356.md`, the Christel service-catalogue correction, specialist-workstream and Control-routing reconciliations, booking-confirmation-v2 controlled submission, Juvan booking approval/v1 handset proof, client-welcome repair, booking-update activation/stale suppression, Meta booking-update approval and all explicit fail-closed gates.
 
@@ -28,7 +28,7 @@ Current accepted **application** code is **PR #380 / `2e387e5f1000774d97046a516c
 - Migration 069 remained checksum-valid; service #31 `Upper Back, Neck & Jaw Release` remains active, Abigail remains `abigailMapped=false`, Christel remains the active/client-bookable mapping, and 13 linked appointments remain preserved.
 - Startup reverified migrations 065/066/067/068 as checksum-valid and Juvan controlled identity as **BOUND** to the current canonical pointer, presently client **845**, display `Juvan Botha`, controlled phone suffix **1564**, Jean-Pierre admin **4**.
 - Current Juvan approval contract remains `assigned_practitioner_primary_jean_pierre_backup_first_decision_wins`.
-- Practitioner-approved client rescheduling remains dark/off with `featureEnabled=false`; #380 did not alter that provider gate.
+- Practitioner-approved client rescheduling is now **enabled in production** through configuration-only activation deploy `dep-da433gbncjis73aucgv0`; startup verified `featureEnabled=true`, both exact template names configured, migration 064 checksum-valid and its required request-table indexes present. No application-code change was required.
 - The previously completed Dummy Test booking cleanup remains complete and `CRM_DUMMY_APPOINTMENT_CLEANUP_ON_START=false` remains the normal inert state.
 - No genuine Couples Massage appointment, companion identity, Calendar event, booking decision, cancellation, Juvan reset/re-registration or handset journey was manufactured merely to prove #380.
 
@@ -41,7 +41,7 @@ Relevant accepted runtime lineage remains:
 - **#353** — specialist-chat lifecycle operating convention.
 - **#354** — client self-service reschedule start-boundary guard.
 - **#355** — practitioner-approved reschedule success confirmation with durable retry/claim/suppression.
-- **#356** — exact Meta approval-request/decline transport contracts; feature remains dark pending provider readiness.
+- **#356** — exact Meta approval-request/decline transport contracts and fail-closed runtime gate. The 2026-08-21 provider approval and production activation closed its former external block without changing application code.
 - **#358** — historical CRM reset structured-interaction language-boundary repair used in the completed Dummy Test journey.
 - **#359** — documentation/reconciliation of completed CRM Dummy Test reassignment and genuine fresh-identity handset proof.
 - **#360** — guarded practitioner Block time / Blocked time workflow using canonical `calendar_blocks`.
@@ -308,28 +308,22 @@ No genuine Juvan reset/re-registration occurred merely for #380 proof. Productio
 
 The sanctioned Render read-only Postgres connector has previously failed before SQL execution at the known SSL/TLS boundary. No write-capable workaround is authorized merely for read evidence.
 
-## Current highest-priority external gate — practitioner-approved client reschedule
+## Practitioner-approved client reschedule — 🟢 PROVIDER VERIFIED / PRODUCTION ENABLED
 
-The application-side engineering through #356 is present, but the feature remains **🟠 WAITING PROVIDER / NOT ACTIVE** behind `WHATSAPP_RESCHEDULE_APPROVAL_ENABLED=false`.
-
-Last authoritative controlled Meta evidence remains:
+On 2026-08-21 the sanctioned provider verifier returned the complete readiness gate for both templates without submitting or editing either provider identity:
 
 | Template | Status | Category | Language | Exact | duplicateCount | App configured |
 |---|---|---|---|---|---:|---|
-| `shiloh_reschedule_approval_request_v1` | **PENDING** | UTILITY | `en` | true | 0 | true |
-| `shiloh_reschedule_declined_v1` | **PENDING** | UTILITY | `en` | true | 0 | true |
+| `shiloh_reschedule_approval_request_v1` | **APPROVED** | UTILITY | `en` | true | 0 | true |
+| `shiloh_reschedule_declined_v1` | **APPROVED** | UTILITY | `en` | true | 0 | true |
 
-Required activation readiness for **each** is `APPROVED / UTILITY / en / exact=true / duplicateCount=0 / configured=true`.
+Verification deploy `dep-da4331jm8hqs73dl3h60` ran on unchanged GitHub `main` commit `d15857c65e1765faaaa22e101261323f7374bb46` with the explicit one-shot checker enabled and the feature still off. Both results were `submitted=false / reason=already_exists_exact`.
 
-While either fails that gate:
+Production activation deploy `dep-da433gbncjis73aucgv0` then restored `META_RESCHEDULE_APPROVAL_TEMPLATES_PROVISION_ON_START=false`, set `WHATSAPP_RESCHEDULE_APPROVAL_ENABLED=true`, reached LIVE on the same unchanged commit, and logged `featureEnabled=true`, both template configurations true, migration 064 checksum-valid and both required indexes present. `/health` returned HTTP 200 with database `ok`; no startup provider submission, WhatsApp template send, reschedule request, appointment mutation or CRM/Calendar mutation occurred.
 
-- do not resubmit merely because it is PENDING;
-- do not enable `WHATSAPP_RESCHEDULE_APPROVAL_ENABLED`;
-- do not route activation to Production / DevOps;
-- do not manufacture a Juvan reschedule, practitioner decision, CRM/Calendar mutation or handset proof;
-- WhatsApp / Meta Integration remains the monitoring owner for a genuinely read-only provider refresh when an authorized surface is available.
+The provider and activation gates are closed. The deterministic kill switch remains `WHATSAPP_RESCHEDULE_APPROVAL_ENABLED=false`. Every actual send still revalidates the exact approved/configured provider contract and fails closed on drift, duplicates or provider-read failure.
 
-Only after both templates independently satisfy the complete provider gate may approval be reconciled and a separate controlled Production / DevOps activation begin.
+Genuine client/practitioner handset delivery remains an evidence boundary, not an implementation blocker. Observe it only through natural business use; do not manufacture a Juvan reschedule, decision, appointment or CRM/Calendar mutation for proof.
 
 ## Juvan Botha booking approval — 🟢 VERIFIED LIVE PRIMARY / BACKUP
 
@@ -502,6 +496,6 @@ PR #351 remains superseded/closed because newer authority #352–#356 overtook i
 
 **Separate unimplemented UX idea:** context-aware return to the same Manage Client screen after a successful cancellation is not part of current authority and requires separate explicit implementation approval.
 
-**Highest-priority remaining external gate:** WhatsApp / Meta Integration owns genuinely read-only monitoring of `shiloh_reschedule_approval_request_v1` and `shiloh_reschedule_declined_v1`. Until both independently satisfy the complete `APPROVED / UTILITY / en / exact=true / duplicateCount=0 / configured=true` gate, do not enable practitioner-approved rescheduling or manufacture a reschedule journey.
+**Practitioner-approved rescheduling:** both required Meta templates are provider-approved, exact, duplicate-free and configured; production is enabled through `WHATSAPP_RESCHEDULE_APPROVAL_ENABLED=true`. The one-shot provider checker is off. Preserve the exact runtime send guard and deterministic `false` kill switch. Genuine handset delivery remains open for natural business use only; do not manufacture a Juvan reschedule or practitioner decision for proof.
 
 **Remaining evidence boundary:** a real Couples Massage booking should occur only through natural client use; do not create one merely for proof. A real Juvan reset→new registration→new canonical rebind is also intentionally unproven and must occur only under later explicit authorization on the genuine business-controlled device. All other standing fail-closed gates remain preserved.
