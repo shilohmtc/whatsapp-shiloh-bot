@@ -103,7 +103,7 @@ const ACTION_COPY = {
   admin_action_schedule: ['Manage schedule', 'Working hours, leave and closures'],
   admin_action_calendar_integrity: ['Calendar integrity', 'Check booking and Calendar integrity'],
   admin_action_help: ['Help', 'View Admin help'],
-  admin_action_reset_juvan: ['Reset Juvan', 'Preview the controlled Juvan reset'],
+  admin_action_reset_juvan: ['Reset Juvan', 'Choose booking cleanup or identity-only reset'],
   admin_appointment_block_time: ['Block time', 'Make practitioner time unavailable'],
   admin_block_manage: ['Blocked time', 'View or manage upcoming blocks'],
 };

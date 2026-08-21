@@ -28,7 +28,7 @@ const ACTIONS = [
   { key: 'manage_booking', labels: ['Manage a booking'], command: 'Manage a booking', description: 'Reschedule or cancel an existing appointment' },
   { key: 'finalize', labels: ['Finalize past visits'], command: 'Finalize past appointments', description: 'Completed, No-show, Reschedule or leave unresolved' },
   { key: 'client', labels: ['Find a client', 'Find my client', 'Client details', 'My client details'], command: 'Find a client', description: 'View full authorized CRM client details' },
-  { key: 'reset_juvan', labels: ['Reset Juvan', 'Reset Juvan profile'], command: 'Reset test client Juvan', description: 'Preview and confirm the controlled Juvan reset' },
+  { key: 'reset_juvan', labels: ['Reset Juvan', 'Reset Juvan profile'], command: 'Reset test client Juvan', description: 'Choose booking cleanup or identity-only reset' },
   { key: 'walkin', labels: ['Add a walk-in'], command: 'Add a walk-in', description: 'Register a walk-in client' },
   { key: 'staff_services', labels: ['Staff services', 'My services'], command: 'Staff services', description: 'View authorized service mappings' },
   { key: 'pricing', labels: ['Services & pricing', 'My services & pricing'], command: 'Services & pricing', description: 'View or manage service pricing' },
