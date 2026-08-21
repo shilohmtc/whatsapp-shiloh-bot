@@ -34,7 +34,7 @@ test('approved Meta v1 contract stays unchanged while live delivery is simplifie
   assert.match(provisioning, /Google Calendar: \{\{6\}\}/);
   assert.match(provisioning, /Apple \/ Outlook \/ phone: \{\{7\}\}/);
   assert.match(provisioning, /Reply RESCHEDULE or CANCEL/);
-  assert.match(confirmation, /sendWhatsAppTemplate\(phone,template,\[clientName\|\|'there',serviceName,staffName,date,time,google,ics\|\|google\]/);
+  assert.match(confirmation, /bookingConfirmationTemplatePayload\(\{template,appointmentId,clientName,serviceName,staffName,date,time,google,ics\}\)/);
 });
 
 test('canonical calendar and booking-change actions remain available outside automatic v1 delivery', () => {
