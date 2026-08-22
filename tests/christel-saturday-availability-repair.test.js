@@ -23,12 +23,12 @@ test('repair is bounded to the proven stale Goldie FMA block', () => {
   assert.doesNotMatch(migration, /DELETE FROM appointments|DELETE FROM staff_schedule_exceptions|DELETE FROM staff_recurring_day_closures/i);
 });
 
-test('repair is checksum-controlled and must finish before production app start', () => {
+test('repair remains checksum-controlled but is not a permanent production-start hook', () => {
   assert.match(repairScript, /schema_migrations/);
   assert.match(repairScript, /checksumVerified/);
   assert.match(repairScript, /BEGIN/);
   assert.match(repairScript, /ROLLBACK/);
-  assert.match(pkg.scripts.start, /^node scripts\/applyChristelSaturdayAvailabilityRepair\.js && node /);
+  assert.doesNotMatch(pkg.scripts.start, /ChristelSaturday|christelSaturday/);
 });
 
 test('Christel 90-minute Saturday service fits canonical 08:00-14:00 envelope when no genuine conflict exists', () => {
