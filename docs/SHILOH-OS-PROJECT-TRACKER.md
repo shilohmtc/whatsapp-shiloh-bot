@@ -30,9 +30,9 @@ Control & Reconciliation uses reconciled authoritative evidence, not specialist-
 
 **CI:** PR #395 run **#1228** passed; focused pre-merge tests passed **30/30** and full pre-merge regression passed **856/856**. Reconciliation PR #396 run **#1230** also passed.
 
-**Render application baseline:** PR #395 deploy **`dep-da4a75lckfvc738ghpmg`** reached LIVE on exact application merge `485ed97d8812fc291c71493dd1bb652b5da42f05`. Documentation-only PR #396 then auto-deployed current `main` as **`dep-da4abn9t0dsc73adlld0` / `9bd3251122475d9b2b36fffa2408b8e95d442bfc`**, which is the current LIVE deployment and preserves the #395 application behavior unchanged. Repeated current `/health` requests on 2026-08-22 returned HTTP 200.
+**Render application baseline:** PR #395 deploy **`dep-da4a75lckfvc738ghpmg`** reached **LIVE** on exact application merge `485ed97d8812fc291c71493dd1bb652b5da42f05`. Documentation-only PR #396 then auto-deployed current `main` as **`dep-da4abn9t0dsc73adlld0` / `9bd3251122475d9b2b36fffa2408b8e95d442bfc`**, which is the current LIVE deployment and preserves #395 application behavior unchanged. Repeated current `/health` requests on 2026-08-22 returned HTTP 200.
 
-**Newer production defect evidence:** current Render logs on 2026-08-22 contain three WhatsApp onboarding failures with PostgreSQL **42702**, `column reference "normalized_phone" is ambiguous`, in the `completeOnboarding()` → `processActiveSession()` path in `src/services/clientIdentityOnboarding.js`. This is newer production authority than earlier clean log windows. It does not invalidate #395 Calendar verification, but CRM & Identity owns the bounded defect investigation/repair. Do not diagnose or mutate from Control by inference.
+**Newer production defect evidence:** current Render logs on 2026-08-22 contain three WhatsApp onboarding failures with PostgreSQL **42702**, `column reference "normalized_phone" is ambiguous`, in the `completeOnboarding()` → `processActiveSession()` path in `src/services/clientIdentityOnboarding.js`. This is newer production authority than earlier clean log windows. It does not invalidate #395 Calendar verification; CRM & Identity owns the bounded defect investigation/repair. Do not diagnose or mutate from Control by inference.
 
 Migration **070_couples_massage_self_service.sql** applied and checksum-verified. Production now has canonical service **#66 Couples Massage**, category Massage, **90 minutes**, price **R1080**, with exact active/client-bookable practitioner mappings **Abigail staff #1 + Christel staff #3**. Companion contact authority is appointment-scoped `booking_backup` with `marketingConsent=false`.
 
@@ -78,7 +78,7 @@ Practitioner-approved client rescheduling is **provider-verified and production-
 | META-BOOKING-CONFIRM-V2 | WhatsApp / Meta Integration + Production / DevOps | 🟢 VERIFIED LIVE / ENABLED | Fresh provider gate APPROVED / UTILITY / en / exact / duplicateCount=0. #383 exact five-parameter + three-button routing and fail-closed selector; #384 migration 071 evidence persistence; full 18-identity audit clean; final deploy `dep-da43g9mk1f9s73ajl33g` LIVE with v2 ready=true. Genuine handset delivery remains natural-use evidence only. |
 | META-BOOKING-UPDATE | WhatsApp / Meta + Production | 🟢 VERIFIED LIVE / ENABLED | `shiloh_booking_update_v1` approved/exact/duplicate-free and production-enabled. Kill switch `WHATSAPP_BOOKING_UPDATE_ENABLED=false`. |
 | CUSTOMER-CHANGE-EVIDENCE | Booking & Admin UX + WhatsApp | 🟠 WAITING GENUINE FUTURE DELIVERY | #575 / audit 674 terminally suppressed `appointment_already_ended`, `sent_at=null`; wait for a natural still-future appointment change. |
-| GOOGLE-CALENDAR-AUTH | Booking/Admin + Production | 🟢 VERIFIED HEALTHY | #302 fail-closed provider guard remains permanent. #395 is current practitioner-conflict classification authority: unrelated practitioner events do not block the assigned practitioner; shared/clinic-wide and relevant assigned-practitioner Calendar conflicts remain blocking. #570/#585 genuine sync evidence and #362 Dummy Test cleanup remain preserved. |
+| GOOGLE-CALENDAR-AUTH | Booking/Admin + Production | 🟢 VERIFIED HEALTHY | #302 fail-closed provider guard remains permanent. #395 is current practitioner-conflict classification authority: unrelated practitioner events do not block the assigned practitioner; shared/clinic-wide and relevant assigned-practitioner Calendar conflicts remain blocking. #570/#585 genuine sync evidence, #362 Dummy Test cleanup and #380 multi-staff safety remain preserved. |
 | ADMIN-BOOKING-ENTITLEMENT | Booking & Admin UX | 🟢 VERIFIED LIVE | #318 scope: Christel+Abigail shared; Marietjie only; linked Admin own practitioner; JP explicit Christel+Abigail exception; other unlinked Admin none. Block-time authority remains separate/narrower. |
 | ADMIN-BOOKING-FAST-PATH | Booking & Admin UX | 🟢 VERIFIED | Existing lookup/provisional-client/typed-time/same-Admin confirm rules remain accepted. |
 | CLIENT-WELCOME-JUVAN | Booking & Admin UX | 🟢 HANDSET EVIDENCE PRESERVED | #337 genuine Juvan `Hi` proved registered-client welcome; #364 clears phone-level welcome state only during a future authorized reset. Do not reset merely for proof. |
@@ -96,22 +96,213 @@ Practitioner-approved client rescheduling is **provider-verified and production-
 | OZOW | Production / business | 🟠 WAITING | Merchant configuration + explicit business rules required. |
 | PRIVACY-DESTRUCTIVE | Control + CRM | 🟠 WAITING | Fail closed pending authority/evidence. |
 
-## Preserved detailed authority
+## Couples Massage self-service — verified live
 
-All detailed implementation, business-policy, provider, CRM, catalogue, Juvan, Couples Massage, reschedule, credential-rotation, Goldie description, attendance, GBP, Ozow, privacy and genuine-journey authority recorded before this reconciliation remains in force where not explicitly superseded above. In particular, PR #395 supersedes earlier application authority only for practitioner Google Calendar conflict classification, while PR #396 is documentation-only.
+Durable evidence: `docs/SHILOH-OS-RECONCILIATION-2026-08-20-COUPLES-MASSAGE-SELF-SERVICE.md`.
 
-The dated practitioner Calendar reconciliation is `docs/SHILOH-OS-RECONCILIATION-2026-08-21-PRACTITIONER-CALENDAR-CONFLICT-CLASSIFICATION.md`. The prior Goldie business-approval reconciliation remains authoritative for Goldie scope and is not invalidated by the newer Calendar reconciliation.
+- #380 supersedes only the earlier assisted-only Couples Massage placeholder. **Couples & Packages** remains the first special option inside **Massage Treatments**; submenu order remains **Couples Massage → Sports Massage Package → Back**.
+- Production migration 070 established canonical Shiloh-owned service **#66 Couples Massage**: Massage category, active, 90 minutes, R1080, exact active/client-bookable mappings Abigail #1 + Christel #3.
+- Client presentation is `90 min • R1,080 • Abigail & Christel`.
+- Date/time discovery computes the exact future intersection of Abigail + Christel availability for the full 90 minutes using existing clinic-hours, schedules/exceptions, CRM appointment conflicts, `calendar_blocks`, shared Google Calendar and each practitioner Calendar.
+- One registered lead client supplies companion name + South African mobile. The companion number is stored appointment-scoped as `booking_backup`, with `marketing_consent=false`; it is not inserted into `client_contacts` and does not itself create a CRM client identity.
+- Review + existing Shiloh Booking Policy acceptance are required before mutation.
+- Final commit locks both practitioners in stable order, rechecks both, then creates one parent appointment + one service snapshot + Abigail position 1 + Christel position 2. Shared/practitioner Calendar side effects are compensated if the guarded transaction fails.
+- Existing booking approval authority remains in place after creation; position-1 practitioner remains the ordinary Primary and standing Juvan Primary/JP Backup/first-decision-wins rules remain unchanged.
+- Admin and client cancellation paths now handle multi-staff bookings by locking all assigned practitioners and clearing all practitioner Calendar mirrors. Existing client self-service reschedule remains fail-closed for `staff_count != 1`, so Couples Massage reschedule is assisted until separately designed.
+- #380 does **not** claim automatic WhatsApp fallback messaging to the companion. It establishes booking-specific backup-contact storage; any automatic fallback-send trigger requires separate authority.
+- Final CI #1196 passed. Render `dep-da3l8gtbedkc73dn51e0` reached LIVE on exact #380 merge SHA `2e387e5f1000774d97046a516c1c7d19e93cd947`; migration 070 applied/checksum-verified, Google Calendar health passed and repeated `/health` returned 200.
+- No genuine Couples Massage appointment, companion, Calendar event or handset journey was manufactured for proof.
+
+## Client Couples & Packages — verified live lineage
+
+Durable evidence: `docs/SHILOH-OS-RECONCILIATION-2026-08-20-CLIENT-COUPLES-AND-PACKAGES.md`.
+
+- #378 made **Couples & Packages** the first special option inside client **Massage Treatments** and preserved Sports Massage Package under canonical package authority.
+- #380 supersedes the earlier assisted-only Couples Massage behavior with the self-service contract documented above; do not restore the assisted-only placeholder unless later authority requires it.
+- Sports Massage Package still reuses canonical package slug `sports-massage-monthly`, existing entitlement/enquiry/status/session booking flows and package-session service #65.
+- Current canonical package rule remains 4 sessions / R1400 / 30 days / 24-hour cancellation notice / active.
+
+## Abigail Jaw Release practitioner mapping — verified live
+
+Durable evidence: `docs/SHILOH-OS-RECONCILIATION-2026-08-20-ABIGAIL-JAW-RELEASE-MAPPING.md`.
+
+- #375 introduced exact guarded migration 069 for Goldie service `b5c96105-f534-406d-89ec-68e78c65cf8b` / service #31 `Upper Back, Neck & Jaw Release`; CI #1181 succeeded.
+- #376 added the established checksum-tracked startup application/verification path; CI #1183 succeeded and merge SHA is `5e187c6b531881d82ea1bfe1840b0b891d11518f`.
+- Production applied migration 069 with checksum verification and proved `abigailMapped=false` for Abigail staff #1.
+- The service remains active and Christel staff #3 is the remaining active/client-bookable practitioner mapping.
+- Linked appointment count is 13 and was preserved; the correction does not delete/rewrite appointment history or alter service metadata.
+- #380 startup reverified this authority unchanged.
+
+## Admin UX standardization — verified live
+
+Durable evidence: `docs/SHILOH-OS-RECONCILIATION-2026-08-20-ADMIN-UX-STANDARDIZATION.md`.
+
+- #371 established the Admin copy-standardization layer and Body Treatments presentation grouping without altering CRM service authority or booking mutation semantics.
+- #372 completed `Cancel new booking` presentation for the final pending-new-booking confirmation while preserving existing-appointment `Cancel booking`.
+- #373 keeps `Shiloh Admin 🌿` and the personalized greeting, replacing the redundant landing prompts with `What would you like to manage today?`.
+- Final #373 CI #1177 completed successfully; that presentation authority remains current beneath #380.
+
+## Booking/Admin Juvan Primary/Backup + Manage booking cancellation — verified live
+
+Durable evidence: `docs/SHILOH-OS-RECONCILIATION-2026-08-20-BOOKING-ADMIN-JUVAN-PRIMARY-BACKUP-AND-MANAGE-CANCEL.md`.
+
+- #366 merged as `53b5e0c4027f9910291f75c05ec13d9c55528118`; CI #1164 passed 796/796; migration 068 production-applied/checksum-verified.
+- Current Juvan approval is assigned practitioner Primary + JP Backup, revalidated from current controlled identity/appointment truth, with exactly one atomic first terminal decision.
+- `Reset Juvan` is JP-only in Admin presentation and delegates to the existing #364 CRM reset contract.
+- Genuine #585 remains historical evidence of prior JP-sole behavior and was not recreated.
+- #367 established reason-required/confirm-gated existing-appointment cancellation; #380 only broadens its internal staff-lock/Calendar cleanup safety for multi-staff appointments.
+- No genuine appointment cancellation was manufactured for proof.
+
+## Controlled Juvan reusable demo identity — verified live foundation
+
+Durable identity evidence remains `docs/SHILOH-OS-RECONCILIATION-2026-08-20-CONTROLLED-JUVAN-DEMO-IDENTITY.md`.
+
+- #364 anchors `juvan_botha` to the exact normalized business-controlled phone, not a display-name query.
+- `current_client_id` is the current canonical client pointer and may change after an authorized reset/re-registration; current production presently resolves client 845.
+- Reset is exact Jean-Pierre business-admin only, atomically archives/releases/unbinds and preserves appointments/audit history.
+- While UNBOUND, only normal exact-phone WhatsApp onboarding may atomically bind the newly created canonical client and approval-policy pointer.
+- The read-only resolver fails closed on client/contact/policy/shared-active drift and is the required downstream identity source.
+- No genuine Juvan reset/new registration/rebind was executed merely for #380 proof.
+
+## Guarded Juvan booking cleanup — verified live
+
+Durable evidence: `docs/SHILOH-OS-RECONCILIATION-2026-08-21-GUARDED-JUVAN-BOOKING-CLEANUP.md`.
+
+- #388 adds **Clean bookings and reset**, unchanged **Reset identity only**, and **Cancel** to the JP-only Reset Juvan workflow.
+- The clean preview uses the exact current phone-anchored pointer and includes every non-final appointment's ID, status, service, practitioner(s), date/time and known shared/practitioner Calendar mirrors. Confirmation is bound to the exact preview state.
+- Only non-final operational appointments are cancelled through canonical history/audit handling. Completed/no-show/already-cancelled and all appointment rows remain preserved; related pending approval, reschedule, lifecycle/reminder and notification state is terminalized without customer cancellation messaging.
+- Stored/current deterministic shared and every recognized assigned-practitioner Calendar mirror are removed. Any unresolved mirror retains the identity binding and returns a safe idempotent retry path; identity reset runs only after zero unresolved mirrors and a final transaction-time appointment recheck.
+- PR #364's identity-only lifecycle is unchanged. No historical client ID, display-name lookup or one-shot flag is used.
+- CI #1214 passed; Render `dep-da450l9t0dsc73a7dbo0` reached LIVE on exact merge `e4833a743945db63b8cce3731d593f76c9f17921`; Calendar health and `/health` passed with no error/fatal logs in that verified window.
+- No real reset, appointment cancellation, customer message or Calendar event deletion was manufactured for proof.
+
+## Dummy Test booking cleanup — complete / do not replay
+
+Durable evidence: `docs/SHILOH-OS-RECONCILIATION-2026-08-20-DUMMY-TEST-BOOKING-CLEANUP.md`.
+
+- #362 added an exact-client guarded one-shot behind `CRM_DUMMY_APPOINTMENT_CLEANUP_ON_START`.
+- One authorized activation cancelled #582 and #583; existing cancellation history and #564 no-show were preserved.
+- Three lifecycle rows were terminalized; no pending approval/reschedule/change-notification state required mutation.
+- All shared/practitioner Calendar cleanup calls resolved, and full-2026 searches now return zero Dummy Test events on shared, Abigail, Marietjie and primary/Christel surfaces.
+- The one-shot flag is false and must not be replayed merely for proof.
+
+## Admin practitioner Block time — verified live
+
+Durable evidence: `docs/SHILOH-OS-RECONCILIATION-2026-08-20-ADMIN-BLOCK-TIME.md`.
+
+- #360 uses existing `calendar_blocks`.
+- Authority: Christel→Myself/Abigail; Abigail→self; Marietjie→self; JP/others→none.
+- Missing/ambiguous identity and appointment/block overlap fail closed.
+- Future Shiloh-created blocks are manageable; imported Goldie blocks remain outside edit/remove UI.
+- Client/Admin availability already excludes blocks; no fake client appointment/message is created.
+
+## CRM Dummy Test reassignment — complete historical evidence / reusable target retired
+
+Durable evidence: `docs/SHILOH-OS-RECONCILIATION-2026-08-20-CRM-DUMMY-RESET-COMPLETION.md`.
+
+- Genuine Dummy Test reset archived CRM #835 and released its WhatsApp/mobile identity while preserving appointment/audit history.
+- Genuine post-reset `Hi` received the unregistered/new-client branch with no inherited Dummy Test identity.
+- #362 subsequently cleaned the preserved operational bookings.
+- #364 retires Dummy Test, CRM Dummy Test and Chenique from active reusable reset eligibility.
+
+## Practitioner-approved client reschedule — verified live
+
+PR #382 remains completed/do-not-redo authority: both exact templates are APPROVED / UTILITY / en / exact / duplicate-free and production is enabled with `WHATSAPP_RESCHEDULE_APPROVAL_ENABLED=true`. The first genuine handset journey remains natural-use evidence only.
+
+## Marietjie detailed waxing audit — verified read-only / implementation held
+
+The completed production audit established that no exact or normalized canonical service exists for:
+
+- **Brow Wax — R80 — 15 minutes**
+- **Brow Tint — R80 — 15 minutes**
+- **Upper Lip Wax — R80 — 15 minutes**
+- **Lower Lip Wax — R80 — 15 minutes**
+- **Lower Lip & Chin Wax — R120 — 20 minutes**
+- **Full Face Wax — R500 — 60 minutes**
+
+The recommended resolution is **create new** for each service, using exactly those client-facing names with processing time `0` and extra time `0`. Business intent to add the six services under Marietjie is recorded, but controlled implementation approval is **not closed**: Full Face Wax still requires explicit human truth for its included areas and whether brow shaping is included. The complete six-service creation unit therefore remains fail-closed on hold. No CRM implementation instruction is issued yet.
+
+Preserve service #49 **Waxing** as inactive, unmapped and non-bookable at 60 minutes / R80–R500 with three historical and zero future appointments. Preserve service #62 **Eyebrow wax shape & Tint** as inactive, unmapped and non-bookable at 40 minutes / R150 with four historical and zero future appointments. Preserve both historical services and every linked appointment. Do not retire, rename, replace or remap broad Waxing by inference. Existing permanent-makeup brow/lip services and Lip Plump services are unrelated, and Abigail's service authority remains unchanged.
+
+## Goldie service-description export — business decisions recorded / drafting, support and publication held
+
+The completed CRM read-only audit verified source export `export (33).csv` at SHA-256 `fdcba9cf4145d0e4925630d65a103a9d0fa6ba3c618e33fb7c428aae27c84d16` against comparison `Services.csv` at SHA-256 `f5f15b774b766b111236176e44040e7fc99bb1624f71b07117ea861380697e08`. All **52/52** Goldie service IDs and names match exactly; **49** descriptions are nonblank; no rows are missing or unmatched; and no exact description is duplicated across services. The 52-service audit is complete and must not be repeated merely for reconciliation.
+
+Goldie editor evidence captured on 2026-08-21 now closes the editor-recovery question for the two active/non-retired blanks:
+
+1. `90baece3-1520-4368-b772-eaba08e1a511` — **Lymphatic Drainage Reset Package**: the internal Service description field is empty. Screenshot SHA-256 `cfde9dbaf723f68c77713e836c7edc1ba1eb011f5b91c302539e37ba20fc07af`.
+2. `d42f5e34-b3c1-4ff3-9206-0fc97823d02e` — **Facial Lymphatic Drainage Massage**: the internal Service description field is empty. Screenshot SHA-256 `2b0fe100ebbd37f77c37c97334e57fa57b9cbb2cdf7b23d47b08a280c3094561`.
+
+In both screens, `Enter service description` is placeholder UI, not stored text. These blanks no longer require another Goldie editor check. Business must explicitly decide whether each field should remain blank or receive separately authored and approved wording. The Reset Package service photo contains secondary marketing copy about three consecutive lymphatic-drainage treatments, a complete reset and a 25% three-session saving; that image is not the internal Description field and must not be copied or published as description text by inference.
+
+Preserve the retired `1d734e8b-d21e-44c3-9a3f-b2a7165a7787` **Full Body Sports Massage** Description as blank; do not author or publish a replacement.
+
+The Psoas editor route is exhausted but the missing tail remains unresolved:
+
+- `b39dcaf1-7894-40e0-8a51-c7ab4eba553a` — **Lower Back & Hip & Psoas Release** was copied verbatim from the Goldie editor. It is exactly **1,000 characters**, matches the exported Description byte-for-byte, ends `deep physica`, and has SHA-256 `bfe27a01b504bd4545c16824d2a722097aba122095b94b4b5202dc3231aff352`.
+- Therefore the editor does not contain an accessible missing tail. Goldie Support/backend history must provide the uncapped stored value and any prior value, or explicitly confirm that the source field itself is truncated. Do not infer or autocomplete the ending.
+
+Known approval exceptions remain fail-closed:
+
+- **Ozone & Far Infrared Therapy** contains a duplicated practitioner contact fragment plus phone-number and treatment-claim exceptions.
+- **Bamboo Sports Massage Area Specific** contains a full-body treatment-identity conflict.
+- Additional phone-number, medical/treatment-claim, punctuation, corrupted and misplaced-text exceptions remain individually approval-gated in the CRM approval matrix.
+
+This evidence does not authorize a Shiloh catalogue or production-data mutation. Do not bulk-publish descriptions. CRM & Identity has completed the read-only editor evidence unit; Goldie Support owns the remaining Psoas source dependency, and Control & Reconciliation/business own publication authority.
+
+Business decisions D1–D11 were explicitly approved on 2026-08-21:
+
+1. Preserve the **Lymphatic Drainage Reset Package** Description as blank for now; any future copy is a separately commissioned and approved unit.
+2. Preserve the **Facial Lymphatic Drainage Massage** Description as blank for now; any future copy is a separately commissioned and approved unit.
+3. Preserve retired **Full Body Sports Massage** as intentionally blank.
+4. Keep **Lower Back & Hip & Psoas Release** unpublished while awaiting Goldie Support's uncapped stored value/history or explicit confirmation that no longer value exists.
+5. If Psoas copy is later drafted, use a neutral factual rewrite and qualified review; the current pain, nerve-compression, posture, mobility and emotional-well-being claims are not approved unchanged.
+6. Remove practitioner personal phone numbers from public descriptions. This applies to **Ozone & Far Infrared Therapy**, **Plasma Fybroblast** and **Basic Facial-Hydrationw/Pigmentation Targeted Break out skin**; client contact must use Shiloh's controlled clinic journey instead.
+7. **Bamboo Sports Massage Area Specific** remains identity-blocked until business confirms whether the actual treatment is Area Specific or Full Body.
+8. Bamboo inflammation, circulation and lymphatic-flow claims must be neutralized or pass the clinical-claim review gate.
+9. CRM & Identity may prepare a mechanical-only correction draft for obvious punctuation, bracket, quotation-mark and spacing defects. This is drafting authority only.
+10. CRM & Identity is commissioned to prepare controlled rewrites for corrupted and misplaced text. Exact replacement wording must return for approval before publication.
+11. Imported Goldie provenance is not publication approval. Clinical or treatment efficacy, recovery, safety, outcome or duration claims require retained substantiation and qualified clinical/compliance review. Without that gate, use neutral factual wording or keep the description unpublished.
+
+These decisions authorize controlled drafting and reconciliation only. They do not authorize catalogue, database, Goldie or production publication/mutation. Psoas source recovery and Bamboo treatment identity remain fail-closed external/human-truth gates.
+
+The next CRM unit is drafting-only and may proceed without redoing source/editor verification. Publication remains blocked until exact proposed wording is approved and every applicable source, identity and claim-review gate is closed.
+
+
+## Provider credential rotation — verified complete
+
+The exposed Meta WhatsApp Cloud API bearer credential was identified by non-secret ownership and consumer evidence as Render `WHATSAPP_TOKEN` for the single `shiloh-whatsapp-bot` service. PR #387 first closed the serialization defect that had allowed nested Axios request headers to reach logs; CI #1212 passed all 835 tests and the production log window was clean before replacement installation.
+
+Final provider ownership is the dedicated Meta system user `Shiloh` (ID `61593365711509`), assigned only the production `Shiloh_MTC` app and production WABA `4002592316709920`. Its never-expiring token has only `whatsapp_business_management` and `whatsapp_business_messaging`; the Test WABA and unrelated provider permissions are excluded. Only Render secret `WHATSAPP_TOKEN` changed. After the final token was live and provider checks passed, all tokens for generic system user `Employee` (ID `61593165503862`) were revoked.
+
+Post-revocation Render deploy `dep-da47v6n40ujc73d1qeug` reached LIVE on the then-current documentation-only `main`, PR #389 / `ae3825925277205512a4db0d9e13964fb3e79ea5`. Root and health probes returned 200; booking-update, cancellation, staff-finalization and booking-confirmation provider checks remained APPROVED; that verified window contained zero errors and zero Authorization, Bearer, Meta-token-like or `WHATSAPP_TOKEN` values. No real customer message or booking was created. Historic retained log entries were not destroyed because Render provides no supported individual-entry deletion; they remain subject to provider retention. PR #385 Meta contracts remain unchanged. Newer 2026-08-22 CRM onboarding errors are unrelated later runtime evidence and do not reopen the completed credential rotation.
+
+## Other preserved state
+
+Booking confirmation v2 is live behind the exact centralized contract gate; v1 remains the explicit rollback. Genuine v2 handset delivery is not yet evidenced and may arise only from a natural booking. Booking update activation is complete but natural delivery evidence remains open. Google Calendar remains synchronized/fail-closed, with #395 now the bounded practitioner-event classification authority. Attendance stays own-practitioner only and #558 stays HOLD. Christel catalogue correction remains authoritative. Abigail is no longer eligible for service #31 Jaw Release; Christel remains the verified current mapping. Couples & Packages remains the client navigation owner; Couples Massage is now self-service under the exact #380 dual-practitioner contract. GBP, Ozow and privacy gates remain unchanged. Goldie description source identity is verified, while recovery and publication approvals remain fail-closed.
 
 ## Exact continuation
 
-**Authoritative current state:** PR #395 / `485ed97d8812fc291c71493dd1bb652b5da42f05` is current accepted application code. CI #1228 passed; focused tests passed 30/30 and full regression passed 856/856. #395 deploy `dep-da4a75lckfvc738ghpmg` reached LIVE on exact merge. Documentation-only PR #396 / `9bd3251122475d9b2b36fffa2408b8e95d442bfc` passed CI #1230 and is current GitHub `main` plus current LIVE Render deploy `dep-da4abn9t0dsc73adlld0`; repeated current `/health` requests returned 200.
+**Authoritative current state:** PR #395 / `485ed97d8812fc291c71493dd1bb652b5da42f05` is current accepted application code. CI #1228 passed; focused tests passed 30/30 and full regression passed 856/856. Deploy `dep-da4a75lckfvc738ghpmg` reached LIVE on exact merge SHA. Documentation-only PR #396 / `9bd3251122475d9b2b36fffa2408b8e95d442bfc` passed CI #1230 and is current GitHub `main` plus current LIVE Render deploy `dep-da4abn9t0dsc73adlld0`; repeated current `/health` requests returned 200. PR #387 provider-log redaction, PR #385 Meta reconciliation, booking-confirmation v2 selection/evidence, PR #382 reschedule activation, PR #380 Couples Massage and all standing fail-closed invariants remain preserved.
 
-**Booking/Admin completed state:** #395 practitioner Calendar conflict classification is verified live and must not be redone. An unrelated practitioner's Calendar event does not, by itself, block the assigned practitioner. Shared/clinic-wide events and the relevant assigned practitioner's Calendar remain blocking, with existing provider-health and canonical conflict rules preserved. #388 Juvan cleanup, #380 Couples Massage, #367 cancellation, #371-#373 presentation, #375/#376 Jaw Release mapping and all unrelated accepted authority remain preserved.
+**Booking/Admin completed state:** #395 practitioner Calendar conflict classification is verified live and must not be redone. An unrelated practitioner's Calendar event does not, by itself, block the assigned practitioner. Shared/clinic-wide events and the relevant assigned practitioner's Calendar remain blocking, with existing provider-health and canonical conflict rules preserved. #366 Primary/Backup approval remains verified live; #388 JP-only guarded Juvan booking cleanup remains verified live; #367 Manage booking guarded cancellation remains verified live with #380 multi-staff safety; #371-#373 presentation standardization remains verified live; #375/#376 remove service #31 from Abigail only; #378 established Couples & Packages navigation; #380 establishes atomic Couples Massage self-service. Current controlled Juvan identity remains phone-anchored/current-pointer based; do not name-match or permanently hard-code client 845.
 
-**New CRM defect:** current production logs on 2026-08-22 show three onboarding failures with PostgreSQL 42702 `column reference "normalized_phone" is ambiguous` in `clientIdentityOnboarding.js`. This evidence is newer than earlier clean log windows. CRM & Identity owns bounded defect investigation/repair; Production / DevOps observes deployment/runtime evidence; Control tracks reconciliation. No root cause or corrective mutation is authorized by this documentation patch.
+**Client Massage Treatments:** keep **Couples & Packages** as the first special option, with **Couples Massage**, **Sports Massage Package**, then **Back**. Couples Massage is **90 minutes / R1,080 / Abigail + Christel**, offers only shared full-duration availability, requires lead client + companion name/mobile + Booking Policy acceptance, and commits both practitioner allocations atomically. Companion mobile is booking-only backup / no marketing; automatic fallback messaging is not claimed. Sports Massage Package continues to resolve canonical `sports-massage-monthly` authority.
 
-**Provider credential security:** rotation is complete and must not be redone. Earlier clean verification windows remain valid for credential-rotation proof but are time-bounded; they do not override the newer unrelated onboarding failures.
+**Multi-staff change safety:** client Couples Massage cancellation locks all assigned practitioners and removes all practitioner Calendar mirrors; Admin canonical cancellation does the same. Client self-service reschedule remains fail-closed for multi-staff appointments and requires clinic assistance.
 
-**Goldie descriptions:** PR #392/#393 and D1-D11 remain preserved. The newer practitioner Calendar reconciliation changes chronology only, not Goldie publication authority or its external/human-review gates.
+**Admin presentation:** keep `Shiloh Admin 🌿`, personalized `Welcome back, <Admin> 👋`, and `What would you like to manage today?`; keep `Body Treatments`, `New booking`, `Manage booking`, and `Cancel new booking` semantics from #371-#373. Existing appointment cancellation remains `Cancel booking` through the canonical #367 flow.
 
-**Remaining genuine-device gates:** genuine booking-confirmation/reschedule/customer-change/Juvan lifecycle evidence remains natural-use or explicitly authorized only. Do not manufacture appointments, decisions, resets, CRM/Calendar mutations or provider state merely for proof.
+**Proposed but not implemented:** context-aware post-cancellation return to the same Manage Client screen requires separate explicit authorization.
+
+**Marietjie waxing audit:** the six-service production audit is complete/read-only and must not be repeated. No matching canonical rows exist; six new rows are recommended with exact requested names/prices/durations and zero buffers. Implementation remains held for explicit Full Face Wax included-area and brow-shaping truth. Preserve inactive historical services #49/#62, their seven linked historical appointments, unrelated services and Abigail's authority.
+
+**Goldie descriptions:** PR #392/#393 source/editor evidence is complete and must not be repeated. JP approved D1–D11 on 2026-08-21: preserve both active lymphatic blanks and the retired Sports Massage blank; keep Psoas unpublished pending Goldie Support; prepare neutral/reviewed Psoas wording only after source closure; remove practitioner phone numbers from descriptions; hold Bamboo for Area Specific versus Full Body truth and claim review; and prepare mechanical corrections plus controlled rewrites for exact approval. Imported Goldie text is not publication approval: clinical/treatment claims require retained substantiation and qualified review. CRM & Identity may draft under a separate controlled instruction, but no description may be published or mutated until its exact gates close.
+
+**Provider credential security:** rotation is complete and must not be redone. Dedicated Meta system user `Shiloh` owns the final least-privilege WhatsApp token; all former `Employee` tokens are revoked; only Render `WHATSAPP_TOKEN` changed. Earlier post-revocation production/provider health and log-redaction evidence remains valid for its verified window. Preserve PR #385 contracts, PR #387 redaction and the dedicated production-only asset boundary.
+
+**Practitioner-approved rescheduling:** the Meta provider and Production activation gates are closed. Both exact templates are approved, exact, duplicate-free and configured; `WHATSAPP_RESCHEDULE_APPROVAL_ENABLED=true` is live and the one-shot verifier is false. Booking & Admin UX may observe the first genuine client/practitioner journey when natural business use occurs; do not manufacture a Juvan reschedule, decision or CRM/Calendar mutation for evidence.
+
+**New CRM defect:** current production logs on 2026-08-22 show three onboarding failures with PostgreSQL 42702 `column reference "normalized_phone" is ambiguous` in `clientIdentityOnboarding.js`. This evidence is newer than earlier clean log windows. CRM & Identity owns bounded defect investigation/repair; Production / DevOps observes deployment/runtime evidence; Control tracks reconciliation. No root cause or corrective mutation is authorized by this documentation reconciliation.
+
+**Remaining genuine-device gate:** a real Juvan booking cleanup/reset→new registration→canonical rebind remains intentionally unproven and may occur only when Jean-Pierre genuinely intends that operational action. Do not manufacture or cancel an appointment for verification. All other standing fail-closed gates remain preserved.
