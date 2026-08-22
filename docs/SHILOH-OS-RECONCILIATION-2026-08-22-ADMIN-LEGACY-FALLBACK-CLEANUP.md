@@ -42,17 +42,18 @@ GitHub Actions CI run **32567694026** completed successfully on Node **24.14.1**
 
 Render workspace **My Workspace** was explicitly confirmed before production inspection.
 
+Application deployment:
+
 - Service: `whatsapp-shiloh-bot`
 - Service ID: `srv-d9qbfmk9v7es73emgam0`
 - Deploy: **`dep-da4njtlckfvc73cmnk0g`**
 - Trigger: new commit
 - Exact application commit: **`696a2c669a3de7b21f8119f0786c707974c30ffd`**
 - Status: **LIVE**
-- Completed: **2026-08-22T10:30:46.679185Z**
 
 Startup reached the production listener successfully and Render reported the service live. Existing migration/bootstrap verification completed through migration 072 and a production request returned HTTP 200 in the inspected startup window.
 
-A Google Calendar provider-health warning about insufficient `calendar.events.readonly` permission was also present in the inspected logs. It did not block this deploy or startup and is not caused by this presentation-only repair; it remains a separate Google Calendar/provider concern and does not reopen this controlled unit.
+An earlier inspection window contained a transient Google Calendar provider-health permission warning. That is **superseded by newer authoritative production evidence** from reconciliation PR #410: documentation-only main commit **`560099cdb55260ae045ffa6a2a3cb2cfdb51017b`** auto-deployed as **`dep-da4nrhgjo6nc73fee4sg`**, reached **LIVE** at `2026-08-22T10:46:11.098874Z`, logged **`Google Calendar provider health check passed`**, logged `Shiloh started`, and returned repeated `/health` HTTP 200 plus root HTTP 200. There is therefore no unresolved Google Calendar provider-health gate attached to this controlled unit.
 
 ## Safety boundary
 
@@ -62,15 +63,15 @@ This unit contains no database migration and made no appointment, schedule, CRM,
 
 ### Project Tracker
 
-Record `ADMIN-LEGACY-FALLBACK-CLEANUP` as **🟢 VERIFIED LIVE / COMPLETE**, with #409 / `696a2c669a3d...`, CI 868/868 and Render deploy `dep-da4njtlckfvc73cmnk0g` as bounded evidence. Preserve all unrelated current gates and durable authorities.
+Record `ADMIN-LEGACY-FALLBACK-CLEANUP` as **🟢 VERIFIED LIVE / COMPLETE**, with #409 / `696a2c669a3d...`, CI 868/868, application deploy `dep-da4njtlckfvc73cmnk0g`, and final reconciliation deploy `dep-da4nrhgjo6nc73fee4sg` as bounded evidence. Preserve all unrelated current gates and durable authorities.
 
 ### Master Status
 
-Record #409 as the current accepted application baseline and preserve #399 as the durable CRM normalized-phone repair authority, #395 as the practitioner Calendar conflict-classification authority, and every unrelated provider/human/evidence gate unchanged.
+Record #409 as the current accepted application baseline, #410 / `560099cdb552...` as documentation-only reconciliation convergence, and preserve #399 as the durable CRM normalized-phone repair authority, #395 as the practitioner Calendar conflict-classification authority, and every unrelated provider/human/evidence gate unchanged.
 
 ## Unresolved gates
 
-**None for this controlled unit.** The separate Google Calendar provider-permission warning is not a dependency of the Admin fallback cleanup and must be handled only by the owning Google Calendar / Production workstream if it remains current and actionable.
+**None for this controlled unit.** The earlier transient Calendar warning is superseded by the later clean provider-health check on the final reconciliation deploy.
 
 ## Do not redo
 
@@ -78,4 +79,4 @@ Do not restore the legacy raw Admin command dump, do not bypass the existing gua
 
 ## Final ownership
 
-**None — controlled unit complete after Tracker and Master reconciliation are merged and the documentation-only deployment is verified.**
+**None — controlled unit complete once this final health-evidence reconciliation is merged and its documentation-only deployment is verified.**
