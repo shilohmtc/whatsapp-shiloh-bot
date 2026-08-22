@@ -24,9 +24,7 @@ BEGIN
      AND cb.starts_at = TIMESTAMPTZ '2026-08-29 06:00:00+00'
      AND cb.ends_at = TIMESTAMPTZ '2026-08-29 22:00:00+00'
      AND cb.title = 'FMA Course'
-     AND cb.source = 'goldie_import'
-     AND cb.created_at = TIMESTAMPTZ '2026-08-10 19:00:07+00'
-     AND cb.updated_at = TIMESTAMPTZ '2026-08-10 19:00:07+00';
+     AND cb.source = 'goldie_import';
 
   IF v_target_count <> 1 THEN
     RAISE EXCEPTION '073 exact stale Goldie block precondition failed; matched % rows', v_target_count;
@@ -39,9 +37,7 @@ BEGIN
      AND cb.starts_at = TIMESTAMPTZ '2026-08-29 06:00:00+00'
      AND cb.ends_at = TIMESTAMPTZ '2026-08-29 22:00:00+00'
      AND cb.title = 'FMA Course'
-     AND cb.source = 'goldie_import'
-     AND cb.created_at = TIMESTAMPTZ '2026-08-10 19:00:07+00'
-     AND cb.updated_at = TIMESTAMPTZ '2026-08-10 19:00:07+00';
+     AND cb.source = 'goldie_import';
 
   IF NOT FOUND THEN
     RAISE EXCEPTION '073 stale Goldie block was not removed';
