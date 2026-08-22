@@ -4,11 +4,9 @@
   "description": "Production-ready WhatsApp AI Bot",
   "main": "app.js",
   "type": "commonjs",
-  "engines": {
-    "node": "24.14.1"
-  },
+  "engines": {"node": "24.14.1"},
   "scripts": {
-    "start": "node -r ./src/bootstrap/christelSaturdayAvailabilityDiagnosticBootstrap.js -r ./src/bootstrap/christelSaturdayBlockEvidenceBootstrap.js -r ./src/bootstrap/adminClientLookupNamePatch.js -r ./src/bootstrap/adminProvisionalClientBookingPatch.js -r ./src/bootstrap/adminBookingNaturalDatePatch.js -r ./src/bootstrap/adminBookingChangeConfirmationPatch.js -r ./src/bootstrap/adminBookingChangeConfirmationAuthPatch.js -r ./src/bootstrap/adminBookingChangeConfirmationCommitPatch.js -r ./src/bootstrap/adminManualStartTimePickerPatch.js -r ./src/bootstrap/adminBookingProviderGuardPatch.js -r ./src/bootstrap/adminBookingCustomerNotificationPatch.js -r ./src/bootstrap/adminBookingTypedTimePickerPatch.js -r ./src/bootstrap/clientRescheduleStartBoundaryPatch.js -r ./src/bootstrap/clientRescheduleApprovedNotificationPatch.js -r ./src/bootstrap/clientRescheduleApprovalPatch.js -r ./src/bootstrap/clientRescheduleApprovalTemplateProvisioningBootstrap.js -r ./src/bootstrap/adminBlockTimePatch.js -r ./src/bootstrap/adminUxStandardizationPatch.js -r ./src/bootstrap/abigailJawReleaseMappingPatch.js -r ./src/bootstrap/clientCouplesPackagesPatch.js app.js",
+    "start": "node scripts/applyChristelSaturdayAvailabilityRepair.js && node -r ./src/bootstrap/christelSaturdayAvailabilityDiagnosticBootstrap.js -r ./src/bootstrap/christelSaturdayBlockEvidenceBootstrap.js -r ./src/bootstrap/adminClientLookupNamePatch.js -r ./src/bootstrap/adminProvisionalClientBookingPatch.js -r ./src/bootstrap/adminBookingNaturalDatePatch.js -r ./src/bootstrap/adminBookingChangeConfirmationPatch.js -r ./src/bootstrap/adminBookingChangeConfirmationAuthPatch.js -r ./src/bootstrap/adminBookingChangeConfirmationCommitPatch.js -r ./src/bootstrap/adminManualStartTimePickerPatch.js -r ./src/bootstrap/adminBookingProviderGuardPatch.js -r ./src/bootstrap/adminBookingCustomerNotificationPatch.js -r ./src/bootstrap/adminBookingTypedTimePickerPatch.js -r ./src/bootstrap/clientRescheduleStartBoundaryPatch.js -r ./src/bootstrap/clientRescheduleApprovedNotificationPatch.js -r ./src/bootstrap/clientRescheduleApprovalPatch.js -r ./src/bootstrap/clientRescheduleApprovalTemplateProvisioningBootstrap.js -r ./src/bootstrap/adminBlockTimePatch.js -r ./src/bootstrap/adminUxStandardizationPatch.js -r ./src/bootstrap/abigailJawReleaseMappingPatch.js -r ./src/bootstrap/clientCouplesPackagesPatch.js app.js",
     "dev": "nodemon --exec \"node -r ./src/bootstrap/adminClientLookupNamePatch.js -r ./src/bootstrap/adminProvisionalClientBookingPatch.js -r ./src/bootstrap/adminBookingNaturalDatePatch.js -r ./src/bootstrap/adminBookingChangeConfirmationPatch.js -r ./src/bootstrap/adminBookingChangeConfirmationAuthPatch.js -r ./src/bootstrap/adminBookingChangeConfirmationCommitPatch.js -r ./src/bootstrap/adminManualStartTimePickerPatch.js -r ./src/bootstrap/adminBookingProviderGuardPatch.js -r ./src/bootstrap/adminBookingCustomerNotificationPatch.js -r ./src/bootstrap/adminBookingTypedTimePickerPatch.js -r ./src/bootstrap/clientRescheduleStartBoundaryPatch.js -r ./src/bootstrap/clientRescheduleApprovedNotificationPatch.js -r ./src/bootstrap/clientRescheduleApprovalPatch.js -r ./src/bootstrap/clientRescheduleApprovalTemplateProvisioningBootstrap.js -r ./src/bootstrap/adminBlockTimePatch.js -r ./src/bootstrap/adminUxStandardizationPatch.js -r ./src/bootstrap/abigailJawReleaseMappingPatch.js -r ./src/bootstrap/clientCouplesPackagesPatch.js\" app.js",
     "db:migrate": "node scripts/migrate.js",
     "maintenance": "node scripts/maintenance.js",
@@ -17,16 +15,6 @@
   "keywords": ["whatsapp", "meta", "openai"],
   "author": "",
   "license": "MIT",
-  "dependencies": {
-    "axios": "^1.12.2",
-    "dotenv": "^17.2.1",
-    "express": "^5.1.0",
-    "mammoth": "^1.9.1",
-    "multer": "^2.0.2",
-    "openai": "7.1.0",
-    "pdf-parse": "^1.1.1",
-    "pg": "^8.13.1",
-    "pino": "^10.1.0"
-  },
+  "dependencies": {"axios": "^1.12.2", "dotenv": "^17.2.1", "express": "^5.1.0", "mammoth": "^1.9.1", "multer": "^2.0.2", "openai": "7.1.0", "pdf-parse": "^1.1.1", "pg": "^8.13.1", "pino": "^10.1.0"},
   "devDependencies": {"nodemon": "^3.1.10"}
 }
