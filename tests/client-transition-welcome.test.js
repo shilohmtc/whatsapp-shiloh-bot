@@ -4,6 +4,11 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const transition = require('../src/services/clientTransitionWelcome');
+const {
+  PREMIUM_GREETING,
+  HUMAN_VERIFICATION_REPLY,
+  IDENTITY_CONFLICT_REPLY,
+} = require('../src/services/clientIdentityOnboarding');
 const { commandForAdminButton } = require('../src/services/adminEarningsButtons');
 
 const webhookSource = fs.readFileSync(
@@ -16,7 +21,12 @@ const serviceSource = fs.readFileSync(
   'utf8'
 );
 
-test('universal welcome uses the approved client-facing copy', () => {
+const resolverSource = fs.readFileSync(
+  path.join(__dirname, '..', 'src', 'services', 'clientVerifiedIdentity.js'),
+  'utf8'
+);
+
+test('legacy universal welcome compatibility surface remains unchanged', () => {
   const reply = transition.buildUniversalWelcome();
   assert.match(reply, /you’re in the right place/i);
   assert.match(reply, /Shiloh, our AI Assistant/i);
@@ -29,18 +39,22 @@ test('universal welcome uses the approved client-facing copy', () => {
   assert.match(reply, /Making or managing your appointment/i);
   assert.match(reply, /Calls & SMS: 066 239 9138/i);
   assert.match(reply, /right here on WhatsApp/i);
-  assert.doesNotMatch(reply, /WhatsApp is not available on this number/i);
+});
+
+test('first-contact presentation uses the exact canonical PREMIUM_GREETING', () => {
+  assert.equal(transition.buildPremiumGreeting(), PREMIUM_GREETING);
+  assert.equal(transition.prependPremiumGreeting('Identity-specific reply'), `${PREMIUM_GREETING}\n\nIdentity-specific reply`);
+  assert.equal(transition.prependPremiumGreeting(`${PREMIUM_GREETING}\n\nIdentity-specific reply`), `${PREMIUM_GREETING}\n\nIdentity-specific reply`);
 });
 
 test('registered clients receive a clear already-registered branch and guided actions', () => {
   const reply = transition.buildTransitionWelcome();
   const interactive = transition.registeredClientInteractive();
+  assert.ok(reply.startsWith(PREMIUM_GREETING));
   assert.match(reply, /already registered with Shiloh/i);
   assert.match(reply, /no need to register again/i);
   assert.match(reply, /How would you like to proceed/i);
   assert.equal(interactive.type, 'list');
-  assert.match(interactive.body, /already registered with Shiloh/i);
-  assert.match(interactive.body, /no need to register again/i);
   assert.deepEqual(
     interactive.rows.map((row) => row.id),
     ['services', 'client_browse_services', 'client_practitioners', 'main menu']
@@ -60,77 +74,108 @@ test('already-delivered legacy Book appointment payload remains compatible', () 
   assert.match(webhookSource, /commandForAdminButton\(id\)\|\|id\|\|null/);
 });
 
-test('registered-client interactive body stays within Meta limit and excludes long welcome copy', () => {
-  const universal = transition.buildUniversalWelcome();
+test('registered-client interactive body stays within Meta limit and excludes the greeting', () => {
   const interactive = transition.registeredClientInteractive();
-
   assert.equal(transition.WHATSAPP_INTERACTIVE_BODY_MAX, 1024);
-  assert.ok(
-    interactive.body.length <= transition.WHATSAPP_INTERACTIVE_BODY_MAX,
-    `interactive body must be <= ${transition.WHATSAPP_INTERACTIVE_BODY_MAX} characters`
-  );
+  assert.ok(interactive.body.length <= transition.WHATSAPP_INTERACTIVE_BODY_MAX);
   assert.equal(interactive.body, transition.buildRegisteredClientPrompt());
-  assert.notEqual(interactive.body, transition.buildTransitionWelcome());
-  assert.doesNotMatch(interactive.body, /Welcome to Shiloh/i);
-  assert.ok(
-    universal.length > transition.WHATSAPP_INTERACTIVE_BODY_MAX,
-    'approved universal welcome should remain plain text rather than be embedded in an interactive body'
-  );
+  assert.doesNotMatch(interactive.body, /Welcome to \*Shiloh Massage Therapy/i);
 });
 
-test('registered-client delivery sends compact list before marking the welcome delivered', () => {
-  const postSendIndex = serviceSource.indexOf('function registeredClientPostSend');
-  const listIndex = serviceSource.indexOf('await sendWhatsAppList(', postSendIndex);
-  const markIndex = serviceSource.indexOf('await markUniversalWelcomeSent(phone, clientId);', postSendIndex);
-  const registeredBranchIndex = serviceSource.indexOf("clientState.status === 'unique' && profileComplete(clientState.client)");
-  const plainReplyIndex = serviceSource.indexOf('reply: buildUniversalWelcome()', registeredBranchIndex);
-
-  assert.ok(postSendIndex >= 0, 'registered post-send sequencer must exist');
-  assert.ok(listIndex > postSendIndex, 'compact interactive list must be sent in post-send sequencing');
-  assert.ok(markIndex > listIndex, 'delivery ledger must be marked only after the interactive list succeeds');
-  assert.ok(plainReplyIndex > registeredBranchIndex, 'registered clients must receive the long universal welcome as plain text first');
+test('new registration first contact gets premium greeting exactly once', () => {
+  const identity = {
+    handled: true,
+    identityStatus: 'unknown',
+    reply: 'legacy registration response',
+  };
+  const result = transition.identityBranchWithPremiumWelcome('27820000001', identity);
+  assert.equal(result.identityStatus, 'unknown');
+  assert.ok(result.reply.startsWith(`${PREMIUM_GREETING}\n\n`));
+  assert.equal(result.reply.split(PREMIUM_GREETING).length - 1, 1);
+  assert.match(result.reply, /first name, surname, date of birth and gender/i);
 });
 
-test('new clients receive the same universal welcome before registration', () => {
-  const reply = `${transition.buildUniversalWelcome()}\n\n${transition.buildNewClientPrompt()}`;
-  assert.match(reply, /Welcome to Shiloh/i);
-  assert.match(reply, /looks like you’re new to Shiloh/i);
-  assert.match(reply, /quick registration/i);
-  assert.match(reply, /first name, surname, date of birth and gender/i);
+test('claim_required gets premium greeting once without changing identity status', () => {
+  const identity = {
+    handled: true,
+    identityStatus: 'claim_required',
+    client: { id: 48 },
+    reply: 'This number matches one imported Shiloh contact, but imported contact details are not identity proof.',
+  };
+  const result = transition.identityBranchWithPremiumWelcome('27820000002', identity);
+  assert.equal(result.identityStatus, 'claim_required');
+  assert.equal(result.client.id, 48);
+  assert.equal(result.reply.split(PREMIUM_GREETING).length - 1, 1);
+  assert.match(result.reply, /imported contact details are not identity proof/i);
 });
 
-test('incomplete and ambiguous identities receive universal welcome before their safe branch', () => {
-  assert.match(serviceSource, /function identityBranchWithWelcome\(phone, identity\)/);
-  assert.match(serviceSource, /reply: `\$\{buildUniversalWelcome\(\)\}\\n\\n\$\{identity\.reply\}`/);
-  assert.match(serviceSource, /markUniversalWelcomeSent\(phone, identity\.client\?\.id \|\| null\)/);
-  assert.doesNotMatch(serviceSource, /if \(clientState\.status === 'ambiguous'\) return \{ handled: false \};/);
-  assert.doesNotMatch(serviceSource, /if \(!profileComplete\(client\)\) return \{ handled: false \};/);
+test('historical_unverified gets greeting plus unchanged human-verification response', () => {
+  const identity = {
+    handled: true,
+    identityStatus: 'historical_unverified',
+    client: { id: 473 },
+    reply: HUMAN_VERIFICATION_REPLY,
+  };
+  const result = transition.identityBranchWithPremiumWelcome('27820000003', identity);
+  assert.equal(result.identityStatus, 'historical_unverified');
+  assert.equal(result.reply, `${PREMIUM_GREETING}\n\n${HUMAN_VERIFICATION_REPLY}`);
 });
 
-test('universal welcome remains greeting-only so direct operational intent is not intercepted', () => {
-  assert.equal(transition.isGreetingOnly('Hello'), true);
-  assert.equal(transition.isGreetingOnly('Good morning!'), true);
-  assert.equal(transition.isGreetingOnly('I need to reschedule'), false);
-  assert.equal(transition.isGreetingOnly('Book me for Friday'), false);
+test('ambiguous gets greeting plus unchanged fail-closed conflict response', () => {
+  const identity = {
+    handled: true,
+    identityStatus: 'ambiguous',
+    reply: IDENTITY_CONFLICT_REPLY,
+  };
+  const result = transition.identityBranchWithPremiumWelcome('27820000004', identity);
+  assert.equal(result.identityStatus, 'ambiguous');
+  assert.equal(result.reply, `${PREMIUM_GREETING}\n\n${IDENTITY_CONFLICT_REPLY}`);
 });
 
-test('registered branch only treats fully registered clients as eligible', () => {
-  assert.equal(transition.profileComplete({ display_name: 'Jane Doe', date_of_birth: '1990-01-01', gender: 'female' }), true);
-  assert.equal(transition.profileComplete({ display_name: 'Jane', date_of_birth: '1990-01-01', gender: 'female' }), false);
-  assert.equal(transition.profileComplete({ display_name: 'Jane Doe', date_of_birth: null, gender: 'female' }), false);
-  assert.equal(transition.profileComplete({ display_name: 'Jane Doe', date_of_birth: '1990-01-01', gender: null }), false);
+test('provisional and manual-review identity statuses are preserved by presentation wrapper', () => {
+  for (const identityStatus of ['provisional', 'registration_required', 'manual_review']) {
+    const identity = { handled: true, identityStatus, reply: `safe ${identityStatus} response` };
+    const result = transition.identityBranchWithPremiumWelcome('27820000005', identity);
+    assert.equal(result.identityStatus, identityStatus);
+    assert.equal(result.reply, `${PREMIUM_GREETING}\n\nsafe ${identityStatus} response`);
+  }
 });
 
-test('v2 welcome uses durable phone-level delivery state and post-send marking', () => {
+test('verified returning welcome starts with premium greeting and keeps registered-client actions', () => {
+  const reply = transition.buildTransitionWelcome();
+  const interactive = transition.registeredClientInteractive();
+  assert.ok(reply.startsWith(PREMIUM_GREETING));
+  assert.match(reply, /already registered with Shiloh/i);
+  assert.equal(interactive.rows[0].id, 'services');
+});
+
+test('subsequent onboarding messages do not repeat premium greeting', () => {
+  assert.match(serviceSource, /if \(await welcomeAlreadyDelivered\(phone\)\)/);
+  assert.match(serviceSource, /return \{ handled: false \};/);
+  assert.match(serviceSource, /isGreetingOnly\(text\).*pendingOnboardingSession\(phone\)/s);
+  assert.doesNotMatch(serviceSource, /if \(!isGreetingOnly\(text\)\) return \{ handled: false \};/);
+});
+
+test('first-contact routing is centralized before normal identity handling for all ordinary client messages', () => {
+  const transitionIndex = webhookSource.indexOf('const transitionWelcome=await processClientTransitionWelcome');
+  const identityIndex = webhookSource.indexOf('const identity=await processClientIdentityMessage');
+  assert.ok(transitionIndex >= 0, 'central first-contact transition route must exist');
+  assert.ok(identityIndex > transitionIndex, 'first-contact presentation must run before normal identity handling');
+  assert.match(serviceSource, /async function processClientTransitionWelcome\(phone, text\)/);
+  assert.doesNotMatch(serviceSource, /async function processClientTransitionWelcome\(phone, text\) \{\n  if \(!isGreetingOnly\(text\)\)/);
+});
+
+test('presentation change does not alter centralized verified-client resolver semantics', () => {
+  assert.doesNotMatch(serviceSource, /INSERT INTO client_identity_verifications/);
+  assert.doesNotMatch(serviceSource, /UPDATE client_contacts SET contact_type/);
+  assert.doesNotMatch(serviceSource, /controlled_demo_identities/);
+  assert.match(resolverSource, /status: 'historical_unverified'|status: "historical_unverified"/);
+  assert.match(resolverSource, /status: 'ambiguous'|status: "ambiguous"/);
+});
+
+test('v2 phone-level delivery ledger remains unchanged so already-welcomed clients are not re-greeted', () => {
   assert.equal(transition.UNIVERSAL_WELCOME_VERSION, 'v2');
   assert.match(serviceSource, /client_whatsapp_welcome_deliveries/);
   assert.match(serviceSource, /whatsapp_universal_welcome_v2_sent_at/);
-  assert.match(serviceSource, /postSend/);
-  assert.match(serviceSource, /pendingOnboardingSession/);
-  assert.match(webhookSource, /processClientTransitionWelcome/);
-
-  const transitionIndex = webhookSource.indexOf('const transitionWelcome=await processClientTransitionWelcome');
-  const identityIndex = webhookSource.indexOf('const identity=await processClientIdentityMessage');
-  assert.ok(transitionIndex >= 0, 'universal welcome route must exist');
-  assert.ok(identityIndex > transitionIndex, 'universal welcome must run before the normal identity greeting');
+  assert.match(serviceSource, /ON CONFLICT \(phone, welcome_version\) DO NOTHING/);
 });
