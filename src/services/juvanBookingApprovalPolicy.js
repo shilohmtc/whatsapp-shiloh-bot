@@ -11,6 +11,7 @@ const BASE_MIGRATION = '065_juvan_botha_jp_booking_approval.sql';
 const IDENTITY_MIGRATION = '066_controlled_juvan_demo_identity.sql';
 const REBIND_MIGRATION = '067_controlled_juvan_registration_rebind.sql';
 const PRIMARY_BACKUP_MIGRATION = '068_juvan_primary_backup_booking_approval.sql';
+const REBIND_AMBIGUITY_FIX_MIGRATION = '072_client_onboarding_controlled_demo_phone_ambiguity.sql';
 const EXPECTED_APPROVER_NAME = 'Jean-Pierre';
 
 async function ensureJuvanBookingApprovalPolicy() {
@@ -18,6 +19,7 @@ async function ensureJuvanBookingApprovalPolicy() {
   const identityMigration = await applyMigrationFile(IDENTITY_MIGRATION);
   const rebindMigration = await applyMigrationFile(REBIND_MIGRATION);
   const primaryBackupMigration = await applyMigrationFile(PRIMARY_BACKUP_MIGRATION);
+  const rebindAmbiguityFixMigration = await applyMigrationFile(REBIND_AMBIGUITY_FIX_MIGRATION);
 
   const result = await pool.query(`
     SELECT d.demo_key,
@@ -81,6 +83,7 @@ async function ensureJuvanBookingApprovalPolicy() {
       { filename: IDENTITY_MIGRATION, applied: identityMigration.applied === true, checksumVerified: identityMigration.checksumVerified === true },
       { filename: REBIND_MIGRATION, applied: rebindMigration.applied === true, checksumVerified: rebindMigration.checksumVerified === true },
       { filename: PRIMARY_BACKUP_MIGRATION, applied: primaryBackupMigration.applied === true, checksumVerified: primaryBackupMigration.checksumVerified === true },
+      { filename: REBIND_AMBIGUITY_FIX_MIGRATION, applied: rebindAmbiguityFixMigration.applied === true, checksumVerified: rebindAmbiguityFixMigration.checksumVerified === true },
     ],
     demoKey: DEMO_KEY,
     bindingState: state.status,
@@ -99,6 +102,7 @@ module.exports = {
   IDENTITY_MIGRATION,
   REBIND_MIGRATION,
   PRIMARY_BACKUP_MIGRATION,
+  REBIND_AMBIGUITY_FIX_MIGRATION,
   POLICY_KEY,
   EXPECTED_CLIENT_NAME: EXPECTED_DISPLAY_NAME,
   EXPECTED_APPROVER_NAME,
