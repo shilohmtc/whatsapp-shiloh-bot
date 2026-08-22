@@ -16,10 +16,10 @@ test('repair is bounded to the proven stale Goldie FMA block', () => {
   assert.match(migration, /2026-08-29 22:00:00\+00/);
   assert.match(migration, /cb\.title = 'FMA Course'/);
   assert.match(migration, /cb\.source = 'goldie_import'/);
-  assert.match(migration, /2026-08-10 19:00:07\+00/);
   assert.match(migration, /expected exactly one active Christel practitioner/);
   assert.match(migration, /exact stale Goldie block precondition failed/);
   assert.equal((migration.match(/DELETE FROM calendar_blocks/g) || []).length, 1);
+  assert.doesNotMatch(migration, /created_at|updated_at/);
   assert.doesNotMatch(migration, /DELETE FROM appointments|DELETE FROM staff_schedule_exceptions|DELETE FROM staff_recurring_day_closures/i);
 });
 
