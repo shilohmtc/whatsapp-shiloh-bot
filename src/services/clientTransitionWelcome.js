@@ -1,5 +1,9 @@
 const { pool } = require('../db/pool');
-const { processClientIdentityMessage, REGISTRATION_START_PROMPT } = require('./clientIdentityOnboarding');
+const {
+  processClientIdentityMessage,
+  REGISTRATION_START_PROMPT,
+  PREMIUM_GREETING,
+} = require('./clientIdentityOnboarding');
 const { resolveVerifiedClientByWhatsApp } = require('./clientVerifiedIdentity');
 const { sendWhatsAppList } = require('./whatsapp');
 
@@ -23,6 +27,9 @@ function profileComplete(client = {}) {
   );
 }
 
+// Historical long-form welcome retained as an exported compatibility surface.
+// First-contact identity presentation below deliberately uses the canonical
+// clientIdentityOnboarding PREMIUM_GREETING instead.
 function buildUniversalWelcome() {
   return [
     '🌿 *Welcome to Shiloh*',
@@ -54,6 +61,17 @@ function buildUniversalWelcome() {
   ].join('\n');
 }
 
+function buildPremiumGreeting() {
+  return PREMIUM_GREETING;
+}
+
+function prependPremiumGreeting(reply = '') {
+  const body = String(reply || '').trim();
+  if (!body) return PREMIUM_GREETING;
+  if (body === PREMIUM_GREETING || body.startsWith(`${PREMIUM_GREETING}\n\n`)) return body;
+  return `${PREMIUM_GREETING}\n\n${body}`;
+}
+
 function buildRegisteredClientPrompt() {
   return [
     '✅ *You’re already registered with Shiloh.*',
@@ -77,7 +95,7 @@ function buildNewClientPrompt() {
 }
 
 function buildTransitionWelcome() {
-  return `${buildUniversalWelcome()}\n\n${buildRegisteredClientPrompt()}`;
+  return `${PREMIUM_GREETING}\n\n${buildRegisteredClientPrompt()}`;
 }
 
 function registeredClientInteractive() {
@@ -186,31 +204,31 @@ function registeredClientPostSend(phone, clientId) {
   };
 }
 
-function identityBranchWithWelcome(phone, identity) {
+function identityBranchWithPremiumWelcome(phone, identity) {
   if (!identity?.handled) return identity;
 
   if (identity.identityStatus === 'unknown') {
     return {
       ...identity,
-      reply: `${buildUniversalWelcome()}\n\n${buildNewClientPrompt()}`,
+      reply: `${PREMIUM_GREETING}\n\n${buildNewClientPrompt()}`,
       postSend: async () => markUniversalWelcomeSent(phone),
     };
   }
 
   return {
     ...identity,
-    reply: `${buildUniversalWelcome()}\n\n${identity.reply}`,
+    reply: prependPremiumGreeting(identity.reply),
     postSend: async () => markUniversalWelcomeSent(phone, identity.client?.id || null),
   };
 }
 
 async function processClientTransitionWelcome(phone, text) {
-  if (!isGreetingOnly(text)) return { handled: false };
-
   const clientState = await resolveClientState(phone);
 
   if (await welcomeAlreadyDelivered(phone)) {
-    if (clientState.status === 'none' && await pendingOnboardingSession(phone)) {
+    // Preserve the existing repeated-greeting reminder, but never intercept
+    // ordinary subsequent onboarding details after the first welcome.
+    if (isGreetingOnly(text) && clientState.status === 'none' && await pendingOnboardingSession(phone)) {
       return {
         handled: true,
         reply: '🌿 We’ve already started your Shiloh registration. Please send your *first name, surname, date of birth and gender* so I can continue.',
@@ -223,14 +241,14 @@ async function processClientTransitionWelcome(phone, text) {
     const client = clientState.client;
     return {
       handled: true,
-      reply: buildUniversalWelcome(),
+      reply: PREMIUM_GREETING,
       client,
       postSend: registeredClientPostSend(phone, client.id),
     };
   }
 
   const identity = await processClientIdentityMessage(phone, text);
-  return identityBranchWithWelcome(phone, identity);
+  return identityBranchWithPremiumWelcome(phone, identity);
 }
 
 module.exports = {
@@ -241,9 +259,12 @@ module.exports = {
   isGreetingOnly,
   profileComplete,
   buildUniversalWelcome,
+  buildPremiumGreeting,
+  prependPremiumGreeting,
   buildRegisteredClientPrompt,
   buildNewClientPrompt,
   buildTransitionWelcome,
   registeredClientInteractive,
+  identityBranchWithPremiumWelcome,
   processClientTransitionWelcome,
 };
