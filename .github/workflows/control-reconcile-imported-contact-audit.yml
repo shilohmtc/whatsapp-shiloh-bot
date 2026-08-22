@@ -1,0 +1,127 @@
+name: Control reconcile imported-contact audit ledgers
+
+on:
+  push:
+    branches:
+      - control/reconcile-imported-contact-identity-audit-20260822
+
+permissions:
+  contents: write
+
+jobs:
+  reconcile-ledgers:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: control/reconcile-imported-contact-identity-audit-20260822
+          fetch-depth: 0
+
+      - name: Apply bounded Master and Tracker reconciliation
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+
+          master_path = Path('docs/SHILOH-OS-MASTER-STATUS.md')
+          tracker_path = Path('docs/SHILOH-OS-PROJECT-TRACKER.md')
+          new_recon = 'docs/SHILOH-OS-RECONCILIATION-2026-08-22-IMPORTED-CONTACT-BOOK-CANONICAL-CRM-IDENTITY-AUDIT.md'
+          old_latest = 'docs/SHILOH-OS-RECONCILIATION-2026-08-22-ADMIN-LEGACY-FALLBACK-CLEANUP.md'
+          old_gate = 'docs/SHILOH-OS-RECONCILIATION-2026-08-22-IMPORTED-CONTACT-BOOK-DB-EVIDENCE-GATE.md'
+
+          production_summary = '''**Imported contact-book identity audit:** **AUDIT COMPLETE / HIGH-RISK VERIFIED-CLIENT AUTHORITY DEFECT / IMPLEMENTATION AUTHORIZED.** Read-only production snapshot `2026-08-22 11:11:35.088085 UTC` (`13:11:35 SAST`) used an authenticated TLSv1.3 PostgreSQL connection, explicitly verified `transaction_read_only=on`, executed the approved exact Q1–Q11 pack, and ended with `ROLLBACK`; no SQL/data/provider/config mutation occurred. Current cohort: **794** active `goldie_import` clients; **776** with mobile/WhatsApp phone; **553** phone-bearing with no appointment history; **241** with appointment history / **530** appointment rows; derived **223** with phone + history and **18** with history but no current mobile/WhatsApp phone; **776** imported-origin phone groups resolve to exactly one active canonical client and **0** to more than one; **3** currently carry WhatsApp contact; **4** carry `verified_at` proxy/anomaly evidence; **0** have onboarding session state `complete`; Q11 found no durable identity/onboarding/contact/claim/registration audit action for the cohort. `goldie_import`, exact-phone uniqueness, display name, DOB/gender, appointment history, profile completeness, contact type and `verified_at` alone are **not verified Shiloh identity authority**. Current code still violates this contract by using imported name/demographics and unique-phone + profile completeness at onboarding and booking gates. CRM & Identity owns the authorized forward-migration + centralized verified-client resolver repair; Booking & Admin UX is a mandatory shared-contract consumer. Preserve exact-phone duplicate/conflict protection, canonical client IDs and all original import provenance. No bulk delete/merge/archive/rename/rewrite/trust-backfill is authorized. Linda exact-phone trace remains blocked until a legitimate phone anchor exists; never resolve `Linda Dr` by display name. Durable audit/authorization: `''' + new_recon + '''`.'''
+
+          continuation_summary = '''**Imported contact-book identity audit:** **COMPLETE; VERIFIED-CLIENT AUTHORITY REPAIR AUTHORIZED NOW.** The 2026-08-22 Q1–Q11 production snapshot closed the prior DB-evidence gate and established 794 active `goldie_import` clients, including 553 phone-bearing/no-history imported-contact-only records, 223 phone-bearing historical imported clients, 18 historical imported clients without a current phone claim path, 0 duplicate active-client phone groups, 3 WhatsApp contacts, 4 `verified_at` proxy/anomaly rows and 0 completed onboarding sessions. Imported provenance/profile data are not identity proof. CRM & Identity must add explicit durable verification evidence in a forward migration and centralize the verified-client resolver; Booking & Admin UX must consume the same resolver at booking identity gate and final commit. Exact phone remains candidate/duplicate protection only. No bulk cohort remediation is authorized. Linda remains untraced without an exact-phone anchor; no display-name matching.''' 
+
+          tracker = tracker_path.read_text(encoding='utf-8')
+          master = master_path.read_text(encoding='utf-8')
+
+          # Latest reconciliation pointers: preserve old recon as durable anchor but make this audit the continuation pointer.
+          if old_latest not in tracker or old_latest not in master:
+              raise SystemExit('Expected current latest reconciliation pointer not found in both ledgers')
+          tracker = tracker.replace(f'latest reconciliation `{old_latest}`', f'latest reconciliation `{new_recon}`', 1)
+          master = master.replace(f'latest reconciliation, currently `{old_latest}`', f'latest reconciliation, currently `{new_recon}`', 1)
+
+          # Add the completed audit reconciliation ahead of its now-historical DB gate anchor.
+          if new_recon not in tracker:
+              tracker = tracker.replace(f'including `{old_gate}`', f'including `{new_recon}`, `{old_gate}`', 1)
+          if new_recon not in master:
+              master = master.replace(f'Preserve in particular `{old_gate}`', f'Preserve in particular `{new_recon}`, `{old_gate}`', 1)
+
+          # Replace Tracker production-baseline audit paragraph.
+          tracker, n = re.subn(
+              r'(?ms)^\*\*Imported contact-book identity audit:\*\*.*?(?=\n\nMigration \*\*070_)',
+              production_summary,
+              tracker,
+              count=1,
+          )
+          if n != 1:
+              raise SystemExit(f'Expected 1 Tracker production audit paragraph replacement, got {n}')
+
+          # Replace the old single tracker row with completed audit + open implementation gate.
+          row_pattern = r'(?m)^\| CRM-IMPORTED-CONTACT-PROVENANCE-AUDIT \|.*$'
+          audit_row = '| CRM-IMPORTED-CONTACT-PROVENANCE-AUDIT | CRM & Identity + Production/DevOps observer | 🟢 VERIFIED READ-ONLY / COMPLETE | Q1–Q11 executed at 2026-08-22 11:11:35 UTC over TLSv1.3 in explicit READ ONLY transaction and ended with ROLLBACK. Current evidence: 794 active Goldie-origin clients; 553 phone/no-history imported-contact-only; 223 phone+history; 18 history/no-phone; 776 unique one-client phone groups; 0 multi-client phone groups; 3 WhatsApp contacts; 4 verified_at proxy/anomaly; 0 completed onboarding sessions. Linda exact-phone trace remains separately blocked/no display-name lookup. Do not rerun audit merely for reconciliation. |'
+          repair_row = '| CRM-VERIFIED-CLIENT-AUTHORITY | CRM & Identity; Booking & Admin UX required consumer | ⚪ READY / AUTHORIZED — HIGH RISK | Implement now: explicit durable verification evidence in next forward migration + centralized verified-client resolver. Imported source/name/DOB/gender/history/profile completeness/contact type/verified_at alone are not authority; exact phone remains candidate/duplicate protection. Booking identity gate and final commit must consume the same resolver. Preserve IDs/provenance and fail closed on historical/conflicting identity. No bulk remediation/trust backfill or alteration of the four proxy rows authorized. |'
+          tracker, n = re.subn(row_pattern, audit_row + '\n' + repair_row, tracker, count=1)
+          if n != 1:
+              raise SystemExit(f'Expected 1 Tracker audit-row replacement, got {n}')
+
+          # Replace Tracker exact-continuation audit paragraph.
+          tracker, n = re.subn(
+              r'(?ms)^\*\*Imported contact-book identity audit:\*\*.*?(?=\n\n\*\*Booking/Admin completed state:)',
+              continuation_summary,
+              tracker,
+              count=1,
+          )
+          if n != 1:
+              raise SystemExit(f'Expected 1 Tracker continuation audit paragraph replacement, got {n}')
+
+          # Master: replace all stale imported-contact blocker/identity paragraphs that use the bold label.
+          master, n = re.subn(
+              r'(?ms)^\*\*Imported contact-book (?:provenance|identity) audit:\*\*.*?(?=\n\n(?:\*\*|##|Migration ))',
+              production_summary,
+              master,
+          )
+          if n < 1:
+              raise SystemExit('Expected at least one Master imported-contact audit paragraph replacement')
+
+          # If a dedicated CRM section contains stale prose without the bold label, add an authoritative supersession paragraph directly after its heading.
+          crm_heading = '## CRM & identity durable state\n'
+          if crm_heading in master and production_summary not in master.split(crm_heading, 1)[1][:7000]:
+              master = master.replace(crm_heading, crm_heading + '\n' + production_summary + '\n', 1)
+
+          # Ensure the explicit shared contract/authorization is durable in Master exactly once.
+          contract_heading = '## Imported contact-book verified-client authority — 🔴 DEFECT / IMPLEMENTATION AUTHORIZED\n'
+          if contract_heading not in master:
+              insertion = '''\n''' + contract_heading + '''
+Authoritative audit/approval: `''' + new_recon + '''`.
+
+Risk is **HIGH**: identity integrity, privacy, historical-record association and consent. The audit establishes that personal-address-book import provenance is not verified Shiloh identity. Exact-phone uniqueness selects a candidate and preserves duplicate/conflict protection; it does not prove identity, registration, consent, canonical name, DOB, gender or guardian status.
+
+Implementation authority is **APPROVED NOW** for CRM & Identity to add explicit durable client/contact verification evidence in the next forward migration, centralize one verified-client resolver, collect imported claimants' canonical registration data afresh without comparing against imported labels or seeding imported DOB/gender, preserve canonical client IDs and all original import provenance, and fail closed to stronger/human verification for historical or conflicting identity. Booking & Admin UX must consume that same resolver at both booking identity gate and final commit; it must not retain a parallel unique-phone + profile-complete rule.
+
+This approval does **not** authorize bulk production CRM remediation, deletion, merge, archive, rename, mass attribute rewrite, trust backfill, manual alteration/grandfathering of the four `verified_at` proxy/anomaly records, Linda-specific mutation, or weakening duplicate/conflict protection. Any later cohort remediation is a separate production-data mutation unit requiring separate authority.
+
+The project-lifetime Render Postgres single-IP `/32` observation exception authorized by PR #411 remains narrow/TLS-required and must be removed and verified closed at final Shiloh OS project closure.
+'''
+              marker = '\n## Provider credential rotation — 🟢 VERIFIED COMPLETE\n'
+              if marker not in master:
+                  raise SystemExit('Expected Master provider credential heading not found for bounded insertion')
+              master = master.replace(marker, insertion + marker, 1)
+
+          tracker_path.write_text(tracker, encoding='utf-8')
+          master_path.write_text(master, encoding='utf-8')
+
+          # Self-delete: this editing workflow must not be part of the final PR.
+          Path('.github/workflows/control-reconcile-imported-contact-audit.yml').unlink()
+
+      - name: Commit reconciled ledgers and remove temporary workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/SHILOH-OS-MASTER-STATUS.md docs/SHILOH-OS-PROJECT-TRACKER.md .github/workflows/control-reconcile-imported-contact-audit.yml
+          git diff --cached --check
+          git commit -m "Reconcile imported-contact identity audit authority"
+          git push origin HEAD:control/reconcile-imported-contact-identity-audit-20260822
