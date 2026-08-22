@@ -1,4 +1,5 @@
 const interactiveMenu = require('../services/adminInteractiveMenu');
+const adminAssistant = require('../services/adminAssistant');
 const bookingFlow = require('../services/adminMobileBookingFlow');
 const { normalizePhone } = require('../services/clientIdentityOnboarding');
 const {
@@ -36,6 +37,21 @@ async function standardizeBookingCategorySession(sender, result) {
   };
 }
 
+function isLegacyAdminFallback(result) {
+  return result?.handled === true
+    && result?.isAdmin === true
+    && typeof result?.reply === 'string'
+    && result.reply.includes("I don't have that admin command connected yet.");
+}
+
+function modernizeLegacyAdminFallback(result) {
+  if (!isLegacyAdminFallback(result)) return result;
+  return {
+    ...result,
+    reply: "I didn't recognise that admin request. Send *Menu* to open Shiloh Admin.",
+  };
+}
+
 if (!interactiveMenu.__adminUxStandardizationPatched) {
   const original = interactiveMenu.processAdminInteractiveMenuMessage;
   interactiveMenu.processAdminInteractiveMenuMessage = async function processAdminInteractiveMenuWithStandardUx(sender, text) {
@@ -46,4 +62,17 @@ if (!interactiveMenu.__adminUxStandardizationPatched) {
   Object.defineProperty(interactiveMenu, '__adminUxStandardizationPatched', { value: true, enumerable: false });
 }
 
-module.exports = { categorySignature, standardizeBookingCategorySession };
+if (!adminAssistant.__adminLegacyFallbackPatched) {
+  const original = adminAssistant.processAdminAssistantMessage;
+  adminAssistant.processAdminAssistantMessage = async function processAdminAssistantWithoutLegacyDump(sender, text) {
+    return modernizeLegacyAdminFallback(await original(sender, text));
+  };
+  Object.defineProperty(adminAssistant, '__adminLegacyFallbackPatched', { value: true, enumerable: false });
+}
+
+module.exports = {
+  categorySignature,
+  isLegacyAdminFallback,
+  modernizeLegacyAdminFallback,
+  standardizeBookingCategorySession,
+};
