@@ -1,5 +1,6 @@
 const { pool } = require('../db/pool');
 const { processClientIdentityMessage, REGISTRATION_START_PROMPT } = require('./clientIdentityOnboarding');
+const { resolveVerifiedClientByWhatsApp } = require('./clientVerifiedIdentity');
 const { sendWhatsAppList } = require('./whatsapp');
 
 const UNIVERSAL_WELCOME_VERSION = 'v2';
@@ -117,25 +118,11 @@ async function ensureWelcomeSchema() {
 }
 
 async function resolveClientState(phone) {
-  const normalized = normalizePhone(phone);
-  if (!normalized) return { status: 'none', clients: [] };
-  const result = await pool.query(
-    `SELECT DISTINCT c.id,
-            c.display_name,
-            c.date_of_birth,
-            c.custom_attributes->>'gender' AS gender,
-            c.custom_attributes->>'${UNIVERSAL_WELCOME_ATTRIBUTE}' AS universal_welcome_sent_at
-       FROM clients c
-       JOIN client_contacts cc ON cc.client_id = c.id
-      WHERE cc.normalized_value = $1
-        AND cc.contact_type IN ('whatsapp','mobile')
-        AND c.status = 'active'
-      ORDER BY c.id`,
-    [normalized]
-  );
-  if (!result.rowCount) return { status: 'none', clients: [] };
-  if (result.rowCount > 1) return { status: 'ambiguous', clients: result.rows };
-  return { status: 'unique', client: result.rows[0], clients: result.rows };
+  const identity = await resolveVerifiedClientByWhatsApp(phone);
+  if (identity.status === 'verified_client') {
+    return { status: 'unique', authorityStatus: identity.status, client: identity.client, clients: identity.clients, registrationComplete: identity.registrationComplete };
+  }
+  return { status: identity.status, authorityStatus: identity.status, client: identity.client || null, clients: identity.clients || [], registrationComplete: false };
 }
 
 async function welcomeAlreadyDelivered(phone) {
@@ -232,7 +219,7 @@ async function processClientTransitionWelcome(phone, text) {
     return { handled: false };
   }
 
-  if (clientState.status === 'unique' && profileComplete(clientState.client)) {
+  if (clientState.status === 'unique' && clientState.registrationComplete && clientState.client?.gender) {
     const client = clientState.client;
     return {
       handled: true,

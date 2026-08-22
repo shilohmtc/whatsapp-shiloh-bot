@@ -1,8 +1,4 @@
-const { pool } = require("../db/pool");
-
-function normalizePhone(value = "") {
-  return String(value).replace(/[^0-9]/g, "");
-}
+const { resolveVerifiedClientByWhatsApp } = require('./clientVerifiedIdentity');
 
 function cleanName(text = "") {
   return String(text)
@@ -18,6 +14,8 @@ function comparableName(value = "") {
   return cleanName(value).toLocaleLowerCase("en-ZA");
 }
 
+// Retained only as a non-authoritative compatibility utility for historical
+// tests/callers. It MUST NOT be used to verify, claim or link a client.
 const NON_IDENTITY_NAME_PREFIXES = new Set(["pa", "mr", "mrs", "ms", "miss", "dr"]);
 function identityNameTokens(value = "") {
   const normalized = comparableName(value)
@@ -87,177 +85,30 @@ function parseNaturalDateOfBirth(text = "", now = new Date()) {
   return null;
 }
 
-function extractGender(text = "") {
-  const match = String(text || "").match(/\b(prefer not to (?:say|answer)|non[- ]?binary|female|woman|male|man|other)\b/i);
-  if (!match) return null;
-  const value = match[0].toLowerCase().replace(/[_-]+/g, " ").replace(/\s+/g, " ");
-  if (["female", "woman"].includes(value)) return "female";
-  if (["male", "man"].includes(value)) return "male";
-  if (["non binary", "nonbinary"].includes(value)) return "non-binary";
-  if (value === "other") return "other";
-  if (["prefer not to say", "prefer not to answer"].includes(value)) return "prefer_not_to_say";
-  return null;
+// The old imported-name guard is intentionally inert. Identity decisions are
+// centralized in clientVerifiedIdentity. This compatibility export prevents
+// a controller/test import from reviving the retired display-name rule.
+async function forceMatchedClientNameConfirmation() {
+  return false;
 }
 
-async function findImportedUnverifiedClient(phone) {
-  const key = normalizePhone(phone);
-  const result = await pool.query(
-    `SELECT DISTINCT c.id, c.display_name, c.date_of_birth,
-            c.custom_attributes->>'gender' AS gender,
-            cc.id AS contact_id, cc.contact_type
-       FROM clients c
-       JOIN client_contacts cc ON cc.client_id = c.id
-      WHERE cc.normalized_value = $1
-        AND cc.contact_type IN ('mobile','whatsapp')
-        AND c.status = 'active'
-      ORDER BY c.id`,
-    [key]
-  );
-  const clientIds = [...new Set(result.rows.map((row) => String(row.id)))];
-  if (clientIds.length !== 1) return clientIds.length > 1 ? { status: "ambiguous" } : { status: "none" };
-  const rows = result.rows.filter((row) => String(row.id) === clientIds[0]);
-  if (rows.some((row) => row.contact_type === "whatsapp")) return { status: "verified" };
-  const client = rows[0];
-  if (!client || !client.contact_id) return { status: "none" };
-  const source = await pool.query(`SELECT source FROM clients WHERE id=$1`, [client.id]);
-  if (source.rows[0]?.source !== "goldie_import") return { status: "not_imported" };
-  return { status: "claim_required", client };
-}
-
-async function startImportedClientClaim(phone, client) {
-  const key = normalizePhone(phone);
-  await pool.query(
-    `INSERT INTO client_onboarding_sessions
-       (phone, client_id, state, pending_name, pending_contact, pending_date_of_birth, pending_gender, booking_requested, updated_at)
-     VALUES ($1,$2,'collect_name',NULL,$1,$3,$4,TRUE,NOW())
-     ON CONFLICT (phone) DO UPDATE SET
-       client_id=EXCLUDED.client_id,
-       state='collect_name',
-       pending_name=NULL,
-       pending_contact=EXCLUDED.pending_contact,
-       pending_date_of_birth=EXCLUDED.pending_date_of_birth,
-       pending_gender=EXCLUDED.pending_gender,
-       booking_requested=TRUE,
-       updated_at=NOW()`,
-    [key, client.id, client.date_of_birth || null, client.gender || null]
-  );
-}
-
-async function persistVerifiedWhatsAppClaim(phone, clientId) {
-  const key = normalizePhone(phone);
-  const result = await pool.query(
-    `UPDATE client_contacts cc
-        SET contact_type='whatsapp', verified_at=COALESCE(cc.verified_at,NOW()), updated_at=NOW()
-      WHERE cc.client_id=$2
-        AND cc.normalized_value=$1
-        AND cc.contact_type='mobile'
-        AND NOT EXISTS (
-          SELECT 1 FROM client_contacts existing
-           WHERE existing.normalized_value=$1
-             AND existing.contact_type='whatsapp'
-             AND existing.id<>cc.id
-        )
-      RETURNING cc.id`,
-    [key, clientId]
-  );
-  if (result.rowCount === 1) return true;
-  const existing = await pool.query(
-    `SELECT 1 FROM client_contacts
-      WHERE client_id=$2 AND normalized_value=$1 AND contact_type='whatsapp' LIMIT 1`,
-    [key, clientId]
-  );
-  return existing.rowCount === 1;
-}
-
-async function forceMatchedClientNameConfirmation(phone, clientId) {
-  const key = normalizePhone(phone);
-  const result = await pool.query(
-    `UPDATE client_onboarding_sessions
-        SET state = 'collect_name', pending_name = NULL, updated_at = NOW()
-      WHERE phone = $1 AND client_id = $2
-      RETURNING phone, client_id, state`,
-    [key, clientId]
-  );
-  return result.rowCount === 1;
-}
-
-async function guardActiveNameConfirmation(phone, text) {
-  const key = normalizePhone(phone);
-  const sessionResult = await pool.query(
-    `SELECT s.client_id, s.state, s.pending_date_of_birth, s.pending_gender,
-            c.display_name
-       FROM client_onboarding_sessions s
-       JOIN clients c ON c.id = s.client_id
-      WHERE s.phone = $1
-        AND s.client_id IS NOT NULL`,
-    [key]
-  );
-
-  if (sessionResult.rowCount === 0) {
-    const imported = await findImportedUnverifiedClient(phone);
-    if (imported.status === "ambiguous") {
-      return {
-        handled: true,
-        reply: "I found more than one possible Shiloh client profile for this number, so I won't link WhatsApp automatically. Please contact the clinic team so we can verify the correct profile safely.",
-      };
-    }
-    if (imported.status === "claim_required") {
-      await startImportedClientClaim(phone, imported.client);
-      return {
-        handled: true,
-        reply: "Hi 👋 It looks like this number may be linked to an existing Shiloh client profile. Before I link WhatsApp to that profile, please confirm your name.",
-      };
-    }
-    return { handled: false };
-  }
-
-  if (sessionResult.rowCount !== 1) {
+async function guardActiveNameConfirmation(phone) {
+  const identity = await resolveVerifiedClientByWhatsApp(phone);
+  if (identity.status === 'ambiguous' || identity.status === 'manual_review') {
     return {
       handled: true,
-      reply: "I found an identity conflict for this WhatsApp number, so I won't update any client record automatically. Please contact the clinic team so we can verify the correct profile safely.",
+      identityStatus: identity.status,
+      reply: "I found an identity conflict for this WhatsApp number, so I won't update, merge or select a client record automatically. Please contact the clinic team so we can verify the correct profile safely.",
     };
   }
-
-  const client = sessionResult.rows[0];
-  if (client.state === "complete") return { handled: false };
-
-  if (client.state === "collect_name") {
-    if (!namesCompatible(text, client.display_name)) {
-      return {
-        handled: true,
-        reply: "I couldn't safely match that name to the existing client profile. I won't change or merge any client records automatically. Please send the full name as the clinic knows it, or contact the clinic team so we can verify the profile safely.",
-      };
-    }
-
-    const linked = await persistVerifiedWhatsAppClaim(phone, client.client_id);
-    if (!linked) {
-      return {
-        handled: true,
-        reply: "I matched the name, but I couldn't safely verify this WhatsApp link. I won't change or merge any client records automatically. Please contact the clinic team so we can verify the profile safely.",
-      };
-    }
-    await pool.query(
-      `UPDATE client_onboarding_sessions
-          SET pending_name=$3, updated_at=NOW()
-        WHERE phone=$1 AND client_id=$2 AND state='collect_name'`,
-      [key, client.client_id, client.display_name]
-    );
-    return { handled: false, identityNameVerified: true };
+  if (identity.status === 'historical_unverified') {
+    return {
+      handled: true,
+      identityStatus: identity.status,
+      reply: "This number matches a Shiloh profile with appointment history, but history and imported details are not identity proof. Please contact the clinic team so we can verify the profile before continuing.",
+    };
   }
-
-  const naturalDob = parseNaturalDateOfBirth(text);
-  const gender = extractGender(text);
-  if (naturalDob || gender) {
-    await pool.query(
-      `UPDATE client_onboarding_sessions
-          SET pending_date_of_birth=COALESCE($3::date,pending_date_of_birth),
-              pending_gender=COALESCE($4,pending_gender),
-              updated_at=NOW()
-        WHERE phone=$1 AND client_id=$2 AND state <> 'complete'`,
-      [key, client.client_id, naturalDob, gender]
-    );
-  }
-  return { handled: false };
+  return { handled: false, identityStatus: identity.status };
 }
 
 module.exports = {

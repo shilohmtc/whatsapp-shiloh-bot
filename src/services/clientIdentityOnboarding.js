@@ -1,5 +1,11 @@
 const { pool } = require("../db/pool");
 const { registrationStatus, assertRegistrationComplete } = require("./clientRegistrationPolicy");
+const {
+  resolveVerifiedClientByWhatsApp,
+  isVerifiedRegistration,
+} = require("./clientVerifiedIdentity");
+
+const AUTHORITY_VERSION = "verified_client_v1";
 
 function normalizePhone(value = "") { return String(value).replace(/[^0-9]/g, ""); }
 function normalizeRegistrationMobile(value = "") {
@@ -117,11 +123,15 @@ const REGISTRATION_START_PROMPT = [
   "*Sarah Smith, 14 May 1990, Female*",
 ].join("\n");
 
+const HUMAN_VERIFICATION_REPLY = "I found an existing Shiloh profile linked to this number, but I can’t safely treat the phone, imported details or appointment history as identity proof. Please contact the clinic team so we can verify the correct profile before continuing.";
+const IDENTITY_CONFLICT_REPLY = "I found an identity conflict with this WhatsApp number, so I won’t merge, select or update a client profile automatically. Please contact the clinic team so we can verify the correct profile safely.";
+
 let onboardingSchemaPromise = null;
 async function ensureOnboardingSchema() {
   if (!onboardingSchemaPromise) {
     onboardingSchemaPromise = (async () => {
       await pool.query(`ALTER TABLE client_onboarding_sessions ADD COLUMN IF NOT EXISTS pending_gender TEXT`);
+      await pool.query(`ALTER TABLE client_onboarding_sessions ADD COLUMN IF NOT EXISTS authority_version TEXT`);
       await pool.query(`ALTER TABLE client_onboarding_sessions DROP CONSTRAINT IF EXISTS client_onboarding_state_check`);
       await pool.query(`ALTER TABLE client_onboarding_sessions ADD CONSTRAINT client_onboarding_state_check CHECK (state IN ('collect_name','confirm_whatsapp','collect_contact','collect_dob','collect_gender','complete'))`);
     })().catch((error) => { onboardingSchemaPromise = null; throw error; });
@@ -129,19 +139,16 @@ async function ensureOnboardingSchema() {
   return onboardingSchemaPromise;
 }
 
+// Compatibility entry point used by existing Booking/Admin consumers. "unique"
+// is now emitted ONLY for an explicitly verified client. All authority comes
+// from resolveVerifiedClientByWhatsApp; profile completeness remains an
+// orthogonal registration requirement, not identity proof.
 async function resolveClientByWhatsApp(phone) {
-  const normalized = normalizePhone(phone);
-  if (!normalized) return { status: "none", clients: [] };
-  const r = await pool.query(`SELECT DISTINCT c.id,c.display_name,c.date_of_birth,c.status,c.custom_attributes->>'gender' AS gender,cc.id AS contact_id,cc.contact_type,cc.normalized_value,cc.verified_at FROM clients c JOIN client_contacts cc ON cc.client_id=c.id WHERE cc.normalized_value=$1 AND cc.contact_type IN ('whatsapp','mobile') AND c.status='active' ORDER BY c.id`, [normalized]);
-  const by = new Map();
-  for (const row of r.rows) {
-    if (!by.has(String(row.id))) by.set(String(row.id), row);
-    else if (row.contact_type === "whatsapp") by.set(String(row.id), row);
+  const authority = await resolveVerifiedClientByWhatsApp(phone);
+  if (authority.status === "verified_client") {
+    return { ...authority, status: "unique", authorityStatus: "verified_client" };
   }
-  const clients = [...by.values()];
-  if (!clients.length) return { status: "none", clients: [] };
-  if (clients.length > 1) return { status: "ambiguous", clients };
-  return { status: "unique", client: clients[0], clients };
+  return { ...authority, authorityStatus: authority.status };
 }
 function profileComplete(client) {
   return registrationStatus({ fullName: client?.display_name, mobileNumber: client?.normalized_value, dateOfBirth: client?.date_of_birth }).complete;
@@ -149,14 +156,27 @@ function profileComplete(client) {
 
 async function getSession(phone) {
   await ensureOnboardingSchema();
-  const r = await pool.query(`SELECT phone,client_id,state,pending_name,pending_contact,pending_date_of_birth,pending_gender,booking_requested,created_at,updated_at FROM client_onboarding_sessions WHERE phone=$1`, [normalizePhone(phone)]);
+  const r = await pool.query(`SELECT phone,client_id,state,pending_name,pending_contact,pending_date_of_birth,pending_gender,booking_requested,authority_version,created_at,updated_at FROM client_onboarding_sessions WHERE phone=$1`, [normalizePhone(phone)]);
   return r.rows[0] || null;
+}
+function patchValue(patch, key, current, fallback = null) {
+  return Object.prototype.hasOwnProperty.call(patch, key) ? patch[key] : (current ?? fallback);
 }
 async function saveSession(phone, patch = {}) {
   await ensureOnboardingSchema();
   const key = normalizePhone(phone);
   const c = (await getSession(key)) || {};
-  const r = await pool.query(`INSERT INTO client_onboarding_sessions (phone,client_id,state,pending_name,pending_contact,pending_date_of_birth,pending_gender,booking_requested,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW()) ON CONFLICT (phone) DO UPDATE SET client_id=EXCLUDED.client_id,state=EXCLUDED.state,pending_name=EXCLUDED.pending_name,pending_contact=EXCLUDED.pending_contact,pending_date_of_birth=EXCLUDED.pending_date_of_birth,pending_gender=EXCLUDED.pending_gender,booking_requested=EXCLUDED.booking_requested,updated_at=NOW() RETURNING *`, [key,patch.clientId??c.client_id??null,patch.state??c.state??"collect_name",patch.pendingName??c.pending_name??null,patch.pendingContact??c.pending_contact??key,patch.pendingDateOfBirth??c.pending_date_of_birth??null,patch.pendingGender??c.pending_gender??null,patch.bookingRequested??c.booking_requested??false]);
+  const values = {
+    clientId: patchValue(patch, "clientId", c.client_id),
+    state: patchValue(patch, "state", c.state, "collect_name"),
+    pendingName: patchValue(patch, "pendingName", c.pending_name),
+    pendingContact: patchValue(patch, "pendingContact", c.pending_contact, key),
+    pendingDateOfBirth: patchValue(patch, "pendingDateOfBirth", c.pending_date_of_birth),
+    pendingGender: patchValue(patch, "pendingGender", c.pending_gender),
+    bookingRequested: patchValue(patch, "bookingRequested", c.booking_requested, false),
+    authorityVersion: patchValue(patch, "authorityVersion", c.authority_version, AUTHORITY_VERSION),
+  };
+  const r = await pool.query(`INSERT INTO client_onboarding_sessions (phone,client_id,state,pending_name,pending_contact,pending_date_of_birth,pending_gender,booking_requested,authority_version,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NOW()) ON CONFLICT (phone) DO UPDATE SET client_id=EXCLUDED.client_id,state=EXCLUDED.state,pending_name=EXCLUDED.pending_name,pending_contact=EXCLUDED.pending_contact,pending_date_of_birth=EXCLUDED.pending_date_of_birth,pending_gender=EXCLUDED.pending_gender,booking_requested=EXCLUDED.booking_requested,authority_version=EXCLUDED.authority_version,updated_at=NOW() RETURNING *`, [key,values.clientId,values.state,values.pendingName,values.pendingContact,values.pendingDateOfBirth,values.pendingGender,values.bookingRequested,values.authorityVersion]);
   return r.rows[0];
 }
 function nextState(session = {}) {
@@ -189,24 +209,44 @@ async function completeOnboarding(phone, session) {
   try {
     await db.query("BEGIN");
     let clientId = session.client_id;
+    let clientSource = "whatsapp_onboarding";
     if (clientId) {
-      await db.query(`UPDATE clients SET display_name=COALESCE($2,display_name),date_of_birth=COALESCE($3::date,date_of_birth),custom_attributes=COALESCE(custom_attributes,'{}'::jsonb) || jsonb_build_object('gender',$4::text),updated_at=NOW() WHERE id=$1`, [clientId, session.pending_name, session.pending_date_of_birth, session.pending_gender]);
+      const lockedClient = await db.query(`SELECT id,source FROM clients WHERE id=$1 AND status='active' FOR UPDATE`, [clientId]);
+      if (lockedClient.rowCount !== 1) {
+        const e = new Error("Existing onboarding client is not an active canonical client");
+        e.code = "AMBIGUOUS_CONTACT";
+        throw e;
+      }
+      clientSource = lockedClient.rows[0].source;
+      await db.query(`UPDATE clients SET display_name=$2,date_of_birth=$3::date,custom_attributes=COALESCE(custom_attributes,'{}'::jsonb) || jsonb_build_object('gender',$4::text),updated_at=NOW() WHERE id=$1`, [clientId, session.pending_name, session.pending_date_of_birth, session.pending_gender]);
     } else {
       const created = await db.query(`INSERT INTO clients (display_name,date_of_birth,custom_attributes,source) VALUES ($1,$2::date,jsonb_build_object('gender',$3::text),'whatsapp_onboarding') RETURNING id`, [session.pending_name, session.pending_date_of_birth, session.pending_gender]);
       clientId = created.rows[0].id;
     }
-    const existing = await db.query(`SELECT id,client_id FROM client_contacts WHERE normalized_value=$1 AND contact_type IN ('whatsapp','mobile') LIMIT 1`, [key]);
-    if (existing.rowCount && String(existing.rows[0].client_id) !== String(clientId)) {
+
+    const contacts = await db.query(`SELECT id,client_id,contact_type FROM client_contacts WHERE normalized_value=$1 AND contact_type IN ('whatsapp','mobile') ORDER BY CASE WHEN contact_type='whatsapp' THEN 0 ELSE 1 END,id FOR UPDATE`, [key]);
+    if (contacts.rows.some((row) => String(row.client_id) !== String(clientId))) {
       const e = new Error("WhatsApp number belongs to another canonical client"); e.code = "AMBIGUOUS_CONTACT"; throw e;
     }
-    if (existing.rowCount) {
-      await db.query(`UPDATE client_contacts SET verified_at=COALESCE(verified_at,NOW()),updated_at=NOW() WHERE id=$1`, [existing.rows[0].id]);
+
+    let contactId;
+    const existing = contacts.rows.find((row) => String(row.client_id) === String(clientId));
+    if (existing) {
+      const updated = await db.query(`UPDATE client_contacts SET contact_type='whatsapp',verified_at=COALESCE(verified_at,NOW()),updated_at=NOW() WHERE id=$1 RETURNING id`, [existing.id]);
+      contactId = updated.rows[0].id;
     } else {
-      await db.query(`INSERT INTO client_contacts (client_id,contact_type,value,normalized_value,is_primary,verified_at) VALUES ($1,'whatsapp',$2,$3,TRUE,NOW())`, [clientId, phone, key]);
+      const inserted = await db.query(`INSERT INTO client_contacts (client_id,contact_type,value,normalized_value,is_primary,verified_at) VALUES ($1,'whatsapp',$2,$3,TRUE,NOW()) RETURNING id`, [clientId, phone, key]);
+      contactId = inserted.rows[0].id;
     }
-    await db.query(`UPDATE client_onboarding_sessions SET client_id=$2,state='complete',updated_at=NOW() WHERE phone=$1`, [key, clientId]);
+
+    const verificationMethod = clientSource === "goldie_import" ? "imported_claim_registration" : "whatsapp_registration";
+    const verification = await db.query(`INSERT INTO client_identity_verifications (client_id,client_contact_id,verification_method,status,verified_at,evidence_reference) VALUES ($1,$2,$3,'active',NOW(),$4::jsonb) ON CONFLICT DO NOTHING RETURNING id`, [clientId, contactId, verificationMethod, JSON.stringify({ authorityVersion: AUTHORITY_VERSION, channel: "whatsapp" })]);
+    const verificationId = verification.rows[0]?.id || null;
+
+    await db.query(`INSERT INTO crm_audit_events (action,entity_type,entity_id,metadata) VALUES ('client.identity_verified','client',$1,$2::jsonb)`, [clientId, JSON.stringify({ verificationMethod, verificationId, authorityVersion: AUTHORITY_VERSION })]);
+    await db.query(`UPDATE client_onboarding_sessions SET client_id=$2,state='complete',authority_version=$3,updated_at=NOW() WHERE phone=$1`, [key, clientId, AUTHORITY_VERSION]);
     await db.query("COMMIT");
-    const client = await pool.query(`SELECT c.id,c.display_name,c.date_of_birth,c.custom_attributes->>'gender' AS gender,cc.normalized_value,cc.verified_at FROM clients c JOIN client_contacts cc ON cc.client_id=c.id AND cc.normalized_value=$2 WHERE c.id=$1 LIMIT 1`, [clientId, key]);
+    const client = await pool.query(`SELECT c.id,c.display_name,c.date_of_birth,c.custom_attributes->>'gender' AS gender,cc.normalized_value,cc.verified_at FROM clients c JOIN client_contacts cc ON cc.client_id=c.id AND cc.normalized_value=$2 WHERE c.id=$1 ORDER BY CASE WHEN cc.contact_type='whatsapp' THEN 0 ELSE 1 END LIMIT 1`, [clientId, key]);
     return client.rows[0];
   } catch (error) {
     await db.query("ROLLBACK");
@@ -221,61 +261,101 @@ async function processActiveSession(phone, text, session) {
   const pendingGender = parsed.gender || session.pending_gender || null;
   const candidate = { ...session, pending_name: pendingName, pending_date_of_birth: pendingDateOfBirth, pending_gender: pendingGender };
   const state = nextState(candidate);
-  session = await saveSession(phone, { pendingName, pendingDateOfBirth, pendingGender, state });
+  session = await saveSession(phone, { pendingName, pendingDateOfBirth, pendingGender, state, authorityVersion: AUTHORITY_VERSION });
   if (state !== "complete") return { handled: true, reply: promptForMissing(session) };
   try {
     const client = await completeOnboarding(phone, session);
-    return { handled: true, onboardingComplete: true, resumeBooking: true, client, reply: `Thank you, ${client.display_name}. 🌿 Your Shiloh client registration is complete.` };
+    return { handled: true, onboardingComplete: true, resumeBooking: true, identityStatus: "verified_complete", client, reply: `Thank you, ${client.display_name}. 🌿 Your Shiloh client registration is complete.` };
   } catch (error) {
-    if (error.code === "AMBIGUOUS_CONTACT" || error.code === "23505") return { handled: true, reply: "I found an identity conflict with this WhatsApp number, so I won’t merge any client records automatically. Please contact the clinic team so we can verify the correct profile safely." };
+    if (error.code === "AMBIGUOUS_CONTACT" || error.code === "23505") return { handled: true, identityStatus: "ambiguous", reply: IDENTITY_CONFLICT_REPLY };
     throw error;
   }
 }
 
-async function processClientIdentityMessage(phone, text) {
-  const existingSession = await getSession(phone);
-  if (existingSession && existingSession.state !== "complete") return processActiveSession(phone, text, existingSession);
+function manualReviewIdentity(identity) {
+  return ["ambiguous", "manual_review", "historical_unverified"].includes(identity?.status);
+}
 
-  const identity = await resolveClientByWhatsApp(phone);
+async function resetSessionForCurrentAuthority(phone, identity, existingSession) {
+  if (manualReviewIdentity(identity)) return null;
+  if (existingSession.client_id && (!identity.client || String(identity.client.id) !== String(existingSession.client_id))) return null;
+  if (identity.status === "verified_client") {
+    return saveSession(phone, { authorityVersion: AUTHORITY_VERSION });
+  }
+  return saveSession(phone, {
+    clientId: identity.client?.id || existingSession.client_id || null,
+    state: "collect_name",
+    pendingName: null,
+    pendingContact: normalizePhone(phone),
+    pendingDateOfBirth: null,
+    pendingGender: null,
+    bookingRequested: existingSession.booking_requested ?? true,
+    authorityVersion: AUTHORITY_VERSION,
+  });
+}
+
+async function processClientIdentityMessage(phone, text) {
+  let existingSession = await getSession(phone);
+  if (existingSession && existingSession.state !== "complete") {
+    if (existingSession.authority_version !== AUTHORITY_VERSION) {
+      const authority = await resolveVerifiedClientByWhatsApp(phone);
+      if (manualReviewIdentity(authority)) {
+        return { handled: true, identityStatus: authority.status, client: authority.client || null, reply: authority.status === "ambiguous" ? IDENTITY_CONFLICT_REPLY : HUMAN_VERIFICATION_REPLY };
+      }
+      existingSession = await resetSessionForCurrentAuthority(phone, authority, existingSession);
+      if (!existingSession) return { handled: true, identityStatus: "manual_review", reply: HUMAN_VERIFICATION_REPLY };
+    }
+    return processActiveSession(phone, text, existingSession);
+  }
+
+  const identity = await resolveVerifiedClientByWhatsApp(phone);
   const bookingRequest = isBookingRequest(text);
   const walkinRequest = isWalkinRegistrationRequest(text);
 
-  if (identity.status === "ambiguous") {
-    return { handled: true, identityStatus: "ambiguous", reply: "I found more than one possible Shiloh client profile for this WhatsApp number, so the clinic team needs to verify the correct profile before we continue. I won’t merge or select a profile automatically." };
+  if (manualReviewIdentity(identity)) {
+    return {
+      handled: true,
+      identityStatus: identity.status,
+      client: identity.client || null,
+      reply: identity.status === "ambiguous" ? IDENTITY_CONFLICT_REPLY : HUMAN_VERIFICATION_REPLY,
+    };
   }
 
-  if (identity.status === "unique" && profileComplete(identity.client)) {
+  if (isVerifiedRegistration(identity)) {
     if (isGreetingOnly(text) || walkinRequest) {
       return { handled: true, identityStatus: "matched_complete", onboardingComplete: true, resumeBooking: true, client: identity.client, reply: `${PREMIUM_GREETING}\n\nWelcome back, *${firstName(identity.client.display_name)}* 🌿` };
     }
     return { handled: false, identityStatus: "matched_complete", client: identity.client };
   }
 
-  const known = identity.status === "unique" ? identity.client : null;
-  const sessionSeed = {
+  const known = identity.client || null;
+  const session = await saveSession(phone, {
     clientId: known?.id || null,
     state: "collect_name",
-    pendingName: known?.display_name || null,
+    pendingName: null,
     pendingContact: normalizePhone(phone),
-    pendingDateOfBirth: known?.date_of_birth || null,
-    pendingGender: known?.gender || null,
-    bookingRequested: true,
-  };
-  sessionSeed.state = nextState({ pending_name: sessionSeed.pendingName, pending_date_of_birth: sessionSeed.pendingDateOfBirth, pending_gender: sessionSeed.pendingGender });
-  const session = await saveSession(phone, sessionSeed);
+    pendingDateOfBirth: null,
+    pendingGender: null,
+    bookingRequested: bookingRequest || walkinRequest || true,
+    authorityVersion: AUTHORITY_VERSION,
+  });
 
   const parsed = extractWhatsAppRegistration(text);
-  if (!isGreetingOnly(text) && !bookingRequest && !walkinRequest && (parsed.dateOfBirth || parsed.gender)) {
+  if (!isGreetingOnly(text) && !bookingRequest && !walkinRequest && (parsed.fullName || parsed.dateOfBirth || parsed.gender)) {
     return processActiveSession(phone, text, session);
   }
 
-  if (known) {
-    return { handled: true, identityStatus: "matched_incomplete", client: known, reply: `Welcome back, *${firstName(known.display_name)}*. 🌿 I just need to complete your Shiloh client registration.\n\n${promptForMissing(session)}` };
+  if (identity.status === "claim_required") {
+    return { handled: true, identityStatus: "claim_required", client: known, reply: `${PREMIUM_GREETING}\n\nThis number matches one imported Shiloh contact, but imported contact details are not identity proof. Please complete registration afresh so I can safely link this WhatsApp number.\n\n${REGISTRATION_START_PROMPT}` };
+  }
+  if (identity.status === "provisional" || identity.status === "unverified_client" || identity.status === "verified_client") {
+    return { handled: true, identityStatus: identity.status === "verified_client" ? "verified_incomplete" : "registration_required", client: known, reply: `${PREMIUM_GREETING}\n\nI need to complete your Shiloh client registration before I can treat this number as booking-ready.\n\n${REGISTRATION_START_PROMPT}` };
   }
   return { handled: true, identityStatus: "unknown", reply: `${PREMIUM_GREETING}\n\n${REGISTRATION_START_PROMPT}` };
 }
 
 module.exports = {
+  AUTHORITY_VERSION,
   normalizePhone,
   normalizeRegistrationMobile,
   looksLikeRegistrationMobileInput,
@@ -284,8 +364,11 @@ module.exports = {
   extractWhatsAppRegistration,
   extractBundledRegistration,
   resolveClientByWhatsApp,
+  resolveVerifiedClientByWhatsApp,
   profileComplete,
   processClientIdentityMessage,
   PREMIUM_GREETING,
   REGISTRATION_START_PROMPT,
+  HUMAN_VERIFICATION_REPLY,
+  IDENTITY_CONFLICT_REPLY,
 };

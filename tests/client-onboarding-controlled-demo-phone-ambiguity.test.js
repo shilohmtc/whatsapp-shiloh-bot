@@ -30,7 +30,8 @@ test('migration 072 removes the PL/pgSQL identifier collision without weakening 
 });
 
 test('ordinary onboarding still owns canonical contact creation and duplicate conflict handling', () => {
-  assert.match(onboarding, /SELECT id,client_id FROM client_contacts WHERE normalized_value=\$1 AND contact_type IN \('whatsapp','mobile'\) LIMIT 1/);
+  assert.match(onboarding, /SELECT id,client_id,contact_type FROM client_contacts WHERE normalized_value=\$1 AND contact_type IN \('whatsapp','mobile'\)[\s\S]*FOR UPDATE/);
+  assert.match(onboarding, /contacts\.rows\.some\(\(row\) => String\(row\.client_id\) !== String\(clientId\)\)/);
   assert.match(onboarding, /AMBIGUOUS_CONTACT/);
   assert.match(onboarding, /INSERT INTO client_contacts \(client_id,contact_type,value,normalized_value,is_primary,verified_at\)/);
   assert.doesNotMatch(onboarding, /controlled_demo_identities/);
