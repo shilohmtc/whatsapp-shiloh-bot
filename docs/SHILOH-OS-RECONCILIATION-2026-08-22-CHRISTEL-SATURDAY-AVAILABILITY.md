@@ -48,10 +48,10 @@ PR #404 introduced forward migration `073_remove_stale_christel_goldie_fma_block
 
 PR #405 narrowed only those non-authoritative metadata predicates. The final migration still requires the exact proven row identity: id 141, Christel, `time_off`, exact interval, title `FMA Course`, and source `goldie_import`. CI #1248 passed before merge.
 
-Exact application merge: `8bfaf91d91f1f02ce5369f9e7781c0ea110d6e21`.
-Exact Render deploy: `dep-da4n8mfavr4c739nqfbg` reached LIVE.
+Exact repair merge: `8bfaf91d91f1f02ce5369f9e7781c0ea110d6e21`.
+Exact repair Render deploy: `dep-da4n8mfavr4c739nqfbg` reached LIVE.
 
-Production startup evidence:
+Production startup evidence after repair:
 
 - migration 073: `applied=true`, `checksumVerified=true`
 - Christel 2026-08-29 overlapping block count after repair: 0
@@ -66,9 +66,24 @@ Production startup evidence:
 
 No real appointment or Calendar event was manufactured for verification.
 
+## Diagnostic cleanup
+
+PR #406 removed the temporary production diagnostic service and startup probes after CI #1250 passed. The ordinary production start command was restored; migration 073 and the durable focused regression remain in source control.
+
+Exact cleanup merge: `d71df61f7744281c5c06c1f688bd75a27f738cc1`.
+Exact cleanup Render deploy: `dep-da4nam8jo6nc73fe2nrg` reached LIVE on 2026-08-22.
+
+Post-cleanup production evidence:
+
+- `npm start` contains no Christel Saturday diagnostic or repair startup hook;
+- `Shiloh started` was logged normally;
+- Google Calendar provider health passed;
+- repeated `/health` requests returned HTTP 200;
+- no temporary Christel Saturday diagnostic messages ran after the cleanup cutover.
+
 ## Durable result
 
-Christel → Full Body Swedish → Saturday 29 August 2026 now has authoritative 90-minute availability within the confirmed 08:00–14:00 clinic envelope when no genuine conflict exists. The availability gate order remains unchanged. Real appointments, schedule exceptions, recurring closures, `calendar_blocks`, and Google Calendar conflicts continue to block availability when authoritative.
+Christel → Full Body Swedish → Saturday 29 August 2026 has authoritative 90-minute availability within the confirmed 08:00–14:00 clinic envelope when no genuine conflict exists. The availability gate order remains unchanged. Real appointments, schedule exceptions, recurring closures, `calendar_blocks`, and Google Calendar conflicts continue to block availability when authoritative.
 
 PR #395 remains the durable practitioner-Calendar classification authority and must not be redone because of this incident.
 
@@ -78,4 +93,17 @@ PR #395 remains the durable practitioner-Calendar classification authority and m
 - Migration 073 is applied and checksum-verified in production.
 - The stale row is removed; do not recreate it from legacy Goldie state.
 - Focused regression retains the 90-minute Saturday 08:00–14:00 semantics and all existing conflict gates.
-- Temporary production diagnostic hooks are removed by the reconciliation cleanup PR; diagnostic source is not durable runtime behavior.
+- Temporary production diagnostic hooks and source are removed from runtime by PR #406.
+- Do not ask JP to reproduce the original zero-slot failure merely for evidence.
+
+## Ledger reconciliation handoff
+
+This dated reconciliation is the authoritative Booking & Admin UX evidence packet. `docs/SHILOH-OS-PROJECT-TRACKER.md` and `docs/SHILOH-OS-MASTER-STATUS.md` still contain their pre-incident application baseline and do not yet include this completed unit. Control & Reconciliation must fold this result into both ledgers without superseding newer unrelated authority.
+
+Recommended ledger outcome:
+
+- add `CHRISTEL-SATURDAY-AVAILABILITY` as `🟢 VERIFIED LIVE / COMPLETE` under Booking & Admin UX;
+- record PR #405 / `8bfaf91d91f1f02ce5369f9e7781c0ea110d6e21` + migration 073 as the bounded repair authority;
+- record PR #406 / `d71df61f7744281c5c06c1f688bd75a27f738cc1` + `dep-da4nam8jo6nc73fe2nrg` as the current cleanup/live convergence point;
+- preserve PR #399 as CRM onboarding ambiguity authority and PR #395 as practitioner Calendar classification authority;
+- mark the stale Goldie block diagnosis/repair complete and do not redo it.
