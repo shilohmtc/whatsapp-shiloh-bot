@@ -64,6 +64,20 @@ function classifyCandidateAuthority(candidate, { verification = null, controlled
   return { status: 'unverified_client', reason: 'existing_client_without_explicit_verification' };
 }
 
+function dedupeCandidates(rows = []) {
+  const byClient = new Map();
+  for (const row of rows) {
+    const key = String(row.id);
+    if (!byClient.has(key)) {
+      byClient.set(key, { ...row, contact_ids: [row.contact_id] });
+      continue;
+    }
+    const existing = byClient.get(key);
+    if (!existing.contact_ids.includes(row.contact_id)) existing.contact_ids.push(row.contact_id);
+  }
+  return [...byClient.values()];
+}
+
 async function exactPhoneCandidates(phone, db = pool) {
   const normalized = normalizePhone(phone);
   if (!normalized) return [];
@@ -91,17 +105,40 @@ async function exactPhoneCandidates(phone, db = pool) {
     [normalized]
   );
 
-  const byClient = new Map();
-  for (const row of result.rows) {
-    const key = String(row.id);
-    if (!byClient.has(key)) {
-      byClient.set(key, { ...row, contact_ids: [row.contact_id] });
-      continue;
-    }
-    const existing = byClient.get(key);
-    if (!existing.contact_ids.includes(row.contact_id)) existing.contact_ids.push(row.contact_id);
-  }
-  return [...byClient.values()];
+  return dedupeCandidates(result.rows);
+}
+
+// Archive-aware reclaim is deliberately a fallback. Active candidates always win.
+// We inventory every non-active owner for the exact phone so an archived Goldie
+// candidate can never be selected while another canonical client still owns it.
+async function nonActiveExactPhoneOwners(phone, db = pool) {
+  const normalized = normalizePhone(phone);
+  if (!normalized) return [];
+
+  const result = await db.query(
+    `SELECT c.id,
+            c.display_name,
+            c.date_of_birth,
+            c.status,
+            c.source,
+            c.custom_attributes->>'gender' AS gender,
+            c.custom_attributes->>'registration_status' AS registration_status,
+            c.custom_attributes->>'profile_incomplete' AS profile_incomplete,
+            cc.id AS contact_id,
+            cc.contact_type,
+            cc.normalized_value,
+            cc.verified_at,
+            EXISTS (SELECT 1 FROM appointments a WHERE a.client_id = c.id) AS has_appointment_history
+       FROM clients c
+       JOIN client_contacts cc ON cc.client_id = c.id
+      WHERE cc.normalized_value = $1
+        AND cc.contact_type IN ('whatsapp','mobile')
+        AND c.status <> 'active'
+      ORDER BY c.id, CASE WHEN cc.contact_type = 'whatsapp' THEN 0 ELSE 1 END, cc.id`,
+    [normalized]
+  );
+
+  return dedupeCandidates(result.rows);
 }
 
 async function activeVerificationForCandidate(candidate, normalizedPhone, db = pool) {
@@ -145,22 +182,80 @@ async function resolveVerifiedClientByWhatsApp(phone, db = pool) {
   const normalized = normalizePhone(phone);
   if (!normalized) return { status: 'none', clients: [], reason: 'missing_phone' };
 
+  // Existing active exact-phone authority is first and unchanged.
   const clients = await exactPhoneCandidates(normalized, db);
-  if (!clients.length) return { status: 'none', clients: [], reason: 'no_exact_phone_candidate' };
   if (clients.length > 1) {
     return { status: 'ambiguous', clients, reason: 'multiple_active_clients_for_exact_phone' };
   }
 
-  const client = clients[0];
+  if (clients.length === 1) {
+    const client = clients[0];
+    const controlled = await controlledAuthorityForPhone(normalized, db);
+    const verification = controlled ? null : await activeVerificationForCandidate(client, normalized, db);
+    const authority = classifyCandidateAuthority(client, { verification, controlled });
+
+    return {
+      ...authority,
+      client,
+      clients,
+      registrationComplete: registrationComplete(client),
+    };
+  }
+
+  // A configured controlled-demo phone must never fall through to archival reclaim.
+  // Unbound, drifted, policy-drifted or conflicting controlled state all fail closed.
   const controlled = await controlledAuthorityForPhone(normalized, db);
-  const verification = controlled ? null : await activeVerificationForCandidate(client, normalized, db);
-  const authority = classifyCandidateAuthority(client, { verification, controlled });
+  if (controlled) {
+    return {
+      status: 'manual_review',
+      clients: controlled.client ? [controlled.client] : [],
+      client: controlled.client || null,
+      reason: `controlled_demo_${controlled.status || 'conflict'}`,
+    };
+  }
+
+  const inactiveOwners = await nonActiveExactPhoneOwners(normalized, db);
+  if (!inactiveOwners.length) {
+    return { status: 'none', clients: [], reason: 'no_exact_phone_candidate' };
+  }
+  if (inactiveOwners.length > 1) {
+    return {
+      status: 'ambiguous',
+      clients: inactiveOwners,
+      reason: 'multiple_non_active_clients_for_exact_phone',
+    };
+  }
+
+  const archived = inactiveOwners[0];
+  if (archived.status !== 'archived' || archived.source !== 'goldie_import') {
+    return {
+      status: 'manual_review',
+      client: archived,
+      clients: inactiveOwners,
+      reason: 'non_reclaimable_exact_phone_owner',
+    };
+  }
+
+  // Archived imported clients are reclaimable only when they do not already carry
+  // active durable identity authority. That state is an inconsistency and must be
+  // reviewed rather than silently reactivated.
+  const verification = await activeVerificationForCandidate(archived, normalized, db);
+  if (verification) {
+    return {
+      status: 'manual_review',
+      client: archived,
+      clients: inactiveOwners,
+      reason: 'archived_client_has_active_verification',
+    };
+  }
 
   return {
-    ...authority,
-    client,
-    clients,
-    registrationComplete: registrationComplete(client),
+    status: 'claim_required',
+    reason: 'archived_imported_contact_unverified',
+    client: archived,
+    clients: inactiveOwners,
+    reclaimRequired: true,
+    registrationComplete: false,
   };
 }
 
@@ -173,6 +268,7 @@ module.exports = {
   registrationComplete,
   classifyCandidateAuthority,
   exactPhoneCandidates,
+  nonActiveExactPhoneOwners,
   activeVerificationForCandidate,
   controlledAuthorityForPhone,
   resolveVerifiedClientByWhatsApp,
