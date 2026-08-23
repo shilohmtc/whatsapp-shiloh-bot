@@ -5,6 +5,7 @@ const path = require('node:path');
 
 const {
   classifyCandidateAuthority,
+  resolveVerifiedClientByWhatsApp,
 } = require('../src/services/clientVerifiedIdentity');
 
 function candidate(overrides = {}) {
@@ -42,9 +43,59 @@ test('verified_at proxy alone is insufficient identity authority', () => {
   assert.equal(result.status, 'claim_required');
 });
 
-test('imported appointment history is preserved as a fail-closed historical state, not identity proof', () => {
+test('imported appointment history no longer forces the clinic-verification dead end', () => {
   const result = classifyCandidateAuthority(candidate({ has_appointment_history: true }));
+  assert.equal(result.status, 'claim_required');
+  assert.equal(result.reason, 'imported_contact_unverified');
+});
+
+test('non-imported historical client without explicit evidence remains fail-closed', () => {
+  const result = classifyCandidateAuthority(candidate({
+    source: 'whatsapp_onboarding',
+    has_appointment_history: true,
+  }));
   assert.equal(result.status, 'historical_unverified');
+  assert.equal(result.reason, 'history_without_explicit_verification');
+});
+
+test('verified imported historical client remains verified and is not forced to register again', () => {
+  const result = classifyCandidateAuthority(candidate({ has_appointment_history: true }), {
+    verification: {
+      id: 10,
+      verification_method: 'imported_claim_registration',
+      verified_at: '2026-08-23T10:00:00Z',
+    },
+  });
+  assert.equal(result.status, 'verified_client');
+  assert.equal(result.verificationMethod, 'imported_claim_registration');
+});
+
+test('multiple active exact-phone candidates remain ambiguous before any claim flow', async () => {
+  const db = {
+    async query() {
+      return {
+        rowCount: 2,
+        rows: [
+          {
+            ...candidate({ id: 101 }),
+            contact_id: 501,
+            contact_type: 'mobile',
+            normalized_value: '27820000001',
+          },
+          {
+            ...candidate({ id: 202 }),
+            contact_id: 502,
+            contact_type: 'mobile',
+            normalized_value: '27820000001',
+          },
+        ],
+      };
+    },
+  };
+  const result = await resolveVerifiedClientByWhatsApp('27820000001', db);
+  assert.equal(result.status, 'ambiguous');
+  assert.equal(result.reason, 'multiple_active_clients_for_exact_phone');
+  assert.equal(result.clients.length, 2);
 });
 
 test('provisional client remains unverified until explicit evidence exists', () => {
@@ -81,6 +132,34 @@ test('imported DOB and gender are not seeded into a fresh authority-version clai
   assert.match(onboarding, /pendingGender:\s*null/);
   assert.doesNotMatch(onboarding, /pendingDateOfBirth:\s*known\?\.date_of_birth/);
   assert.doesNotMatch(onboarding, /pendingGender:\s*known\?\.gender/);
+});
+
+test('fresh imported registration reuses the canonical client and preserves provenance and appointments', () => {
+  const onboarding = source('src/services/clientIdentityOnboarding.js');
+  assert.match(onboarding, /let clientId = session\.client_id/);
+  assert.match(onboarding, /SELECT id,source FROM clients WHERE id=\$1 AND status='active' FOR UPDATE/);
+  assert.match(onboarding, /clientSource = lockedClient\.rows\[0\]\.source/);
+  assert.match(onboarding, /UPDATE clients SET display_name=\$2,date_of_birth=\$3::date,custom_attributes=.*jsonb_build_object\('gender',\$4::text\).*WHERE id=\$1/s);
+  assert.match(onboarding, /else \{\s*const created = await db\.query\(`INSERT INTO clients/s);
+  assert.doesNotMatch(onboarding, /UPDATE clients SET[^`]*source\s*=/s);
+  assert.doesNotMatch(onboarding, /(?:UPDATE|DELETE FROM) appointments/i);
+  assert.match(onboarding, /verificationMethod = clientSource === "goldie_import" \? "imported_claim_registration" : "whatsapp_registration"/);
+});
+
+test('fresh imported registration writes explicit verification evidence on the retained client', () => {
+  const onboarding = source('src/services/clientIdentityOnboarding.js');
+  assert.match(onboarding, /INSERT INTO client_identity_verifications \(client_id,client_contact_id,verification_method,status,verified_at,evidence_reference\)/);
+  assert.match(onboarding, /\[clientId, contactId, verificationMethod/);
+  assert.match(onboarding, /client\.identity_verified/);
+  assert.match(onboarding, /UPDATE client_onboarding_sessions SET client_id=\$2,state='complete',authority_version=\$3/);
+});
+
+test('same-client exact-phone completion cannot silently create or steal another active identity', () => {
+  const onboarding = source('src/services/clientIdentityOnboarding.js');
+  assert.match(onboarding, /SELECT id,client_id,contact_type FROM client_contacts WHERE normalized_value=\$1 AND contact_type IN \('whatsapp','mobile'\)[\s\S]*FOR UPDATE/);
+  assert.match(onboarding, /contacts\.rows\.some\(\(row\) => String\(row\.client_id\) !== String\(clientId\)\)/);
+  assert.match(onboarding, /AMBIGUOUS_CONTACT/);
+  assert.match(onboarding, /if \(clientId\)[\s\S]*UPDATE clients[\s\S]*else \{[\s\S]*INSERT INTO clients/);
 });
 
 test('Booking/Admin gate and final commit inherit the same centralized resolver authority', () => {

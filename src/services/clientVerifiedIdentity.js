@@ -38,12 +38,19 @@ function classifyCandidateAuthority(candidate, { verification = null, controlled
     };
   }
 
-  if (candidate.has_appointment_history === true) {
-    return { status: 'historical_unverified', reason: 'history_without_explicit_verification' };
-  }
-
+  // Goldie/contact-book provenance is never identity authority. A single exact-phone
+  // imported candidate remains claimable through fresh governed registration even
+  // when legitimate appointment history exists. History is preserved on the same
+  // canonical client, but it must not force an imported person into a verification
+  // dead end or become identity proof.
   if (candidate.source === 'goldie_import') {
     return { status: 'claim_required', reason: 'imported_contact_unverified' };
+  }
+
+  // Retain the stronger human-verification boundary for non-imported historical
+  // identities that lack explicit verification evidence.
+  if (candidate.has_appointment_history === true) {
+    return { status: 'historical_unverified', reason: 'history_without_explicit_verification' };
   }
 
   if (
