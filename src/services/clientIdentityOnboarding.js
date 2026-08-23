@@ -3,9 +3,10 @@ const { registrationStatus, assertRegistrationComplete } = require("./clientRegi
 const {
   resolveVerifiedClientByWhatsApp,
   isVerifiedRegistration,
+  controlledAuthorityForPhone,
 } = require("./clientVerifiedIdentity");
 
-const AUTHORITY_VERSION = "verified_client_v1";
+const AUTHORITY_VERSION = "verified_client_v2_archive_reclaim";
 
 function normalizePhone(value = "") { return String(value).replace(/[^0-9]/g, ""); }
 function normalizeRegistrationMobile(value = "") {
@@ -197,6 +198,12 @@ function promptForMissing(session = {}) {
   return `${prefix}Please send ${missing.join(missing.length > 1 ? ", " : "")}. You can send the remaining details together in one message.`;
 }
 
+function ambiguousContactError(message) {
+  const e = new Error(message);
+  e.code = "AMBIGUOUS_CONTACT";
+  return e;
+}
+
 async function completeOnboarding(phone, session) {
   const key = normalizePhone(phone);
   if (!session.pending_gender) {
@@ -210,23 +217,58 @@ async function completeOnboarding(phone, session) {
     await db.query("BEGIN");
     let clientId = session.client_id;
     let clientSource = "whatsapp_onboarding";
+    let reactivatedFromStatus = null;
+
+    // Lock exact-phone ownership before writing any canonical identity data. This
+    // makes the archived reclaim path fail closed and leaves status/data unchanged
+    // on rollback if another client owns the phone.
+    const contacts = await db.query(`SELECT id,client_id,contact_type FROM client_contacts WHERE normalized_value=$1 AND contact_type IN ('whatsapp','mobile') ORDER BY CASE WHEN contact_type='whatsapp' THEN 0 ELSE 1 END,id FOR UPDATE`, [key]);
+
     if (clientId) {
-      const lockedClient = await db.query(`SELECT id,source FROM clients WHERE id=$1 AND status='active' FOR UPDATE`, [clientId]);
+      const lockedClient = await db.query(`SELECT id,source,status FROM clients WHERE id=$1 FOR UPDATE`, [clientId]);
       if (lockedClient.rowCount !== 1) {
-        const e = new Error("Existing onboarding client is not an active canonical client");
-        e.code = "AMBIGUOUS_CONTACT";
-        throw e;
+        throw ambiguousContactError("Existing onboarding client is not a canonical client");
       }
-      clientSource = lockedClient.rows[0].source;
-      await db.query(`UPDATE clients SET display_name=$2,date_of_birth=$3::date,custom_attributes=COALESCE(custom_attributes,'{}'::jsonb) || jsonb_build_object('gender',$4::text),updated_at=NOW() WHERE id=$1`, [clientId, session.pending_name, session.pending_date_of_birth, session.pending_gender]);
+      const canonicalClient = lockedClient.rows[0];
+      clientSource = canonicalClient.source;
+
+      if (contacts.rows.some((row) => String(row.client_id) !== String(clientId))) {
+        throw ambiguousContactError("WhatsApp number belongs to another canonical client");
+      }
+
+      const controlled = await controlledAuthorityForPhone(key, db);
+      if (controlled && !(controlled.status === "bound" && String(controlled.client?.id || "") === String(clientId))) {
+        throw ambiguousContactError("Controlled demo identity is not safely bound to this canonical client");
+      }
+
+      if (canonicalClient.status === "archived") {
+        if (clientSource !== "goldie_import") {
+          throw ambiguousContactError("Archived canonical client is not eligible for imported-contact reclaim");
+        }
+        const activeVerification = await db.query(`SELECT id FROM client_identity_verifications WHERE client_id=$1 AND status='active' ORDER BY verified_at DESC,id DESC LIMIT 1`, [clientId]);
+        if (activeVerification.rowCount) {
+          throw ambiguousContactError("Archived canonical client already has active durable verification authority");
+        }
+        reactivatedFromStatus = canonicalClient.status;
+        await db.query(`UPDATE clients SET status='active',display_name=$2,date_of_birth=$3::date,custom_attributes=COALESCE(custom_attributes,'{}'::jsonb) || jsonb_build_object('gender',$4::text),updated_at=NOW() WHERE id=$1`, [clientId, session.pending_name, session.pending_date_of_birth, session.pending_gender]);
+      } else if (canonicalClient.status === "active") {
+        await db.query(`UPDATE clients SET display_name=$2,date_of_birth=$3::date,custom_attributes=COALESCE(custom_attributes,'{}'::jsonb) || jsonb_build_object('gender',$4::text),updated_at=NOW() WHERE id=$1`, [clientId, session.pending_name, session.pending_date_of_birth, session.pending_gender]);
+      } else {
+        throw ambiguousContactError("Existing onboarding client status is not eligible for automatic identity completion");
+      }
     } else {
+      // Unknown/new registration is still allowed only when no exact-phone owner
+      // exists. Any retained archived/non-active ownership therefore fails closed
+      // instead of creating a duplicate active canonical client.
+      if (contacts.rowCount) {
+        throw ambiguousContactError("WhatsApp number already belongs to a canonical client");
+      }
+      const controlled = await controlledAuthorityForPhone(key, db);
+      if (controlled) {
+        throw ambiguousContactError("Controlled demo phone cannot create a new canonical client");
+      }
       const created = await db.query(`INSERT INTO clients (display_name,date_of_birth,custom_attributes,source) VALUES ($1,$2::date,jsonb_build_object('gender',$3::text),'whatsapp_onboarding') RETURNING id`, [session.pending_name, session.pending_date_of_birth, session.pending_gender]);
       clientId = created.rows[0].id;
-    }
-
-    const contacts = await db.query(`SELECT id,client_id,contact_type FROM client_contacts WHERE normalized_value=$1 AND contact_type IN ('whatsapp','mobile') ORDER BY CASE WHEN contact_type='whatsapp' THEN 0 ELSE 1 END,id FOR UPDATE`, [key]);
-    if (contacts.rows.some((row) => String(row.client_id) !== String(clientId))) {
-      const e = new Error("WhatsApp number belongs to another canonical client"); e.code = "AMBIGUOUS_CONTACT"; throw e;
     }
 
     let contactId;
@@ -240,10 +282,10 @@ async function completeOnboarding(phone, session) {
     }
 
     const verificationMethod = clientSource === "goldie_import" ? "imported_claim_registration" : "whatsapp_registration";
-    const verification = await db.query(`INSERT INTO client_identity_verifications (client_id,client_contact_id,verification_method,status,verified_at,evidence_reference) VALUES ($1,$2,$3,'active',NOW(),$4::jsonb) ON CONFLICT DO NOTHING RETURNING id`, [clientId, contactId, verificationMethod, JSON.stringify({ authorityVersion: AUTHORITY_VERSION, channel: "whatsapp" })]);
+    const verification = await db.query(`INSERT INTO client_identity_verifications (client_id,client_contact_id,verification_method,status,verified_at,evidence_reference) VALUES ($1,$2,$3,'active',NOW(),$4::jsonb) ON CONFLICT DO NOTHING RETURNING id`, [clientId, contactId, verificationMethod, JSON.stringify({ authorityVersion: AUTHORITY_VERSION, channel: "whatsapp", reactivatedFromStatus })]);
     const verificationId = verification.rows[0]?.id || null;
 
-    await db.query(`INSERT INTO crm_audit_events (action,entity_type,entity_id,metadata) VALUES ('client.identity_verified','client',$1,$2::jsonb)`, [clientId, JSON.stringify({ verificationMethod, verificationId, authorityVersion: AUTHORITY_VERSION })]);
+    await db.query(`INSERT INTO crm_audit_events (action,entity_type,entity_id,metadata) VALUES ('client.identity_verified','client',$1,$2::jsonb)`, [clientId, JSON.stringify({ verificationMethod, verificationId, authorityVersion: AUTHORITY_VERSION, reactivatedFromStatus })]);
     await db.query(`UPDATE client_onboarding_sessions SET client_id=$2,state='complete',authority_version=$3,updated_at=NOW() WHERE phone=$1`, [key, clientId, AUTHORITY_VERSION]);
     await db.query("COMMIT");
     const client = await pool.query(`SELECT c.id,c.display_name,c.date_of_birth,c.custom_attributes->>'gender' AS gender,cc.normalized_value,cc.verified_at FROM clients c JOIN client_contacts cc ON cc.client_id=c.id AND cc.normalized_value=$2 WHERE c.id=$1 ORDER BY CASE WHEN cc.contact_type='whatsapp' THEN 0 ELSE 1 END LIMIT 1`, [clientId, key]);
