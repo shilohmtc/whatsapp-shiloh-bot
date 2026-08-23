@@ -1,6 +1,6 @@
 # Shiloh OS — Engineering Governance
 
-Updated: 2026-08-20
+Updated: 2026-08-23
 Purpose: permanent engineering operating rules that apply across Shiloh OS continuation work.
 
 ## Workstream operating model
@@ -75,6 +75,22 @@ The checkpoint routing block uses this structure:
 Across every workstream, the shared source of truth is GitHub `main`, `docs/SHILOH-OS-MASTER-STATUS.md`, `docs/SHILOH-OS-PROJECT-TRACKER.md`, the latest reconciliation evidence identified by those documents, and verified production/provider state.
 
 Before controlled work, a specialist chat must read the applicable authoritative repository state and verify any production/provider facts that could have changed. Chat history is navigation context only when authoritative repository evidence exists; it must not be used to reconstruct or override project truth. Do not redo completed or superseded work.
+
+## GitHub connector permission, privacy-confirmation and payload-minimization rule
+
+This rule applies across all five Shiloh OS workstreams.
+
+GitHub connector permission, Shiloh business authorization, and ChatGPT/platform privacy confirmation are three separate controls and must not be conflated:
+
+- A GitHub connector setting such as **Allow all actions** is technical capability only. It does not itself authorize a production mutation, destructive action, irreversible business decision, security-sensitive change, or work outside the currently authorized Shiloh scope.
+- Shiloh business authorization controls whether a substantial controlled unit may proceed. Once that unit is authorized, routine in-scope GitHub execution must continue through the controlled-work completion protocol without repeatedly asking for the same Shiloh authorization merely because a branch, file write, pull request, merge, or reconciliation step is next.
+- ChatGPT/the platform may independently display a privacy or data-sharing confirmation for a GitHub write even when the GitHub connector is configured to allow actions automatically. Such a confirmation is a platform privacy control, not a new Shiloh authorization gate and not evidence that the GitHub connector permission has been reduced.
+
+GitHub write payloads must contain only the minimum authoritative information required for the operation. Commit messages, pull-request titles/bodies, reconciliation records, comments, and connector payloads should prefer role- or decision-based wording such as **business authorization recorded** rather than unnecessary personal identifiers. Do not include full phone numbers, personal addresses, credentials, secrets, client personal data, or other identifying/sensitive information unless it is genuinely required for the authoritative repository record and is appropriate for that controlled scope.
+
+Do not weaken global connector/plugin permissions merely to suppress platform privacy confirmations. If a platform privacy confirmation still appears after payload minimization and physically blocks an otherwise authorized GitHub action, treat it as a platform interaction gate only. After the platform confirmation is satisfied, resume the already-authorized controlled unit from the blocked action without requesting a new Shiloh business authorization.
+
+This rule reduces avoidable interruptions and unnecessary data disclosure; it does not expand authorization. Existing approval, provider, human-truth, security, privacy, production, destructive-action, and scope gates remain fully authoritative.
 
 ## Bounded execution / anti-thrashing rule
 
