@@ -2,7 +2,7 @@
 
 Date: 2026-08-23
 Owner: 00 — Control & Reconciliation
-Status: GOVERNANCE RULE IMPLEMENTED / PENDING MERGE
+Status: VERIFIED / COMPLETE
 
 ## Authoritative decision
 
@@ -34,13 +34,22 @@ This rule does not authorize production mutations, destructive actions, irrevers
 
 All existing business authorization, provider, human-truth, safety, privacy, security, production, destructive-action and scope gates remain authoritative.
 
-## Implementation
+## Implementation and evidence
 
 Canonical governance file updated:
 
 `docs/SHILOH-OS-ENGINEERING-GOVERNANCE.md`
 
 The rule is placed directly after the Authoritative-state rule so every specialist workstream encounters it during required governance inspection.
+
+Delivery evidence:
+
+- PR #423 — `Add permanent GitHub connector privacy governance`
+- implementation/reconciliation merge: `31f51c7bc6ac307fb00fd938cd65a1e4cf995275`
+- CI #1288 / run `32637357517` / job `97189009523`
+- Node `24.14.1`
+- full non-mutating regression: **887 passed / 0 failed / 0 cancelled / 0 skipped**
+- exact documentation auto-deploy: `dep-da5dq6jbc2fs73aokl0g` — LIVE
 
 ## No operational mutation
 
@@ -55,4 +64,8 @@ This governance unit does not change:
 - Render environment values;
 - database schema or data.
 
-Only repository governance documentation and reconciliation records are changed.
+Only repository governance documentation and reconciliation records changed.
+
+## Closure
+
+This governance rule is permanent shared authority. Do not ask for duplicate Shiloh authorization merely because an already-authorized controlled unit reaches an ordinary GitHub execution step. Do not treat platform privacy confirmation as business authorization. Do not broaden connector permissions merely to suppress privacy prompts.
