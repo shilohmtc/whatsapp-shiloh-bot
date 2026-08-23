@@ -1,7 +1,7 @@
 # Shiloh OS — Master Status Addendum — GitHub Connector Privacy Governance
 
 Date: 2026-08-23
-Status: GOVERNANCE IMPLEMENTED / MERGE-GATED
+Status: VERIFIED / COMPLETE
 
 This bounded addendum supplements `docs/SHILOH-OS-MASTER-STATUS.md` without replacing unrelated Master authority.
 
@@ -27,12 +27,26 @@ Global connector/plugin permissions must not be weakened or broadened merely to 
 
 This governance rule does not authorize production mutations, destructive actions, irreversible business decisions, security-sensitive changes, provider writes, or work outside the authorized scope. Existing approval, provider, human-truth, security, privacy, production, destructive-action and scope gates remain authoritative.
 
-## Canonical rule location
+## Canonical rule and evidence
+
+Canonical authority:
 
 `docs/SHILOH-OS-ENGINEERING-GOVERNANCE.md`
 
-Every specialist workstream is already required to inspect the current Engineering Governance on GitHub `main`; after merge this rule therefore becomes part of the permanent cross-workstream operating model.
+Every specialist workstream is required to inspect current Engineering Governance on GitHub `main`; this rule is therefore part of the permanent cross-workstream operating model.
+
+Evidence:
+
+- PR #423 merged as `31f51c7bc6ac307fb00fd938cd65a1e4cf995275`
+- CI #1288 / run `32637357517` / job `97189009523`
+- Node `24.14.1`
+- full non-mutating regression: 887/887 passed
+- exact documentation auto-deploy `dep-da5dq6jbc2fs73aokl0g` reached LIVE
 
 ## Operational non-change
 
-No connector permission setting, application code, production data, provider configuration, Render environment value, appointment/attendance state, or database state is changed by this documentation-only governance unit.
+No connector permission setting, application code, production data, provider configuration, Render environment value, appointment/attendance state, or database state changed by this documentation-only governance unit.
+
+## Closure
+
+Permanent authority is established. Platform privacy confirmations may still exist as platform controls; they do not reopen or supersede this governance rule.
