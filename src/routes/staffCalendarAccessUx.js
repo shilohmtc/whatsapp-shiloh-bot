@@ -24,33 +24,42 @@ function normalizeReason(value) {
   return reason === 'logout' || reason === 'session' ? reason : null;
 }
 
-function createStaffCalendarAccessRouter({
+function createStaffCalendarAccessPageHandler({
   env = process.env,
   renderPage = renderStaffCalendarAccessPage,
-  renderClient = staffCalendarAccessClientScript,
 } = {}) {
-  const router = express.Router();
-
-  router.get('/', (req, res) => {
+  return function staffCalendarAccessPage(req, res) {
     setAccessSecurityHeaders(res);
     if (!isStaffCalendarAccessUxEnabled(env)) return res.status(404).type('text/plain').send('Not Found');
     return res.status(200).type('html').send(renderPage({
       reason: normalizeReason(req.query?.reason),
       clientScriptPath: `${req.baseUrl || '/calendar/staff'}/client.js`,
     }));
-  });
+  };
+}
 
-  router.get('/client.js', (req, res) => {
+function createStaffCalendarAccessClientHandler({
+  env = process.env,
+  renderClient = staffCalendarAccessClientScript,
+} = {}) {
+  return function staffCalendarAccessClient(_req, res) {
     setAccessSecurityHeaders(res);
     if (!isStaffCalendarAccessUxEnabled(env)) return res.status(404).type('text/plain').send('Not Found');
     return res.status(200).type('application/javascript').send(renderClient());
-  });
+  };
+}
 
+function createStaffCalendarAccessRouter(options = {}) {
+  const router = express.Router();
+  router.get('/', createStaffCalendarAccessPageHandler(options));
+  router.get('/client.js', createStaffCalendarAccessClientHandler(options));
   return router;
 }
 
 module.exports = createStaffCalendarAccessRouter();
 module.exports.createStaffCalendarAccessRouter = createStaffCalendarAccessRouter;
+module.exports.createStaffCalendarAccessPageHandler = createStaffCalendarAccessPageHandler;
+module.exports.createStaffCalendarAccessClientHandler = createStaffCalendarAccessClientHandler;
 module.exports.isStaffCalendarAccessUxEnabled = isStaffCalendarAccessUxEnabled;
 module.exports.setAccessSecurityHeaders = setAccessSecurityHeaders;
 module.exports.normalizeReason = normalizeReason;
