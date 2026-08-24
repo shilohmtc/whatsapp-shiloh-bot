@@ -3,14 +3,19 @@ const { pool } = require('../db/pool');
 const calendarReadOnlyUxRoutes = require('./calendarReadOnlyUx');
 const staffCalendarAccessUxRoutes = require('./staffCalendarAccessUx');
 const { createStaffBrowserSessionService } = require('../services/staffBrowserSession');
+const { createPilotGuardedStaffBrowserSessionService } = require('../services/staffBrowserPilotGate');
 const { createStaffBrowserSessionRouter } = require('./staffBrowserSession');
 const { createStaffBrowserChallengeDispatcher } = require('../services/staffBrowserChallengeDelivery');
 const { createOptionalCalendarSessionMiddleware } = require('../middleware/staffBrowserSession');
 const router = express.Router();
 
-const staffBrowserSessionService = createStaffBrowserSessionService({
+const baseStaffBrowserSessionService = createStaffBrowserSessionService({
   db: pool,
   challengeDispatcher: createStaffBrowserChallengeDispatcher(),
+});
+const staffBrowserSessionService = createPilotGuardedStaffBrowserSessionService({
+  service: baseStaffBrowserSessionService,
+  db: pool,
 });
 
 function esc(v=''){return String(v).replace(/\\/g,'\\\\').replace(/\n/g,'\\n').replace(/,/g,'\\,').replace(/;/g,'\\;');}
