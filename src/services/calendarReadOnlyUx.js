@@ -1,0 +1,168 @@
+const schedulingEngine = require('./schedulingEngine');
+
+const BUSINESS_TIMEZONE = 'Africa/Johannesburg';
+const BUSINESS_UTC_OFFSET = '+02:00';
+const ALLOWED_VIEWS = new Set(['day', 'week', 'agenda']);
+const DATE_KEY = /^\d{4}-\d{2}-\d{2}$/;
+
+function uxError(code, message) {
+  const error = new Error(message);
+  error.code = code;
+  return error;
+}
+
+function dateKeyFromDate(date = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: BUSINESS_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date);
+  const values = Object.fromEntries(parts.map(part => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
+function parseDateKey(value, fallbackDate = new Date()) {
+  if (value == null || String(value).trim() === '') return dateKeyFromDate(fallbackDate);
+  const key = String(value).trim();
+  if (!DATE_KEY.test(key)) throw uxError('CALENDAR_UX_INVALID_DATE', 'Calendar date must use YYYY-MM-DD.');
+  const parsed = new Date(`${key}T12:00:00${BUSINESS_UTC_OFFSET}`);
+  if (Number.isNaN(parsed.getTime()) || dateKeyFromDate(parsed) !== key) {
+    throw uxError('CALENDAR_UX_INVALID_DATE', 'Calendar date is invalid.');
+  }
+  return key;
+}
+
+function addDays(dateKey, days) {
+  const date = new Date(`${dateKey}T12:00:00${BUSINESS_UTC_OFFSET}`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return dateKeyFromDate(date);
+}
+
+function mondayFor(dateKey) {
+  const noon = new Date(`${dateKey}T12:00:00${BUSINESS_UTC_OFFSET}`);
+  const weekday = noon.getUTCDay();
+  const delta = weekday === 0 ? -6 : 1 - weekday;
+  return addDays(dateKey, delta);
+}
+
+function normalizeView(value) {
+  const view = String(value || 'day').trim().toLowerCase();
+  if (!ALLOWED_VIEWS.has(view)) throw uxError('CALENDAR_UX_INVALID_VIEW', 'Calendar view must be day, week or agenda.');
+  return view;
+}
+
+function normalizeStaffFilter(value) {
+  if (value == null || String(value).trim() === '' || String(value).trim().toLowerCase() === 'all') return null;
+  if (!/^\d+$/.test(String(value).trim())) throw uxError('CALENDAR_UX_INVALID_STAFF_FILTER', 'Calendar practitioner filter is invalid.');
+  const id = Number(value);
+  if (!Number.isSafeInteger(id) || id <= 0) throw uxError('CALENDAR_UX_INVALID_STAFF_FILTER', 'Calendar practitioner filter is invalid.');
+  return id;
+}
+
+function periodFor(view, dateKey) {
+  const startKey = view === 'week' ? mondayFor(dateKey) : dateKey;
+  const lengthDays = view === 'day' ? 1 : 7;
+  const endKey = addDays(startKey, lengthDays);
+  const stepDays = lengthDays;
+  const dateKeys = Array.from({ length: lengthDays }, (_, index) => addDays(startKey, index));
+  return {
+    startKey,
+    endKey,
+    dateKeys,
+    from: new Date(`${startKey}T00:00:00${BUSINESS_UTC_OFFSET}`).toISOString(),
+    to: new Date(`${endKey}T00:00:00${BUSINESS_UTC_OFFSET}`).toISOString(),
+    previousAnchor: addDays(dateKey, -stepDays),
+    nextAnchor: addDays(dateKey, stepDays),
+  };
+}
+
+function eventStaffIds(item) {
+  if (Array.isArray(item?.staffIds)) return item.staffIds.map(Number).filter(Number.isSafeInteger);
+  if (Number.isSafeInteger(Number(item?.staffId))) return [Number(item.staffId)];
+  return [];
+}
+
+function filterTimelineForDisplay(timeline, requestedStaffId) {
+  const permittedStaff = Array.isArray(timeline?.staff) ? timeline.staff : [];
+  if (requestedStaffId == null) {
+    return { selectedStaffId: null, permittedStaff, timeline };
+  }
+
+  const permitted = new Set(permittedStaff.map(item => Number(item.id)).filter(Number.isSafeInteger));
+  if (!permitted.has(requestedStaffId)) {
+    throw uxError('CALENDAR_UX_STAFF_FILTER_FORBIDDEN', 'The requested practitioner is outside the authenticated Calendar viewer scope.');
+  }
+
+  const includesStaff = item => eventStaffIds(item).includes(requestedStaffId);
+  const appointments = (timeline.appointments || []).filter(includesStaff);
+  const blocks = (timeline.blocks || []).filter(includesStaff);
+  const leave = (timeline.leave || []).filter(includesStaff);
+  const externalBusy = (timeline.externalBusy || []).filter(includesStaff);
+  const closures = timeline.closures || [];
+
+  return {
+    selectedStaffId: requestedStaffId,
+    permittedStaff,
+    timeline: {
+      ...timeline,
+      staff: permittedStaff.filter(item => Number(item.id) === requestedStaffId),
+      workingWindows: (timeline.workingWindows || []).filter(item => Number(item.staffId) === requestedStaffId),
+      scheduleExceptions: (timeline.scheduleExceptions || []).filter(item => Number(item.staffId) === requestedStaffId),
+      recurringClosures: (timeline.recurringClosures || []).filter(item => Number(item.staffId) === requestedStaffId),
+      appointments,
+      blocks,
+      leave,
+      externalBusy,
+      closures,
+      events: [...appointments, ...blocks, ...leave, ...closures, ...externalBusy],
+    },
+  };
+}
+
+function createCalendarReadOnlyUxService({ listTimeline = schedulingEngine.listTimeline } = {}) {
+  async function buildModel({ view: rawView, date: rawDate, staff: rawStaff, viewer, now = new Date() } = {}) {
+    if (!viewer || typeof viewer !== 'object') {
+      throw uxError('CALENDAR_UX_AUTH_REQUIRED', 'An authenticated server-side Calendar viewer is required.');
+    }
+    const view = normalizeView(rawView);
+    const dateKey = parseDateKey(rawDate, now);
+    const requestedStaffId = normalizeStaffFilter(rawStaff);
+    const period = periodFor(view, dateKey);
+
+    const timeline = await listTimeline({
+      from: period.from,
+      to: period.to,
+      viewer,
+    });
+
+    const filtered = filterTimelineForDisplay(timeline, requestedStaffId);
+    return {
+      view,
+      dateKey,
+      period,
+      selectedStaffId: filtered.selectedStaffId,
+      permittedStaff: filtered.permittedStaff,
+      timeline: filtered.timeline,
+      readOnly: true,
+      timezone: BUSINESS_TIMEZONE,
+    };
+  }
+
+  return { buildModel };
+}
+
+const service = createCalendarReadOnlyUxService();
+
+module.exports = {
+  ALLOWED_VIEWS,
+  BUSINESS_TIMEZONE,
+  createCalendarReadOnlyUxService,
+  buildModel: service.buildModel,
+  normalizeView,
+  parseDateKey,
+  normalizeStaffFilter,
+  periodFor,
+  filterTimelineForDisplay,
+  uxError,
+};
