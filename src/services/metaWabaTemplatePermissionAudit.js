@@ -80,7 +80,23 @@ function summarizeDebugToken(data, wabaId) {
   };
 }
 
-function summarizeWaba(data, discoveredBusinessIds) {
+function summarizeHealthStatus(value) {
+  if (value == null) return { present: false, canSendMessage: null, entities: [] };
+  if (typeof value !== 'object' || Array.isArray(value)) {
+    return { present: true, canSendMessage: sanitizeDiagnosticText(value, 60), entities: [] };
+  }
+  const entities = Array.isArray(value.entities) ? value.entities.map((entity) => ({
+    entityType: sanitizeDiagnosticText(entity?.entity_type, 60),
+    canSendMessage: sanitizeDiagnosticText(entity?.can_send_message, 60),
+  })) : [];
+  return {
+    present: true,
+    canSendMessage: sanitizeDiagnosticText(value.can_send_message, 60),
+    entities,
+  };
+}
+
+function summarizeWaba(data, tokenBusinessIds) {
   const ownerId = data?.owner_business?.id || data?.owner_business;
   return {
     querySucceeded: true,
@@ -89,9 +105,10 @@ function summarizeWaba(data, discoveredBusinessIds) {
     status: sanitizeDiagnosticText(data?.status, 60),
     ownershipType: sanitizeDiagnosticText(data?.ownership_type, 60),
     ownerBusinessPresent: Boolean(ownerId),
-    ownerBusinessMatchesDiscoveredBusiness: ownerId ? discoveredBusinessIds.includes(String(ownerId)) : null,
+    ownerBusinessMatchesTokenBusinessContext: ownerId ? tokenBusinessIds.includes(String(ownerId)) : null,
     onBehalfOfBusinessPresent: Boolean(data?.on_behalf_of_business_info),
-    healthStatusPresent: data?.health_status != null,
+    sharedWithPartners: data?.is_shared_with_partners === true,
+    healthStatus: summarizeHealthStatus(data?.health_status),
   };
 }
 
@@ -110,16 +127,32 @@ function summarizeAssignedUsers(data, principalId) {
   };
 }
 
+function summarizeSystemUsers(data, principalId) {
+  const rows = Array.isArray(data?.data) ? data.data : [];
+  const principal = principalId ? rows.find((row) => String(row?.id || '') === String(principalId)) : null;
+  return {
+    querySucceeded: true,
+    systemUserCount: rows.length,
+    currentTokenPrincipalIsSystemUser: Boolean(principal),
+    currentPrincipalSystemUserRole: sanitizeDiagnosticText(principal?.role, 60),
+  };
+}
+
 async function discoverBusinessContext(graphGet) {
   const ids = [];
-  const me = await graphGet('me', { fields: 'business' });
+  const me = await graphGet('me', { fields: 'id,business' });
   if (me.ok && me.data?.business?.id) ids.push(String(me.data.business.id));
 
   const businesses = await graphGet('me/businesses', { fields: 'id', limit: 100 });
   if (businesses.ok) {
     for (const row of businesses.data?.data || []) if (row?.id) ids.push(String(row.id));
   }
-  return { ids: [...new Set(ids)], me, businesses };
+  return {
+    ids: [...new Set(ids)],
+    principalId: me.ok && me.data?.id ? String(me.data.id) : null,
+    meQuerySucceeded: me.ok,
+    businessesQuerySucceeded: businesses.ok,
+  };
 }
 
 async function summarizeBusinessWabaRelationships(graphGet, businessIds, wabaId) {
@@ -148,6 +181,53 @@ async function summarizeBusinessWabaRelationships(graphGet, businessIds, wabaId)
   };
 }
 
+async function inspectAssignedUsers(graphGet, wabaId, businessIds, principalId) {
+  let lastError = null;
+  for (const businessId of businessIds) {
+    const assigned = await graphGet(`${wabaId}/assigned_users`, {
+      business: businessId,
+      fields: 'id,tasks,user_type',
+      limit: 100,
+    });
+    if (assigned.ok) return summarizeAssignedUsers(assigned.data, principalId);
+    lastError = assigned.error;
+  }
+  return lastError
+    ? { querySucceeded: false, error: lastError }
+    : { querySucceeded: false, reason: 'business_context_unavailable' };
+}
+
+async function inspectSystemUsers(graphGet, businessIds, principalId) {
+  let anySucceeded = false;
+  let total = 0;
+  let role = null;
+  let principalFound = false;
+  let lastError = null;
+  for (const businessId of businessIds) {
+    const users = await graphGet(`${businessId}/system_users`, { fields: 'id,role', limit: 100 });
+    if (!users.ok) {
+      lastError = users.error;
+      continue;
+    }
+    anySucceeded = true;
+    const summary = summarizeSystemUsers(users.data, principalId);
+    total += summary.systemUserCount;
+    if (summary.currentTokenPrincipalIsSystemUser) {
+      principalFound = true;
+      role = summary.currentPrincipalSystemUserRole;
+    }
+  }
+  if (!anySucceeded) return lastError
+    ? { querySucceeded: false, error: lastError }
+    : { querySucceeded: false, reason: 'business_context_unavailable' };
+  return {
+    querySucceeded: true,
+    systemUserCount: total,
+    currentTokenPrincipalIsSystemUser: principalFound,
+    currentPrincipalSystemUserRole: role,
+  };
+}
+
 async function runMetaWabaTemplatePermissionAudit(options = {}) {
   const env = options.env || process.env;
   const discover = options.discoverWabaId || discoverWabaId;
@@ -162,47 +242,47 @@ async function runMetaWabaTemplatePermissionAudit(options = {}) {
   const permissions = await graphGet('me/permissions');
   const debugToken = await graphGet('debug_token', { input_token: env.WHATSAPP_TOKEN });
   const businessContext = await discoverBusinessContext(graphGet);
-  const relationships = await summarizeBusinessWabaRelationships(graphGet, businessContext.ids, wabaId);
   const waba = await graphGet(wabaId, {
-    fields: 'account_review_status,business_verification_status,status,ownership_type,owner_business,on_behalf_of_business_info,health_status',
+    fields: 'account_review_status,business_verification_status,status,ownership_type,owner_business,on_behalf_of_business_info,is_shared_with_partners,health_status',
   });
+
+  const tokenBusinessIds = [...businessContext.ids];
+  const ownerBusinessId = waba.ok ? (waba.data?.owner_business?.id || waba.data?.owner_business || null) : null;
+  const businessIds = [...new Set([...tokenBusinessIds, ...(ownerBusinessId ? [String(ownerBusinessId)] : [])])];
 
   const debugSummary = debugToken.ok
     ? summarizeDebugToken(debugToken.data, wabaId)
     : { querySucceeded: false, error: debugToken.error, principalId: null };
-
-  let assignedUsers = { querySucceeded: false, reason: 'business_context_unavailable' };
-  for (const businessId of businessContext.ids) {
-    const assigned = await graphGet(`${wabaId}/assigned_users`, {
-      business: businessId,
-      fields: 'id,tasks,user_type',
-      limit: 100,
-    });
-    if (assigned.ok) {
-      assignedUsers = summarizeAssignedUsers(assigned.data, debugSummary.principalId);
-      break;
-    }
-    assignedUsers = { querySucceeded: false, error: assigned.error };
-  }
+  const principalId = debugSummary.principalId || businessContext.principalId;
+  const relationships = await summarizeBusinessWabaRelationships(graphGet, businessIds, wabaId);
+  const assignedUsers = await inspectAssignedUsers(graphGet, wabaId, businessIds, principalId);
+  const systemUsers = await inspectSystemUsers(graphGet, businessIds, principalId);
 
   const permissionSummary = permissions.ok
     ? summarizePermissions(permissions.data)
     : { querySucceeded: false, error: permissions.error };
   const wabaSummary = waba.ok
-    ? summarizeWaba(waba.data, businessContext.ids)
+    ? summarizeWaba(waba.data, tokenBusinessIds)
     : { querySucceeded: false, error: waba.error };
 
-  const principalIdRemoved = { ...debugSummary };
-  delete principalIdRemoved.principalId;
+  const tokenEvidence = { ...debugSummary };
+  delete tokenEvidence.principalId;
 
   const evidence = {
     templateListReadable: templateList.ok,
     templateListError: templateList.ok ? null : templateList.error,
-    token: principalIdRemoved,
+    token: tokenEvidence,
     permissions: permissionSummary,
+    businessContext: {
+      meQuerySucceeded: businessContext.meQuerySucceeded,
+      businessesQuerySucceeded: businessContext.businessesQuerySucceeded,
+      tokenBusinessCount: tokenBusinessIds.length,
+      ownerBusinessFallbackUsed: Boolean(ownerBusinessId && !tokenBusinessIds.includes(String(ownerBusinessId))),
+    },
     businessRelationships: relationships,
     waba: wabaSummary,
     assignedUsers,
+    systemUsers,
   };
 
   const managementScopeProven = permissionSummary.whatsappBusinessManagementGranted === true
@@ -211,6 +291,12 @@ async function runMetaWabaTemplatePermissionAudit(options = {}) {
   const assetManagementProven = assignedUsers.currentPrincipalCanManageTemplates === true;
   const wabaApproved = String(wabaSummary.accountReviewStatus || '').toUpperCase() === 'APPROVED';
   const businessVerified = String(wabaSummary.businessVerificationStatus || '').toLowerCase() === 'verified';
+  const wabaReviewDeficiencyProven = wabaSummary.querySucceeded === true
+    && Boolean(wabaSummary.accountReviewStatus)
+    && !wabaApproved;
+  const businessVerificationDeficiencyProven = wabaSummary.querySucceeded === true
+    && Boolean(wabaSummary.businessVerificationStatus)
+    && !businessVerified;
 
   return {
     ok: true,
@@ -220,6 +306,8 @@ async function runMetaWabaTemplatePermissionAudit(options = {}) {
       assetManagementProven,
       wabaApproved,
       businessVerified,
+      wabaReviewDeficiencyProven,
+      businessVerificationDeficiencyProven,
       localPermissionDeficiencyProven: managementScopeProven && assignedUsers.querySucceeded && !assetManagementProven,
       providerWabaRestrictionIndicated: managementScopeProven && assetManagementProven && wabaApproved && businessVerified,
     },
@@ -234,7 +322,9 @@ module.exports = {
   makeGraphClient,
   summarizePermissions,
   summarizeDebugToken,
+  summarizeHealthStatus,
   summarizeWaba,
   summarizeAssignedUsers,
+  summarizeSystemUsers,
   runMetaWabaTemplatePermissionAudit,
 };
