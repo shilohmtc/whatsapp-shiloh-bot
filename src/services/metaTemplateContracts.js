@@ -6,11 +6,13 @@ const { buildBookingConfirmationTemplateDefinition } = require('./bookingConfirm
 const { buildBookingConfirmationV2TemplateDefinition } = require('./bookingConfirmationV2TemplateProvisioning');
 const { buildReminderActionTemplateDefinition } = require('./reminderActionTemplateProvisioning');
 const { buildDefinition } = require('./clientLifecycleTemplateProvisioning');
+const { buildStaffAuthTemplateContract } = require('./staffAuthTemplateDefinition');
 
 const GRAPH_VERSION = 'v23.0';
 const definition = (key) => buildDefinition(key);
 const CONTRACTS = Object.freeze([
   ['booking_update','WHATSAPP_BOOKING_UPDATE_TEMPLATE',definition('booking_update'),true],
+  ['staff_auth_otp','WHATSAPP_STAFF_AUTH_TEMPLATE',buildStaffAuthTemplateContract(),true,true],
   ['staff_finalization_actions',null,buildStaffFinalizationActionTemplateDefinition(),true],
   ['appointment_followup_v2','WHATSAPP_FOLLOWUP_ACTIONS_TEMPLATE',definition('appointment_followup_actions'),true],
   ['booking_approval_outcome','WHATSAPP_BOOKING_APPROVAL_OUTCOME_TEMPLATE',definition('booking_approval_outcome'),true],
@@ -49,9 +51,27 @@ function componentsMatch(expected, actual) {
   if (!Array.isArray(expected)) return false;
   return JSON.stringify(semanticComponents(expected)) === JSON.stringify(semanticComponents(actual));
 }
+function staffAuthComponentsMatch(expected, actual) {
+  if (!Array.isArray(expected) || !Array.isArray(actual) || expected.length !== 3 || actual.length !== 3) return false;
+  const [expectedBody, expectedFooter, expectedButtons] = expected;
+  const [body, footer, buttons] = actual;
+  const expectedButton = expectedButtons?.buttons?.[0];
+  const button = buttons?.buttons?.[0];
+  return String(body?.type || '').toUpperCase() === 'BODY'
+    && body?.add_security_recommendation === expectedBody?.add_security_recommendation
+    && String(footer?.type || '').toUpperCase() === 'FOOTER'
+    && Number(footer?.code_expiration_minutes) === Number(expectedFooter?.code_expiration_minutes)
+    && String(buttons?.type || '').toUpperCase() === 'BUTTONS'
+    && Array.isArray(buttons?.buttons) && buttons.buttons.length === 1
+    && String(button?.type || '').toUpperCase() === String(expectedButton?.type || '').toUpperCase()
+    && String(button?.otp_type || '').toUpperCase() === String(expectedButton?.otp_type || '').toUpperCase()
+    && button?.text === expectedButton?.text
+    && button?.url === expectedButton?.url;
+}
 function compareContract(entry, provider) {
   const expected=entry.contract;
-  const checks={name:provider?.name===expected.name,language:provider?.language===expected.language,category:String(provider?.category||'').toUpperCase()===expected.category,components:componentsMatch(expected.components,provider?.components)};
+  const checks={name:provider?.name===expected.name,language:provider?.language===expected.language,category:String(provider?.category||'').toUpperCase()===expected.category,components:entry.key==='staff_auth_otp'?staffAuthComponentsMatch(expected.components,provider?.components):componentsMatch(expected.components,provider?.components)};
+  if (expected.message_send_ttl_seconds != null) checks.messageTtl=Number(provider?.message_send_ttl_seconds)===Number(expected.message_send_ttl_seconds);
   checks.exact=Object.values(checks).every(Boolean);
   return checks;
 }
@@ -62,7 +82,7 @@ function selectProviderVariant(providers, entry) {
 }
 async function fetchAllTemplates(wabaId) {
   let url=`https://graph.facebook.com/${GRAPH_VERSION}/${wabaId}/message_templates`;
-  const templates=[]; let params={fields:'id,name,status,category,language,quality_score,components',limit:100};
+  const templates=[]; let params={fields:'id,name,status,category,language,quality_score,components,message_send_ttl_seconds',limit:100};
   do { const response=await axios.get(url,{headers:{Authorization:`Bearer ${process.env.WHATSAPP_TOKEN}`},timeout:15000,params}); templates.push(...(response.data?.data||[])); url=response.data?.paging?.next||null; params=undefined; } while(url);
   return templates;
 }
@@ -76,7 +96,7 @@ async function inspectMetaTemplateInventory() {
   const wabaId=await discoverWabaId();
   if(!wabaId)return {ok:false,reason:'waba_not_discovered',templates:[]};
   const providers=await fetchAllTemplates(wabaId);
-  return {ok:true,templates:CONTRACTS.map(entry=>{const {provider,duplicateCount}=selectProviderVariant(providers,entry);const configuredName=configuredTemplateName(entry);const contract=provider?compareContract(entry,provider):null;return {key:entry.key,expectedName:entry.contract.name,configuredName,defined:true,configured:configuredName===entry.contract.name,provider:{exists:Boolean(provider),status:provider?.status||null,quality:provider?.quality_score?.score||provider?.quality_score||null,category:provider?.category||null,language:provider?.language||null,duplicateCount},contract,sendable:entry.sendable,ready:Boolean(entry.sendable&&configuredName===entry.contract.name&&duplicateCount===0&&provider?.status==='APPROVED'&&contract?.exact)};})};
+  return {ok:true,templates:CONTRACTS.map(entry=>{const {provider,duplicateCount}=selectProviderVariant(providers,entry);const configuredName=configuredTemplateName(entry);const contract=provider?compareContract(entry,provider):null;return {key:entry.key,expectedName:entry.contract.name,configuredName,defined:true,configured:configuredName===entry.contract.name,provider:{exists:Boolean(provider),status:provider?.status||null,quality:provider?.quality_score?.score||provider?.quality_score||null,category:provider?.category||null,language:provider?.language||null,messageSendTtlSeconds:provider?.message_send_ttl_seconds??null,duplicateCount},contract,sendable:entry.sendable,ready:Boolean(entry.sendable&&configuredName===entry.contract.name&&duplicateCount===0&&provider?.status==='APPROVED'&&contract?.exact)};})};
 }
 let cache=null, cachedAt=0;
 async function assertTemplateSendAllowed(name,language='en') {
@@ -86,10 +106,11 @@ async function assertTemplateSendAllowed(name,language='en') {
   if(configuredTemplateName(entry)!==entry.contract.name)throw new Error(`WhatsApp template configuration does not match contract: ${entry.env}`);
   if(entry.key==='booking_update'&&process.env.WHATSAPP_BOOKING_UPDATE_ENABLED!=='true')throw new Error('Booking-update delivery gate is disabled');
   if((entry.key==='reschedule_approval_request'||entry.key==='reschedule_declined')&&process.env.WHATSAPP_RESCHEDULE_APPROVAL_ENABLED!=='true')throw new Error('Reschedule-approval delivery gate is disabled');
+  if(entry.key==='staff_auth_otp'&&process.env.SHILOH_STAFF_BROWSER_AUTH_WHATSAPP_DELIVERY_ENABLED!=='true')throw new Error('Staff authentication WhatsApp delivery gate is disabled');
   if(!cache||Date.now()-cachedAt>60000){cache=await inspectMetaTemplateInventory();cachedAt=Date.now();}
   const state=cache.templates?.find(x=>x.key===entry.key);
   if(!state?.ready)throw new Error(`WhatsApp template is not exact, approved and configured: ${name}`);
   return state;
 }
 function resetTemplateInventoryCache(){cache=null;cachedAt=0;}
-module.exports={CONTRACTS,configuredTemplateName,semanticComponents,compareContract,selectProviderVariant,fetchAllTemplates,inspectMetaTemplateInventory,assertTemplateSendAllowed,resetTemplateInventoryCache};
+module.exports={CONTRACTS,configuredTemplateName,semanticComponents,staffAuthComponentsMatch,compareContract,selectProviderVariant,fetchAllTemplates,inspectMetaTemplateInventory,assertTemplateSendAllowed,resetTemplateInventoryCache};
