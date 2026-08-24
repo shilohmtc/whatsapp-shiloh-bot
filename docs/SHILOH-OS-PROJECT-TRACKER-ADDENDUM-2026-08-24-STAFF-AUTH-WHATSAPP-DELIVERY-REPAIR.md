@@ -3,70 +3,59 @@
 Date: 2026-08-24
 Owner: 00 — Control & Reconciliation
 
-## Closed unit
+## Closed prior unit
 
 `SHILOH-STAFF-CALENDAR-CHRISTEL-PILOT`
 
 State: COMPLETE AS FAILED PILOT / SAFELY RE-LOCKED / DO NOT REDO.
 
-The single genuine challenge authorized by PR #467 was consumed. Christel did not receive the challenge. No second challenge was attempted. Production was re-locked and verified healthy.
+The single genuine challenge authorized by PR #467 was consumed. Christel did not receive the challenge. No second challenge was attempted.
 
-## Control diagnosis
-
-Independent production evidence proves:
-
-- challenge request reached Meta and returned a real WhatsApp message ID;
-- application logged `WhatsApp message sent`;
-- `POST /challenge` returned 202;
-- Meta then posted to `/webhook` approximately 1.2 seconds later;
-- current webhook handling discards status-only `value.statuses` callbacks;
-- current staff-auth challenge transport is free-form text;
-- current exact Meta template inventory has no staff-authentication template contract.
-
-The exact historical provider delivery/failure status is therefore not available from Shiloh logs and must not be guessed.
-
-## Active next unit
+## Controlled repair unit
 
 `SHILOH-STAFF-AUTH-WHATSAPP-DELIVERY-REPAIR`
 
-State: AUTHORIZED FOR IMPLEMENTATION NOW.
-
-Owner: 30 — WhatsApp & Meta Integration.
-
-Support: 40 — Production & DevOps only where Render rollout/verification is required.
-
+Implementation owner: 30 — WhatsApp & Meta Integration.
+Support: 40 — Production & DevOps only for rollout/verification.
 Acceptance owner: 00 — Control & Reconciliation.
-
 Priority: HIGHEST CURRENT CALENDAR DEPENDENCY.
 
-## Required deliverables
+State: BLOCKED AT GENUINE META/WABA TEMPLATE-CREATION PERMISSION GATE.
 
-- sanitized WhatsApp status-only callback handling and correlation;
-- no loss of existing inbound-message behavior;
-- exact provider status/error observability without authentication secrets or full recipient numbers;
-- provider/template inventory inspection;
-- Meta-compliant exact staff OTP authentication-template delivery path if supported;
-- fail-closed exact template contract and configuration checks;
-- mocked-provider focused tests;
-- all existing WhatsApp/template/session/Calendar/pilot tests;
-- full non-mutating regression;
-- merged application PR, exact Render verification and reconciliation.
+## Completed / do not redo
 
-If no suitable auth template exists, Control authorizes submission of exactly one dedicated Shiloh staff authentication OTP template for provider review. That authority does not include a real recipient send.
+- PR #469 implemented sanitized WhatsApp `value.statuses` processing while preserving existing inbound `value.messages` routing.
+- Status callbacks now correlate Meta message ID, sent/delivered/read/failed state, provider timestamp and sanitized provider error evidence.
+- Production staff-auth delivery no longer depends on generic free-form WhatsApp transport.
+- Exact version-controlled `AUTHENTICATION` OTP contract `shiloh_staff_auth_otp_v1` is required; wrong category/language, pending/unapproved state, drift, duplicates and provider rejection fail closed.
+- Challenge TTL remains five minutes and challenge verification remains short-lived and single-use; canonical staff/Admin identity, pilot gates, CSRF/session boundaries and Calendar non-reachability remain intact.
+- Focused and full non-mutating CI passed: 1001/1001 tests.
+- PR #469 merged to main as `56e47897b0fbd5f48436a29866ab50482ee58f91`.
+- Exact Render rollout was verified healthy with migration 078 checksum verification, Google Calendar provider health, repeated `/health` HTTP 200 and clean bounded post-cutover error logs.
+- Read-only provider inventory found zero Authentication templates and no exact Shiloh staff-auth template.
+- Exactly one Control-authorized template submission attempt was made. Meta rejected it before creation with HTTP 400 / provider code 10: `This WhatsApp Business Account does not have permission to create message template`.
+- No staff-auth template was created by that request.
+- No real WhatsApp authentication message was sent and no second Christel challenge was attempted.
+- The one-shot template audit/provisioning gates were re-locked OFF after the provider response.
+
+## Current blocker
+
+The current WABA does not have permission to create message templates. The exact Authentication OTP template therefore does not exist and cannot yet become approved/sendable.
+
+Do not retry template submission, downgrade to free-form delivery, or repurpose a utility/marketing/booking/reminder template under this unit.
 
 ## Holds
 
-No second real Christel challenge until this unit is complete and separately accepted by Control.
+All staff Calendar/auth pilot activation controls remain OFF.
 
-All Calendar/staff-auth production activation gates remain OFF.
+No second real Christel challenge is authorized.
 
 No Calendar create/reschedule/cancel/drag-drop, schedule/block/leave writes, broad staff rollout, or Google authority changes are authorized.
 
-## Priority sequence
+## Required next control action
 
-1. NOW — 30 repairs/observes staff-auth WhatsApp delivery.
-2. 00 accepts/rejects repair evidence.
-3. One newly authorized bounded Christel read-only pilot challenge.
-4. On successful pilot, 10 implements `SHILOH-CALENDAR-CREATE-BOOKING` as the highest-priority product unit.
-5. Christel production Calendar booking activation after guarded create-booking proof.
-6. Broader rollout and secondary Calendar mutations later.
+00 — Control & Reconciliation must accept this blocked outcome and authorize a narrow provider-account/template-permission remediation path before 30 performs any further Meta template mutation.
+
+Only after the exact Authentication OTP template exists, is APPROVED, and exact readback passes may 00 authorize one new bounded genuine Christel read-only pilot challenge.
+
+After a successful repeat pilot, route immediately to 10 — Booking & Admin UX for `SHILOH-CALENDAR-CREATE-BOOKING`, including guarded eligibility for Christel to book eligible clients for herself or with Abigail.

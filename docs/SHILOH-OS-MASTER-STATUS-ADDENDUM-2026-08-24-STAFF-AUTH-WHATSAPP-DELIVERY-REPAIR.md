@@ -3,62 +3,59 @@
 Date: 2026-08-24
 Owner: 00 — Control & Reconciliation
 
-## Verified operational truth
+## Authoritative operational truth
 
-The secure browser staff/Admin session boundary, Calendar access UX, and canonical-account pilot gate remain implemented and verified live.
+The secure browser staff/Admin session boundary, Calendar access UX, canonical-account pilot gate and existing Calendar security architecture remain implemented and verified live.
 
-The first genuine Christel read-only staff Calendar pilot failed before authentication because the WhatsApp challenge did not arrive at the intended user. The system was then re-locked and remains default-off.
+The first genuine Christel read-only staff Calendar pilot remains COMPLETE AS FAILED PILOT / SAFELY RE-LOCKED / DO NOT REDO. The single challenge authorized by PR #467 was consumed; no second challenge has been attempted.
 
-The failure does NOT invalidate the session, Calendar projection, Day/Week/Agenda, or pilot-gate architecture.
+## Delivery repair now live
 
-## Provider-delivery truth established by Control
+PR #469 completed the application-side delivery repair and merged as `56e47897b0fbd5f48436a29866ab50482ee58f91`.
 
-For the consumed pilot challenge:
+Verified behavior now includes:
 
-- Shiloh generated/processed the challenge request;
-- the WhatsApp dispatcher invoked the current provider sender;
-- Meta accepted the send request and returned a WhatsApp message ID;
-- the browser challenge endpoint returned HTTP 202;
-- Meta subsequently called Shiloh's `/webhook` endpoint;
-- current Shiloh webhook handling ignores status-only callbacks because it returns early when `value.messages` is absent;
-- therefore the historical Meta delivery state/error carried by the status callback is not preserved in Shiloh evidence;
-- current staff-auth challenge transport is a free-form text send through `sendWhatsAppMessage`;
-- current exact template-contract inventory has no dedicated staff authentication OTP template.
+- WhatsApp status-only `value.statuses` callbacks are handled separately from inbound `value.messages`;
+- sent/delivered/read/failed status, provider timestamp and sanitized provider error evidence correlate by Meta message ID;
+- inbound WhatsApp message routing remains unchanged;
+- authentication codes, full recipient phone numbers, authentication message bodies, session/CSRF tokens and provider credentials are excluded from repair evidence/logging;
+- production staff-auth challenge delivery is exact-template controlled and does not use generic free-form WhatsApp transport;
+- the required contract is a dedicated Meta `AUTHENTICATION` copy-code OTP template, `shiloh_staff_auth_otp_v1`, language `en_US`, with five-minute OTP expiry/message TTL controls;
+- production delivery fails closed unless the exact template is approved, correctly categorized/languaged, non-duplicated and exact on provider readback;
+- all existing session, challenge TTL/single-use, canonical identity, pilot allowlist, CSRF, cookie, revocation, ADMIN_API_KEY isolation and Calendar authority protections remain intact.
 
-The final historical non-delivery cause remains UNPROVEN and must not be guessed.
+CI passed the complete non-mutating suite: 1001/1001 tests.
 
-## Authorized target architecture
+The merged repair was verified live on Render with migration 078 checksum verification, Google Calendar provider health, repeated `/health` HTTP 200 and clean bounded error-level logs.
 
-The staff-auth WhatsApp delivery path must gain two properties before another real pilot challenge:
+## Provider truth / genuine blocker
 
-### 1. Delivery-status observability
+A read-only inspection of the current WABA found zero Authentication-category templates and no exact Shiloh staff-auth OTP template.
 
-Shiloh must process WhatsApp `value.statuses` callbacks separately from inbound `value.messages` and preserve sanitized provider delivery state correlated by Meta message ID.
+Control had authorized exactly one template submission if that condition was proven. Exactly one submission attempt was made. Meta rejected the request before template creation with:
 
-No authentication code, message body containing the code, full recipient phone number, session token, CSRF token, or provider credential may be logged or persisted for this purpose.
+- HTTP status: 400
+- provider code: 10
+- sanitized provider title/message: `This WhatsApp Business Account does not have permission to create message template`
 
-### 2. Exact authentication-template transport
+Therefore the exact staff authentication OTP template does not currently exist and cannot be approved/sendable under the present WABA permission state.
 
-Production staff sign-in OTP delivery should use an exact, approved, configured Meta authentication/OTP template contract rather than relying on a generic free-form text path.
+No real recipient message was sent. No second Christel challenge was attempted. The one-shot audit/provision startup gates were re-locked OFF after the provider response.
 
-If the current provider account supports Meta Authentication-category OTP templates, that is the required target. The send must fail closed unless the exact template contract is approved and configured.
+## Current state
 
-If provider constraints prevent this target, the owning workstream must return exact provider evidence to Control rather than silently weakening to free-form or unrelated template delivery.
+`SHILOH-STAFF-AUTH-WHATSAPP-DELIVERY-REPAIR` is BLOCKED AT GENUINE META/WABA TEMPLATE-CREATION PERMISSION GATE.
 
-## Authority boundary
+The application repair is complete and live. The remaining blocker is provider/account authority, not application delivery code.
 
-This addendum authorizes implementation and, if necessary, submission of exactly one dedicated Shiloh staff authentication OTP template for provider review.
+Do not retry template submission, fall back to free-form authentication delivery, or reuse unrelated utility/marketing/booking/reminder templates without a new explicit Control unit.
 
-It does not authorize a real recipient send or a second Christel challenge.
+All staff browser pilot/auth/Calendar production activation gates remain OFF.
 
-All staff Calendar/auth pilot activation controls remain OFF until a later explicit Control pilot authorization.
+## Required next ownership
 
-## Ownership
+Next owner: 00 — Control & Reconciliation for acceptance and authorization of a narrow provider-account/template-permission remediation unit. 30 — WhatsApp & Meta Integration should resume only after that authority is explicit; 40 — Production & DevOps is support only where provider configuration rollout/verification requires it.
 
-Implementation owner: 30 — WhatsApp & Meta Integration.
-Render rollout support: 40 — Production & DevOps as required.
-Final acceptance: 00 — Control & Reconciliation.
+Only after the exact Authentication OTP template exists, is APPROVED and exact provider readback passes may 00 authorize one new bounded genuine Christel read-only pilot challenge.
 
-## Product priority
-
-This provider-delivery repair is the highest current Calendar dependency. After a successful repeat Christel read-only pilot, the next highest-priority product unit is guarded Calendar Create Booking under 10 — Booking & Admin UX, including the ability for Christel to book eligible clients with Abigail through canonical scheduling and permission guards.
+On a successful repeat pilot, route immediately to 10 — Booking & Admin UX for `SHILOH-CALENDAR-CREATE-BOOKING`, preserving canonical practitioner eligibility, availability, conflict, approval and provider guards for Christel booking eligible clients for herself or with Abigail.
