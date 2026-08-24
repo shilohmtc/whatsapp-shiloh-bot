@@ -1,6 +1,7 @@
 const express = require('express');
 const calendarReadOnlyUx = require('../services/calendarReadOnlyUx');
 const { renderCalendarPage, renderUnavailablePage } = require('../presentation/calendarReadOnlyUx');
+const { isCalendarBridgeEnabled } = require('../middleware/staffBrowserSession');
 
 const CALENDAR_VIEWER_CONTEXT = Symbol.for('shiloh.calendar.server.viewer');
 
@@ -21,7 +22,7 @@ function setCalendarSecurityHeaders(res) {
   res.setHeader('Referrer-Policy', 'no-referrer');
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
-  res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; base-uri 'none'; form-action 'self'; frame-ancestors 'none'");
+  res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; script-src 'self'; connect-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'self'; frame-ancestors 'none'");
 }
 
 function statusForError(error) {
@@ -45,6 +46,7 @@ function createCalendarReadOnlyHandler({
   renderPage = renderCalendarPage,
   renderUnavailable = renderUnavailablePage,
   resolveViewer = resolveServerViewer,
+  staffAccessPath = '/calendar/staff',
 } = {}) {
   return async function calendarReadOnlyHandler(req, res, next) {
     try {
@@ -53,6 +55,10 @@ function createCalendarReadOnlyHandler({
 
       const viewer = resolveViewer(req);
       if (!viewer) {
+        if (isCalendarBridgeEnabled(env)) {
+          res.setHeader('Location', `${staffAccessPath}?reason=session`);
+          return res.status(302).type('text/plain').send('Staff sign-in required');
+        }
         return res.status(503).type('html').send(renderUnavailable({
           code: 'CALENDAR_SECURE_ACCESS_NOT_CONFIGURED',
           message: 'Secure browser staff sign-in is not configured for this Calendar surface yet.',
@@ -65,7 +71,11 @@ function createCalendarReadOnlyHandler({
         staff: req.query?.staff,
         viewer,
       });
-      return res.status(200).type('html').send(renderPage(model, { basePath: req.baseUrl || '/shiloh-calendar' }));
+      return res.status(200).type('html').send(renderPage(model, {
+        basePath: req.baseUrl || '/calendar/read-only',
+        staffAccessPath,
+        staffAccessScriptPath: `${staffAccessPath}/client.js`,
+      }));
     } catch (error) {
       if (res.headersSent) return next(error);
       const status = statusForError(error);
