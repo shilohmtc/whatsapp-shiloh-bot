@@ -253,6 +253,7 @@ async function ensureGoldieWaveAPublication() {
     let applied = false;
     let appliedAt = existing.rows[0]?.applied_at || null;
     if (existing.rowCount === 0) {
+      await client.query("SET LOCAL shiloh.goldie_wave_a_authority = 'PR441'");
       await client.query(sql);
       const recorded = await client.query(
         'INSERT INTO schema_migrations (filename, checksum) VALUES ($1, $2) RETURNING applied_at',
