@@ -76,6 +76,28 @@ Across every workstream, the shared source of truth is GitHub `main`, `docs/SHIL
 
 Before controlled work, a specialist chat must read the applicable authoritative repository state and verify any production/provider facts that could have changed. Chat history is navigation context only when authoritative repository evidence exists; it must not be used to reconstruct or override project truth. Do not redo completed or superseded work.
 
+## Durable operating-rule persistence / no user-memory dependency rule
+
+This rule is mandatory across **all five Shiloh OS workstreams**, including Control & Reconciliation.
+
+When a project-wide or cross-workstream operating rule, reporting convention, recurring workflow requirement, architectural working rule, authorization boundary, or other durable Shiloh OS norm is explicitly agreed or ratified, the owning workstream must persist that rule into the appropriate authoritative GitHub surface during the same controlled unit whenever the available tools and authorization permit it.
+
+Shiloh OS must not depend on JP remembering, restating, policing, or manually carrying a durable operating rule between specialist chats. Conversation history, project context, handoff text and assistant memory may be used as navigation context, but they must not be the sole authoritative location for a rule that future specialists are expected to follow.
+
+The authoritative surface must match the type of rule:
+
+- **Engineering Governance** for durable working methods, reporting conventions, routing, completion protocols and cross-stream operating norms.
+- **Master Status** for durable application architecture, business rules, permissions, integrations and verified operational truth.
+- **Project Tracker / reconciliation evidence** for delivery state, implementation evidence, unresolved gates and current next actions.
+
+A specialist that discovers a previously agreed durable rule exists only in conversational context must not silently rely on that memory as permanent authority. It must either reconcile the rule into the correct authoritative repository surface within its controlled scope, or route the exact governance/reconciliation dependency to Control & Reconciliation if ownership or authority is unclear.
+
+Future specialists must recover durable rules independently from current authoritative repository state and preserve newer authority. JP should not need to remind each specialist that an already-ratified norm exists.
+
+This persistence rule does **not** require recording casual preferences, transient instructions, private personal details, secrets, credentials, sensitive data, or one-off conversational choices in GitHub. Persist only project-relevant durable rules that legitimately belong in Shiloh OS authority, and continue to minimize identifying or sensitive information.
+
+Persisting a durable rule does not expand authorization. Production mutations, destructive actions, external messages, permission changes, security-sensitive actions and irreversible business decisions remain subject to their existing authorization and fail-closed gates.
+
 ## GitHub connector permission, privacy-confirmation and payload-minimization rule
 
 This rule applies across all five Shiloh OS workstreams.
