@@ -35,6 +35,12 @@ jobs:
           SHILOH_STAFF_BROWSER_SESSION_CALENDAR_BRIDGE_ENABLED: 'false'
           SHILOH_CALENDAR_READONLY_UX_ENABLED: 'false'
         run: node --test tests/staff-browser-session-boundary.test.js
+      - name: Run focused staff Calendar access UX tests
+        env:
+          SHILOH_STAFF_BROWSER_AUTH_WHATSAPP_DELIVERY_ENABLED: 'false'
+          SHILOH_STAFF_BROWSER_SESSION_CALENDAR_BRIDGE_ENABLED: 'false'
+          SHILOH_CALENDAR_READONLY_UX_ENABLED: 'false'
+        run: node --test tests/staff-calendar-access-ux.test.js
       - name: Run non-mutating regression tests
         env:
           SHILOH_STAFF_BROWSER_AUTH_WHATSAPP_DELIVERY_ENABLED: 'false'
