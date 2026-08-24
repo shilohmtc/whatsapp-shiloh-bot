@@ -14,7 +14,7 @@ function messageForReason(reason) {
 }
 
 function styles() {
-  return `:root{color-scheme:light;--ink:#20322b;--muted:#6c7d75;--paper:#f7f5ef;--panel:#fffdf9;--line:#dfe5df;--leaf:#496b5a;--leaf-soft:#e7eee9;--warning:#8a5b2c;--warning-soft:#f8efe4;--error:#8a3f3f;--error-soft:#f8eaea}*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.shell{max-width:760px;margin:0 auto;padding:28px 18px 40px}.brand{margin-bottom:18px}.brand h1{margin:0;font-size:1.5rem}.brand p{margin:5px 0 0;color:var(--muted)}.card{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:20px;box-shadow:0 5px 22px rgba(32,50,43,.05)}.eyebrow{font-size:.75rem;text-transform:uppercase;letter-spacing:.12em;color:var(--muted)}h2{margin:5px 0 8px;font-size:1.2rem}.lead{margin:0 0 18px;color:var(--muted);line-height:1.5}.field{display:grid;gap:7px;margin-top:14px}.field label{font-size:.83rem;font-weight:700}.field input{width:100%;border:1px solid var(--line);border-radius:12px;padding:11px 12px;background:#fff;color:var(--ink);font:inherit}.field input:focus{outline:2px solid var(--leaf-soft);border-color:var(--leaf)}.actions{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin-top:14px}.button{border:1px solid var(--leaf);border-radius:999px;padding:9px 14px;background:var(--leaf);color:#fff;font:inherit;font-weight:700;cursor:pointer}.button.secondary{background:#fff;color:var(--leaf)}.button:disabled{opacity:.55;cursor:not-allowed}.status{margin:16px 0 0;border:1px solid var(--line);border-radius:12px;padding:11px 12px;background:#fff;line-height:1.45;font-size:.9rem}.status[data-state="accepted"],.status[data-state="authenticated"],.status[data-state="signed-out"]{background:var(--leaf-soft);border-color:#cbd9cf}.status[data-state="expired"],.status[data-state="rate-limited"],.status[data-state="provider-unavailable"]{background:var(--warning-soft);border-color:#ead5bd;color:#68451f}.status[data-state="invalid"],.status[data-state="error"],.status[data-state="session-ended"]{background:var(--error-soft);border-color:#eccccc;color:#6d3434}.code-panel{margin-top:18px;border-top:1px solid var(--line);padding-top:17px}.code-panel[hidden]{display:none}.privacy-note,.footer-note{color:var(--muted);font-size:.8rem;line-height:1.5}.privacy-note{margin:16px 0 0}.footer-note{margin:18px 0 0;text-align:center}.read-only{display:inline-block;margin-left:6px;border-radius:999px;padding:4px 8px;background:var(--leaf-soft);color:var(--leaf);font-size:.72rem;font-weight:700}@media(max-width:560px){.shell{padding:18px 12px}.card{padding:16px}.actions{align-items:stretch}.button{width:100%}}`;
+  return `:root{color-scheme:light;--ink:#20322b;--muted:#6c7d75;--paper:#f7f5ef;--panel:#fffdf9;--line:#dfe5df;--leaf:#496b5a;--leaf-soft:#e7eee9;--warning:#8a5b2c;--warning-soft:#f8efe4;--error:#8a3f3f;--error-soft:#f8eaea}*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.shell{max-width:760px;margin:0 auto;padding:28px 18px 40px}.brand{margin-bottom:18px}.brand h1{margin:0;font-size:1.5rem}.brand p{margin:5px 0 0;color:var(--muted)}.card{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:20px;box-shadow:0 5px 22px rgba(32,50,43,.05)}.eyebrow{font-size:.75rem;text-transform:uppercase;letter-spacing:.12em;color:var(--muted)}h2{margin:5px 0 8px;font-size:1.2rem}.lead{margin:0 0 18px;color:var(--muted);line-height:1.5}.field{display:grid;gap:7px;margin-top:14px}.field label{font-size:.83rem;font-weight:700}.field input{width:100%;border:1px solid var(--line);border-radius:12px;padding:11px 12px;background:#fff;color:var(--ink);font:inherit}.field input:focus{outline:2px solid var(--leaf-soft);border-color:var(--leaf)}.actions{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin-top:14px}.actions[hidden]{display:none}.button{border:1px solid var(--leaf);border-radius:999px;padding:9px 14px;background:var(--leaf);color:#fff;font:inherit;font-weight:700;cursor:pointer}.button.secondary{background:#fff;color:var(--leaf)}.button:disabled{opacity:.55;cursor:not-allowed}.status{margin:16px 0 0;border:1px solid var(--line);border-radius:12px;padding:11px 12px;background:#fff;line-height:1.45;font-size:.9rem}.status[data-state="accepted"],.status[data-state="authenticated"],.status[data-state="signed-out"]{background:var(--leaf-soft);border-color:#cbd9cf}.status[data-state="expired"],.status[data-state="rate-limited"],.status[data-state="provider-unavailable"]{background:var(--warning-soft);border-color:#ead5bd;color:#68451f}.status[data-state="invalid"],.status[data-state="error"],.status[data-state="session-ended"]{background:var(--error-soft);border-color:#eccccc;color:#6d3434}.code-panel{margin-top:18px;border-top:1px solid var(--line);padding-top:17px}.code-panel[hidden]{display:none}.privacy-note,.footer-note{color:var(--muted);font-size:.8rem;line-height:1.5}.privacy-note{margin:16px 0 0}.footer-note{margin:18px 0 0;text-align:center}.read-only{display:inline-block;margin-left:6px;border-radius:999px;padding:4px 8px;background:var(--leaf-soft);color:var(--leaf);font-size:.72rem;font-weight:700}@media(max-width:560px){.shell{padding:18px 12px}.card{padding:16px}.actions{align-items:stretch}.button{width:100%}}`;
 }
 
 function renderStaffCalendarAccessPage({ reason = null, clientScriptPath = '/calendar/staff/client.js' } = {}) {
@@ -29,6 +29,7 @@ function renderStaffCalendarAccessPage({ reason = null, clientScriptPath = '/cal
         <div class="actions"><button class="button" type="submit" data-shiloh-challenge-button>Send sign-in code</button></div>
       </form>
       <div class="status" role="status" aria-live="polite" data-shiloh-status data-state="${escapeHtml(initial.state)}">${escapeHtml(initial.message)}</div>
+      <div class="actions" data-shiloh-session-tools hidden><button class="button secondary" type="button" data-shiloh-logout>Sign out current session</button></div>
       <section class="code-panel" data-shiloh-code-panel hidden>
         <span class="eyebrow">One-time code</span><h2>Enter the code from WhatsApp</h2>
         <p class="lead">Codes expire after about five minutes. Request a new code if this one expires.</p>
@@ -60,6 +61,7 @@ function select(selector){return document.querySelector(selector);}
 function setStatus(state,message){var node=select('[data-shiloh-status]');if(!node)return;node.dataset.state=state;node.textContent=message;}
 function setBusy(button,busy){if(button)button.disabled=!!busy;}
 function revealCode(){var panel=select('[data-shiloh-code-panel]');if(panel)panel.hidden=false;var code=select('#staff-code');if(code)code.focus();}
+function revealSessionTools(){var tools=select('[data-shiloh-session-tools]');if(tools)tools.hidden=false;}
 function currentPhone(){var phone=select('#staff-whatsapp');return String(currentWhatsapp||(phone&&phone.value)||'').trim();}
 function pruneRequests(now){requestTimes=requestTimes.filter(function(value){return now-value<REQUEST_WINDOW_MS;});}
 function requestRateLimited(now){pruneRequests(now);return requestTimes.length>=REQUEST_LIMIT;}
@@ -67,11 +69,17 @@ function recordRequest(now){pruneRequests(now);requestTimes.push(now);}
 function jsonHeaders(extra){var headers={'Content-Type':'application/json','Accept':'application/json'};if(extra){Object.keys(extra).forEach(function(key){headers[key]=extra[key];});}return headers;}
 function postJson(url,payload,extraHeaders){return fetch(url,{method:'POST',credentials:'same-origin',cache:'no-store',headers:jsonHeaders(extraHeaders),body:JSON.stringify(payload||{})});}
 function safeJson(response){return response.json().catch(function(){return {};});}
+function viewerPermitsCalendar(viewer){return !!(viewer&&typeof viewer==='object'&&(viewer.calendarScope==='own_staff'||viewer.calendarScope==='business_all_staff'));}
 
 async function probeSession(){
   try{
     var response=await fetch(AUTH_BASE+'/session',{method:'GET',credentials:'same-origin',cache:'no-store',headers:{'Accept':'application/json'}});
-    if(response.ok){window.location.replace(CALENDAR_PATH);}
+    if(response.ok){
+      var body=await safeJson(response);
+      if(viewerPermitsCalendar(body.viewer)){window.location.replace(CALENDAR_PATH);return;}
+      revealSessionTools();
+      setStatus('error','Your current staff session is valid, but its canonical authority does not permit Calendar access. Sign out to use another authorized account.');
+    }
   }catch(_error){}
 }
 
@@ -126,7 +134,13 @@ async function verifyChallenge(event){
   try{
     var response=await postJson(AUTH_BASE+'/verify',{whatsapp:phone,code:code});
     if(response.status===200){
+      var body=await safeJson(response);
       if(codeInput)codeInput.value='';
+      if(!viewerPermitsCalendar(body.viewer)){
+        revealSessionTools();
+        setStatus('error','Sign-in succeeded, but your current Shiloh authority does not permit Calendar access. No scheduling data was exposed.');
+        return;
+      }
       setStatus('authenticated','Sign-in successful. Opening your read-only Shiloh Calendar…');
       window.setTimeout(function(){window.location.assign(CALENDAR_PATH);},350);
       return;
@@ -154,7 +168,7 @@ function requestAnother(){
 async function logout(){
   var button=select('[data-shiloh-logout]');
   var status=select('[data-shiloh-calendar-access-status]');
-  function calendarStatus(message){if(status)status.textContent=message;}
+  function calendarStatus(message){if(status)status.textContent=message;else setStatus('pending',message);}
   setBusy(button,true);
   calendarStatus('Signing out…');
   var csrfToken=null;
