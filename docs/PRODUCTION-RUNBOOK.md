@@ -43,6 +43,34 @@ npm run maintenance -- startup-test-command --confirm --allow-whatsapp
 
 Do not use `--allow-whatsapp` during routine verification. Never run a write command merely to test that it works. Prefer a read-only/dry-run command and inspect the result first. Do not use genuine appointments for destructive testing and do not send unnecessary WhatsApp messages to real clients.
 
+## Assistant-operated named maintenance framework
+
+The repository contains an inert contract framework for the separately ratified assistant PostgreSQL maintenance architecture. It is not a production executor.
+
+Current framework files:
+
+- `src/maintenance/operationFramework.js` — validates immutable named-operation contracts.
+- `config/maintenance-operation-manifest.js` — versioned registry surface. The live manifest is intentionally empty until a separately reviewed operation is added.
+- `tests/maintenance-operation-framework.test.js` — deterministic fail-closed contract tests.
+
+The framework enforces the design boundary for future exact operations:
+
+- operation IDs are named and versioned;
+- classification is explicit (`read` or `write`);
+- exact Git commit and Control authorization reference are part of the operation contract;
+- arbitrary SQL, raw command, shell, secret and connection-string fields are rejected;
+- exact confirmation tokens are bound to operation ID/version;
+- write contracts require lock, timeout, precondition, expected-state, precommit and independent read-only postcommit verification declarations;
+- write contracts require a replay-prevention interface;
+- structured result keys that imply identity, credentials or raw payloads are rejected;
+- unknown operation names fail closed.
+
+The repository framework deliberately does **not** implement a production replay ledger, database role, credential, network path, job executor, HTTP route, shell, One-Off Job trigger or direct database connection. Those remain separately gated.
+
+A merge/deploy containing this framework must not execute a maintenance operation. Normal `npm start` remains independent from the maintenance-operation registry. CI runs the focused framework tests before the full non-mutating regression suite.
+
+A future live operation must not become executable merely because its definition exists in Git. It still requires the first-party bounded execution capability and a separate exact Control authorization, including review of its commit, immutable operation contract, expected effects, failure/rollback behavior and verification plan.
+
 ## Pre-write checklist
 
 Before any mutating maintenance command:
@@ -53,6 +81,8 @@ Before any mutating maintenance command:
 4. Confirm database backup/PITR availability in Render for database-changing work; if no suitable recovery point is available, do not proceed with a risky bulk mutation.
 5. For Calendar work, identify exact affected calendar/event scope and avoid bulk destructive changes to genuine appointments.
 6. For Goldie work, retain the source export/checksum outside Git and confirm no client messaging path is invoked.
+
+For any future assistant-operated named maintenance write, also require the separately ratified operation contract: exact authorization, exact commit/checksum, live same-transaction fail-closed preconditions, expected-state assertions, all-or-nothing transactionality, replay protection, sanitized evidence and independent read-only post-state verification.
 
 ## Application rollback
 
@@ -84,5 +114,6 @@ Goldie remains connected until the documented exit gate is fully cleared: fresh 
 - No destructive testing against genuine CRM/Calendar appointments.
 - Write maintenance commands require `--confirm`.
 - WhatsApp-capable maintenance commands suppress messaging unless `--allow-whatsapp` is explicitly supplied.
+- Assistant-operated named maintenance remains non-executable until separately authorized and supported by a bounded first-party execution mechanism.
 - Prefer dry-run/read-only verification first.
 - Do not disconnect Goldie until the exit gate is fully verified.
