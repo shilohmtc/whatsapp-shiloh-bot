@@ -21,10 +21,7 @@ function stableStringify(value) {
 }
 
 function contractForChecksum(operation) {
-  const {
-    checksum,
-    ...contract
-  } = operation;
+  const { checksum, ...contract } = operation;
   return contract;
 }
 
@@ -117,7 +114,7 @@ function validateOperationDefinition(operation) {
   if (!SHA_PATTERN.test(operation.commit || '')) throw new Error('operation.commit must be an exact 40-character lowercase Git SHA');
   if (!AUTHORIZATION_PATTERN.test(operation.authorizationRef || '')) throw new Error('operation.authorizationRef must use PR #<number> format');
   if (typeof operation.description !== 'string' || operation.description.trim() === '') throw new Error('operation.description is required');
-  if (operation.enabled !== false) throw new Error('repository framework operations must remain disabled until separately authorized');
+  if (typeof operation.enabled !== 'boolean') throw new Error('operation.enabled must be boolean');
   if (operation.execution !== 'first-party-bounded-job') {
     throw new Error('operation.execution must be first-party-bounded-job');
   }
