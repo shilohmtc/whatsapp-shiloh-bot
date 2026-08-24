@@ -1,6 +1,6 @@
 # Shiloh OS — Engineering Governance
 
-Updated: 2026-08-23
+Updated: 2026-08-24
 Purpose: permanent engineering operating rules that apply across Shiloh OS continuation work.
 
 ## Workstream operating model
@@ -155,6 +155,30 @@ Every specialist final checkpoint must explicitly state:
 - whether Project Tracker and/or Master reconciliation was required and completed;
 - whether another workstream owns a dependency or next action;
 - the next-specialist status: either the mandatory specialist handoff below, or **`Next specialist: None — controlled unit complete.`**
+
+## Plain-English capability summary rule
+
+This rule is mandatory across **all five Shiloh OS workstreams**, including Control & Reconciliation.
+
+Every final checkpoint for a meaningful controlled unit must include a short plain-English section titled **`What this now enables`** immediately before **`Exactly what JP should do next`**. The purpose is to translate technical delivery evidence into the practical operating capability Shiloh has gained, changed, clarified, or still lacks.
+
+The section must state, where applicable:
+
+- what Shiloh can now do that it could not reliably do before;
+- whether ChatGPT/Shiloh OS can directly use the capability in future specialist work;
+- whether the capability is **read-only**, **bounded write-capable**, **fully operational**, **partially enabled**, **blocked**, or otherwise materially constrained;
+- what manual work JP no longer needs to perform because of the completed unit;
+- what limitations, external gates, evidence requirements, permissions, or tool-capability gaps still remain;
+- whether future specialists should reuse this capability rather than rebuilding or bypassing it; and
+- when a technical framework or architecture exists but is not yet operational, an explicit statement that the capability must **not** be represented as available merely because its design or framework has been completed.
+
+The section must be understandable without requiring JP to interpret PR numbers, commit SHAs, CI terminology, Render deployment IDs, SQL architecture jargon, provider terminology, or implementation details. Technical evidence still belongs elsewhere in the checkpoint and reconciliation record; this section explains the practical consequence of that evidence.
+
+The summary must distinguish **completed infrastructure/framework** from **usable current capability**. For example, an approved database-access architecture or inert maintenance-operation framework does not mean production SQL writes are available if the required execution mechanism is still missing. Conversely, once a capability is genuinely verified operational, the summary should say plainly what future specialists may now do and what JP no longer needs to do manually.
+
+Do not overstate capability. If a feature is partially operational, provider-gated, read-only, fail-closed, human-truth-dependent, or unavailable through the currently connected tools, say so explicitly. A plain-English summary is explanatory only; it does not expand authorization, weaken safety/production/provider gates, or create permission for destructive or security-sensitive actions.
+
+This section is required whenever the controlled unit creates, changes, retires, blocks, or materially clarifies an ongoing Shiloh capability. For purely clerical/no-capability documentation corrections, it may state briefly that no new operating capability was created.
 
 ### Mandatory specialist-to-specialist handoff rule
 
