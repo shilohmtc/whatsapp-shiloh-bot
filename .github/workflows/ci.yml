@@ -25,5 +25,7 @@ jobs:
         run: npm ci
       - name: Run focused maintenance framework tests
         run: npm run test:maintenance-framework
+      - name: Run focused SchedulingTimeline parity tests
+        run: node --test tests/scheduling-engine-readonly-projection.test.js
       - name: Run non-mutating regression tests
         run: npm test
