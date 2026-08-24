@@ -1,5 +1,6 @@
 const express = require('express');
 const { pool } = require('../db/pool');
+const calendarReadOnlyUxRoutes = require('./calendarReadOnlyUx');
 const router = express.Router();
 
 function esc(v=''){return String(v).replace(/\\/g,'\\\\').replace(/\n/g,'\\n').replace(/,/g,'\\,').replace(/;/g,'\\;');}
@@ -22,5 +23,7 @@ router.get('/:token.ics',async(req,res,next)=>{try{
   const body=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Shiloh//Appointment//EN','CALSCALE:GREGORIAN','METHOD:PUBLISH','BEGIN:VEVENT',`UID:shiloh-${a.id}@appointments`,`DTSTAMP:${now}`,`DTSTART:${stamp(a.starts_at)}`,`DTEND:${stamp(a.ends_at)}`,`SUMMARY:${esc(`Shiloh — ${a.service_name}`)}`,`DESCRIPTION:${esc(`Appointment with ${a.staff_name} at Shiloh.`)}`,`LOCATION:${esc(a.location_name||'Shiloh')}`,'END:VEVENT','END:VCALENDAR',''].join('\r\n');
   res.setHeader('Content-Type','text/calendar; charset=utf-8');res.setHeader('Content-Disposition',`inline; filename="shiloh-appointment-${a.id}.ics"`);res.send(body);
 }catch(e){next(e);}});
+
+router.use('/read-only', calendarReadOnlyUxRoutes);
 
 module.exports=router;
