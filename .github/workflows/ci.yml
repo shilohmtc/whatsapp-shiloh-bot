@@ -27,5 +27,7 @@ jobs:
         run: npm run test:maintenance-framework
       - name: Run focused SchedulingTimeline parity tests
         run: node --test tests/scheduling-engine-readonly-projection.test.js
+      - name: Run focused Calendar UX security tests
+        run: node --test tests/calendar-readonly-ux.test.js
       - name: Run non-mutating regression tests
         run: npm test
