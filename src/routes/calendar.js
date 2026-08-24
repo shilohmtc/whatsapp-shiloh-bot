@@ -1,6 +1,7 @@
 const express = require('express');
 const { pool } = require('../db/pool');
 const calendarReadOnlyUxRoutes = require('./calendarReadOnlyUx');
+const staffCalendarAccessUxRoutes = require('./staffCalendarAccessUx');
 const { createStaffBrowserSessionService } = require('../services/staffBrowserSession');
 const { createStaffBrowserSessionRouter } = require('./staffBrowserSession');
 const { createStaffBrowserChallengeDispatcher } = require('../services/staffBrowserChallengeDelivery');
@@ -34,6 +35,7 @@ router.get('/:token.ics',async(req,res,next)=>{try{
 }catch(e){next(e);}});
 
 router.use('/staff-auth', createStaffBrowserSessionRouter({ service: staffBrowserSessionService }));
+router.use('/staff', staffCalendarAccessUxRoutes);
 router.use('/read-only', createOptionalCalendarSessionMiddleware({ service: staffBrowserSessionService }), calendarReadOnlyUxRoutes);
 
 module.exports=router;
