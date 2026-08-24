@@ -204,5 +204,6 @@ test('navigation is GET-only/read-only and existing appointment-share ICS route 
   assert.match(icsSource, /appointment_calendar_share_tokens/);
   assert.match(icsSource, /text\/calendar; charset=utf-8/);
   assert.match(icsSource, /METHOD:PUBLISH/);
-  assert.match(icsSource, /router\.use\('\/read-only', calendarReadOnlyUxRoutes\)/);
+  assert.match(icsSource, /router\.use\('\/read-only', createOptionalCalendarSessionMiddleware\(\{ service: staffBrowserSessionService \}\), calendarReadOnlyUxRoutes\)/);
+  assert.match(icsSource, /SHILOH_STAFF_BROWSER_SESSION_CALENDAR_BRIDGE_ENABLED|createOptionalCalendarSessionMiddleware/);
 });

@@ -1,7 +1,16 @@
 const express = require('express');
 const { pool } = require('../db/pool');
 const calendarReadOnlyUxRoutes = require('./calendarReadOnlyUx');
+const { createStaffBrowserSessionService } = require('../services/staffBrowserSession');
+const { createStaffBrowserSessionRouter } = require('./staffBrowserSession');
+const { createStaffBrowserChallengeDispatcher } = require('../services/staffBrowserChallengeDelivery');
+const { createOptionalCalendarSessionMiddleware } = require('../middleware/staffBrowserSession');
 const router = express.Router();
+
+const staffBrowserSessionService = createStaffBrowserSessionService({
+  db: pool,
+  challengeDispatcher: createStaffBrowserChallengeDispatcher(),
+});
 
 function esc(v=''){return String(v).replace(/\\/g,'\\\\').replace(/\n/g,'\\n').replace(/,/g,'\\,').replace(/;/g,'\\;');}
 function stamp(v){return new Date(v).toISOString().replace(/[-:]/g,'').replace(/\.\d{3}Z$/,'Z');}
@@ -24,6 +33,7 @@ router.get('/:token.ics',async(req,res,next)=>{try{
   res.setHeader('Content-Type','text/calendar; charset=utf-8');res.setHeader('Content-Disposition',`inline; filename="shiloh-appointment-${a.id}.ics"`);res.send(body);
 }catch(e){next(e);}});
 
-router.use('/read-only', calendarReadOnlyUxRoutes);
+router.use('/staff-auth', createStaffBrowserSessionRouter({ service: staffBrowserSessionService }));
+router.use('/read-only', createOptionalCalendarSessionMiddleware({ service: staffBrowserSessionService }), calendarReadOnlyUxRoutes);
 
 module.exports=router;
