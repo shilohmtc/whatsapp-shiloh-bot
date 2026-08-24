@@ -27,17 +27,21 @@ function providerRestrictionGraph() {
       scopes: ['whatsapp_business_management', 'whatsapp_business_messaging', 'business_management'],
       granular_scopes: [{ scope: 'whatsapp_business_management', target_ids: ['waba-123'] }],
     } } };
-    if (pathName === 'me') return { ok: true, data: { business: { id: 'biz-456' } } };
+    if (pathName === 'me') return { ok: true, data: { id: '9988776655443322', business: { id: 'biz-456' } } };
     if (pathName === 'me/businesses') return { ok: true, data: { data: [{ id: 'biz-456' }] } };
     if (pathName === 'biz-456/owned_whatsapp_business_accounts') return { ok: true, data: { data: [{ id: 'waba-123' }] } };
     if (pathName === 'biz-456/client_whatsapp_business_accounts') return { ok: true, data: { data: [] } };
+    if (pathName === 'biz-456/system_users') return { ok: true, data: { data: [
+      { id: '9988776655443322', role: 'ADMIN' },
+    ] } };
     if (pathName === 'waba-123') return { ok: true, data: {
       account_review_status: 'APPROVED',
       business_verification_status: 'verified',
       status: 'ACTIVE',
       ownership_type: 'BUSINESS_OWNED',
       owner_business: { id: 'biz-456' },
-      health_status: { can_send_message: 'AVAILABLE' },
+      is_shared_with_partners: false,
+      health_status: { can_send_message: 'AVAILABLE', entities: [{ entity_type: 'WABA', id: 'waba-123', can_send_message: 'AVAILABLE' }] },
     } };
     if (pathName === 'waba-123/assigned_users') return { ok: true, data: { data: [
       { id: '9988776655443322', user_type: 'SYSTEM_USER', tasks: ['MANAGE_TEMPLATES'] },
@@ -64,9 +68,12 @@ test('audit proves adequate token scope asset task ownership and healthy WABA wi
   assert.equal(result.evidence.businessRelationships.clientWabaMatch, false);
   assert.equal(result.evidence.waba.accountReviewStatus, 'APPROVED');
   assert.equal(result.evidence.waba.businessVerificationStatus, 'verified');
-  assert.equal(result.evidence.waba.ownerBusinessMatchesDiscoveredBusiness, true);
+  assert.equal(result.evidence.waba.ownerBusinessMatchesTokenBusinessContext, true);
+  assert.equal(result.evidence.waba.healthStatus.canSendMessage, 'AVAILABLE');
   assert.equal(result.evidence.assignedUsers.currentTokenPrincipalAssigned, true);
   assert.equal(result.evidence.assignedUsers.currentPrincipalCanManageTemplates, true);
+  assert.equal(result.evidence.systemUsers.currentTokenPrincipalIsSystemUser, true);
+  assert.equal(result.evidence.systemUsers.currentPrincipalSystemUserRole, 'ADMIN');
   assert.equal(result.conclusion.providerWabaRestrictionIndicated, true);
   assert.equal(result.conclusion.localPermissionDeficiencyProven, false);
 
@@ -94,6 +101,25 @@ test('audit identifies assigned-user template-management deficiency when proven'
   assert.equal(result.conclusion.assetManagementProven, false);
   assert.equal(result.conclusion.localPermissionDeficiencyProven, true);
   assert.equal(result.conclusion.providerWabaRestrictionIndicated, false);
+});
+
+test('owner-business relation is a read-only fallback when system-user business enumeration is unavailable', async () => {
+  const base = providerRestrictionGraph();
+  const graphGet = async (pathName, params) => {
+    if (pathName === 'me') return { ok: true, data: { id: '9988776655443322' } };
+    if (pathName === 'me/businesses') return { ok: false, error: { httpStatus: 400, code: '100' } };
+    return base(pathName, params);
+  };
+  const result = await runMetaWabaTemplatePermissionAudit({
+    env: { WHATSAPP_TOKEN: 'provider-secret' },
+    discoverWabaId: async () => 'waba-123',
+    graphGet,
+  });
+  assert.equal(result.evidence.businessContext.tokenBusinessCount, 0);
+  assert.equal(result.evidence.businessContext.ownerBusinessFallbackUsed, true);
+  assert.equal(result.evidence.businessRelationships.ownedWabaMatch, true);
+  assert.equal(result.evidence.assignedUsers.currentPrincipalCanManageTemplates, true);
+  assert.equal(result.conclusion.providerWabaRestrictionIndicated, true);
 });
 
 test('diagnostic sanitizer removes phone token long IDs and challenge material', () => {
