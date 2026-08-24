@@ -240,10 +240,11 @@ test('Booking/Admin gate and final commit inherit the same centralized resolver 
   assert.match(commit, /resolveClientByWhatsApp/);
 });
 
-test('forward migration 074 remains latest, unchanged in role, and has no trust backfill', () => {
+test('forward migration 074 remains unchanged in role and has no trust backfill after later migrations', () => {
   const migrationsDir = path.join(__dirname, '..', 'migrations');
   const files = fs.readdirSync(migrationsDir).filter((name) => /^\d+_.+\.sql$/.test(name)).sort();
-  assert.equal(files.at(-1), '074_client_identity_verification_authority.sql');
+  assert.equal(files.filter((name) => name === '074_client_identity_verification_authority.sql').length, 1);
+  assert.ok(files.indexOf('074_client_identity_verification_authority.sql') < files.indexOf('075_goldie_wave_a_customer_descriptions.sql'));
   const migration = source('migrations/074_client_identity_verification_authority.sql');
   assert.match(migration, /CREATE TABLE IF NOT EXISTS client_identity_verifications/);
   assert.match(migration, /ADD COLUMN IF NOT EXISTS authority_version/);
@@ -251,9 +252,13 @@ test('forward migration 074 remains latest, unchanged in role, and has no trust 
   assert.doesNotMatch(migration, /UPDATE\s+clients\s+SET/i);
 });
 
-test('production start verifies migration 074 before app startup', () => {
+test('production start verifies migration 074 before later Wave A publication and app startup', () => {
   const pkg = JSON.parse(source('package.json'));
-  assert.match(pkg.scripts.start, /^node scripts\/ensure-client-identity-verification\.js && node /);
+  const start = pkg.scripts.start;
+  const identity = start.indexOf('node scripts/ensure-client-identity-verification.js');
+  const waveA = start.indexOf('node scripts/ensure-goldie-wave-a-publication.js');
+  const app = start.lastIndexOf(' app.js');
+  assert.ok(identity === 0 && waveA > identity && app > waveA);
   const bootstrap = source('scripts/ensure-client-identity-verification.js');
   assert.match(bootstrap, /074_client_identity_verification_authority\.sql/);
   assert.match(bootstrap, /checksumVerified/);
