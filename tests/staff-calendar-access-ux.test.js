@@ -1,0 +1,236 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+
+const {
+  renderStaffCalendarAccessPage,
+  staffCalendarAccessClientScript,
+} = require('../src/presentation/staffCalendarAccessUx');
+const {
+  createStaffCalendarAccessPageHandler,
+  createStaffCalendarAccessClientHandler,
+  isStaffCalendarAccessUxEnabled,
+} = require('../src/routes/staffCalendarAccessUx');
+const {
+  CALENDAR_VIEWER_CONTEXT,
+  createCalendarReadOnlyHandler,
+} = require('../src/routes/calendarReadOnlyUx');
+const { createCalendarReadOnlyUxService } = require('../src/services/calendarReadOnlyUx');
+const { renderCalendarPage } = require('../src/presentation/calendarReadOnlyUx');
+
+function fakeResponse() {
+  return {
+    statusCode: null,
+    contentType: null,
+    body: null,
+    headers: {},
+    headersSent: false,
+    setHeader(name, value) { this.headers[String(name).toLowerCase()] = value; },
+    status(code) { this.statusCode = code; return this; },
+    type(value) { this.contentType = value; return this; },
+    send(value) { this.body = String(value); this.headersSent = true; return this; },
+  };
+}
+
+function timelineFor(staff) {
+  return {
+    meta: {
+      from: '2026-08-23T22:00:00.000Z',
+      to: '2026-08-24T22:00:00.000Z',
+      canonicalSources: ['appointments', 'appointment_staff'],
+      nonCanonicalSources: ['google_calendar'],
+      googleCalendarRequired: true,
+    },
+    staff,
+    workingWindows: staff.map(person => ({
+      kind: 'working_window', canonical: true, source: 'staff_working_hours',
+      staffId: person.id, dayOfWeek: 1, startsLocal: '08:00:00', endsLocal: '17:00:00',
+    })),
+    scheduleExceptions: [],
+    recurringClosures: [],
+    appointments: [],
+    blocks: [],
+    leave: [],
+    closures: [],
+    externalBusy: [],
+    events: [],
+  };
+}
+
+const enabledEnv = {
+  SHILOH_CALENDAR_READONLY_UX_ENABLED: 'true',
+  SHILOH_STAFF_BROWSER_SESSION_CALENDAR_BRIDGE_ENABLED: 'true',
+  SHILOH_STAFF_BROWSER_AUTH_WHATSAPP_DELIVERY_ENABLED: 'false',
+};
+
+test('staff Calendar access surface remains default-off and requires both existing Calendar gates', () => {
+  assert.equal(isStaffCalendarAccessUxEnabled({}), false);
+  assert.equal(isStaffCalendarAccessUxEnabled({ SHILOH_CALENDAR_READONLY_UX_ENABLED: 'true' }), false);
+  assert.equal(isStaffCalendarAccessUxEnabled({ SHILOH_STAFF_BROWSER_SESSION_CALENDAR_BRIDGE_ENABLED: 'true' }), false);
+  assert.equal(isStaffCalendarAccessUxEnabled(enabledEnv), true);
+
+  const off = createStaffCalendarAccessPageHandler({ env: {} });
+  const offRes = fakeResponse();
+  off({ query: {}, baseUrl: '/calendar/staff' }, offRes);
+  assert.equal(offRes.statusCode, 404);
+
+  const on = createStaffCalendarAccessPageHandler({ env: enabledEnv });
+  const onRes = fakeResponse();
+  on({ query: {}, baseUrl: '/calendar/staff' }, onRes);
+  assert.equal(onRes.statusCode, 200);
+  assert.match(onRes.headers['cache-control'], /no-store/);
+  assert.match(onRes.headers['content-security-policy'], /script-src 'self'/);
+  assert.match(onRes.headers['content-security-policy'], /connect-src 'self'/);
+});
+
+test('sign-in entry is human initiated and preserves the non-enumerating account contract', () => {
+  const html = renderStaffCalendarAccessPage();
+  const client = staffCalendarAccessClientScript();
+  assert.match(html, /Send sign-in code/);
+  assert.match(html, /For privacy, the request confirmation is the same whether or not the number is eligible/i);
+  assert.match(client, /addEventListener\('submit',requestChallenge\)/);
+  assert.doesNotMatch(client, /requestChallenge\(\);/);
+  assert.match(client, /if\(select\('\[data-shiloh-staff-calendar-access\]'\)\)probeSession\(\);/);
+  assert.doesNotMatch(html + client, /beginChallenge|sendWhatsAppMessage/);
+});
+
+test('browser client uses only the accepted staff-auth contracts and never persists browser authority', () => {
+  const client = staffCalendarAccessClientScript();
+  for (const endpoint of ['/challenge', '/verify', '/session', '/csrf', '/logout']) {
+    assert.match(client, new RegExp(endpoint.replace('/', '\\/')));
+  }
+  assert.match(client, /CALENDAR_PATH='\/calendar\/read-only'/);
+  assert.doesNotMatch(client, /localStorage|sessionStorage|document\.cookie|ADMIN_API_KEY|x-admin-key|Bearer\s|jsonwebtoken|\bJWT\b/i);
+  assert.doesNotMatch(client, /location\.(?:assign|replace)[^\n]*(?:code|csrf|token)=/i);
+  assert.doesNotMatch(client, /\/appointments|\/blocks|\/leave|\/schedule|\/reschedule|\/cancel/i);
+});
+
+test('sign-in UX exposes accepted, invalid, expired, rate-limit, provider-unavailable, success, session-ended and logout states', () => {
+  const client = staffCalendarAccessClientScript();
+  const sessionPage = renderStaffCalendarAccessPage({ reason: 'session' });
+  const logoutPage = renderStaffCalendarAccessPage({ reason: 'logout' });
+  assert.match(client, /Request accepted\. If this number is eligible/i);
+  assert.match(client, /code is invalid or no longer active/i);
+  assert.match(client, /code has expired/i);
+  assert.match(client, /Too many sign-in requests/i);
+  assert.match(client, /temporarily unavailable/i);
+  assert.match(client, /Sign-in successful\. Opening your read-only Shiloh Calendar/i);
+  assert.match(sessionPage, /missing, expired, or revoked/i);
+  assert.match(logoutPage, /You are signed out/i);
+});
+
+test('challenge and CSRF secrets remain request-body or in-memory only and never enter URLs or persistent storage', () => {
+  const html = renderStaffCalendarAccessPage();
+  const client = staffCalendarAccessClientScript();
+  assert.match(client, /body:JSON\.stringify\(payload\|\|\{\}\)/);
+  assert.match(client, /\{whatsapp:phone,code:code\}/);
+  assert.match(client, /csrfToken=String\(csrfBody\.csrfToken\|\|''\)/);
+  assert.match(client, /'x-shiloh-csrf-token':csrfToken/);
+  assert.doesNotMatch(html, /name="(?:code|csrf|token|session)/i);
+  assert.doesNotMatch(html + client, /localStorage|sessionStorage|document\.cookie/i);
+});
+
+test('logout explicitly rotates CSRF then calls the accepted CSRF-protected logout endpoint', () => {
+  const client = staffCalendarAccessClientScript();
+  const csrfIndex = client.indexOf("AUTH_BASE+'/csrf'");
+  const logoutIndex = client.indexOf("AUTH_BASE+'/logout'");
+  assert.ok(csrfIndex >= 0);
+  assert.ok(logoutIndex > csrfIndex);
+  assert.match(client, /'x-shiloh-csrf-token':csrfToken/);
+  assert.match(client, /ACCESS_PATH\+'\?reason=logout'/);
+  assert.match(client, /ACCESS_PATH\+'\?reason=session'/);
+});
+
+test('revoked, missing or expired Calendar session redirects to staff sign-in before SchedulingTimeline is read', async () => {
+  let buildCalls = 0;
+  const handler = createCalendarReadOnlyHandler({
+    env: enabledEnv,
+    buildModel: async () => { buildCalls += 1; return {}; },
+  });
+  const res = fakeResponse();
+  await handler({ query: {}, baseUrl: '/calendar/read-only' }, res, () => {});
+  assert.equal(res.statusCode, 302);
+  assert.equal(res.headers.location, '/calendar/staff?reason=session');
+  assert.equal(buildCalls, 0);
+});
+
+test('own_staff scope has no practitioner switcher and a manual other-staff filter still fails closed', async () => {
+  const ownViewer = { calendarScope: 'own_staff', staffId: 44 };
+  const service = createCalendarReadOnlyUxService({
+    listTimeline: async ({ viewer }) => {
+      assert.deepEqual(viewer, ownViewer);
+      return timelineFor([{ id: 44, displayName: 'Christel' }]);
+    },
+  });
+  const model = await service.buildModel({ view: 'day', date: '2026-08-24', viewer: ownViewer });
+  const html = renderCalendarPage(model, { basePath: '/calendar/read-only' });
+  assert.match(html, /Christel • your permitted timeline/);
+  assert.doesNotMatch(html, /All permitted/);
+  assert.doesNotMatch(html, /staff=45/);
+  await assert.rejects(
+    service.buildModel({ view: 'day', date: '2026-08-24', staff: '45', viewer: ownViewer }),
+    error => error.code === 'CALENDAR_UX_STAFF_FILTER_FORBIDDEN',
+  );
+});
+
+test('business-wide presentation can switch only among practitioners returned by canonical SchedulingTimeline scope', async () => {
+  const businessViewer = { calendarScope: 'business_all_staff' };
+  const service = createCalendarReadOnlyUxService({
+    listTimeline: async ({ viewer }) => {
+      assert.deepEqual(viewer, businessViewer);
+      return timelineFor([
+        { id: 44, displayName: 'Christel' },
+        { id: 45, displayName: 'Abigail' },
+      ]);
+    },
+  });
+  const model = await service.buildModel({ view: 'day', date: '2026-08-24', viewer: businessViewer });
+  const html = renderCalendarPage(model, { basePath: '/calendar/read-only' });
+  assert.match(html, /All permitted/);
+  assert.match(html, /staff=44/);
+  assert.match(html, /staff=45/);
+  assert.doesNotMatch(html, /staff=46/);
+});
+
+test('authenticated Calendar remains scheduling-read-only while adding only staff-session logout interaction', async () => {
+  const viewer = { calendarScope: 'own_staff', staffId: 44 };
+  const service = createCalendarReadOnlyUxService({
+    listTimeline: async () => timelineFor([{ id: 44, displayName: 'Christel' }]),
+  });
+  const model = await service.buildModel({ view: 'day', date: '2026-08-24', viewer });
+  const html = renderCalendarPage(model, { basePath: '/calendar/read-only' });
+  assert.match(html, /data-shiloh-logout/);
+  assert.match(html, /Read-only operational view/);
+  assert.doesNotMatch(html, /Create booking|Reschedule appointment|Cancel appointment|drag(?:gable)?|contenteditable/i);
+  assert.doesNotMatch(html, /<form|method="post"/i);
+
+  const accessRoute = fs.readFileSync(path.join(__dirname, '..', 'src/routes/staffCalendarAccessUx.js'), 'utf8');
+  assert.doesNotMatch(accessRoute, /router\.(?:post|put|patch|delete)\s*\(/i);
+  assert.doesNotMatch(accessRoute, /calendarScope|staffId|business_role|ADMIN_API_KEY|x-admin-key/i);
+});
+
+test('existing Calendar share ICS route remains separate and unchanged in authority', () => {
+  const calendarRoute = fs.readFileSync(path.join(__dirname, '..', 'src/routes/calendar.js'), 'utf8');
+  assert.match(calendarRoute, /router\.get\('\/:token\.ics'/);
+  assert.match(calendarRoute, /appointment_calendar_share_tokens/);
+  assert.match(calendarRoute, /METHOD:PUBLISH/);
+  assert.match(calendarRoute, /router\.use\('\/staff-auth', createStaffBrowserSessionRouter/);
+  assert.match(calendarRoute, /router\.use\('\/staff', staffCalendarAccessUxRoutes\)/);
+  assert.match(calendarRoute, /router\.use\('\/read-only', createOptionalCalendarSessionMiddleware/);
+});
+
+test('staff access client asset is default-off with the same no-store browser security envelope', () => {
+  const off = createStaffCalendarAccessClientHandler({ env: {} });
+  const offRes = fakeResponse();
+  off({}, offRes);
+  assert.equal(offRes.statusCode, 404);
+
+  const on = createStaffCalendarAccessClientHandler({ env: enabledEnv });
+  const onRes = fakeResponse();
+  on({}, onRes);
+  assert.equal(onRes.statusCode, 200);
+  assert.match(onRes.contentType, /application\/javascript/);
+  assert.match(onRes.headers['cache-control'], /no-store/);
+  assert.match(onRes.body, /\/calendar\/staff-auth/);
+});
