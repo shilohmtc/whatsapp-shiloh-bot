@@ -69,7 +69,7 @@ async function sendStaffAuthTemplate(destination, code, options = {}) {
         timeout: 15000,
       }
     );
-    const messageId = response?.data?.messages?.[0]?.id || null;
+    const messageId = sanitizeProviderText(response?.data?.messages?.[0]?.id, 250);
     log.info({ messageId, templateName: STAFF_AUTH_TEMPLATE_NAME }, 'Staff authentication WhatsApp template accepted');
     return response?.data;
   } catch (error) {
