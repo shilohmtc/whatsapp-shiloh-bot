@@ -6,7 +6,7 @@ function sanitizeProviderText(value, maxLength = 180) {
     .replace(/[\r\n\t]+/g, ' ')
     .replace(/\bBearer\s+[^\s"',}\]]+/gi, 'Bearer [REDACTED]')
     .replace(/\bEAA[A-Za-z0-9_-]{20,}\b/g, '[REDACTED]')
-    .replace(/\b\+?\d{10,15}\b/g, '[REDACTED_PHONE]')
+    .replace(/(^|[^\d])\+?\d{10,15}(?=$|[^\d])/g, '$1[REDACTED_PHONE]')
     .replace(/\b[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{10}\b/g, '[REDACTED_CHALLENGE]')
     .slice(0, maxLength);
 }
@@ -61,6 +61,7 @@ function processWhatsAppStatuses(statuses) {
 module.exports = {
   ALLOWED_PROVIDER_STATUSES,
   sanitizeProviderText,
+  sanitizeMetaMessageId,
   sanitizeProviderError,
   sanitizeStatus,
   processWhatsAppStatuses,
