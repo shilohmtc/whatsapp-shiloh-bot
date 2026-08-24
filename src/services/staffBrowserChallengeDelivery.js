@@ -4,20 +4,32 @@ function isStaffBrowserWhatsAppDeliveryEnabled(env = process.env) {
   return String(env[DELIVERY_FLAG] || '').trim().toLowerCase() === 'true';
 }
 
-function createStaffBrowserChallengeDispatcher({ env = process.env, sendMessage = null } = {}) {
+function createStaffBrowserChallengeDispatcher({ env = process.env, sendMessage = null, sendTemplate = null } = {}) {
   if (!isStaffBrowserWhatsAppDeliveryEnabled(env)) return null;
-  const providerSend = sendMessage || require('./whatsapp').sendWhatsAppMessage;
-  if (typeof providerSend !== 'function') throw new Error('staff browser WhatsApp provider is unavailable');
+
+  // sendMessage is retained only as an injected compatibility seam for existing unit tests.
+  // Production never imports or falls back to the generic free-form WhatsApp sender.
+  const templateSend = sendTemplate || (sendMessage ? null : require('./staffAuthWhatsApp').sendStaffAuthTemplate);
+  if (!sendMessage && typeof templateSend !== 'function') throw new Error('staff browser WhatsApp template provider is unavailable');
 
   return async function dispatchStaffBrowserChallenge({ destination, code, expiresAt } = {}) {
     const to = String(destination || '').trim();
     const challenge = String(code || '').trim().toUpperCase();
-    if (!/^\+?\d{10,15}$/.test(to) || !/^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{10}$/.test(challenge)) {
+    const expiry = new Date(expiresAt).getTime();
+    if (!/^\+?\d{10,15}$/.test(to)
+      || !/^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{10}$/.test(challenge)
+      || !Number.isFinite(expiry)
+      || expiry <= Date.now()) {
       throw new Error('invalid staff browser authentication delivery payload');
     }
-    const expiryMinutes = Math.max(1, Math.ceil((new Date(expiresAt).getTime() - Date.now()) / 60000));
-    const message = `Your Shiloh staff sign-in code is ${challenge}. It expires in about ${expiryMinutes} minutes. If you did not request this, ignore this message.`;
-    return providerSend(to, message);
+
+    if (sendMessage) {
+      const expiryMinutes = Math.max(1, Math.ceil((expiry - Date.now()) / 60000));
+      const message = `Your Shiloh staff sign-in code is ${challenge}. It expires in about ${expiryMinutes} minutes. If you did not request this, ignore this message.`;
+      return sendMessage(to, message);
+    }
+
+    return templateSend(to, challenge);
   };
 }
 
