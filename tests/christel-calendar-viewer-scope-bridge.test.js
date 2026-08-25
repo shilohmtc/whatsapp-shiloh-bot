@@ -47,6 +47,26 @@ function authorityRow(overrides = {}) {
   };
 }
 
+function calendarOperator(adminId) {
+  const id = Number(adminId);
+  if (id === 2) {
+    return {
+      adminId: 2,
+      displayName: 'Christel',
+      calendarRole: 'operations_admin',
+      source: 'shiloh_calendar',
+      capabilities: { read: true, create: true, edit: true, reschedule: true, cancel: true, syncRetry: true },
+    };
+  }
+  return {
+    adminId: id,
+    displayName: `Staff ${id}`,
+    calendarRole: 'read_only',
+    source: 'shiloh_calendar',
+    capabilities: { read: true, create: false, edit: false, reschedule: false, cancel: false, syncRetry: false },
+  };
+}
+
 function deterministicRandom() {
   let n = 1;
   return (size) => {
@@ -174,6 +194,10 @@ test('2 emergency bootstrap exchange viewer crosses the adapter and Calendar rea
   const handler = createCalendarReadOnlyHandler({
     env: productionShapeEnv,
     buildModel: calendarUx.buildModel,
+    resolveOperator: async (adminId, capability) => {
+      assert.equal(capability, 'calendar:read');
+      return calendarOperator(adminId);
+    },
     renderPage: () => '<main><div class="access-controls"></div><p>Calendar</p></main>',
   });
   const res = fakeResponse();
@@ -183,6 +207,7 @@ test('2 emergency bootstrap exchange viewer crosses the adapter and Calendar rea
   assert.equal(timelineCalls.length, 1);
   assert.deepEqual(timelineCalls[0].viewer, { calendarScope: 'all_business' });
   assert.match(res.body, /Create booking/);
+  assert.match(res.body, /Emergency legacy booking/);
 });
 
 test('3 unknown browser viewer scopes remain forbidden before SchedulingTimeline is called', async () => {
@@ -223,29 +248,35 @@ test('5 SchedulingTimeline itself still rejects raw browser-only scopes; the ada
   );
 });
 
-test('6 production-shaped pilot still permits only Admin 2 and blocks non-Christel Admins', () => {
+test('6 emergency-bootstrap pilot still permits only Admin 2 and blocks non-Christel Admins', () => {
   assert.equal(isAdminAllowedByPilot(2, productionShapeEnv), true);
   assert.equal(isAdminAllowedByPilot(3, productionShapeEnv), false);
   assert.equal(isAdminAllowedByPilot(99, productionShapeEnv), false);
 });
 
-test('7 Create Booking presentation remains restricted to the emergency Christel session', async () => {
-  const buildModel = async () => ({ dateKey: '2026-08-25' });
+test('7 Christel retains emergency booking while other authorized staff remain read-only', async () => {
+  const buildModel = async () => ({ dateKey: '2026-08-25', timeline: { appointments: [], events: [] } });
   const renderPage = () => '<main><div class="access-controls"></div><p>Calendar</p></main>';
-  const handler = createCalendarReadOnlyHandler({ env: productionShapeEnv, buildModel, renderPage });
+  const handler = createCalendarReadOnlyHandler({
+    env: productionShapeEnv,
+    buildModel,
+    renderPage,
+    resolveOperator: async (adminId) => calendarOperator(adminId),
+  });
 
   const christel = fakeResponse();
   await handler(authenticatedRequest({ calendarScope: 'business_all_staff' }, 2), christel, () => {});
   assert.equal(christel.statusCode, 200);
   assert.match(christel.body, /Create booking/);
+  assert.match(christel.body, /Emergency legacy booking/);
 
   const otherAdmin = fakeResponse();
   await handler(authenticatedRequest({ calendarScope: 'business_all_staff' }, 3), otherAdmin, () => {});
   assert.equal(otherAdmin.statusCode, 200);
-  assert.doesNotMatch(otherAdmin.body, /Create booking/);
+  assert.doesNotMatch(otherAdmin.body, /Create booking|Emergency legacy booking|Manage/);
 });
 
-test('8 repair does not broaden SchedulingTimeline or create a second appointment-write path', () => {
+test('8 emergency fallback does not rewrite SchedulingTimeline or the frozen Christel booking service', () => {
   const schedulingSource = fs.readFileSync(path.join(__dirname, '../src/services/schedulingEngine.js'), 'utf8');
   const calendarBookingSource = fs.readFileSync(path.join(__dirname, '../src/services/calendarCreateBooking.js'), 'utf8');
   assert.match(schedulingSource, /const KNOWN_SCOPES = new Set\(\[ALL_BUSINESS_SCOPE, \.\.\.OWN_SCOPES, 'none'\]\)/);
