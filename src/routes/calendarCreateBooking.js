@@ -24,6 +24,8 @@ function setBookingSecurityHeaders(res) {
 function statusForError(error) {
   if (error?.code === 'CALENDAR_BOOKING_DISABLED') return 404;
   if (error?.code === 'CALENDAR_BOOKING_FORBIDDEN') return 403;
+  if (error?.code === 'CALENDAR_BOOKING_NEW_CLIENT_AMBIGUOUS') return 409;
+  if (String(error?.code || '').startsWith('CALENDAR_BOOKING_NEW_CLIENT_INVALID_')) return 400;
   if (String(error?.code || '').startsWith('CALENDAR_BOOKING_INVALID_') || error?.code === 'CALENDAR_BOOKING_CLIENT_REQUIRED') return 400;
   if (error?.code === 'CALENDAR_BOOKING_INELIGIBLE_SELECTION') return 409;
   return 503;
@@ -90,6 +92,7 @@ function createCalendarCreateBookingRouter({
       const result = await bookingService.prepare({
         adminId: req.staffBrowserSession.adminId,
         clientId: req.body?.clientId,
+        newClient: req.body?.newClient,
         staffId: req.body?.staffId,
         serviceId: req.body?.serviceId,
         date: req.body?.date,
@@ -98,6 +101,17 @@ function createCalendarCreateBookingRouter({
       if (result.status !== 'pending_confirmation') {
         return res.status(409).json({ status: result.status, reply: result.reply || 'Booking cannot be prepared.' });
       }
+      return res.status(200).json(result);
+    } catch (error) {
+      const status = statusForError(error);
+      if (status !== 503) return res.status(status).json({ error: error.message, code: error.code, requestId: req.id });
+      return next(error);
+    }
+  });
+
+  router.post('/discard', sameOrigin, requireSession, requireCsrf, async (req, res, next) => {
+    try {
+      const result = await bookingService.discard({ adminId: req.staffBrowserSession.adminId });
       return res.status(200).json(result);
     } catch (error) {
       const status = statusForError(error);
