@@ -3,52 +3,78 @@
 Date: 2026-08-25
 Owner: 00 — Control & Reconciliation
 
-## Current controlled unit
+## Controlled unit
 
 `SHILOH-META-BUSINESS-VERIFICATION-CONVERGENCE-RECHECK`
 
-Status: AUTHORIZED / WAITING FOR BOUNDED PROVIDER PROPAGATION WINDOW.
+Status: COMPLETE — META SUPPORT REQUIRED.
 
-Execution owner: 30 — WhatsApp & Meta Integration.
+Execution owner: 30 — WhatsApp & Meta Integration — terminal specialist work complete.
 Acceptance: 00 — Control & Reconciliation.
-Priority: HIGHEST CURRENT CALENDAR DEPENDENCY.
+External dependency: Meta Business Support.
 
-## Current evidence
+This Meta track is parallel and is not on the critical path for Christel browser Calendar booking.
 
-JP's authenticated Meta UI reports Business verification VERIFIED / APPROVED.
+## Final authorized provider evidence
 
-Read-only provider API evidence recorded by commit `63bc7feaaf4ae313d4f4bde717fad03f1d5b2aa4` still reports:
+The single final GET-only recheck authorized by PR #475 has been consumed. No further provider recheck is authorized under this unit.
+
+Authenticated Meta UI reports Business verification VERIFIED / APPROVED.
+
+Fresh sanitized provider API evidence still reports:
 
 - Business verification `rejected`;
 - overall provider health `LIMITED`;
 - BUSINESS health `LIMITED`;
-- WABA and APP health `AVAILABLE`.
+- WABA health `AVAILABLE`;
+- APP health `AVAILABLE`.
 
-Token validity, SYSTEM_USER token type, required WhatsApp scopes, WABA review `APPROVED`, WABA status `ACTIVE`, WABA ownership `SELF`, and readable template inventory remain proven.
+The following remain proven:
 
-No template creation, message, challenge, security/access mutation or Calendar activation occurred.
+- token valid;
+- token type SYSTEM_USER;
+- `whatsapp_business_management` granted;
+- `whatsapp_business_messaging` granted;
+- template inventory readable;
+- WABA account review `APPROVED`;
+- WABA `ACTIVE`;
+- WABA ownership `SELF`.
 
-## Control authorization
+The Meta UI and live provider API therefore remain non-converged after the final authorized recheck.
 
-PR for this addendum authorizes exactly one further GET-only provider recheck no earlier than 2026-08-25 06:45 Africa/Johannesburg (04:45 UTC).
+## Audit safety and production evidence
 
-Success requires both:
+The bounded audit used the existing default-off diagnostic only.
 
-1. Business verification no longer reports `rejected`; and
-2. BUSINESS health no longer reports `LIMITED`.
+Audit deploy: `dep-da6hu6942hec73d6ame0`.
 
-If successful: return read-only proof to 00. Template creation remains separately gated.
+`META_WABA_TEMPLATE_PERMISSION_AUDIT_ON_START` was restored to `false` immediately after evidence capture.
 
-If either gate still fails: stop rechecking and route the exact UI/API mismatch to Meta Business Support through 00/JP.
+Re-lock deploy: `dep-da6hug8n74is73f6cm2g`.
 
-## Holds
+Re-lock startup evidence:
 
-No template creation retry, no `shiloh_staff_auth_otp_v1` submission, no real staff-auth message, no Christel challenge, no token/role/system-user/asset/WABA ownership/credential/phone-registration mutation, and no Calendar/auth activation.
+- Node 24.14.1;
+- build successful;
+- zero npm vulnerabilities;
+- Google Calendar provider health passed;
+- Shiloh started normally.
 
-## Priority sequence
+## Holds / do not redo
 
-1. NOW — wait until the bounded recheck time and run one GET-only provider recheck.
-2. If converged, 00 separately authorizes one OTP template creation.
-3. If not converged, JP opens Meta Business Support case with sanitized discrepancy evidence.
-4. After exact OTP template APPROVED/readback, 00 authorizes one Christel read-only pilot.
-5. Successful pilot routes immediately to 10 — Booking & Admin UX for `SHILOH-CALENDAR-CREATE-BOOKING`.
+- Do not perform another provider convergence recheck under PR #475.
+- Do not experiment with token scopes, roles, system users, asset assignments, WABA ownership/sharing, credentials, or phone registration.
+- Do not create or submit `shiloh_staff_auth_otp_v1` yet.
+- Do not create any other template as a workaround.
+- Do not send a real staff-auth WhatsApp message or another Christel challenge.
+- Do not change Calendar authority because of this Meta discrepancy.
+
+No unauthorized provider, permission, template, message, challenge, credential, phone-registration, or Calendar mutation occurred during the final recheck.
+
+## Next sequence
+
+1. NOW / PARALLEL — JP opens a Meta Business Support case using the exact sanitized UI/API discrepancy.
+2. 30 remains paused; no further provider polling or permission experimentation while support is pending.
+3. When Meta provides a substantive resolution or the provider state demonstrably changes, return that evidence to 00 — Control & Reconciliation.
+4. Template creation remains separately gated and requires a new Control decision after the provider-side state is resolved.
+5. Christel browser Calendar work continues independently under 10 — Booking & Admin UX and must not wait for Meta staff OTP.
