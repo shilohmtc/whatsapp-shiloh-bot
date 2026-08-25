@@ -70,8 +70,6 @@ test('single-practitioner projection preserves canonical appointment_staff assig
   const data = fixture({
     appointments: [{
       appointment_id: 501,
-      legacy_staff_id: 1,
-      legacy_staff_name: 'Julia',
       starts_at: '2026-08-24T08:00:00.000Z',
       ends_at: '2026-08-24T09:00:00.000Z',
       status: 'booked',
@@ -105,6 +103,12 @@ test('single-practitioner projection preserves canonical appointment_staff assig
     assert.match(sql, /^\/\* SchedulingTimeline:[a-z_]+ \*\/[\s\S]*\bSELECT\b/i);
     assert.doesNotMatch(sql, /\b(?:INSERT|UPDATE|DELETE|ALTER|DROP|TRUNCATE)\b/i);
   }
+
+  const appointmentSql = seen.find(item => /SchedulingTimeline:appointments/.test(item.sql))?.sql || '';
+  assert.match(appointmentSql, /\bJOIN\s+appointment_staff\s+ast\b/i);
+  assert.match(appointmentSql, /ast\.staff_id\s*=\s*ANY\(\$3::bigint\[\]\)/i);
+  assert.doesNotMatch(appointmentSql, /\ba\.staff_id\b/i);
+  assert.doesNotMatch(appointmentSql, /\ba\.staff_name\b/i);
 });
 
 test('multi-practitioner projection preserves PR #380 appointment_staff fan-out without collapsing the appointment', async () => {
@@ -112,8 +116,6 @@ test('multi-practitioner projection preserves PR #380 appointment_staff fan-out 
     appointments: [
       {
         appointment_id: 880,
-        legacy_staff_id: 1,
-        legacy_staff_name: 'Julia',
         starts_at: '2026-08-24T09:00:00.000Z',
         ends_at: '2026-08-24T10:30:00.000Z',
         status: 'booked',
@@ -123,8 +125,6 @@ test('multi-practitioner projection preserves PR #380 appointment_staff fan-out 
       },
       {
         appointment_id: 880,
-        legacy_staff_id: 1,
-        legacy_staff_name: 'Julia',
         starts_at: '2026-08-24T09:00:00.000Z',
         ends_at: '2026-08-24T10:30:00.000Z',
         status: 'booked',
