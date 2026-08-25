@@ -29,6 +29,8 @@ jobs:
         run: node --test tests/scheduling-engine-readonly-projection.test.js
       - name: Run focused Calendar UX security tests
         run: node --test tests/calendar-readonly-ux.test.js
+      - name: Run focused Calendar operational-assurance cutover tests
+        run: node --test tests/calendar-operational-assurance-cutover.test.js
       - name: Run focused Christel Calendar viewer-scope bridge tests
         run: node --test tests/christel-calendar-viewer-scope-bridge.test.js
       - name: Run focused staff browser session security tests
