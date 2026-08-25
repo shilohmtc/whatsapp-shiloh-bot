@@ -29,6 +29,7 @@ function setCalendarSecurityHeaders(res) {
 }
 
 function statusForError(error) {
+  if (error?.code === 'CALENDAR_ACCESS_FORBIDDEN') return 403;
   if (error?.code === 'CALENDAR_UX_AUTH_REQUIRED' || error?.code === 'SCHEDULING_TIMELINE_FORBIDDEN') return 403;
   if (error?.code === 'CALENDAR_UX_STAFF_FILTER_FORBIDDEN') return 403;
   if (String(error?.code || '').startsWith('CALENDAR_UX_INVALID_') || String(error?.code || '').startsWith('SCHEDULING_TIMELINE_INVALID_')) return 400;
@@ -38,6 +39,7 @@ function statusForError(error) {
 function safeUnavailableMessage(error) {
   if (error?.code === 'SCHEDULING_GOOGLE_CALENDAR_REQUIRED') return 'Google Calendar provider state is unavailable, so Shiloh Calendar is failing closed.';
   if (error?.code === 'CALENDAR_UX_STAFF_FILTER_FORBIDDEN') return 'That practitioner is outside your authenticated Calendar scope.';
+  if (error?.code === 'CALENDAR_ACCESS_FORBIDDEN') return 'Your authenticated Shiloh role does not permit Calendar access.';
   if (statusForError(error) === 400) return 'The requested Calendar view or filter is invalid.';
   if (statusForError(error) === 403) return 'Your authenticated Shiloh access does not permit this Calendar view.';
   return 'SchedulingTimeline is unavailable, so Shiloh Calendar is failing closed.';
@@ -79,6 +81,7 @@ function createCalendarReadOnlyHandler({
   renderUnavailable = renderUnavailablePage,
   resolveViewer = resolveServerViewer,
   resolveOperator = resolveCalendarOperator,
+  db = pool,
   staffAccessPath = '/calendar/staff',
   bookingPath = '/calendar/book',
   operationsPath = '/calendar/operations',
@@ -100,24 +103,25 @@ function createCalendarReadOnlyHandler({
         }));
       }
 
+      const adminId = Number(req.staffBrowserSession?.adminId);
+      if (!Number.isSafeInteger(adminId) || adminId <= 0) {
+        const error = new Error('Authenticated Calendar role context is unavailable.');
+        error.code = 'CALENDAR_ACCESS_FORBIDDEN';
+        throw error;
+      }
+      // Re-resolve capability on every Calendar read so permission revocation is enforced
+      // server-side even when the browser session itself is still otherwise valid.
+      const operationalOperator = await resolveOperator(adminId, 'calendar:read', { db });
+
       const model = await buildModel({ view: req.query?.view, date: req.query?.date, staff: req.query?.staff, viewer });
       let html = renderPage(model, {
         basePath: req.baseUrl || '/calendar/read-only',
         staffAccessPath,
         staffAccessScriptPath: `${staffAccessPath}/client.js`,
       });
-      const emergencyChristel = isEmergencyCalendarBookingEnabled(env) && Number(req.staffBrowserSession?.adminId) === EMERGENCY_ADMIN_ID;
+      const emergencyChristel = isEmergencyCalendarBookingEnabled(env) && adminId === EMERGENCY_ADMIN_ID;
       if (emergencyChristel) html = decorateEmergencyBookingEntry(html, model.dateKey, bookingPath);
-
-      let operationalOperator = null;
-      if (req.staffBrowserSession?.adminId) {
-        try {
-          operationalOperator = await resolveOperator(req.staffBrowserSession.adminId, 'calendar:read', { db: pool });
-        } catch (error) {
-          if (error?.code !== 'CALENDAR_ACCESS_FORBIDDEN') throw error;
-        }
-      }
-      if (operationalOperator) html = decorateOperationalEntries(html, model, operationalOperator, operationsPath);
+      html = decorateOperationalEntries(html, model, operationalOperator, operationsPath);
       return res.status(200).type('html').send(html);
     } catch (error) {
       if (res.headersSent) return next(error);
