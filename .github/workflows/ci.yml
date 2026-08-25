@@ -59,6 +59,8 @@ jobs:
         run: node --test tests/emergency-christel-calendar-bootstrap.test.js
       - name: Run focused emergency Christel Calendar booking acceptance tests
         run: node --test tests/emergency-christel-calendar-booking-acceptance.test.js
+      - name: Run focused Calendar new-client booking acceptance tests
+        run: node --test tests/calendar-new-client-booking-acceptance.test.js
       - name: Run non-mutating regression tests
         env:
           SHILOH_STAFF_BROWSER_AUTH_WHATSAPP_DELIVERY_ENABLED: 'false'
