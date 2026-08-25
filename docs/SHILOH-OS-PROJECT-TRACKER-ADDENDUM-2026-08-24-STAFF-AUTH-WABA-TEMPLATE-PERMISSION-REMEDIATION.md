@@ -1,6 +1,6 @@
 # Shiloh OS — Project Tracker Addendum — Staff Auth WABA Template Permission Remediation
 
-Date: 2026-08-24
+Date: 2026-08-25
 Owner: 00 — Control & Reconciliation
 
 ## Closed prior unit
@@ -9,50 +9,75 @@ Owner: 00 — Control & Reconciliation
 
 State: APPLICATION COMPLETE / VERIFIED LIVE / PROVIDER-BLOCKED / DO NOT REDO.
 
-PR #469 completed the application repair. PR #470 reconciled the provider gate. Full non-mutating regression passed 1001/1001. Production is LIVE on current main `01f60a4d56b1c32847cda254ac45851463dd490e` via deploy `dep-da6abi9srm7s73er9pog`.
+PR #469 completed the application repair. PR #470 reconciled the provider gate. The exact Authentication OTP template still does not exist and no additional template creation attempt is authorized.
 
-Provider inventory found zero Authentication templates. The single authorized `shiloh_staff_auth_otp_v1` creation attempt was rejected before creation with HTTP 400 / Meta code 10 because the WABA lacks permission to create message templates.
-
-## Active next unit
+## Current controlled unit
 
 `SHILOH-META-WABA-TEMPLATE-CREATION-PERMISSION-REMEDIATION`
 
-State: AUTHORIZED FOR IMPLEMENTATION NOW.
+State: BLOCKED AT PROVEN META BUSINESS VERIFICATION GATE.
 
 Owner: 30 — WhatsApp & Meta Integration.
 Support: 40 — Production & DevOps only where required.
 Acceptance: 00 — Control & Reconciliation.
 Priority: HIGHEST CURRENT CALENDAR DEPENDENCY.
 
-## Objective
+## Diagnostic implementation and verification
 
-Prove the exact Meta/WABA account or permission condition causing template-creation denial and resolve only the minimum provider-side condition required to restore template-creation capability.
+PR #472 added a default-off, GET-only, sanitized provider permission audit and is merged.
 
-## Guardrails
+Current application authority before this reconciliation: `2c9468363065531f5e56244e17f83bf306ff9a7a`.
 
-- No new template submission is authorized in this unit.
-- No genuine staff-auth message or Christel challenge is authorized.
-- No fallback to free-form authentication delivery.
-- No unrelated Utility/Marketing/booking/reminder template reuse.
-- No broad user/system-user/token/asset/ownership permission mutation without a separate exact 00 authorization.
-- Calendar/pilot/auth activation controls remain OFF.
+CI passed Node 24.14.1 with full non-mutating regression 1007/1007, zero failures/cancellations/skips and zero npm vulnerabilities.
 
-## Required evidence
+Baseline deploy `dep-da6ai7cs728c73f606hg` was verified live with the audit OFF. The one bounded read-only audit was then run with `META_WABA_TEMPLATE_PERMISSION_AUDIT_ON_START=true`, after which the flag was immediately restored to `false`. Re-lock deploy `dep-da6fr2710e5c73bit11g` is LIVE and healthy on the same exact application commit.
 
-30 must return sanitized evidence identifying the actual provider cause and either:
+No template creation request, WhatsApp authentication message, genuine challenge, Meta role/scope/asset mutation, ownership change or credential change occurred.
 
-- proof that template creation capability is restored without broadening identity/access/security boundaries; or
-- the exact minimum external/admin/security-sensitive mutation still required.
+## Exact provider evidence
 
-Do not stop at an intermediate `In progress` checkpoint while executable diagnostic/remediation work remains and no genuine provider/admin/authorization gate exists.
+Sanitized provider evidence proves:
+
+- message-template inventory is readable;
+- current token is valid and is a SYSTEM_USER token;
+- `whatsapp_business_management` is granted;
+- `whatsapp_business_messaging` is granted;
+- WABA account review status is `APPROVED`;
+- WABA status is `ACTIVE`;
+- WABA ownership type is `SELF`;
+- Meta business verification status is `rejected`;
+- overall provider health is `LIMITED`;
+- WABA health entity is `AVAILABLE`;
+- APP health entity is `AVAILABLE`;
+- BUSINESS health entity is `LIMITED`.
+
+The provider audit could not enumerate business context / assigned-user / system-user task state, so no claim is made that those states are sufficient or deficient. They must not be guessed.
+
+The decisive proven blocker is the rejected Meta Business verification state and associated LIMITED business health.
+
+## Required next action
+
+Do not add token scopes, alter system-user or human-user roles, modify asset assignments, change WABA ownership/sharing or retry template creation as a speculative workaround.
+
+Return to 00 for acceptance and authorization of the minimum external Meta business-verification remediation. JP/Control must review the rejected Business verification in authenticated Meta Business settings, correct/resubmit/appeal the verification using accurate business information and provider-requested evidence, or use Meta Business Support if Meta exposes no direct remediation route.
+
+After Meta reports business verification as verified, return to 30 for read-only provider proof before any template creation. Exactly one `shiloh_staff_auth_otp_v1` creation still requires a fresh separate 00 authorization.
+
+## Holds
+
+- No template creation retry.
+- No genuine staff-auth WhatsApp message.
+- No Christel retry/challenge.
+- No free-form OTP fallback.
+- All staff Calendar/auth pilot activation controls remain OFF.
+- No Calendar create/reschedule/cancel/drag-drop or Google authority changes.
 
 ## Priority sequence
 
-1. NOW — restore WABA template-creation capability.
-2. 00 acceptance.
-3. Separate exact one-template creation authorization for `shiloh_staff_auth_otp_v1`.
-4. Meta APPROVED + exact readback.
-5. One newly authorized bounded Christel read-only pilot.
+1. NOW — 00/JP remediate the rejected Meta Business verification state.
+2. 30 proves read-only that business verification and provider health are restored.
+3. 00 separately authorizes exactly one `shiloh_staff_auth_otp_v1` creation.
+4. Meta APPROVED + exact Shiloh readback.
+5. 00 authorizes one bounded genuine Christel read-only pilot.
 6. On successful pilot, 10 implements `SHILOH-CALENDAR-CREATE-BOOKING` immediately.
-7. Christel production booking activation after guarded proof.
-8. Broader rollout and secondary Calendar mutations later.
+7. Broader rollout and secondary Calendar mutations remain later.
