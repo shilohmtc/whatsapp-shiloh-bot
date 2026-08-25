@@ -77,6 +77,15 @@ test('single-practitioner projection preserves canonical appointment_staff assig
       assigned_staff_id: 1,
       staff_name_snapshot: 'Julia',
     }],
+    calendar_blocks: [{
+      id: 601,
+      staff_id: 1,
+      starts_at: '2026-08-24T10:00:00.000Z',
+      ends_at: '2026-08-24T11:00:00.000Z',
+      block_type: 'manual',
+      title: 'Blocked time',
+      record_source: 'admin_whatsapp',
+    }],
     staff_schedule_exceptions: [{
       staff_id: 1, exception_date: '2026-08-24', location_id: 10, exception_type: 'available', starts_local: '08:00:00', ends_local: '12:00:00',
     }],
@@ -96,6 +105,9 @@ test('single-practitioner projection preserves canonical appointment_staff assig
   assert.equal(timeline.appointments[0].source, 'appointments');
   assert.deepEqual(timeline.appointments[0].staffIds, [1]);
   assert.deepEqual(timeline.appointments[0].staff, [{ staffId: 1, nameSnapshot: 'Julia', source: 'appointment_staff' }]);
+  assert.equal(timeline.blocks.length, 1);
+  assert.equal(timeline.blocks[0].source, 'calendar_blocks');
+  assert.equal(timeline.blocks[0].allDay, false, 'canonical Shiloh blocks are explicit starts_at/ends_at intervals, not stored all-day records');
   assert.equal(timeline.leave.length, 1, 'fixture rows are projected only after the real SQL permission filter; fake data remains deterministic');
   assert.ok(timeline.scheduleExceptions.every(item => item.canonical === true));
   assert.ok(seen.length >= 9);
@@ -109,6 +121,10 @@ test('single-practitioner projection preserves canonical appointment_staff assig
   assert.match(appointmentSql, /ast\.staff_id\s*=\s*ANY\(\$3::bigint\[\]\)/i);
   assert.doesNotMatch(appointmentSql, /\ba\.staff_id\b/i);
   assert.doesNotMatch(appointmentSql, /\ba\.staff_name\b/i);
+
+  const blockSql = seen.find(item => /SchedulingTimeline:calendar_blocks/.test(item.sql))?.sql || '';
+  assert.match(blockSql, /\bSELECT\s+id,\s*staff_id,\s*starts_at,\s*ends_at,\s*block_type,\s*title,\s*source\s+AS\s+record_source\b/i);
+  assert.doesNotMatch(blockSql, /\ball_day\b/i);
 });
 
 test('multi-practitioner projection preserves PR #380 appointment_staff fan-out without collapsing the appointment', async () => {
@@ -160,7 +176,13 @@ test('Google external-busy projection reuses PR #395 staff classification and re
     start: { dateTime: '2026-08-24T13:00:00.000Z' },
     end: { dateTime: '2026-08-24T14:00:00.000Z' },
   };
-  const events = [sharedClinicEvent, juliaOnlyEvent];
+  const allDaySharedEvent = {
+    id: 'shared-all-day-busy',
+    summary: 'External all-day busy',
+    start: { date: '2026-08-24' },
+    end: { date: '2026-08-25' },
+  };
+  const events = [sharedClinicEvent, juliaOnlyEvent, allDaySharedEvent];
   const data = fixture();
   const engine = createSchedulingEngine({
     query: fakeQuery(data),
@@ -175,11 +197,13 @@ test('Google external-busy projection reuses PR #395 staff classification and re
   const timeline = await engine.listTimeline({ ...range, viewer: allBusinessViewer, staffIds: [1, 2] });
   const shared = timeline.externalBusy.find(item => item.id === sharedClinicEvent.id);
   const juliaOnly = timeline.externalBusy.find(item => item.id === juliaOnlyEvent.id);
+  const allDayShared = timeline.externalBusy.find(item => item.id === allDaySharedEvent.id);
   assert.deepEqual(shared.staffIds, [1, 2], 'untagged shared event remains clinic-wide under PR #395');
   assert.deepEqual(juliaOnly.staffIds, [1], 'practitioner-tagged event applies only to the matching practitioner under PR #395');
   assert.equal(shared.canonical, false);
   assert.equal(shared.source, 'google_calendar');
   assert.equal(shared.provenance.authority, 'PR #395 Google conflict classification');
+  assert.equal(allDayShared.allDay, true, 'real Google all-day events retain provider-derived all-day presentation semantics');
   assert.deepEqual(timeline.meta.nonCanonicalSources, ['google_calendar']);
 });
 
