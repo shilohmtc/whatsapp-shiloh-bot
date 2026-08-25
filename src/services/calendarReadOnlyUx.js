@@ -4,11 +4,37 @@ const BUSINESS_TIMEZONE = 'Africa/Johannesburg';
 const BUSINESS_UTC_OFFSET = '+02:00';
 const ALLOWED_VIEWS = new Set(['day', 'week', 'agenda']);
 const DATE_KEY = /^\d{4}-\d{2}-\d{2}$/;
+const TIMELINE_SCOPES = new Set(['all_business', 'own_services', 'own_appointments', 'none']);
 
 function uxError(code, message) {
   const error = new Error(message);
   error.code = code;
   return error;
+}
+
+function normalizeViewerForTimeline(viewer) {
+  if (!viewer || typeof viewer !== 'object') {
+    throw uxError('CALENDAR_UX_AUTH_REQUIRED', 'An authenticated server-side Calendar viewer is required.');
+  }
+
+  const sourceScope = String(viewer.calendarScope || viewer.calendar_scope || '').trim().toLowerCase();
+  if (sourceScope === 'business_all_staff') {
+    return { ...viewer, calendarScope: 'all_business' };
+  }
+
+  if (sourceScope === 'own_staff') {
+    const staffId = Number(viewer.staffId || viewer.staff_id);
+    if (!Number.isSafeInteger(staffId) || staffId <= 0) {
+      throw uxError('SCHEDULING_TIMELINE_FORBIDDEN', 'Own-staff browser Calendar authority must resolve to a canonical staff record.');
+    }
+    return { ...viewer, calendarScope: 'own_appointments', staffId };
+  }
+
+  if (TIMELINE_SCOPES.has(sourceScope)) {
+    return { ...viewer, calendarScope: sourceScope };
+  }
+
+  throw uxError('SCHEDULING_TIMELINE_FORBIDDEN', 'The authenticated browser Calendar viewer does not have a recognized SchedulingTimeline scope.');
 }
 
 function dateKeyFromDate(date = new Date()) {
@@ -122,9 +148,7 @@ function filterTimelineForDisplay(timeline, requestedStaffId) {
 
 function createCalendarReadOnlyUxService({ listTimeline = schedulingEngine.listTimeline } = {}) {
   async function buildModel({ view: rawView, date: rawDate, staff: rawStaff, viewer, now = new Date() } = {}) {
-    if (!viewer || typeof viewer !== 'object') {
-      throw uxError('CALENDAR_UX_AUTH_REQUIRED', 'An authenticated server-side Calendar viewer is required.');
-    }
+    const timelineViewer = normalizeViewerForTimeline(viewer);
     const view = normalizeView(rawView);
     const dateKey = parseDateKey(rawDate, now);
     const requestedStaffId = normalizeStaffFilter(rawStaff);
@@ -133,7 +157,7 @@ function createCalendarReadOnlyUxService({ listTimeline = schedulingEngine.listT
     const timeline = await listTimeline({
       from: period.from,
       to: period.to,
-      viewer,
+      viewer: timelineViewer,
     });
 
     const filtered = filterTimelineForDisplay(timeline, requestedStaffId);
@@ -157,8 +181,10 @@ const service = createCalendarReadOnlyUxService();
 module.exports = {
   ALLOWED_VIEWS,
   BUSINESS_TIMEZONE,
+  TIMELINE_SCOPES,
   createCalendarReadOnlyUxService,
   buildModel: service.buildModel,
+  normalizeViewerForTimeline,
   normalizeView,
   parseDateKey,
   normalizeStaffFilter,

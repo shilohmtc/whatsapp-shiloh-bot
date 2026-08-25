@@ -159,7 +159,7 @@ test('own_staff scope has no practitioner switcher and a manual other-staff filt
   const ownViewer = { calendarScope: 'own_staff', staffId: 44 };
   const service = createCalendarReadOnlyUxService({
     listTimeline: async ({ viewer }) => {
-      assert.deepEqual(viewer, ownViewer);
+      assert.deepEqual(viewer, { calendarScope: 'own_appointments', staffId: 44 });
       return timelineFor([{ id: 44, displayName: 'Christel' }]);
     },
   });
@@ -178,7 +178,7 @@ test('business-wide presentation can switch only among practitioners returned by
   const businessViewer = { calendarScope: 'business_all_staff' };
   const service = createCalendarReadOnlyUxService({
     listTimeline: async ({ viewer }) => {
-      assert.deepEqual(viewer, businessViewer);
+      assert.deepEqual(viewer, { calendarScope: 'all_business' });
       return timelineFor([
         { id: 44, displayName: 'Christel' },
         { id: 45, displayName: 'Abigail' },
