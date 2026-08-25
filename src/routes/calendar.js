@@ -3,6 +3,7 @@ const { pool } = require('../db/pool');
 const calendarReadOnlyUxRoutes = require('./calendarReadOnlyUx');
 const staffCalendarAccessUxRoutes = require('./staffCalendarAccessUx');
 const { createCalendarCreateBookingRouter } = require('./calendarCreateBooking');
+const { createCalendarOperationalRouter } = require('./calendarOperational');
 const { createStaffBrowserSessionService } = require('../services/staffBrowserSession');
 const { createPilotGuardedStaffBrowserSessionService } = require('../services/staffBrowserPilotGate');
 const { createStaffBrowserSessionRouter } = require('./staffBrowserSession');
@@ -42,7 +43,10 @@ router.get('/:token.ics',async(req,res,next)=>{try{
 
 router.use('/staff-auth', createStaffBrowserSessionRouter({ service: staffBrowserSessionService }));
 router.use('/staff', staffCalendarAccessUxRoutes);
+// Frozen Christel emergency booking surface. Preserve as an operational fallback.
 router.use('/book', createCalendarCreateBookingRouter({ sessionService: staffBrowserSessionService }));
+// Authenticated role/capability-governed Calendar mutation surface.
+router.use('/operations', createCalendarOperationalRouter({ sessionService: staffBrowserSessionService }));
 router.use('/read-only', createOptionalCalendarSessionMiddleware({ service: staffBrowserSessionService }), calendarReadOnlyUxRoutes);
 
 module.exports=router;
