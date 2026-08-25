@@ -7,6 +7,7 @@ const ALL_BUSINESS_SCOPE = 'all_business';
 const OWN_SCOPES = new Set(['own_services', 'own_appointments']);
 const KNOWN_SCOPES = new Set([ALL_BUSINESS_SCOPE, ...OWN_SCOPES, 'none']);
 const BUSINESS_TIMEZONE = 'Africa/Johannesburg';
+const APPROVED_LEAVE_REASON = /^Approved leave request #\d+(?::\s*(.*))?$/i;
 
 function timelineError(code, message) {
   const error = new Error(message);
@@ -328,20 +329,11 @@ function createSchedulingEngine({
     const localFrom = localDateKey(range.start);
     const localTo = localDateKey(new Date(range.end.getTime() - 1));
     const staffExceptionResult = await query(`/* SchedulingTimeline:staff_schedule_exceptions */
-      SELECT staff_id, exception_date, location_id, exception_type, starts_local, ends_local
+      SELECT id, staff_id, exception_date, location_id, exception_type, starts_local, ends_local, reason
         FROM staff_schedule_exceptions
        WHERE staff_id = ANY($1::bigint[])
          AND exception_date BETWEEN $2::date AND $3::date
        ORDER BY exception_date, staff_id, starts_local NULLS FIRST`, [permittedStaffIds, localFrom, localTo]);
-
-    const leaveResult = await query(`/* SchedulingTimeline:staff_leave_requests */
-      SELECT id, staff_id, starts_at, ends_at, reason, status, source AS record_source
-        FROM staff_leave_requests
-       WHERE staff_id = ANY($3::bigint[])
-         AND status='approved'
-         AND starts_at < $2::timestamptz
-         AND ends_at > $1::timestamptz
-       ORDER BY starts_at, id`, [range.from, range.to, permittedStaffIds]);
 
     const locationHoursResult = await query(`/* SchedulingTimeline:location_working_hours */
       SELECT lwh.location_id, lwh.day_of_week, lwh.starts_local, lwh.ends_local, lwh.active
@@ -377,21 +369,27 @@ function createSchedulingEngine({
       recordSource: row.record_source || null,
     }));
     const scheduleExceptions = (staffExceptionResult.rows || []).map(row => canonical('schedule_exception', 'staff_schedule_exceptions', {
+      id: row.id,
       staffId: Number(row.staff_id),
       locationId: row.location_id ? Number(row.location_id) : null,
       date: row.exception_date,
       exceptionType: row.exception_type,
       startsLocal: row.starts_local,
       endsLocal: row.ends_local,
-    }));
-    const leave = (leaveResult.rows || []).map(row => canonical('approved_leave', 'staff_leave_requests', {
-      id: row.id,
-      staffIds: [Number(row.staff_id)],
-      startsAt: row.starts_at,
-      endsAt: row.ends_at,
       reason: row.reason || null,
-      recordSource: row.record_source || null,
     }));
+    const leave = (staffExceptionResult.rows || []).flatMap(row => {
+      if (row.exception_type !== 'unavailable' || row.starts_local != null || row.ends_local != null) return [];
+      const match = String(row.reason || '').match(APPROVED_LEAVE_REASON);
+      if (!match) return [];
+      return [canonical('approved_leave', 'staff_schedule_exceptions', {
+        id: row.id,
+        staffIds: [Number(row.staff_id)],
+        date: row.exception_date,
+        allDay: true,
+        reason: String(match[1] || '').trim() || null,
+      })];
+    });
     const workingWindows = buildWorkingWindows(staff, staffHoursResult.rows || [], recurringClosureResult.rows || [], locationHoursResult.rows || []);
     const closures = buildClosures(locationExceptionResult.rows || [], holidayResult.rows || []);
     const externalBusy = await projectGoogleBusy(staff, range.from, range.to, checkCalendarAvailability);
@@ -404,7 +402,7 @@ function createSchedulingEngine({
         viewerScope: viewerFilter.scope,
         canonicalSources: [
           'appointments', 'appointment_staff', 'calendar_blocks', 'staff_working_hours',
-          'staff_recurring_day_closures', 'staff_schedule_exceptions', 'staff_leave_requests',
+          'staff_recurring_day_closures', 'staff_schedule_exceptions',
           'location_working_hours', 'location_hours_exceptions', 'public_holidays',
         ],
         nonCanonicalSources: ['google_calendar'],
