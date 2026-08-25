@@ -71,21 +71,28 @@ Every active or recently closed unit must expose:
 
 | Stream | State | Current unit / authority | Current gate | Next owner |
 |---|---|---|---|---|
-| **00 — Control & Reconciliation** | ✓ RECONCILED | Control Cockpit + `SHILOH-OS-PRIMARY-HUMAN-AUTHORITY` governance | Maintain projection as state changes | 20 return, then 00 |
+| **00 — Control & Reconciliation** | ✓ RECONCILED | Control Cockpit + `SHILOH-OS-PRIMARY-HUMAN-AUTHORITY`; accepted CRM name-authority return | Maintain projection as state changes | Meta Support return or new controlled unit |
 | **10 — Booking & Admin UX** | ✓ COMPLETE / FROZEN | Emergency Christel Calendar + guarded provisional new-client booking | None | None unless new defect evidence |
-| **20 — CRM & Identity** | ▶ ACTIVE | `SHILOH-CLIENT-FACING-NAME-AUTHORITY`; Control PR #488 | Bounded implementation and evidence return | 20 |
+| **20 — CRM & Identity** | ✓ COMPLETE / FROZEN | `SHILOH-CLIENT-FACING-NAME-AUTHORITY`; Control PR #488, implementation PR #490, reconciliation PR #492 | Individual current-name corrections remain evidence-gated | None unless 00 authorizes an exact evidence-backed correction |
 | **30 — WhatsApp & Meta Integration** | ⏸ WAITING EXTERNAL | Meta verification convergence; Control PR #483 | Meta Business Support | Meta Support, then 00 |
 | **40 — Production & DevOps** | ○ OBSERVER / IDLE | Evidence observer | None | Called only when bounded runtime/DB/deploy evidence is needed |
 
 Primary principals: **JP = System Owner / Super Admin**; **Christel = Operations Admin**.
 
+Client-facing-name implementation authority: `a88ba2c7962af4dffb53886904d1ab325b09ae14` / production deploy `dep-da6l97dbedkc73frmqj0`.
+
+Client-facing-name terminal reconciliation authority: PR #492 / main `6b6b626e4f9b4b48f130cc811f86f7cced214605` / reconciliation deploy `dep-da6lbi15efls73cun5f0`.
+
+Durable name boundary: canonical `clients.id` remains identity authority; imported/Goldie/historical names remain aliases/provenance; a current client-facing name requires approved evidence; no active authority means neutral client-facing wording.
+
 ## Current priority sequence
 
-1. **20 — CRM & Identity** implements the client-facing-name authority layer.
-2. **Meta Business Support** proceeds in parallel; 30 remains paused until substantive provider evidence arrives.
-3. **10 — Booking & Admin UX** remains frozen unless genuine new defect evidence appears.
-4. **40 — Production & DevOps** remains observer-only unless a bounded evidence request is routed to it.
-5. **00 — Control & Reconciliation** maintains cross-stream authority, gates and final reconciliation.
+1. **Meta Business Support** proceeds externally; 30 remains paused until substantive provider evidence arrives.
+2. There is currently **no active internal implementation unit** after completion of `SHILOH-CLIENT-FACING-NAME-AUTHORITY`.
+3. Any future exact evidence-backed current-name correction must route through **00 → 20**; do not infer or mass-clean names.
+4. **10 — Booking & Admin UX** remains frozen unless genuine new defect evidence appears.
+5. **40 — Production & DevOps** remains observer-only unless a bounded evidence request is routed to it.
+6. **00 — Control & Reconciliation** maintains cross-stream authority, gates and final reconciliation.
 
 ## Update triggers
 
