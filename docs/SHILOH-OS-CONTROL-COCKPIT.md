@@ -12,6 +12,19 @@ The Control Cockpit is the single visual cross-workstream projection of Shiloh O
 
 The Cockpit is **not an independent source of truth**. It projects the current authoritative Project Tracker, Master Status, merged Control decisions and current machine evidence.
 
+## Primary human principals
+
+Shiloh OS is governed around two primary human principals:
+
+- **JP — System Owner / Super Admin** — accountable system/governance authority.
+- **Christel — Operations Admin** — primary day-to-day clinic operations authority.
+
+Durable product principle: **JP governs Shiloh OS; Christel operates Shiloh OS.**
+
+This is a governance model, not a claim that every external/runtime permission has already been aligned. Concrete role, permission, credential, infrastructure or production-access changes remain separately controlled mutations.
+
+Every material new capability must explicitly define the JP governance/admin path, the Christel operational/admin path, any JP-only/security-sensitive actions, and the applicable audit/fail-closed/non-self-escalation rules.
+
 ## Authority hierarchy
 
 When sources differ, apply this precedence:
@@ -58,13 +71,13 @@ Every active or recently closed unit must expose:
 
 | Stream | State | Current unit / authority | Current gate | Next owner |
 |---|---|---|---|---|
-| **00 — Control & Reconciliation** | ✓ RECONCILED | `SHILOH-OS-CONTROL-COCKPIT` governance standard | Maintain projection as state changes | 20 return, then 00 |
+| **00 — Control & Reconciliation** | ✓ RECONCILED | Control Cockpit + `SHILOH-OS-PRIMARY-HUMAN-AUTHORITY` governance | Maintain projection as state changes | 20 return, then 00 |
 | **10 — Booking & Admin UX** | ✓ COMPLETE / FROZEN | Emergency Christel Calendar + guarded provisional new-client booking | None | None unless new defect evidence |
 | **20 — CRM & Identity** | ▶ ACTIVE | `SHILOH-CLIENT-FACING-NAME-AUTHORITY`; Control PR #488 | Bounded implementation and evidence return | 20 |
 | **30 — WhatsApp & Meta Integration** | ⏸ WAITING EXTERNAL | Meta verification convergence; Control PR #483 | Meta Business Support | Meta Support, then 00 |
 | **40 — Production & DevOps** | ○ OBSERVER / IDLE | Evidence observer | None | Called only when bounded runtime/DB/deploy evidence is needed |
 
-Current repository authority at Cockpit authorization start: `d58847775f352a5289592ea07ee2107d2909779a`.
+Primary principals: **JP = System Owner / Super Admin**; **Christel = Operations Admin**.
 
 ## Current priority sequence
 
@@ -86,7 +99,8 @@ Current repository authority at Cockpit authorization start: `d58847775f352a5289
 - production proof changes completion state;
 - an external provider gate changes;
 - Tracker or Master Status is reconciled;
-- a `DO NOT REDO` boundary is established or lifted.
+- a `DO NOT REDO` boundary is established or lifted;
+- primary-human authority or role boundaries change.
 
 Routine machine evidence should be retrieved by 00 through available connectors rather than requiring JP to act as a human clipboard.
 
@@ -95,6 +109,8 @@ Routine machine evidence should be retrieved by 00 through available connectors 
 For substantive cross-workstream requests, 00 should provide a compact Control Snapshot near the top of the response showing:
 
 `Stream | State | Current unit | Gate | Next owner`
+
+Where human authority is material, 00 should also state the applicable principal boundary: JP System Owner / Super Admin, Christel Operations Admin, or a narrower derived role.
 
 Then the normal Shiloh OS terminal fields remain mandatory:
 
@@ -115,3 +131,4 @@ Then the normal Shiloh OS terminal fields remain mandatory:
 - Specialists must not maintain competing cross-stream boards.
 - Tracker and Master Status remain durable authority; the Cockpit is their readable operational projection.
 - Closed capabilities remain frozen and must not be recreated merely because a later unit touches an adjacent surface.
+- The Primary Human Authority standard defines governance roles but does not silently mutate external/runtime permissions.
