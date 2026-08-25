@@ -3,41 +3,47 @@
 Date: 2026-08-25
 Owner: 00 — Control & Reconciliation
 
-## Verified operational truth
+## Terminal provider-convergence state
 
-Shiloh application-side staff authentication, delivery-status observability, and the exact `shiloh_staff_auth_otp_v1` contract remain complete and default-off.
+`SHILOH-META-BUSINESS-VERIFICATION-CONVERGENCE-RECHECK` is COMPLETE — META SUPPORT REQUIRED.
 
-The provider state has partially changed externally: JP's authenticated Meta UI now reports Business verification VERIFIED / APPROVED, but the Meta provider API has not yet converged. The bounded read-only recheck recorded by commit `63bc7feaaf4ae313d4f4bde717fad03f1d5b2aa4` still reports Business verification `rejected`, overall provider health `LIMITED`, and BUSINESS health `LIMITED`, while WABA and APP health remain `AVAILABLE`.
+Control authority remains PR #475. The single final GET-only provider convergence recheck authorized by that PR has been consumed and did not converge. No further recheck is authorized under that unit.
 
-Token validity, SYSTEM_USER token type, `whatsapp_business_management`, `whatsapp_business_messaging`, WABA review `APPROVED`, WABA status `ACTIVE`, WABA ownership `SELF`, and readable template inventory remain proven.
+Authenticated Meta UI reports Business verification VERIFIED / APPROVED.
 
-Template-creation capability is not yet proven restored.
+Fresh provider API evidence still reports Business verification `rejected`, overall provider health `LIMITED`, and BUSINESS health `LIMITED`, while WABA and APP health are `AVAILABLE`.
 
-## Authoritative interpretation
+Token validity, SYSTEM_USER token type, `whatsapp_business_management`, `whatsapp_business_messaging`, readable template inventory, WABA account review `APPROVED`, WABA status `ACTIVE`, and WABA ownership `SELF` remain proven.
 
-This is currently a Meta provider state-convergence / UI-to-API discrepancy gate. It does not justify token-scope, role, system-user, asset-assignment, WABA ownership/sharing, credential, or phone-registration changes.
+The authoritative interpretation is now an external Meta UI/provider-API state discrepancy requiring Meta Business Support. It is not evidence that Shiloh should change token scopes, roles, system users, asset assignments, WABA ownership/sharing, credentials, phone registration, or Calendar authority.
 
-00 authorizes one final bounded GET-only convergence recheck no earlier than 2026-08-25 06:45 Africa/Johannesburg (04:45 UTC).
+## Audit safety / re-lock
 
-The provider gate clears only when both Business verification no longer reports `rejected` and BUSINESS health no longer reports `LIMITED`.
+Audit deploy: `dep-da6hu6942hec73d6ame0`.
 
-If the provider API remains stale after that one recheck, the authoritative next action is a Meta Business Support escalation using the sanitized UI/API discrepancy evidence. Repeated polling or security/access experimentation is not authorized.
+The one-shot diagnostic flag `META_WABA_TEMPLATE_PERMISSION_AUDIT_ON_START` was restored to `false` immediately after evidence capture.
 
-## Security and activation holds
+Re-lock deploy: `dep-da6hug8n74is73f6cm2g`.
 
-- No `shiloh_staff_auth_otp_v1` creation/submission yet.
-- No free-form OTP fallback.
-- No real staff-auth WhatsApp message.
-- No new Christel challenge.
-- No token-scope, role, system-user, asset-assignment, WABA ownership/sharing, credential, or phone-registration mutation.
-- All staff Calendar/auth pilot activation controls remain OFF.
-- No Calendar create/reschedule/cancel/drag-drop or schedule/block/leave writes.
-- No Google Calendar authority weakening/removal/optionality.
+Re-lock startup evidence records Node 24.14.1, successful build, zero npm vulnerabilities, Google Calendar provider health passed, and normal Shiloh startup.
 
-## Subsequent sequence
+No `shiloh_staff_auth_otp_v1` or other template was created, no real staff-auth WhatsApp message or Christel challenge was sent, and no token-scope, human/system-user role, asset-assignment, WABA ownership/sharing, credential, phone-registration, or Calendar-authority mutation occurred.
 
-1. One bounded provider convergence recheck after the authorized propagation window.
-2. If converged, return to 00 for a separate exact one-template creation authorization.
-3. If not converged, escalate the exact discrepancy to Meta Business Support.
-4. After Meta APPROVED and exact Shiloh template readback, 00 authorizes one new bounded Christel read-only pilot.
-5. Successful pilot routes immediately to `SHILOH-CALENDAR-CREATE-BOOKING` under 10 — Booking & Admin UX.
+## Durable holds
+
+- Stop provider convergence polling under PR #475.
+- Do not experiment with permissions or Meta asset/security configuration.
+- `shiloh_staff_auth_otp_v1` creation remains blocked and separately gated until Meta resolves the provider-side state and 00 grants fresh authorization.
+- No free-form OTP workaround.
+- No real staff-auth send or Christel challenge on this track without new authority.
+
+## Relationship to Calendar priority
+
+Meta staff OTP is a parallel provider track and is not a prerequisite for the authorized Christel emergency browser Calendar path. Booking & Admin UX may continue its current browser-Calendar repair/verification work independently.
+
+## Next durable sequence
+
+1. JP submits the exact sanitized UI/API mismatch to Meta Business Support.
+2. 30 — WhatsApp & Meta Integration remains paused pending substantive external provider evidence.
+3. Meta support response or demonstrable provider-state change returns to 00 for reconciliation.
+4. Template creation requires a new, separate Control authorization after provider resolution.
