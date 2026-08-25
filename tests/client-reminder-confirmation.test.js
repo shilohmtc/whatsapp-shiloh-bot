@@ -37,12 +37,11 @@ test('lifecycle reminder claim pauses while the client has an active reschedule 
   assert.match(lifecycle, /aci\.action\s+IN\s*\('reschedule','cancel'\)/);
 });
 
-test('reminder greeting prefers one unambiguous active CRM client name before profile fallback', () => {
-  assert.match(lifecycle, /client_contacts/);
-  assert.match(lifecycle, /c\.display_name/);
-  assert.match(lifecycle, /c\.status='active'/);
-  assert.match(lifecycle, /HAVING COUNT\(DISTINCT c\.id\)=1/);
-  assert.match(lifecycle, /getProfile/);
+test('reminder greeting uses centralized client-facing-name authority and stays neutral without authority', () => {
+  assert.match(lifecycle, /resolveClientFacingNameByPhone/);
+  assert.match(lifecycle, /return resolved\.name \|\| "there"/);
+  assert.doesNotMatch(lifecycle, /c\.display_name/);
+  assert.doesNotMatch(lifecycle, /getProfile/);
 });
 
 test('reminder action template is provider-safe and exposes deterministic change actions', () => {
