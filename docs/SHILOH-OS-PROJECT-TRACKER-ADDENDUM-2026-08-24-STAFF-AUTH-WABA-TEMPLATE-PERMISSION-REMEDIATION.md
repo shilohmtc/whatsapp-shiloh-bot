@@ -15,9 +15,10 @@ PR #469 completed the application repair. PR #470 reconciled the provider gate. 
 
 `SHILOH-META-WABA-TEMPLATE-CREATION-PERMISSION-REMEDIATION`
 
-State: BLOCKED AT PROVEN META BUSINESS VERIFICATION GATE.
+State: CONTROL-ACCEPTED / BLOCKED AT PROVEN META BUSINESS VERIFICATION GATE / JP EXTERNAL PROVIDER ACTION REQUIRED.
 
 Owner: 30 — WhatsApp & Meta Integration.
+External provider actor: JP, under bounded 00 authorization.
 Support: 40 — Production & DevOps only where required.
 Acceptance: 00 — Control & Reconciliation.
 Priority: HIGHEST CURRENT CALENDAR DEPENDENCY.
@@ -26,11 +27,13 @@ Priority: HIGHEST CURRENT CALENDAR DEPENDENCY.
 
 PR #472 added a default-off, GET-only, sanitized provider permission audit and is merged.
 
-Current application authority before this reconciliation: `2c9468363065531f5e56244e17f83bf306ff9a7a`.
+Application authority after PR #472: `2c9468363065531f5e56244e17f83bf306ff9a7a`.
 
 CI passed Node 24.14.1 with full non-mutating regression 1007/1007, zero failures/cancellations/skips and zero npm vulnerabilities.
 
 Baseline deploy `dep-da6ai7cs728c73f606hg` was verified live with the audit OFF. The one bounded read-only audit was then run with `META_WABA_TEMPLATE_PERMISSION_AUDIT_ON_START=true`, after which the flag was immediately restored to `false`. Re-lock deploy `dep-da6fr2710e5c73bit11g` is LIVE and healthy on the same exact application commit.
+
+PR #473 reconciled the provider diagnosis. Authoritative main at the specialist return was `e4e449b3127dc6e14358ce75aff1dd822c19e066`, with exact-main Render deploy `dep-da6fsc0u01pc73d4mqgg` LIVE.
 
 No template creation request, WhatsApp authentication message, genuine challenge, Meta role/scope/asset mutation, ownership change or credential change occurred.
 
@@ -55,27 +58,54 @@ The provider audit could not enumerate business context / assigned-user / system
 
 The decisive proven blocker is the rejected Meta Business verification state and associated LIMITED business health.
 
-## Required next action
+## 00 Control acceptance and authorization
 
-Do not add token scopes, alter system-user or human-user roles, modify asset assignments, change WABA ownership/sharing or retry template creation as a speculative workaround.
+00 accepts the diagnosis as authoritative and closes further Shiloh diagnostic implementation under this unit.
 
-Return to 00 for acceptance and authorization of the minimum external Meta business-verification remediation. JP/Control must review the rejected Business verification in authenticated Meta Business settings, correct/resubmit/appeal the verification using accurate business information and provider-requested evidence, or use Meta Business Support if Meta exposes no direct remediation route.
+Durable Control authorization is recorded in `docs/SHILOH-OS-RECONCILIATION-2026-08-25-META-BUSINESS-VERIFICATION-CONTROL-AUTHORIZATION.md`.
 
-After Meta reports business verification as verified, return to 30 for read-only provider proof before any template creation. Exactly one `shiloh_staff_auth_otp_v1` creation still requires a fresh separate 00 authorization.
+JP is authorized to remediate only the existing rejected Meta Business verification through authenticated Meta Business administration by:
+
+1. inspecting the rejection and Meta-requested remediation requirements;
+2. correcting factual business-verification information only where supported by authoritative business records and required for verification;
+3. submitting/resubmitting the existing Business verification;
+4. uploading only supporting business documents specifically required by Meta;
+5. using the available appeal/review route; or
+6. opening the appropriate Meta Business Support case if Meta exposes no direct correction/resubmission/appeal route.
+
+This authorization does not permit speculative token, role, system-user, asset-assignment, ownership, credential, phone-registration or WABA-sharing changes.
+
+## Current external gate
+
+JP must complete the Meta Business verification remediation manually in the authenticated provider interface.
+
+The external step is complete when either:
+
+- Meta reports Business verification as verified/approved; or
+- no direct remediation path exists and JP has opened the appropriate Meta Business Support case.
+
+After Meta reports the business verified, return to 30 for read-only proof that Business verification is verified and the business-level provider limitation has cleared.
 
 ## Holds
 
 - No template creation retry.
+- No `shiloh_staff_auth_otp_v1` creation/submission.
 - No genuine staff-auth WhatsApp message.
 - No Christel retry/challenge.
 - No free-form OTP fallback.
+- No token-scope escalation.
+- No human/system-user role or asset-assignment change.
+- No WABA ownership/partner-sharing change.
+- No phone-registration/ownership change.
 - All staff Calendar/auth pilot activation controls remain OFF.
 - No Calendar create/reschedule/cancel/drag-drop or Google authority changes.
 
+If Meta requires any of the held security/ownership/access changes to proceed, JP must stop and return the exact requirement to 00 before making it.
+
 ## Priority sequence
 
-1. NOW — 00/JP remediate the rejected Meta Business verification state.
-2. 30 proves read-only that business verification and provider health are restored.
+1. NOW — JP remediates the rejected Meta Business verification under the narrow Control authorization.
+2. 30 proves read-only that Business verification is verified and business-level provider health/limitation is restored.
 3. 00 separately authorizes exactly one `shiloh_staff_auth_otp_v1` creation.
 4. Meta APPROVED + exact Shiloh readback.
 5. 00 authorizes one bounded genuine Christel read-only pilot.

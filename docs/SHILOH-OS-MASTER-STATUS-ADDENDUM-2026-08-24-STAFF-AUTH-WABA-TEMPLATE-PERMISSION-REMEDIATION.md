@@ -11,6 +11,8 @@ PR #472 added a default-off, GET-only, sanitized Meta/WABA permission diagnostic
 
 The diagnostic was deployed on exact application commit `2c9468363065531f5e56244e17f83bf306ff9a7a`. A clean audit-OFF baseline was verified, one bounded read-only audit was executed, and the audit flag was immediately restored OFF. Re-lock deploy `dep-da6fr2710e5c73bit11g` is LIVE and healthy.
 
+PR #473 reconciled the provider diagnosis. Authoritative main at that reconciliation is `e4e449b3127dc6e14358ce75aff1dd822c19e066`; exact-main deploy `dep-da6fsc0u01pc73d4mqgg` is LIVE.
+
 No template creation request, real authentication message, genuine Christel challenge, provider credential change, token-scope change, role/asset-assignment change, WABA ownership/sharing change or phone-registration mutation occurred.
 
 ## Exact Meta provider finding
@@ -31,13 +33,43 @@ The diagnostic could not enumerate the business context, assigned-user tasks or 
 
 ## Authoritative blocker
 
-`SHILOH-META-WABA-TEMPLATE-CREATION-PERMISSION-REMEDIATION` is BLOCKED at a genuine Meta business-verification gate.
+`SHILOH-META-WABA-TEMPLATE-CREATION-PERMISSION-REMEDIATION` is CONTROL-ACCEPTED and BLOCKED at a genuine external Meta Business-verification gate.
 
-The minimum justified next action is to remediate the rejected Meta Business verification state through authenticated Meta Business administration. Broadening token scopes, changing human/system-user roles, altering WABA asset assignments or changing ownership is not justified by the evidence and is not authorized as a workaround.
+The directly proven blocker is the rejected Meta Business verification state and associated LIMITED business-level provider health.
 
-JP/Control must review Meta's rejected Business verification, correct/resubmit/appeal it using accurate business details and provider-requested supporting evidence, or use Meta Business Support if no direct remediation route is available.
+Broadening token scopes, changing human/system-user roles, altering WABA asset assignments, changing ownership/sharing, rotating credentials or changing phone ownership/registration is not justified by the evidence and is not authorized as a workaround.
 
-After Meta reports the business as verified, 30 must perform read-only provider verification that the business-level limitation is cleared. Template creation remains separately gated and requires fresh 00 authorization.
+## 00 bounded provider-remediation authority
+
+00 authorizes JP to remediate only the existing rejected Meta Business verification through authenticated Meta Business administration.
+
+Authorized provider actions are limited to:
+
+1. inspecting the existing rejection/reason and Meta-requested remediation requirements;
+2. correcting factual Business-verification information only where supported by authoritative business records and required by Meta for verification;
+3. submitting or resubmitting the existing Business verification;
+4. uploading only supporting business documents specifically requested by Meta;
+5. using an available appeal/review process for the existing rejected verification; and
+6. opening the appropriate Meta Business Support case if no direct correction/resubmission/appeal route is available.
+
+The durable authorization record is `docs/SHILOH-OS-RECONCILIATION-2026-08-25-META-BUSINESS-VERIFICATION-CONTROL-AUTHORIZATION.md`.
+
+This is a manual external provider-account action by JP. It does not authorize a specialist to broaden provider access or security settings.
+
+If Meta requires a role, system-user, token-scope, asset-assignment, WABA ownership/sharing, phone-registration/ownership, credential or business-ownership mutation to continue, JP must stop and return that exact requirement to 00 before making it.
+
+## Completion evidence for the external provider gate
+
+After remediation, Meta itself must report Business verification as verified/approved before the Shiloh template-creation path can advance.
+
+If no direct remediation path exists, an opened Meta Business Support case is the correct terminal state for JP's current action while provider review remains pending.
+
+Once Meta reports the business verified, 30 must perform read-only provider verification that:
+
+- Business verification is `verified`; and
+- the business-level provider limitation/health restriction has cleared.
+
+Template creation remains separately gated and requires fresh 00 authorization.
 
 ## Security and activation holds
 
@@ -47,16 +79,19 @@ All prior staff-auth/session/Calendar security controls remain authoritative.
 - No free-form OTP fallback.
 - No real staff-auth WhatsApp message.
 - No new Christel challenge.
+- No token-scope escalation.
+- No human/system-user role or task-assignment change.
+- No WABA ownership/partner-sharing change.
+- No phone-registration/ownership change.
 - No broad staff Calendar activation.
 - No Calendar create/reschedule/cancel/drag-drop or schedule/block/leave writes.
 - No Google Calendar authority weakening/removal/optionality.
 
 ## Subsequent activation order
 
-1. 00 accepts this provider diagnosis and authorizes the exact external Meta Business-verification remediation.
-2. JP/Control completes the provider verification correction/resubmission/appeal or Meta Support path.
-3. 30 verifies read-only that business verification is `verified` and the business-level restriction is cleared.
-4. 00 separately authorizes exactly one creation/submission of `shiloh_staff_auth_otp_v1`.
-5. Meta must report APPROVED and exact Shiloh provider readback must pass.
-6. 00 separately authorizes one bounded genuine Christel read-only Calendar pilot challenge.
-7. Successful pilot routes immediately to `SHILOH-CALENDAR-CREATE-BOOKING` under 10 — Booking & Admin UX.
+1. JP completes the bounded Meta Business-verification correction/resubmission/appeal or Meta Support path.
+2. 30 verifies read-only that Business verification is `verified` and the business-level restriction has cleared.
+3. 00 separately authorizes exactly one creation/submission of `shiloh_staff_auth_otp_v1`.
+4. Meta must report APPROVED and exact Shiloh provider readback must pass.
+5. 00 separately authorizes one bounded genuine Christel read-only Calendar pilot challenge.
+6. Successful pilot routes immediately to `SHILOH-CALENDAR-CREATE-BOOKING` under 10 — Booking & Admin UX.
