@@ -53,6 +53,10 @@ jobs:
           SHILOH_STAFF_BROWSER_PILOT_MODE_ENABLED: 'false'
           SHILOH_STAFF_BROWSER_PILOT_ADMIN_IDS: ''
         run: node --test tests/staff-calendar-pilot-gate.test.js
+      - name: Run focused emergency Christel Calendar bootstrap security tests
+        run: node --test tests/emergency-christel-calendar-bootstrap.test.js
+      - name: Run focused emergency Christel Calendar booking acceptance tests
+        run: node --test tests/emergency-christel-calendar-booking-acceptance.test.js
       - name: Run non-mutating regression tests
         env:
           SHILOH_STAFF_BROWSER_AUTH_WHATSAPP_DELIVERY_ENABLED: 'false'
