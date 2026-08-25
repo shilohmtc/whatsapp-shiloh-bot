@@ -207,8 +207,9 @@ function createEmergencyCalendarBootstrapService({
       );
       const inserted = await client.query(
         `INSERT INTO staff_browser_sessions
-           (admin_id, token_hash, csrf_hash, issued_at, expires_at, rotated_from_session_id, client_fingerprint_hash)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
+           (admin_id, token_hash, csrf_hash, issued_at, expires_at, rotated_from_session_id,
+            client_fingerprint_hash, auth_method, reauthenticated_at, recovery_required)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, 'emergency_bootstrap', $4, FALSE)
          RETURNING id`,
         [EMERGENCY_ADMIN_ID, sessionHash, csrfHash, current, expiresAt, previousSessionId, requestFingerprintHash]
       );

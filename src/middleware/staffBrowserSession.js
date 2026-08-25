@@ -117,12 +117,14 @@ function createOptionalCalendarSessionMiddleware({ service, env = process.env } 
   };
 }
 
-function requireStaffSession({ service, env = process.env } = {}) {
+function requireStaffSession({ service, env = process.env, allowRecoveryRequired = false } = {}) {
   if (!service) throw new Error('staff browser session service is required');
   return async function requireStaffBrowserSession(req, res, next) {
     const token = parseCookieValue(req.headers?.cookie, cookieName(env));
     const session = await service.validateSessionToken(token);
-    if (!session.ok) return res.status(401).json({ error: 'Unauthorized', requestId: req.id });
+    if (!session.ok || (session.recoveryRequired === true && !allowRecoveryRequired)) {
+      return res.status(401).json({ error: 'Unauthorized', requestId: req.id });
+    }
     req.staffBrowserSession = session;
     return next();
   };

@@ -62,6 +62,64 @@ function deriveCalendarViewer(admin) {
   return null;
 }
 
+async function issueStaffBrowserSession({
+  client,
+  admin,
+  current,
+  randomBytes = crypto.randomBytes,
+  sessionTtlMs = DEFAULT_SESSION_TTL_MS,
+  requestFingerprintHash = null,
+  authMethod = 'whatsapp_otp',
+  recoveryRequired = false,
+} = {}) {
+  if (!client || typeof client.query !== 'function') throw new Error('staff browser session transaction is required');
+  if (!admin || !Number.isSafeInteger(Number(admin.id)) || Number(admin.id) <= 0) throw new Error('canonical staff Admin is required');
+  const authenticatedAt = current instanceof Date ? current : new Date(current);
+  const sessionToken = randomOpaqueToken(randomBytes, SESSION_TOKEN_BYTES);
+  const csrfToken = randomOpaqueToken(randomBytes, CSRF_TOKEN_BYTES);
+  const sessionHash = sha256(sessionToken);
+  const csrfHash = sha256(csrfToken);
+  const expiresAt = new Date(authenticatedAt.getTime() + sessionTtlMs);
+
+  const previousResult = await client.query(
+    `SELECT id
+       FROM staff_browser_sessions
+      WHERE admin_id = $1
+        AND revoked_at IS NULL
+      ORDER BY issued_at DESC, id DESC
+      LIMIT 1
+      FOR UPDATE`,
+    [admin.id]
+  );
+  const previousSessionId = previousResult.rows[0]?.id || null;
+  await client.query(
+    `UPDATE staff_browser_sessions
+        SET revoked_at = $2,
+            revoke_reason = 'rotated'
+      WHERE admin_id = $1
+        AND revoked_at IS NULL`,
+    [admin.id, authenticatedAt]
+  );
+  const insertedSession = await client.query(
+    `INSERT INTO staff_browser_sessions
+       (admin_id, token_hash, csrf_hash, issued_at, expires_at, rotated_from_session_id,
+        client_fingerprint_hash, auth_method, reauthenticated_at, recovery_required)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $4, $9)
+     RETURNING id`,
+    [admin.id, sessionHash, csrfHash, authenticatedAt, expiresAt, previousSessionId,
+      requestFingerprintHash, authMethod, recoveryRequired]
+  );
+  return {
+    ok: true,
+    sessionToken,
+    csrfToken,
+    sessionId: insertedSession.rows[0].id,
+    expiresAt,
+    viewer: recoveryRequired ? null : deriveCalendarViewer(admin),
+    recoveryRequired,
+  };
+}
+
 function createStaffBrowserSessionService({
   db,
   now = () => new Date(),
@@ -157,12 +215,7 @@ function createStaffBrowserSessionService({
     if (!normalized || !isValidChallengeCode(normalizedCode)) return { ok: false, code: 'STAFF_AUTH_INVALID_CHALLENGE' };
 
     const current = now();
-    const sessionToken = randomOpaqueToken(randomBytes, SESSION_TOKEN_BYTES);
-    const csrfToken = randomOpaqueToken(randomBytes, CSRF_TOKEN_BYTES);
-    const sessionHash = sha256(sessionToken);
-    const csrfHash = sha256(csrfToken);
     const codeHash = sha256(normalizedCode);
-    const expiresAt = new Date(current.getTime() + sessionTtlMs);
 
     const client = typeof db.connect === 'function' ? await db.connect() : db;
     try {
@@ -236,41 +289,17 @@ function createStaffBrowserSessionService({
           WHERE id = $1`,
         [challenge.id, current, nextAttempts]
       );
-      const previousResult = await client.query(
-        `SELECT id
-           FROM staff_browser_sessions
-          WHERE admin_id = $1
-            AND revoked_at IS NULL
-          ORDER BY issued_at DESC, id DESC
-          LIMIT 1
-          FOR UPDATE`,
-        [admin.id]
-      );
-      const previousSessionId = previousResult.rows[0]?.id || null;
-      await client.query(
-        `UPDATE staff_browser_sessions
-            SET revoked_at = $2,
-                revoke_reason = 'rotated'
-          WHERE admin_id = $1
-            AND revoked_at IS NULL`,
-        [admin.id, current]
-      );
-      const insertedSession = await client.query(
-        `INSERT INTO staff_browser_sessions
-           (admin_id, token_hash, csrf_hash, issued_at, expires_at, rotated_from_session_id, client_fingerprint_hash)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
-         RETURNING id`,
-        [admin.id, sessionHash, csrfHash, current, expiresAt, previousSessionId, requestFingerprintHash]
-      );
+      const issued = await issueStaffBrowserSession({
+        client,
+        admin,
+        current,
+        randomBytes,
+        sessionTtlMs,
+        requestFingerprintHash,
+        authMethod: 'whatsapp_otp',
+      });
       await client.query('COMMIT');
-      return {
-        ok: true,
-        sessionToken,
-        csrfToken,
-        sessionId: insertedSession.rows[0].id,
-        expiresAt,
-        viewer: deriveCalendarViewer(admin),
-      };
+      return issued;
     } catch (error) {
       try { await client.query('ROLLBACK'); } catch (_) {}
       throw error;
@@ -283,7 +312,8 @@ function createStaffBrowserSessionService({
     if (!isValidSessionToken(token)) return { ok: false, code: 'STAFF_SESSION_INVALID' };
     const tokenHash = sha256(token);
     const result = await db.query(
-      `SELECT bs.id AS session_id, bs.admin_id, bs.csrf_hash, bs.expires_at, bs.revoked_at,
+      `SELECT bs.id AS session_id, bs.admin_id, bs.csrf_hash, bs.issued_at, bs.expires_at, bs.revoked_at,
+              bs.auth_method, bs.reauthenticated_at, bs.recovery_required,
               a.staff_id, a.role, a.business_role, a.calendar_scope, a.service_scope,
               a.permissions, a.active AS admin_active, s.status AS staff_status
          FROM staff_browser_sessions bs
@@ -295,7 +325,8 @@ function createStaffBrowserSessionService({
     );
     const row = result.rows[0];
     const current = now();
-    if (!row || row.revoked_at || row.admin_active !== true || new Date(row.expires_at).getTime() <= current.getTime()) {
+    const linkedStaffInactive = row?.staff_id != null && row.staff_status !== 'active';
+    if (!row || row.revoked_at || row.admin_active !== true || linkedStaffInactive || new Date(row.expires_at).getTime() <= current.getTime()) {
       return { ok: false, code: 'STAFF_SESSION_INVALID' };
     }
 
@@ -313,7 +344,10 @@ function createStaffBrowserSessionService({
       sessionId: row.session_id,
       adminId: row.admin_id,
       csrfHash: row.csrf_hash,
-      viewer: deriveCalendarViewer(row),
+      authenticatedAt: row.reauthenticated_at || row.issued_at,
+      authMethod: row.auth_method || 'whatsapp_otp',
+      recoveryRequired: row.recovery_required === true,
+      viewer: row.recovery_required === true ? null : deriveCalendarViewer(row),
     };
   }
 
@@ -392,5 +426,6 @@ module.exports = {
   isValidSessionToken,
   isValidCsrfToken,
   deriveCalendarViewer,
+  issueStaffBrowserSession,
   createStaffBrowserSessionService,
 };
