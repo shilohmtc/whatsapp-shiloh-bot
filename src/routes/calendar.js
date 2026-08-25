@@ -5,19 +5,17 @@ const staffCalendarAccessUxRoutes = require('./staffCalendarAccessUx');
 const { createCalendarCreateBookingRouter } = require('./calendarCreateBooking');
 const { createCalendarOperationalRouter } = require('./calendarOperational');
 const { createStaffBrowserSessionService } = require('../services/staffBrowserSession');
-const { createPilotGuardedStaffBrowserSessionService } = require('../services/staffBrowserPilotGate');
 const { createStaffBrowserSessionRouter } = require('./staffBrowserSession');
 const { createStaffBrowserChallengeDispatcher } = require('../services/staffBrowserChallengeDelivery');
 const { createOptionalCalendarSessionMiddleware } = require('../middleware/staffBrowserSession');
 const router = express.Router();
 
-const baseStaffBrowserSessionService = createStaffBrowserSessionService({
+// Operational cutover authority is the authenticated Calendar role/capability model.
+// Do not retain the former pilot allow-list as a second authorization layer: it would
+// prevent JP and authorized read-only staff from exercising their legitimate roles.
+const staffBrowserSessionService = createStaffBrowserSessionService({
   db: pool,
   challengeDispatcher: createStaffBrowserChallengeDispatcher(),
-});
-const staffBrowserSessionService = createPilotGuardedStaffBrowserSessionService({
-  service: baseStaffBrowserSessionService,
-  db: pool,
 });
 
 function esc(v=''){return String(v).replace(/\\/g,'\\\\').replace(/\n/g,'\\n').replace(/,/g,'\\,').replace(/;/g,'\\;');}
