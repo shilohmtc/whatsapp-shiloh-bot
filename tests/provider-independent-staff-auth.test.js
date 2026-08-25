@@ -199,6 +199,14 @@ function memoryDb({
         if (session) session.last_used_at = params[1];
         return { rows: [], rowCount: session ? 1 : 0 };
       }
+      if (q.startsWith('UPDATE staff_browser_sessions SET csrf_hash')) {
+        const session = state.sessions.find((item) => item.id === Number(params[0]) && !item.revoked_at && new Date(item.expires_at).getTime() > new Date(params[2]).getTime());
+        if (session) {
+          session.csrf_hash = params[1];
+          session.last_used_at = params[2];
+        }
+        return { rows: session ? [{ id: session.id }] : [], rowCount: session ? 1 : 0 };
+      }
       if (q.startsWith('UPDATE staff_browser_sessions SET revoked_at = $2') || q.startsWith('UPDATE staff_browser_sessions SET revoked_at = COALESCE')) {
         let count = 0;
         for (const item of state.sessions) if (item.admin_id === Number(params[0]) && !item.revoked_at) { item.revoked_at = params[1]; item.revoke_reason = q.includes('credential_reset') ? 'credential_reset' : q.includes('break_glass') ? 'break_glass' : 'rotated'; count += 1; }
@@ -441,6 +449,10 @@ test('feature control and incomplete configuration fail closed by default', () =
   assert.equal(auth.providerIndependentAuthPolicy({}).enabled, false);
   assert.equal(auth.providerIndependentAuthPolicy({ SHILOH_STAFF_TOTP_AUTH_ENABLED: 'true' }).operational, false);
   assert.equal(auth.providerIndependentAuthPolicy(enabledEnv()).operational, true);
+});
+
+test('generated staff-auth management client is syntactically valid JavaScript', () => {
+  assert.doesNotThrow(() => new Function(providerIndependentStaffAuthClientScript()));
 });
 
 test('TOTP secret is 160-bit and AES-256-GCM storage is versioned, authenticated, and not plaintext', () => {
@@ -918,7 +930,7 @@ test('mismatched exchange route emits no session cookie and the same aligned han
   });
 });
 
-test('real Chromium persists the production cookie across break-glass exchange, session probe, and management handoff', { timeout: 45_000 }, async (t) => {
+test('real Chromium persists the break-glass session and executes management status and enrollment flows', { timeout: 45_000 }, async (t) => {
   const executable = chromeExecutable();
   if (!executable) {
     if (process.env.CI) assert.fail('CI must provide Chrome for the staff-auth browser-cookie proof');
@@ -955,7 +967,10 @@ test('real Chromium persists the production cookie across break-glass exchange, 
     app.use((req, res, next) => {
       const sendJson = res.json.bind(res);
       res.json = (body) => {
-        responseBodies.push({ path: req.originalUrl, body });
+        const containsEnrollmentMaterial = req.originalUrl === '/calendar/staff-auth/totp/enrollment/start';
+        responseBodies.push(containsEnrollmentMaterial
+          ? { path: req.originalUrl, keys: Object.keys(body || {}).sort() }
+          : { path: req.originalUrl, body });
         return sendJson(body);
       };
       next();
@@ -1010,11 +1025,25 @@ test('real Chromium persists the production cookie across break-glass exchange, 
     const target = targets.find((item) => item.type === 'page' && item.webSocketDebuggerUrl);
     cdp = await connectCdp(target.webSocketDebuggerUrl);
     const networkResponses = [];
+    const networkRequests = [];
+    const browserExceptions = [];
     let pausedManage = null;
+    cdp.on('Network.requestWillBeSent', (event) => networkRequests.push({
+      url: event.request.url,
+      method: event.request.method,
+    }));
     cdp.on('Network.responseReceived', (event) => networkResponses.push({
       requestId: event.requestId,
       url: event.response.url,
       status: event.response.status,
+      mimeType: event.response.mimeType,
+      headers: event.response.headers,
+    }));
+    cdp.on('Runtime.exceptionThrown', (event) => browserExceptions.push({
+      text: event.exceptionDetails?.text || '',
+      description: event.exceptionDetails?.exception?.description || '',
+      lineNumber: event.exceptionDetails?.lineNumber,
+      columnNumber: event.exceptionDetails?.columnNumber,
     }));
     cdp.on('Fetch.requestPaused', (event) => {
       if (event.request.url === `${origin}/calendar/staff-auth/totp/manage`) pausedManage = event;
@@ -1086,8 +1115,57 @@ test('real Chromium persists the production cookie across break-glass exchange, 
 
     const exchangeResponse = networkResponses.find((item) => item.url === `${origin}/calendar/staff-auth/totp/break-glass/exchange`);
     const manageResponse = networkResponses.find((item) => item.url === `${origin}/calendar/staff-auth/totp/manage`);
+    const manageScriptResponse = await pollValue(
+      () => networkResponses.find((item) => item.url === `${origin}/calendar/staff-auth/totp/manage.js`),
+      Boolean,
+      { timeoutMs: 15_000 }
+    );
+    const statusResponse = await pollValue(
+      () => networkResponses.find((item) => item.url === `${origin}/calendar/staff-auth/totp/status`),
+      Boolean,
+      { timeoutMs: 15_000 }
+    );
     assert.equal(exchangeResponse?.status, 200);
     assert.equal(manageResponse?.status, 200);
+    assert.equal(manageScriptResponse.status, 200);
+    const manageScriptHeaders = Object.fromEntries(Object.entries(manageScriptResponse.headers || {}).map(([name, value]) => [name.toLowerCase(), value]));
+    const manageHeaders = Object.fromEntries(Object.entries(manageResponse.headers || {}).map(([name, value]) => [name.toLowerCase(), value]));
+    assert.match(String(manageScriptResponse.mimeType), /javascript/i);
+    assert.match(String(manageScriptHeaders['content-type']), /^application\/javascript/i);
+    assert.equal(String(manageScriptHeaders['x-content-type-options']).toLowerCase(), 'nosniff');
+    assert.match(String(manageHeaders['content-security-policy']), /script-src 'self'/);
+    assert.equal(statusResponse.status, 200);
+    const loadedStatus = await pollValue(
+      () => evaluateInBrowser(cdp, "document.querySelector('[data-management-status]').textContent"),
+      (value) => value !== 'Checking your current security state…',
+      { timeoutMs: 15_000 }
+    );
+    assert.equal(loadedStatus, 'Recovery authentication is active. Enroll a replacement authenticator before Calendar access.');
+    assert.deepEqual(browserExceptions, []);
+
+    await evaluateInBrowser(cdp, "document.querySelector('[data-start-enrollment]').click()");
+    const csrfResponse = await pollValue(
+      () => networkResponses.find((item) => item.url === `${origin}/calendar/staff-auth/csrf`),
+      Boolean,
+      { timeoutMs: 15_000 }
+    );
+    const enrollmentResponse = await pollValue(
+      () => networkResponses.find((item) => item.url === `${origin}/calendar/staff-auth/totp/enrollment/start`),
+      Boolean,
+      { timeoutMs: 15_000 }
+    );
+    assert.equal(networkRequests.some((item) => item.url === `${origin}/calendar/staff-auth/csrf` && item.method === 'POST'), true);
+    assert.equal(networkRequests.some((item) => item.url === `${origin}/calendar/staff-auth/totp/enrollment/start` && item.method === 'POST'), true);
+    assert.equal(csrfResponse.status, 200);
+    assert.equal(enrollmentResponse.status, 200);
+    const enrollmentUi = await pollValue(
+      () => evaluateInBrowser(cdp, `(()=>{var box=document.querySelector('[data-enrollment]');var image=document.querySelector('[data-enrollment-qr]');var manual=document.querySelector('[data-manual-key]');var state=document.querySelector('[data-management-status]');return {visible:box&&!box.hidden,qr:String(image&&image.getAttribute('src')||''),manual:String(manual&&manual.textContent||''),status:String(state&&state.textContent||'')};})()`),
+      (value) => value?.visible && value.manual.length > 0 && value.qr.startsWith('data:image/png;base64,'),
+      { timeoutMs: 15_000 }
+    );
+    assert.equal(enrollmentUi.status, 'Scan the QR code, then prove possession with a current six-digit code.');
+    assert.equal(db.audits.some((event) => event.eventType === 'enrollment_initiated'), true);
+    assert.deepEqual(browserExceptions, []);
 
     const replay = await evaluateInBrowser(cdp, `(async()=>{const response=await fetch('/calendar/staff-auth/totp/break-glass/exchange',{method:'POST',credentials:'same-origin',cache:'no-store',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({token:${JSON.stringify(issued.token)}})});return {status:response.status,body:await response.json()};})()`);
     assert.equal(replay.status, 401);
@@ -1101,6 +1179,13 @@ test('real Chromium persists the production cookie across break-glass exchange, 
     assert.equal(JSON.stringify(capturedLogs).includes(issued.token), false);
     assert.equal(JSON.stringify(db.audits).includes(issued.token), false);
     assert.equal(db.audits.some((event) => event.eventType === 'break_glass_consumed'), true);
+    assert.equal(emittedEvidence.includes(enrollmentUi.manual), false);
+    assert.equal(emittedEvidence.includes(enrollmentUi.qr), false);
+    assert.equal(JSON.stringify(capturedLogs).includes(enrollmentUi.manual), false);
+    assert.equal(JSON.stringify(capturedLogs).includes(enrollmentUi.qr), false);
+    assert.equal(JSON.stringify(db.audits).includes(enrollmentUi.manual), false);
+    assert.equal(JSON.stringify(db.audits).includes(enrollmentUi.qr), false);
+    assert.equal(db.recoveryCodes.length, 0);
   } finally {
     logger.child = originalLoggerChild;
     if (sessionCdp) sessionCdp.close();
