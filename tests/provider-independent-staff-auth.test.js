@@ -2,11 +2,16 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { once } = require('node:events');
+const express = require('express');
 const OTPAuth = require('otpauth');
 
 const auth = require('../src/services/providerIndependentStaffAuth');
 const sessions = require('../src/services/staffBrowserSession');
 const sessionMiddleware = require('../src/middleware/staffBrowserSession');
+const requestContext = require('../src/middleware/requestContext');
+const logger = require('../src/lib/logger');
+const { createStaffBrowserSessionRouter } = require('../src/routes/staffBrowserSession');
 const {
   renderProviderIndependentStaffAuthPage,
   providerIndependentStaffAuthClientScript,
@@ -70,7 +75,13 @@ function activeCredential(adminId, secret, env = enabledEnv()) {
   };
 }
 
-function memoryDb({ admins = [canonicalAdmin()], credentials = [], recoveryCodes = [], sessions: seededSessions = [] } = {}) {
+function memoryDb({
+  admins = [canonicalAdmin()],
+  credentials = [],
+  recoveryCodes = [],
+  sessions: seededSessions = [],
+  forceTotpAdvanceMiss = false,
+} = {}) {
   const state = {
     admins: new Map(admins.map((admin) => [Number(admin.id), { ...admin }])),
     credentials: new Map(credentials.map((credential) => [Number(credential.admin_id), { ...credential }])),
@@ -80,7 +91,10 @@ function memoryDb({ admins = [canonicalAdmin()], credentials = [], recoveryCodes
     breakGlass: [],
     audits: [],
     calls: [],
+    totpAdvanceTransitions: 0,
+    recoveryConsumptionTransitions: 0,
   };
+  let transactionTail = Promise.resolve();
 
   const client = {
     async query(sql, params = []) {
@@ -106,9 +120,10 @@ function memoryDb({ admins = [canonicalAdmin()], credentials = [], recoveryCodes
         return { rows: [], rowCount: 1 };
       }
       if (q.startsWith('UPDATE staff_totp_credentials SET last_accepted_timestep')) {
+        if (forceTotpAdvanceMiss) return { rows: [], rowCount: 0 };
         const row = state.credentials.get(Number(params[0]));
         if (row && (row.last_accepted_timestep == null || Number(row.last_accepted_timestep) < Number(params[1]))) {
-          row.last_accepted_timestep = Number(params[1]); row.updated_at = params[2]; return { rows: [], rowCount: 1 };
+          row.last_accepted_timestep = Number(params[1]); row.updated_at = params[2]; state.totpAdvanceTransitions += 1; return { rows: [], rowCount: 1 };
         }
         return { rows: [], rowCount: 0 };
       }
@@ -170,7 +185,7 @@ function memoryDb({ admins = [canonicalAdmin()], credentials = [], recoveryCodes
       if (q.startsWith('UPDATE staff_auth_recovery_codes SET consumed_at')) {
         const row = state.recoveryCodes.find((item) => item.id === Number(params[0]) && !item.consumed_at && !item.revoked_at);
         if (!row) return { rows: [], rowCount: 0 };
-        row.consumed_at = params[1]; return { rows: [{ id: row.id }], rowCount: 1 };
+        row.consumed_at = params[1]; state.recoveryConsumptionTransitions += 1; return { rows: [{ id: row.id }], rowCount: 1 };
       }
       if (q.startsWith('UPDATE staff_totp_credentials SET replacement_required_at')) {
         const row = state.credentials.get(Number(params[0])); row.replacement_required_at = row.replacement_required_at || params[1]; return { rows: [], rowCount: 1 };
@@ -205,7 +220,58 @@ function memoryDb({ admins = [canonicalAdmin()], credentials = [], recoveryCodes
     },
     release() {},
   };
-  return { ...state, query: client.query.bind(client), async connect() { return client; } };
+
+  function transactionClient() {
+    let releaseTransaction = null;
+    return {
+      async query(sql, params = []) {
+        const q = String(sql).replace(/\s+/g, ' ').trim();
+        if (q === 'BEGIN') {
+          const previous = transactionTail;
+          let unlock;
+          transactionTail = new Promise((resolve) => { unlock = resolve; });
+          await previous;
+          releaseTransaction = unlock;
+        }
+        try {
+          return await client.query(sql, params);
+        } finally {
+          if ((q === 'COMMIT' || q === 'ROLLBACK') && releaseTransaction) {
+            const unlock = releaseTransaction;
+            releaseTransaction = null;
+            unlock();
+          }
+        }
+      },
+      release() {
+        if (releaseTransaction) {
+          const unlock = releaseTransaction;
+          releaseTransaction = null;
+          unlock();
+        }
+      },
+    };
+  }
+
+  return {
+    ...state,
+    get totpAdvanceTransitions() { return state.totpAdvanceTransitions; },
+    get recoveryConsumptionTransitions() { return state.recoveryConsumptionTransitions; },
+    query: client.query.bind(client),
+    async connect() { return transactionClient(); },
+  };
+}
+
+async function withHttpServer(app, run) {
+  const server = app.listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  const address = server.address();
+  try {
+    return await run(`http://127.0.0.1:${address.port}`);
+  } finally {
+    if (typeof server.closeAllConnections === 'function') server.closeAllConnections();
+    await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+  }
 }
 
 test('feature control and incomplete configuration fail closed by default', () => {
@@ -291,11 +357,40 @@ test('same-timestep replay is rejected after the first atomic acceptance', async
   assert.equal(db.audits.some((event) => event.eventType === 'totp_replay_rejected'), true);
 });
 
-test('concurrent replay protection is transaction-locked and compare-and-updated', () => {
-  const source = fs.readFileSync(path.join(__dirname, '..', 'src/services/providerIndependentStaffAuth.js'), 'utf8');
-  assert.match(source, /pg_advisory_xact_lock\(hashtextextended\('staff-totp-auth:/);
-  assert.match(source, /SELECT \* FROM staff_totp_credentials WHERE admin_id = \$1 FOR UPDATE/);
-  assert.match(source, /last_accepted_timestep IS NULL OR last_accepted_timestep < \$2/);
+test('concurrent TOTP replay permits one authentication and advances the timestep exactly once', async () => {
+  const env = enabledEnv();
+  const secret = new OTPAuth.Secret({ size: 20 }).base32;
+  const db = memoryDb({ credentials: [activeCredential(1, secret, env)] });
+  const service = auth.createProviderIndependentStaffAuthService({ db, env, now: () => FIXED_NOW, randomBytes: deterministicRandom() });
+  const code = auth.createTotp(secret).generate({ timestamp: FIXED_NOW.getTime() });
+
+  const results = await Promise.all([
+    service.verifyTotp({ identifier: '27725128605', code, requestFingerprintHash: '1'.repeat(64) }),
+    service.verifyTotp({ identifier: '27725128605', code, requestFingerprintHash: '2'.repeat(64) }),
+  ]);
+
+  assert.equal(results.filter((result) => result.ok).length, 1);
+  assert.equal(results.filter((result) => !result.ok && result.code === 'STAFF_AUTH_INVALID').length, 1);
+  assert.equal(db.sessions.length, 1);
+  assert.equal(db.totpAdvanceTransitions, 1);
+  assert.equal(db.credentials.get(1).last_accepted_timestep, Math.floor(FIXED_NOW.getTime() / 1000 / auth.TOTP_PERIOD_SECONDS));
+  assert.equal(db.audits.filter((event) => event.eventType === 'totp_replay_rejected').length, 1);
+});
+
+test('a lost TOTP compare-and-update fails closed, audits replay, and cannot issue a session', async () => {
+  const env = enabledEnv();
+  const secret = new OTPAuth.Secret({ size: 20 }).base32;
+  const db = memoryDb({ credentials: [activeCredential(1, secret, env)], forceTotpAdvanceMiss: true });
+  const service = auth.createProviderIndependentStaffAuthService({ db, env, now: () => FIXED_NOW, randomBytes: deterministicRandom() });
+  const code = auth.createTotp(secret).generate({ timestamp: FIXED_NOW.getTime() });
+
+  const result = await service.verifyTotp({ identifier: '27725128605', code, requestFingerprintHash: '3'.repeat(64) });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.code, 'STAFF_AUTH_INVALID');
+  assert.equal(db.sessions.length, 0);
+  assert.equal(db.totpAdvanceTransitions, 0);
+  assert.equal(db.audits.filter((event) => event.eventType === 'totp_replay_rejected').length, 1);
 });
 
 test('per-account and per-source failures escalate into temporary lockout', async () => {
@@ -308,6 +403,51 @@ test('per-account and per-source failures escalate into temporary lockout', asyn
   assert.equal(result.code, 'STAFF_AUTH_RATE_LIMITED');
   assert.ok(new Date(db.rate.get('c'.repeat(64)).locked_until).getTime() > FIXED_NOW.getTime());
   assert.equal(db.audits.some((event) => event.eventType === 'authentication_rate_limited'), true);
+});
+
+test('per-account lockout is independent of source throttling and expires after the bounded lock', async () => {
+  const env = enabledEnv();
+  const secret = new OTPAuth.Secret({ size: 20 }).base32;
+  const db = memoryDb({ credentials: [activeCredential(1, secret, env)] });
+  let current = new Date(FIXED_NOW);
+  const service = auth.createProviderIndependentStaffAuthService({
+    db,
+    env,
+    now: () => new Date(current),
+    randomBytes: deterministicRandom(),
+  });
+  const fingerprint = (value) => value.toString(16).padStart(64, '0');
+  const invalidCode = () => {
+    const valid = auth.createTotp(secret).generate({ timestamp: current.getTime() });
+    return valid === '000000' ? '000001' : '000000';
+  };
+
+  for (let attempt = 1; attempt <= 6; attempt += 1) {
+    await service.verifyTotp({ identifier: '27725128605', code: invalidCode(), requestFingerprintHash: fingerprint(attempt) });
+  }
+  current = new Date(current.getTime() + 5_001);
+  await service.verifyTotp({ identifier: '27725128605', code: invalidCode(), requestFingerprintHash: fingerprint(7) });
+  current = new Date(current.getTime() + 30_001);
+  await service.verifyTotp({ identifier: '27725128605', code: invalidCode(), requestFingerprintHash: fingerprint(8) });
+
+  const credential = db.credentials.get(1);
+  assert.equal(credential.failed_attempt_count, auth.ACCOUNT_FAILURE_LIMIT);
+  assert.equal(new Date(credential.locked_until).getTime(), current.getTime() + auth.LOCKOUT_MS);
+  for (let attempt = 1; attempt <= 8; attempt += 1) {
+    assert.equal(db.rate.get(fingerprint(attempt)).failed_attempt_count, 1);
+    assert.equal(db.rate.get(fingerprint(attempt)).locked_until, null);
+  }
+
+  const lockedCode = auth.createTotp(secret).generate({ timestamp: current.getTime() });
+  const locked = await service.verifyTotp({ identifier: '27725128605', code: lockedCode, requestFingerprintHash: fingerprint(9) });
+  assert.equal(locked.code, 'STAFF_AUTH_RATE_LIMITED');
+  assert.equal(db.sessions.length, 0);
+
+  current = new Date(current.getTime() + auth.LOCKOUT_MS + 1);
+  const unlockedCode = auth.createTotp(secret).generate({ timestamp: current.getTime() });
+  const unlocked = await service.verifyTotp({ identifier: '27725128605', code: unlockedCode, requestFingerprintHash: fingerprint(10) });
+  assert.equal(unlocked.ok, true);
+  assert.equal(db.sessions.length, 1);
 });
 
 test('source throttling also covers unknown account guesses without revealing identity state', async () => {
@@ -368,6 +508,38 @@ test('recovery code is atomically single-use and its session cannot authorize Ca
   assert.equal(db.recoveryCodes[0].consumed_at != null, true);
   const replay = await service.verifyRecovery({ identifier: '27725128605', recoveryCode: code, requestFingerprintHash: 'e'.repeat(64) });
   assert.equal(replay.ok, false);
+});
+
+test('concurrent recovery-code use consumes once, issues one recovery session, and rejects every replay', async () => {
+  const env = enabledEnv();
+  const secret = new OTPAuth.Secret({ size: 20 }).base32;
+  const code = 'DCBA'.repeat(8);
+  const db = memoryDb({
+    credentials: [activeCredential(1, secret, env)],
+    recoveryCodes: [{ admin_id: 1, generation: 1, code_hash: await auth.hashRecoveryCode(code, () => Buffer.alloc(16, 5)) }],
+  });
+  const service = auth.createProviderIndependentStaffAuthService({ db, env, now: () => FIXED_NOW, randomBytes: deterministicRandom() });
+
+  const results = await Promise.all([
+    service.verifyRecovery({ identifier: '27725128605', recoveryCode: code, requestFingerprintHash: '4'.repeat(64) }),
+    service.verifyRecovery({ identifier: '27725128605', recoveryCode: code, requestFingerprintHash: '5'.repeat(64) }),
+  ]);
+
+  const accepted = results.filter((result) => result.ok);
+  assert.equal(accepted.length, 1);
+  assert.equal(accepted[0].recoveryRequired, true);
+  assert.equal(accepted[0].viewer, null);
+  assert.equal(results.filter((result) => !result.ok && result.code === 'STAFF_AUTH_INVALID').length, 1);
+  assert.equal(db.recoveryConsumptionTransitions, 1);
+  assert.equal(db.recoveryCodes[0].consumed_at != null, true);
+  assert.equal(db.sessions.length, 1);
+  assert.equal(db.sessions[0].recovery_required, true);
+
+  const replay = await service.verifyRecovery({ identifier: '27725128605', recoveryCode: code, requestFingerprintHash: '6'.repeat(64) });
+  assert.equal(replay.ok, false);
+  assert.equal(replay.code, 'STAFF_AUTH_INVALID');
+  assert.equal(db.recoveryConsumptionTransitions, 1);
+  assert.equal(db.sessions.length, 1);
 });
 
 test('recovery-required session is accepted only by credential-management middleware, not Calendar authorization', async () => {
@@ -467,6 +639,93 @@ test('migration and UI contain no plaintext-secret persistence or persistent bro
   assert.doesNotMatch(html + client, /localStorage|sessionStorage|document\.cookie/i);
   assert.match(client, /removeAttribute\('src'\)/);
   assert.match(client, /textContent=''/);
+});
+
+test('secret-shaped inputs are absent from error responses, request logs, and security-audit evidence', async () => {
+  const materials = {
+    totpSecret: 'JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP',
+    liveTotp: '654321',
+    recoveryCode: 'ABCD-EF12-3456-7890-ABCD-EF12-3456-7890',
+    sessionToken: Buffer.alloc(32, 13).toString('base64url'),
+    encryptionKey: Buffer.alloc(32, 42).toString('base64url'),
+  };
+  materials.otpauthUri = `otpauth://totp/Shiloh%20OS:JP?secret=${materials.totpSecret}&issuer=Shiloh%20OS`;
+  const prohibited = Object.values(materials);
+
+  const capturedLogs = [];
+  const captureLogger = {
+    info(...args) { capturedLogs.push({ level: 'info', args }); },
+    error(...args) { capturedLogs.push({ level: 'error', args }); },
+  };
+  const hadOwnChild = Object.prototype.hasOwnProperty.call(logger, 'child');
+  const originalChild = logger.child;
+  logger.child = () => captureLogger;
+  const responseBodies = [];
+  try {
+    const app = express();
+    app.use(express.json());
+    app.use(requestContext);
+    app.use('/calendar/staff-auth', createStaffBrowserSessionRouter({
+      env: { NODE_ENV: 'test' },
+      service: {
+        async validateSessionToken() { return { ok: false }; },
+        validateCsrfToken() { return false; },
+      },
+      emergencyBootstrapService: { async exchange() { return { ok: false }; } },
+      providerIndependentAuthService: {
+        async verifyTotp() { return { ok: false, code: 'STAFF_AUTH_INVALID' }; },
+        async verifyRecovery() { return { ok: false, code: 'STAFF_AUTH_INVALID' }; },
+      },
+    }));
+    app.use((error, req, res, _next) => {
+      req.log.error({ err: error }, 'Unhandled Express error');
+      res.status(500).json({ error: 'Internal server error', requestId: req.id });
+    });
+
+    await withHttpServer(app, async (origin) => {
+      for (const [pathName, payload] of [
+        ['/calendar/staff-auth/totp/verify', { identifier: `${materials.totpSecret} ${materials.otpauthUri}`, code: materials.liveTotp, sessionToken: materials.sessionToken, encryptionKey: materials.encryptionKey }],
+        ['/calendar/staff-auth/totp/recovery/verify', { identifier: `${materials.sessionToken} ${materials.encryptionKey}`, recoveryCode: materials.recoveryCode, totpSecret: materials.totpSecret, otpauthUri: materials.otpauthUri }],
+      ]) {
+        const response = await fetch(`${origin}${pathName}`, {
+          method: 'POST',
+          headers: { Origin: origin, 'Content-Type': 'application/json', Accept: 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        assert.equal(response.status, 401);
+        responseBodies.push(await response.text());
+      }
+    });
+    await new Promise((resolve) => setImmediate(resolve));
+  } finally {
+    if (hadOwnChild) logger.child = originalChild;
+    else delete logger.child;
+  }
+
+  const env = enabledEnv();
+  const secret = new OTPAuth.Secret({ size: 20 }).base32;
+  const subject = canonicalAdmin({ id: 2, normalized_whatsapp: '27820000000', display_name: 'Christel', staff_id: 4, staff_status: 'active', permissions: {} });
+  const db = memoryDb({ admins: [canonicalAdmin(), subject], credentials: [activeCredential(2, secret, env)] });
+  const service = auth.createProviderIndependentStaffAuthService({ db, env, now: () => FIXED_NOW });
+  const reset = await service.privilegedReset({
+    session: { ok: true, adminId: 1, sessionId: 9, authenticatedAt: FIXED_NOW, recoveryRequired: false },
+    subjectAdminId: 2,
+    reason: prohibited.join(' | '),
+    requestFingerprintHash: '8'.repeat(64),
+  });
+  assert.equal(reset.ok, true);
+
+  const evidence = JSON.stringify({ responseBodies, capturedLogs, audits: db.audits });
+  for (const value of prohibited) assert.equal(evidence.includes(value), false, `prohibited material was retained: ${value}`);
+  const resetAudit = db.audits.find((event) => event.eventType === 'credential_reset');
+  assert.equal(resetAudit.operatorAdminId, 1);
+  assert.equal(resetAudit.subjectAdminId, 2);
+  assert.equal(resetAudit.authMethod, 'totp');
+  assert.match(resetAudit.reason, /\[redacted-totp-secret\]/);
+  assert.match(resetAudit.reason, /\[redacted-otp\]/);
+  assert.match(resetAudit.reason, /\[redacted-auth-uri\]/);
+  assert.match(resetAudit.reason, /\[redacted-recovery-code\]/);
+  assert.match(resetAudit.reason, /\[redacted-secret\]/);
 });
 
 test('management mutations retain same-origin, staff-session, and CSRF guards', () => {

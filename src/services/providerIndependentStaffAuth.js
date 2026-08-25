@@ -93,6 +93,7 @@ function cleanReason(value, fallback = 'security_reset') {
     .replace(/\b(?:[A-Fa-f0-9]{4}[- ]?){7}[A-Fa-f0-9]{4}\b/g, '[redacted-recovery-code]')
     .replace(/\b\d{6}\b/g, '[redacted-otp]')
     .replace(/\b[A-Za-z0-9_-]{43}\b/g, '[redacted-secret]')
+    .replace(/\b(?:[A-Z2-7]{4}[- ]?){7}[A-Z2-7]{4}\b/gi, '[redacted-totp-secret]')
     .slice(0, 240);
   return reason || fallback;
 }
@@ -484,12 +485,17 @@ function createProviderIndependentStaffAuthService({
         await client.query('COMMIT');
         return { ok: false, code: failed.rateLimited ? 'STAFF_AUTH_RATE_LIMITED' : 'STAFF_AUTH_INVALID' };
       }
-      await client.query(
+      const acceptedTimestep = await client.query(
         `UPDATE staff_totp_credentials
             SET last_accepted_timestep = $2, updated_at = $3
           WHERE admin_id = $1 AND (last_accepted_timestep IS NULL OR last_accepted_timestep < $2)`,
         [admin.id, timestep, current]
       );
+      if (acceptedTimestep.rowCount !== 1) {
+        const failed = await registerFailure(client, credential, sourceRate, fingerprint, current, 'totp_replay_rejected');
+        await client.query('COMMIT');
+        return { ok: false, code: failed.rateLimited ? 'STAFF_AUTH_RATE_LIMITED' : 'STAFF_AUTH_INVALID' };
+      }
       await clearFailures(client, admin.id, fingerprint, current);
       const issued = await issueStaffBrowserSession({
         client, admin, current, randomBytes, sessionTtlMs, requestFingerprintHash: fingerprint,
