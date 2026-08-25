@@ -376,18 +376,32 @@ async function connectCdp(webSocketUrl) {
       const waiter = pending.get(message.id);
       if (!waiter) return;
       pending.delete(message.id);
+      clearTimeout(waiter.timeout);
       if (message.error) waiter.reject(new Error(`${message.error.code}: ${message.error.message}`));
       else waiter.resolve(message.result || {});
       return;
     }
     for (const listener of listeners.get(message.method) || []) listener(message.params || {});
   });
+  function rejectPending(error) {
+    for (const waiter of pending.values()) {
+      clearTimeout(waiter.timeout);
+      waiter.reject(error);
+    }
+    pending.clear();
+  }
+  socket.addEventListener('close', () => rejectPending(new Error('Chrome DevTools connection closed')));
+  socket.addEventListener('error', () => rejectPending(new Error('Chrome DevTools connection failed')));
   return {
-    send(method, params = {}) {
+    send(method, params = {}, timeoutMs = 15_000) {
       const id = nextId;
       nextId += 1;
       return new Promise((resolve, reject) => {
-        pending.set(id, { resolve, reject });
+        const timeout = setTimeout(() => {
+          pending.delete(id);
+          reject(new Error(`Chrome DevTools command timed out: ${method}`));
+        }, timeoutMs);
+        pending.set(id, { resolve, reject, timeout });
         socket.send(JSON.stringify({ id, method, params }));
       });
     },
@@ -931,6 +945,7 @@ test('real Chromium persists the production cookie across break-glass exchange, 
   let server;
   let chrome;
   let cdp;
+  let sessionCdp;
 
   try {
     logger.child = () => captureLogger;
@@ -1012,7 +1027,8 @@ test('real Chromium persists the production cookie across break-glass exchange, 
     await cdp.send('Page.navigate', { url: `${origin}/calendar/staff#staff-recovery=${encodeURIComponent(issued.token)}` });
     await pollValue(() => pausedManage, Boolean, { timeoutMs: 15_000 });
 
-    const urlBeforeManage = await evaluateInBrowser(cdp, 'location.href');
+    const navigationHistory = await cdp.send('Page.getNavigationHistory');
+    const urlBeforeManage = navigationHistory.entries[navigationHistory.currentIndex]?.url;
     assert.equal(urlBeforeManage, `${origin}/calendar/staff`);
     assert.equal(urlBeforeManage.includes(issued.token), false);
 
@@ -1025,11 +1041,36 @@ test('real Chromium persists the production cookie across break-glass exchange, 
     assert.equal(sessionCookie.sameSite, 'Strict');
     assert.notEqual(sessionCookie.value, issued.token);
 
-    const sessionProbe = await evaluateInBrowser(cdp, `(async()=>{const response=await fetch('/calendar/staff-auth/session',{credentials:'same-origin',cache:'no-store',headers:{Accept:'application/json'}});return {status:response.status,body:await response.json()};})()`);
-    assert.equal(sessionProbe.status, 200);
-    assert.equal(sessionProbe.body.authenticated, true);
-    assert.equal(sessionProbe.body.recoveryRequired, true);
-    assert.equal(sessionProbe.body.viewer, null);
+    const sessionTarget = await cdp.send('Target.createTarget', { url: 'about:blank' });
+    const sessionTargets = await pollValue(
+      async () => {
+        const response = await fetch(`http://127.0.0.1:${debuggingPort}/json/list`);
+        if (!response.ok) throw new Error(`Chrome session target discovery failed: ${response.status}`);
+        return response.json();
+      },
+      (items) => Array.isArray(items) && items.some((item) => item.id === sessionTarget.targetId && item.webSocketDebuggerUrl),
+      { timeoutMs: 15_000 }
+    );
+    const sessionTargetInfo = sessionTargets.find((item) => item.id === sessionTarget.targetId && item.webSocketDebuggerUrl);
+    sessionCdp = await connectCdp(sessionTargetInfo.webSocketDebuggerUrl);
+    let sessionResponse = null;
+    sessionCdp.on('Network.responseReceived', (event) => {
+      if (event.response.url === `${origin}/calendar/staff-auth/session`) sessionResponse = event.response;
+    });
+    await sessionCdp.send('Page.enable');
+    await sessionCdp.send('Runtime.enable');
+    await sessionCdp.send('Network.enable');
+    await sessionCdp.send('Page.navigate', { url: `${origin}/calendar/staff-auth/session` });
+    await pollValue(() => sessionResponse, Boolean, { timeoutMs: 15_000 });
+    await pollValue(() => evaluateInBrowser(sessionCdp, 'document.readyState'), (value) => value === 'complete', { timeoutMs: 15_000 });
+    const sessionBody = await evaluateInBrowser(sessionCdp, 'JSON.parse(document.body.innerText)');
+    assert.equal(sessionResponse.status, 200);
+    assert.equal(sessionBody.authenticated, true);
+    assert.equal(sessionBody.recoveryRequired, true);
+    assert.equal(sessionBody.viewer, null);
+    await cdp.send('Target.closeTarget', { targetId: sessionTarget.targetId });
+    sessionCdp.close();
+    sessionCdp = null;
 
     await cdp.send('Fetch.continueRequest', { requestId: pausedManage.requestId });
     await cdp.send('Fetch.disable');
@@ -1062,6 +1103,7 @@ test('real Chromium persists the production cookie across break-glass exchange, 
     assert.equal(db.audits.some((event) => event.eventType === 'break_glass_consumed'), true);
   } finally {
     logger.child = originalLoggerChild;
+    if (sessionCdp) sessionCdp.close();
     if (cdp) cdp.close();
     if (chrome && chrome.exitCode == null) {
       chrome.kill('SIGTERM');
