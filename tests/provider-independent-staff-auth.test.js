@@ -1,13 +1,18 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const https = require('node:https');
+const net = require('node:net');
+const os = require('node:os');
 const path = require('node:path');
+const { spawn, spawnSync } = require('node:child_process');
 const { once } = require('node:events');
 const express = require('express');
 const OTPAuth = require('otpauth');
 
 const auth = require('../src/services/providerIndependentStaffAuth');
 const sessions = require('../src/services/staffBrowserSession');
+const browserPilot = require('../src/services/staffBrowserPilotGate');
 const sessionMiddleware = require('../src/middleware/staffBrowserSession');
 const requestContext = require('../src/middleware/requestContext');
 const logger = require('../src/lib/logger');
@@ -16,6 +21,10 @@ const {
   renderProviderIndependentStaffAuthPage,
   providerIndependentStaffAuthClientScript,
 } = require('../src/presentation/providerIndependentStaffAuthUx');
+const {
+  renderStaffCalendarAccessPage,
+  staffCalendarAccessClientScript,
+} = require('../src/presentation/staffCalendarAccessUx');
 
 const FIXED_NOW = new Date('2026-08-25T12:00:00.000Z');
 
@@ -35,6 +44,15 @@ function enabledEnv(ids = '1,2') {
     SHILOH_STAFF_TOTP_ACTIVE_KEY_VERSION: 'v1',
     SHILOH_STAFF_TOTP_ENCRYPTION_KEYS_JSON: JSON.stringify({ v1: Buffer.alloc(32, 42).toString('base64url') }),
     SHILOH_CALENDAR_PUBLIC_ORIGIN: 'https://calendar.shiloh.example',
+  };
+}
+
+function browserPilotEnv(browserPilotIds = '1', totpPilotIds = '1') {
+  return {
+    ...enabledEnv(totpPilotIds),
+    NODE_ENV: 'production',
+    SHILOH_STAFF_BROWSER_PILOT_MODE_ENABLED: 'true',
+    SHILOH_STAFF_BROWSER_PILOT_ADMIN_IDS: browserPilotIds,
   };
 }
 
@@ -93,6 +111,7 @@ function memoryDb({
     calls: [],
     totpAdvanceTransitions: 0,
     recoveryConsumptionTransitions: 0,
+    breakGlassConsumptionTransitions: 0,
   };
   let transactionTail = Promise.resolve();
 
@@ -108,6 +127,10 @@ function memoryDb({
         return { rows: rows.map((item) => ({ ...item })), rowCount: rows.length };
       }
       if (q.startsWith('SELECT * FROM staff_totp_credentials')) {
+        const row = state.credentials.get(Number(params[0]));
+        return { rows: row ? [{ ...row }] : [], rowCount: row ? 1 : 0 };
+      }
+      if (q.startsWith('SELECT status, confirmed_at, replacement_required_at')) {
         const row = state.credentials.get(Number(params[0]));
         return { rows: row ? [{ ...row }] : [], rowCount: row ? 1 : 0 };
       }
@@ -146,6 +169,35 @@ function memoryDb({
       if (q.startsWith('SELECT id FROM staff_browser_sessions')) {
         const active = state.sessions.filter((item) => item.admin_id === Number(params[0]) && !item.revoked_at).at(-1);
         return { rows: active ? [{ id: active.id }] : [], rowCount: active ? 1 : 0 };
+      }
+      if (q.includes('FROM staff_browser_sessions bs')) {
+        const session = state.sessions.find((item) => item.token_hash === params[0]);
+        const admin = session ? state.admins.get(Number(session.admin_id)) : null;
+        if (!session || !admin) return { rows: [], rowCount: 0 };
+        return { rows: [{
+          session_id: session.id,
+          admin_id: session.admin_id,
+          csrf_hash: session.csrf_hash,
+          issued_at: session.issued_at,
+          expires_at: session.expires_at,
+          revoked_at: session.revoked_at,
+          auth_method: session.auth_method,
+          reauthenticated_at: session.issued_at,
+          recovery_required: session.recovery_required,
+          staff_id: admin.staff_id,
+          role: admin.role,
+          business_role: admin.business_role,
+          calendar_scope: admin.calendar_scope,
+          service_scope: admin.service_scope,
+          permissions: admin.permissions,
+          admin_active: admin.admin_active,
+          staff_status: admin.staff_status,
+        }], rowCount: 1 };
+      }
+      if (q.startsWith('UPDATE staff_browser_sessions SET last_used_at')) {
+        const session = state.sessions.find((item) => item.id === Number(params[0]) && !item.revoked_at);
+        if (session) session.last_used_at = params[1];
+        return { rows: [], rowCount: session ? 1 : 0 };
       }
       if (q.startsWith('UPDATE staff_browser_sessions SET revoked_at = $2') || q.startsWith('UPDATE staff_browser_sessions SET revoked_at = COALESCE')) {
         let count = 0;
@@ -206,7 +258,7 @@ function memoryDb({
       if (q.startsWith('UPDATE staff_auth_break_glass_bootstraps SET consumed_at')) {
         const row = state.breakGlass.find((item) => item.id === Number(params[0]) && !item.consumed_at && !item.revoked_at);
         if (!row) return { rows: [], rowCount: 0 };
-        row.consumed_at = params[1]; return { rows: [], rowCount: 1 };
+        row.consumed_at = params[1]; state.breakGlassConsumptionTransitions += 1; return { rows: [], rowCount: 1 };
       }
       if (q.startsWith('UPDATE staff_totp_credentials SET recovery_generation')) {
         const row = state.credentials.get(Number(params[0])); row.recovery_generation = Number(params[1]); return { rows: [], rowCount: 1 };
@@ -257,6 +309,7 @@ function memoryDb({
     ...state,
     get totpAdvanceTransitions() { return state.totpAdvanceTransitions; },
     get recoveryConsumptionTransitions() { return state.recoveryConsumptionTransitions; },
+    get breakGlassConsumptionTransitions() { return state.breakGlassConsumptionTransitions; },
     query: client.query.bind(client),
     async connect() { return transactionClient(); },
   };
@@ -272,6 +325,116 @@ async function withHttpServer(app, run) {
     if (typeof server.closeAllConnections === 'function') server.closeAllConnections();
     await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
   }
+}
+
+function chromeExecutable() {
+  const candidates = [
+    process.env.CHROME_BIN,
+    '/usr/bin/google-chrome',
+    '/usr/bin/google-chrome-stable',
+    '/usr/bin/chromium',
+    '/usr/bin/chromium-browser',
+  ];
+  return candidates.find((candidate) => candidate && fs.existsSync(candidate)) || null;
+}
+
+async function reserveTcpPort() {
+  const server = net.createServer();
+  server.listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  const port = server.address().port;
+  await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+  return port;
+}
+
+async function pollValue(load, predicate, { timeoutMs = 15_000, intervalMs = 50 } = {}) {
+  const deadline = Date.now() + timeoutMs;
+  let lastError;
+  while (Date.now() < deadline) {
+    try {
+      const value = await load();
+      if (predicate(value)) return value;
+    } catch (error) { lastError = error; }
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+  if (lastError) throw lastError;
+  throw new Error('Timed out waiting for browser state');
+}
+
+async function connectCdp(webSocketUrl) {
+  const socket = new WebSocket(webSocketUrl);
+  await new Promise((resolve, reject) => {
+    socket.addEventListener('open', resolve, { once: true });
+    socket.addEventListener('error', reject, { once: true });
+  });
+  let nextId = 1;
+  const pending = new Map();
+  const listeners = new Map();
+  socket.addEventListener('message', (event) => {
+    const message = JSON.parse(String(event.data));
+    if (message.id) {
+      const waiter = pending.get(message.id);
+      if (!waiter) return;
+      pending.delete(message.id);
+      clearTimeout(waiter.timeout);
+      if (message.error) waiter.reject(new Error(`${message.error.code}: ${message.error.message}`));
+      else waiter.resolve(message.result || {});
+      return;
+    }
+    for (const listener of listeners.get(message.method) || []) listener(message.params || {});
+  });
+  function rejectPending(error) {
+    for (const waiter of pending.values()) {
+      clearTimeout(waiter.timeout);
+      waiter.reject(error);
+    }
+    pending.clear();
+  }
+  socket.addEventListener('close', () => rejectPending(new Error('Chrome DevTools connection closed')));
+  socket.addEventListener('error', () => rejectPending(new Error('Chrome DevTools connection failed')));
+  return {
+    send(method, params = {}, timeoutMs = 15_000) {
+      const id = nextId;
+      nextId += 1;
+      return new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          pending.delete(id);
+          reject(new Error(`Chrome DevTools command timed out: ${method}`));
+        }, timeoutMs);
+        pending.set(id, { resolve, reject, timeout });
+        socket.send(JSON.stringify({ id, method, params }));
+      });
+    },
+    on(method, listener) {
+      if (!listeners.has(method)) listeners.set(method, []);
+      listeners.get(method).push(listener);
+    },
+    close() { socket.close(); },
+  };
+}
+
+async function evaluateInBrowser(cdp, expression) {
+  const result = await cdp.send('Runtime.evaluate', {
+    expression,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  if (result.exceptionDetails) throw new Error(result.exceptionDetails.text || 'Browser evaluation failed');
+  return result.result?.value;
+}
+
+function createTestCertificate(directory) {
+  const keyPath = path.join(directory, 'key.pem');
+  const certPath = path.join(directory, 'cert.pem');
+  const generated = spawnSync('openssl', [
+    'req', '-x509', '-newkey', 'rsa:2048', '-nodes',
+    '-keyout', keyPath, '-out', certPath,
+    '-subj', '/CN=127.0.0.1',
+    '-addext', 'subjectAltName=IP:127.0.0.1,DNS:localhost',
+    '-days', '1',
+  ], { encoding: 'utf8' });
+  if (generated.status !== 0) throw new Error(`OpenSSL test certificate failed: ${generated.stderr}`);
+  return { key: fs.readFileSync(keyPath), cert: fs.readFileSync(certPath) };
 }
 
 test('feature control and incomplete configuration fail closed by default', () => {
@@ -307,6 +470,27 @@ test('valid RFC 6238 SHA-1 six-digit TOTP creates the existing opaque session wi
   assert.equal(db.sessions[1].rotated_from_session_id, 1);
   assert.equal(db.sessions[1].auth_method, 'totp');
   assert.equal(db.audits.some((event) => event.eventType === 'totp_verification_succeeded'), true);
+});
+
+test('browser-pilot mismatch rejects a valid TOTP before timestep consumption or session issuance', async () => {
+  const env = browserPilotEnv('2', '1');
+  const secret = new OTPAuth.Secret({ size: 20 }).base32;
+  const db = memoryDb({ credentials: [activeCredential(1, secret, env)] });
+  const service = auth.createProviderIndependentStaffAuthService({ db, env, now: () => FIXED_NOW, randomBytes: deterministicRandom() });
+  const code = auth.createTotp(secret).generate({ timestamp: FIXED_NOW.getTime() });
+
+  const result = await service.verifyTotp({ identifier: '27725128605', code, requestFingerprintHash: 'a'.repeat(64) });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.code, 'STAFF_AUTH_INVALID');
+  assert.equal(db.credentials.get(1).last_accepted_timestep, null);
+  assert.equal(db.totpAdvanceTransitions, 0);
+  assert.equal(db.sessions.length, 0);
+  const mismatch = db.audits.find((event) => event.eventType === 'pilot_authority_mismatch');
+  assert.equal(mismatch.subjectAdminId, 1);
+  assert.equal(mismatch.authMethod, 'totp');
+  assert.equal(mismatch.reason, 'staff_browser_pilot_rejected');
+  assert.deepEqual(mismatch.metadata, { oneTimeCredentialConsumed: false, staffBrowserSessionIssued: false });
 });
 
 test('invalid and malformed TOTP fail closed without session creation', async () => {
@@ -510,6 +694,29 @@ test('recovery code is atomically single-use and its session cannot authorize Ca
   assert.equal(replay.ok, false);
 });
 
+test('browser-pilot mismatch rejects a valid recovery code before consumption or session issuance', async () => {
+  const env = browserPilotEnv('2', '1');
+  const secret = new OTPAuth.Secret({ size: 20 }).base32;
+  const code = 'FACE'.repeat(8);
+  const db = memoryDb({
+    credentials: [activeCredential(1, secret, env)],
+    recoveryCodes: [{ admin_id: 1, generation: 1, code_hash: await auth.hashRecoveryCode(code, () => Buffer.alloc(16, 6)) }],
+  });
+  const service = auth.createProviderIndependentStaffAuthService({ db, env, now: () => FIXED_NOW, randomBytes: deterministicRandom() });
+
+  const result = await service.verifyRecovery({ identifier: '27725128605', recoveryCode: code, requestFingerprintHash: 'b'.repeat(64) });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.code, 'STAFF_AUTH_INVALID');
+  assert.equal(db.recoveryCodes[0].consumed_at, null);
+  assert.equal(db.recoveryConsumptionTransitions, 0);
+  assert.equal(db.sessions.length, 0);
+  const mismatch = db.audits.find((event) => event.eventType === 'pilot_authority_mismatch');
+  assert.equal(mismatch.subjectAdminId, 1);
+  assert.equal(mismatch.authMethod, 'recovery_code');
+  assert.deepEqual(mismatch.metadata, { oneTimeCredentialConsumed: false, staffBrowserSessionIssued: false });
+});
+
 test('concurrent recovery-code use consumes once, issues one recovery session, and rejects every replay', async () => {
   const env = enabledEnv();
   const secret = new OTPAuth.Secret({ size: 20 }).base32;
@@ -610,6 +817,305 @@ test('controlled break-glass handoff is hash-at-rest, short-lived, single-use, a
   assert.equal(exchanged.recoveryRequired, true);
   assert.equal(exchanged.viewer, null);
   assert.equal((await service.exchangeBreakGlass({ token: issued.token })).ok, false);
+});
+
+test('browser-pilot mismatch prohibits break-glass issuance without creating a handoff', async () => {
+  const env = browserPilotEnv('2', '1');
+  const secret = new OTPAuth.Secret({ size: 20 }).base32;
+  const db = memoryDb({ credentials: [activeCredential(1, secret, env)] });
+  const service = auth.createProviderIndependentStaffAuthService({ db, env, now: () => FIXED_NOW, randomBytes: deterministicRandom() });
+
+  const result = await service.issueBreakGlass({ adminId: 1, operatorReference: '40:JP', controlReference: '00:WS-10-recovery' });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.code, 'STAFF_BREAK_GLASS_FORBIDDEN');
+  assert.equal(db.breakGlass.length, 0);
+  assert.equal(db.sessions.length, 0);
+  assert.equal(db.audits.some((event) => event.eventType === 'pilot_authority_mismatch' && event.authMethod === 'break_glass'), true);
+});
+
+test('mismatched break-glass exchange preserves the same handoff for aligned retry within TTL', async () => {
+  const env = browserPilotEnv('1', '1');
+  const secret = new OTPAuth.Secret({ size: 20 }).base32;
+  const db = memoryDb({ credentials: [activeCredential(1, secret, env)] });
+  const service = auth.createProviderIndependentStaffAuthService({ db, env, now: () => FIXED_NOW, randomBytes: deterministicRandom() });
+  const issued = await service.issueBreakGlass({ adminId: 1, operatorReference: '40:JP', controlReference: '00:WS-10-recovery' });
+  assert.equal(issued.ok, true);
+
+  env.SHILOH_STAFF_BROWSER_PILOT_ADMIN_IDS = '2';
+  const mismatched = await service.exchangeBreakGlass({ token: issued.token, requestFingerprintHash: 'c'.repeat(64) });
+  assert.equal(mismatched.ok, false);
+  assert.equal(mismatched.code, 'STAFF_BREAK_GLASS_INVALID');
+  assert.equal(db.breakGlass[0].consumed_at, null);
+  assert.equal(db.breakGlass[0].revoked_at, null);
+  assert.equal(db.breakGlassConsumptionTransitions, 0);
+  assert.equal(db.sessions.length, 0);
+  const mismatch = db.audits.find((event) => event.eventType === 'pilot_authority_mismatch');
+  assert.equal(mismatch.subjectAdminId, 1);
+  assert.equal(mismatch.authMethod, 'break_glass');
+  assert.deepEqual(mismatch.metadata, { oneTimeCredentialConsumed: false, staffBrowserSessionIssued: false });
+
+  env.SHILOH_STAFF_BROWSER_PILOT_ADMIN_IDS = '1';
+  const aligned = await service.exchangeBreakGlass({ token: issued.token, requestFingerprintHash: 'c'.repeat(64) });
+  assert.equal(aligned.ok, true);
+  assert.equal(aligned.recoveryRequired, true);
+  assert.equal(aligned.viewer, null);
+  assert.equal(db.breakGlassConsumptionTransitions, 1);
+  assert.equal(db.sessions.length, 1);
+  assert.equal((await service.exchangeBreakGlass({ token: issued.token })).ok, false);
+});
+
+test('mismatched exchange route emits no session cookie and the same aligned handoff later succeeds', async () => {
+  const env = browserPilotEnv('1', '1');
+  const secret = new OTPAuth.Secret({ size: 20 }).base32;
+  const db = memoryDb({ credentials: [activeCredential(1, secret, env)] });
+  const providerService = auth.createProviderIndependentStaffAuthService({ db, env, now: () => FIXED_NOW, randomBytes: deterministicRandom() });
+  const issued = await providerService.issueBreakGlass({ adminId: 1, operatorReference: '40:JP', controlReference: '00:WS-10-route-proof' });
+  assert.equal(issued.ok, true);
+  env.SHILOH_STAFF_BROWSER_PILOT_ADMIN_IDS = '2';
+
+  const app = express();
+  app.use(express.json());
+  app.use('/calendar/staff-auth', createStaffBrowserSessionRouter({
+    env,
+    service: { async validateSessionToken() { return { ok: false }; }, validateCsrfToken() { return false; } },
+    emergencyBootstrapService: { async exchange() { return { ok: false }; } },
+    providerIndependentAuthService: providerService,
+  }));
+
+  await withHttpServer(app, async (origin) => {
+    const exchange = () => fetch(`${origin}/calendar/staff-auth/totp/break-glass/exchange`, {
+      method: 'POST',
+      headers: {
+        Origin: 'https://calendar.shiloh.example',
+        'X-Forwarded-Proto': 'https',
+        'X-Forwarded-Host': 'calendar.shiloh.example',
+        'Sec-Fetch-Site': 'same-origin',
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({ token: issued.token }),
+    });
+
+    const mismatched = await exchange();
+    assert.equal(mismatched.status, 401);
+    assert.equal(mismatched.headers.get('set-cookie'), null);
+    assert.deepEqual(await mismatched.json(), { error: 'Invalid or expired controlled recovery handoff' });
+    assert.equal(db.breakGlass[0].consumed_at, null);
+    assert.equal(db.sessions.length, 0);
+
+    env.SHILOH_STAFF_BROWSER_PILOT_ADMIN_IDS = '1';
+    const aligned = await exchange();
+    assert.equal(aligned.status, 200);
+    assert.match(aligned.headers.get('set-cookie'), /^__Host-shiloh_staff_session=[A-Za-z0-9_-]{43};/);
+    assert.equal((await aligned.json()).recoveryRequired, true);
+    assert.equal(db.breakGlassConsumptionTransitions, 1);
+    assert.equal(db.sessions.length, 1);
+
+    const replay = await exchange();
+    assert.equal(replay.status, 401);
+    assert.equal(replay.headers.get('set-cookie'), null);
+  });
+});
+
+test('real Chromium persists the production cookie across break-glass exchange, session probe, and management handoff', { timeout: 45_000 }, async (t) => {
+  const executable = chromeExecutable();
+  if (!executable) {
+    if (process.env.CI) assert.fail('CI must provide Chrome for the staff-auth browser-cookie proof');
+    t.skip('Chrome is not installed in this local workspace; CI executes this mandatory browser proof');
+    return;
+  }
+
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'shiloh-staff-auth-browser-'));
+  const env = browserPilotEnv('1', '1');
+  const current = new Date();
+  const secret = new OTPAuth.Secret({ size: 20 }).base32;
+  const db = memoryDb({ credentials: [activeCredential(1, secret, env)] });
+  const providerService = auth.createProviderIndependentStaffAuthService({ db, env, now: () => current });
+  const baseSessionService = sessions.createStaffBrowserSessionService({ db, now: () => current });
+  const guardedSessionService = browserPilot.createPilotGuardedStaffBrowserSessionService({
+    service: baseSessionService,
+    db,
+    env,
+  });
+  const responseBodies = [];
+  const capturedLogs = [];
+  const captureLogger = { info(...args) { capturedLogs.push(args); }, error(...args) { capturedLogs.push(args); } };
+  const originalLoggerChild = logger.child;
+  let server;
+  let chrome;
+  let cdp;
+  let sessionCdp;
+
+  try {
+    logger.child = () => captureLogger;
+    const app = express();
+    app.use(express.json());
+    app.use(requestContext);
+    app.use((req, res, next) => {
+      const sendJson = res.json.bind(res);
+      res.json = (body) => {
+        responseBodies.push({ path: req.originalUrl, body });
+        return sendJson(body);
+      };
+      next();
+    });
+    app.get('/calendar/staff', (_req, res) => res.type('html').send(renderStaffCalendarAccessPage({ providerIndependentAuthEnabled: true })));
+    app.get('/calendar/staff/client.js', (_req, res) => res.type('application/javascript').send(staffCalendarAccessClientScript()));
+    app.use('/calendar/staff-auth', createStaffBrowserSessionRouter({
+      env,
+      service: guardedSessionService,
+      emergencyBootstrapService: { async exchange() { return { ok: false }; } },
+      providerIndependentAuthService: providerService,
+    }));
+
+    const certificate = createTestCertificate(directory);
+    server = https.createServer(certificate, app);
+    server.listen(0, '127.0.0.1');
+    await once(server, 'listening');
+    const origin = `https://127.0.0.1:${server.address().port}`;
+    env.SHILOH_CALENDAR_PUBLIC_ORIGIN = origin;
+    const issued = await providerService.issueBreakGlass({
+      adminId: 1,
+      operatorReference: '40:browser-proof',
+      controlReference: '00:WS-10-browser-proof',
+    });
+    assert.equal(issued.ok, true);
+
+    const debuggingPort = await reserveTcpPort();
+    chrome = spawn(executable, [
+      '--headless=new',
+      '--no-sandbox',
+      '--disable-gpu',
+      '--disable-dev-shm-usage',
+      '--ignore-certificate-errors',
+      '--allow-insecure-localhost',
+      '--remote-allow-origins=*',
+      `--remote-debugging-port=${debuggingPort}`,
+      `--user-data-dir=${path.join(directory, 'profile')}`,
+      'about:blank',
+    ], { stdio: ['ignore', 'ignore', 'pipe'] });
+    let browserErrors = '';
+    chrome.stderr.on('data', (chunk) => { browserErrors += String(chunk).slice(-4_000); });
+
+    const targets = await pollValue(
+      async () => {
+        const response = await fetch(`http://127.0.0.1:${debuggingPort}/json/list`);
+        if (!response.ok) throw new Error(`Chrome target discovery failed: ${response.status}`);
+        return response.json();
+      },
+      (items) => Array.isArray(items) && items.some((item) => item.type === 'page' && item.webSocketDebuggerUrl),
+      { timeoutMs: 15_000 }
+    ).catch((error) => { throw new Error(`${error.message}\n${browserErrors}`); });
+    const target = targets.find((item) => item.type === 'page' && item.webSocketDebuggerUrl);
+    cdp = await connectCdp(target.webSocketDebuggerUrl);
+    const networkResponses = [];
+    let pausedManage = null;
+    cdp.on('Network.responseReceived', (event) => networkResponses.push({
+      requestId: event.requestId,
+      url: event.response.url,
+      status: event.response.status,
+    }));
+    cdp.on('Fetch.requestPaused', (event) => {
+      if (event.request.url === `${origin}/calendar/staff-auth/totp/manage`) pausedManage = event;
+    });
+    await cdp.send('Page.enable');
+    await cdp.send('Runtime.enable');
+    await cdp.send('Network.enable');
+    await cdp.send('Fetch.enable', { patterns: [{ urlPattern: `${origin}/calendar/staff-auth/totp/manage`, requestStage: 'Request' }] });
+
+    await cdp.send('Page.navigate', { url: `${origin}/calendar/staff#staff-recovery=${encodeURIComponent(issued.token)}` });
+    await pollValue(() => pausedManage, Boolean, { timeoutMs: 15_000 });
+
+    const navigationHistory = await cdp.send('Page.getNavigationHistory');
+    const urlBeforeManage = navigationHistory.entries[navigationHistory.currentIndex]?.url;
+    assert.equal(urlBeforeManage, `${origin}/calendar/staff`);
+    assert.equal(urlBeforeManage.includes(issued.token), false);
+
+    const cookieResult = await cdp.send('Network.getAllCookies');
+    const sessionCookie = cookieResult.cookies.find((cookie) => cookie.name === '__Host-shiloh_staff_session');
+    assert.ok(sessionCookie, 'Chromium must accept the production __Host- session cookie');
+    assert.equal(sessionCookie.secure, true);
+    assert.equal(sessionCookie.httpOnly, true);
+    assert.equal(sessionCookie.path, '/');
+    assert.equal(sessionCookie.sameSite, 'Strict');
+    assert.notEqual(sessionCookie.value, issued.token);
+
+    const sessionTarget = await cdp.send('Target.createTarget', { url: 'about:blank' });
+    const sessionTargets = await pollValue(
+      async () => {
+        const response = await fetch(`http://127.0.0.1:${debuggingPort}/json/list`);
+        if (!response.ok) throw new Error(`Chrome session target discovery failed: ${response.status}`);
+        return response.json();
+      },
+      (items) => Array.isArray(items) && items.some((item) => item.id === sessionTarget.targetId && item.webSocketDebuggerUrl),
+      { timeoutMs: 15_000 }
+    );
+    const sessionTargetInfo = sessionTargets.find((item) => item.id === sessionTarget.targetId && item.webSocketDebuggerUrl);
+    sessionCdp = await connectCdp(sessionTargetInfo.webSocketDebuggerUrl);
+    let sessionResponse = null;
+    sessionCdp.on('Network.responseReceived', (event) => {
+      if (event.response.url === `${origin}/calendar/staff-auth/session`) sessionResponse = event.response;
+    });
+    await sessionCdp.send('Page.enable');
+    await sessionCdp.send('Runtime.enable');
+    await sessionCdp.send('Network.enable');
+    await sessionCdp.send('Page.navigate', { url: `${origin}/calendar/staff-auth/session` });
+    await pollValue(() => sessionResponse, Boolean, { timeoutMs: 15_000 });
+    await pollValue(() => evaluateInBrowser(sessionCdp, 'document.readyState'), (value) => value === 'complete', { timeoutMs: 15_000 });
+    const sessionBody = await evaluateInBrowser(sessionCdp, 'JSON.parse(document.body.innerText)');
+    assert.equal(sessionResponse.status, 200);
+    assert.equal(sessionBody.authenticated, true);
+    assert.equal(sessionBody.recoveryRequired, true);
+    assert.equal(sessionBody.viewer, null);
+    await cdp.send('Target.closeTarget', { targetId: sessionTarget.targetId });
+    sessionCdp.close();
+    sessionCdp = null;
+
+    await cdp.send('Fetch.continueRequest', { requestId: pausedManage.requestId });
+    await cdp.send('Fetch.disable');
+    const finalUrl = await pollValue(
+      () => evaluateInBrowser(cdp, 'location.href'),
+      (value) => value === `${origin}/calendar/staff-auth/totp/manage`,
+      { timeoutMs: 15_000 }
+    );
+    assert.equal(finalUrl.includes('#'), false);
+    assert.equal(finalUrl.includes(issued.token), false);
+    const documentHtml = await evaluateInBrowser(cdp, 'document.documentElement.outerHTML');
+    assert.equal(documentHtml.includes(issued.token), false);
+
+    const exchangeResponse = networkResponses.find((item) => item.url === `${origin}/calendar/staff-auth/totp/break-glass/exchange`);
+    const manageResponse = networkResponses.find((item) => item.url === `${origin}/calendar/staff-auth/totp/manage`);
+    assert.equal(exchangeResponse?.status, 200);
+    assert.equal(manageResponse?.status, 200);
+
+    const replay = await evaluateInBrowser(cdp, `(async()=>{const response=await fetch('/calendar/staff-auth/totp/break-glass/exchange',{method:'POST',credentials:'same-origin',cache:'no-store',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({token:${JSON.stringify(issued.token)}})});return {status:response.status,body:await response.json()};})()`);
+    assert.equal(replay.status, 401);
+    assert.equal(db.breakGlassConsumptionTransitions, 1);
+    assert.equal(db.sessions.length, 1);
+
+    await new Promise((resolve) => setImmediate(resolve));
+    const emittedEvidence = JSON.stringify({ responseBodies, capturedLogs, audits: db.audits });
+    assert.equal(emittedEvidence.includes(issued.token), false);
+    assert.equal(JSON.stringify(responseBodies).includes(issued.token), false);
+    assert.equal(JSON.stringify(capturedLogs).includes(issued.token), false);
+    assert.equal(JSON.stringify(db.audits).includes(issued.token), false);
+    assert.equal(db.audits.some((event) => event.eventType === 'break_glass_consumed'), true);
+  } finally {
+    logger.child = originalLoggerChild;
+    if (sessionCdp) sessionCdp.close();
+    if (cdp) cdp.close();
+    if (chrome && chrome.exitCode == null) {
+      chrome.kill('SIGTERM');
+      await Promise.race([once(chrome, 'exit'), new Promise((resolve) => setTimeout(resolve, 2_000))]);
+      if (chrome.exitCode == null) chrome.kill('SIGKILL');
+    }
+    if (server) {
+      if (typeof server.closeAllConnections === 'function') server.closeAllConnections();
+      await new Promise((resolve) => server.close(() => resolve()));
+    }
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
 });
 
 test('feature-off rollback is safe, auditable, and leaves WhatsApp challenge routes intact', () => {
