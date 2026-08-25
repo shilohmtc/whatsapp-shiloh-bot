@@ -5,6 +5,7 @@ const {
 } = require('../presentation/staffCalendarAccessUx');
 const { emergencyCalendarBootstrapClientScript } = require('../presentation/emergencyCalendarBootstrapUx');
 const { isEmergencyCalendarBookingEnabled } = require('../services/emergencyCalendarBootstrap');
+const { providerIndependentAuthPolicy } = require('../services/providerIndependentStaffAuth');
 
 function isStaffCalendarAccessUxEnabled(env = process.env) {
   const calendarEnabled = String(env.SHILOH_CALENDAR_READONLY_UX_ENABLED || '').trim().toLowerCase() === 'true';
@@ -45,6 +46,7 @@ function createStaffCalendarAccessPageHandler({
     let html = renderPage({
       reason: normalizeReason(req.query?.reason),
       clientScriptPath: `${basePath}/client.js`,
+      providerIndependentAuthEnabled: providerIndependentAuthPolicy(env).operational,
     });
     if (isEmergencyCalendarBookingEnabled(env)) {
       html = decorateEmergencyAccessPage(html, `${basePath}/emergency-bootstrap.js`);
