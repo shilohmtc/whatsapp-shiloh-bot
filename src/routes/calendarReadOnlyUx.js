@@ -2,6 +2,7 @@ const express = require('express');
 const calendarReadOnlyUx = require('../services/calendarReadOnlyUx');
 const { renderCalendarPage, renderUnavailablePage } = require('../presentation/calendarReadOnlyUx');
 const { isCalendarBridgeEnabled } = require('../middleware/staffBrowserSession');
+const { EMERGENCY_ADMIN_ID, isEmergencyCalendarBookingEnabled } = require('../services/emergencyCalendarBootstrap');
 
 const CALENDAR_VIEWER_CONTEXT = Symbol.for('shiloh.calendar.server.viewer');
 
@@ -40,6 +41,14 @@ function safeUnavailableMessage(error) {
   return 'SchedulingTimeline is unavailable, so Shiloh Calendar is failing closed.';
 }
 
+function decorateEmergencyBookingEntry(html, dateKey, bookingPath = '/calendar/book') {
+  const href = `${bookingPath}?date=${encodeURIComponent(String(dateKey || ''))}`;
+  return String(html)
+    .replace('<div class="access-controls">', `<div class="access-controls"><a class="nav-button" href="${href}">Create booking</a>`)
+    .replace('Africa/Johannesburg • Read-only • Google-only busy is non-canonical', 'Africa/Johannesburg • Read-only timeline • Google-only busy is non-canonical')
+    .replace('Read-only operational view. Booking, reschedule, cancellation, block, leave and schedule mutations are not available here.', 'Timeline remains read-only. New booking creation uses the separately guarded canonical workflow. Reschedule, cancellation, drag/drop, reassignment, block, leave and schedule mutations are not available here.');
+}
+
 function createCalendarReadOnlyHandler({
   env = process.env,
   buildModel = calendarReadOnlyUx.buildModel,
@@ -47,6 +56,7 @@ function createCalendarReadOnlyHandler({
   renderUnavailable = renderUnavailablePage,
   resolveViewer = resolveServerViewer,
   staffAccessPath = '/calendar/staff',
+  bookingPath = '/calendar/book',
 } = {}) {
   return async function calendarReadOnlyHandler(req, res, next) {
     try {
@@ -71,11 +81,15 @@ function createCalendarReadOnlyHandler({
         staff: req.query?.staff,
         viewer,
       });
-      return res.status(200).type('html').send(renderPage(model, {
+      let html = renderPage(model, {
         basePath: req.baseUrl || '/calendar/read-only',
         staffAccessPath,
         staffAccessScriptPath: `${staffAccessPath}/client.js`,
-      }));
+      });
+      if (isEmergencyCalendarBookingEnabled(env) && Number(req.staffBrowserSession?.adminId) === EMERGENCY_ADMIN_ID) {
+        html = decorateEmergencyBookingEntry(html, model.dateKey, bookingPath);
+      }
+      return res.status(200).type('html').send(html);
     } catch (error) {
       if (res.headersSent) return next(error);
       const status = statusForError(error);
@@ -100,3 +114,4 @@ module.exports.createCalendarReadOnlyRouter = createCalendarReadOnlyRouter;
 module.exports.isFeatureEnabled = isFeatureEnabled;
 module.exports.resolveServerViewer = resolveServerViewer;
 module.exports.setCalendarSecurityHeaders = setCalendarSecurityHeaders;
+module.exports.decorateEmergencyBookingEntry = decorateEmergencyBookingEntry;
