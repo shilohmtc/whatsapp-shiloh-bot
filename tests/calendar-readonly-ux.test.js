@@ -75,6 +75,25 @@ function fakeResponse() {
 }
 
 const viewer = { staffId: 99, calendarScope: 'all_business' };
+const readOnlyOperator = {
+  adminId: 99,
+  displayName: 'Authorized Staff',
+  calendarRole: 'read_only',
+  source: 'shiloh_calendar',
+  capabilities: { read: true, create: false, edit: false, reschedule: false, cancel: false, syncRetry: false },
+};
+
+function authenticatedRequest(overrides = {}) {
+  const req = { query: {}, baseUrl: '/calendar/read-only', staffBrowserSession: { adminId: 99 }, ...overrides };
+  req[CALENDAR_VIEWER_CONTEXT] = { authenticated: true, source: 'server_staff_session', viewer };
+  return req;
+}
+
+async function resolveReadOperator(adminId, capability) {
+  assert.equal(Number(adminId), 99);
+  assert.equal(capability, 'calendar:read');
+  return readOnlyOperator;
+}
 
 async function buildDayModel() {
   const service = createCalendarReadOnlyUxService({ listTimeline: async () => timelineFixture() });
@@ -120,20 +139,35 @@ test('production Calendar UX is default-off and fails closed before SchedulingTi
   assert.equal(buildCalls, 0, 'no SchedulingTimeline read is permitted without server-authenticated viewer context');
 });
 
+test('authenticated Calendar read capability is revalidated server-side before SchedulingTimeline access', async () => {
+  let buildCalls = 0;
+  const denied = new Error('revoked');
+  denied.code = 'CALENDAR_ACCESS_FORBIDDEN';
+  const handler = createCalendarReadOnlyHandler({
+    env: { SHILOH_CALENDAR_READONLY_UX_ENABLED: 'true' },
+    resolveOperator: async () => { throw denied; },
+    buildModel: async () => { buildCalls += 1; return {}; },
+  });
+  const res = fakeResponse();
+  await handler(authenticatedRequest(), res, () => {});
+  assert.equal(res.statusCode, 403);
+  assert.equal(buildCalls, 0, 'revoked calendar:read must block SchedulingTimeline before data is read');
+  assert.match(res.body, /does not permit Calendar access/i);
+});
+
 test('ADMIN_API_KEY and browser credential storage cannot leak into Calendar HTML', async () => {
   const model = await buildDayModel();
   const secret = 'never-embed-this-admin-key';
   const handler = createCalendarReadOnlyHandler({
     env: { SHILOH_CALENDAR_READONLY_UX_ENABLED: 'true', ADMIN_API_KEY: secret },
+    resolveOperator: resolveReadOperator,
     buildModel: async ({ viewer: resolvedViewer }) => {
       assert.deepEqual(resolvedViewer, viewer);
       return model;
     },
   });
-  const req = { query: {}, baseUrl: '/calendar/read-only' };
-  req[CALENDAR_VIEWER_CONTEXT] = { authenticated: true, source: 'server_staff_session', viewer };
   const res = fakeResponse();
-  await handler(req, res, () => {});
+  await handler(authenticatedRequest(), res, () => {});
   assert.equal(res.statusCode, 200);
   assert.doesNotMatch(res.body, new RegExp(secret));
   assert.doesNotMatch(res.body, /ADMIN_API_KEY|x-admin-key|localStorage|sessionStorage|document\.cookie/i);
@@ -164,12 +198,11 @@ test('provider or SchedulingTimeline failure renders explicit unavailable state 
   error.code = 'SCHEDULING_GOOGLE_CALENDAR_REQUIRED';
   const handler = createCalendarReadOnlyHandler({
     env: { SHILOH_CALENDAR_READONLY_UX_ENABLED: 'true' },
+    resolveOperator: resolveReadOperator,
     buildModel: async () => { throw error; },
   });
-  const req = { query: {}, baseUrl: '/calendar/read-only' };
-  req[CALENDAR_VIEWER_CONTEXT] = { authenticated: true, source: 'server_staff_session', viewer };
   const res = fakeResponse();
-  await handler(req, res, () => {});
+  await handler(authenticatedRequest(), res, () => {});
   assert.equal(res.statusCode, 503);
   assert.match(res.body, /Calendar unavailable/);
   assert.match(res.body, /failing closed/i);
@@ -198,6 +231,7 @@ test('navigation is GET-only/read-only and existing appointment-share ICS route 
   const routeSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'routes', 'calendarReadOnlyUx.js'), 'utf8');
   assert.doesNotMatch(routeSource, /router\.(?:post|put|patch|delete)\s*\(/i);
   assert.doesNotMatch(routeSource, /x-admin-key|ADMIN_API_KEY|localStorage|sessionStorage/i);
+  assert.match(routeSource, /resolveOperator\(adminId, 'calendar:read'/);
 
   const icsSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'routes', 'calendar.js'), 'utf8');
   assert.match(icsSource, /router\.get\('\/:token\.ics'/);
