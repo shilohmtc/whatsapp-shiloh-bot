@@ -1,5 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 
 const { createSchedulingEngine } = require('../src/services/schedulingEngine');
 const { eventAppliesToStaff } = require('../src/services/googleBookingCalendar');
@@ -7,15 +9,14 @@ const { eventAppliesToStaff } = require('../src/services/googleBookingCalendar')
 function fixture(overrides = {}) {
   return {
     staff: [
-      { id: 1, display_name: 'Julia', scheduling_type: 'regular', calendar_scope: 'all_business', business_role: 'director' },
-      { id: 2, display_name: 'Christel', scheduling_type: 'regular', calendar_scope: 'all_business', business_role: 'operations_manager' },
+      { id: 1, display_name: 'Julia', scheduling_type: 'regular', calendar_scope: 'all_business', business_role: 'employee_practitioner' },
+      { id: 2, display_name: 'Christel', scheduling_type: 'regular', calendar_scope: 'all_business', business_role: 'owner' },
     ],
     appointments: [],
     calendar_blocks: [],
     staff_working_hours: [],
     staff_recurring_day_closures: [],
     staff_schedule_exceptions: [],
-    staff_leave_requests: [],
     location_working_hours: [
       { location_id: 10, day_of_week: 1, starts_local: '08:00:00', ends_local: '17:00:00', active: true },
     ],
@@ -42,6 +43,10 @@ function fakeQuery(data, seen = []) {
 
 function googleClear() {
   return { enabled: true, available: true, conflicts: [] };
+}
+
+function repoFile(relativePath) {
+  return fs.readFileSync(path.join(__dirname, '..', relativePath), 'utf8');
 }
 
 const range = {
@@ -86,12 +91,14 @@ test('single-practitioner projection preserves canonical appointment_staff assig
       title: 'Blocked time',
       record_source: 'admin_whatsapp',
     }],
-    staff_schedule_exceptions: [{
-      staff_id: 1, exception_date: '2026-08-24', location_id: 10, exception_type: 'available', starts_local: '08:00:00', ends_local: '12:00:00',
-    }],
-    staff_leave_requests: [{
-      id: 700, staff_id: 2, starts_at: '2026-08-24T10:00:00.000Z', ends_at: '2026-08-24T12:00:00.000Z', reason: 'Leave', status: 'approved', record_source: 'admin',
-    }],
+    staff_schedule_exceptions: [
+      {
+        id: 699, staff_id: 1, exception_date: '2026-08-24', location_id: 10, exception_type: 'available', starts_local: '08:00:00', ends_local: '12:00:00', reason: 'Special opening',
+      },
+      {
+        id: 700, staff_id: 1, exception_date: '2026-08-24', location_id: 10, exception_type: 'unavailable', starts_local: null, ends_local: null, reason: 'Approved leave request #700: Annual leave',
+      },
+    ],
   });
   const engine = createSchedulingEngine({
     query: fakeQuery(data, seen),
@@ -108,12 +115,18 @@ test('single-practitioner projection preserves canonical appointment_staff assig
   assert.equal(timeline.blocks.length, 1);
   assert.equal(timeline.blocks[0].source, 'calendar_blocks');
   assert.equal(timeline.blocks[0].allDay, false, 'canonical Shiloh blocks are explicit starts_at/ends_at intervals, not stored all-day records');
-  assert.equal(timeline.leave.length, 1, 'fixture rows are projected only after the real SQL permission filter; fake data remains deterministic');
+  assert.equal(timeline.leave.length, 1);
+  assert.equal(timeline.leave[0].source, 'staff_schedule_exceptions');
+  assert.equal(timeline.leave[0].date, '2026-08-24');
+  assert.equal(timeline.leave[0].allDay, true);
+  assert.equal(timeline.leave[0].reason, 'Annual leave');
   assert.ok(timeline.scheduleExceptions.every(item => item.canonical === true));
+  assert.equal(timeline.meta.canonicalSources.includes('staff_leave_requests'), false);
   assert.ok(seen.length >= 9);
   for (const { sql } of seen) {
     assert.match(sql, /^\/\* SchedulingTimeline:[a-z_]+ \*\/[\s\S]*\bSELECT\b/i);
     assert.doesNotMatch(sql, /\b(?:INSERT|UPDATE|DELETE|ALTER|DROP|TRUNCATE)\b/i);
+    assert.doesNotMatch(sql, /\bstaff_leave_requests\b/i);
   }
 
   const appointmentSql = seen.find(item => /SchedulingTimeline:appointments/.test(item.sql))?.sql || '';
@@ -125,6 +138,9 @@ test('single-practitioner projection preserves canonical appointment_staff assig
   const blockSql = seen.find(item => /SchedulingTimeline:calendar_blocks/.test(item.sql))?.sql || '';
   assert.match(blockSql, /\bSELECT\s+id,\s*staff_id,\s*starts_at,\s*ends_at,\s*block_type,\s*title,\s*source\s+AS\s+record_source\b/i);
   assert.doesNotMatch(blockSql, /\ball_day\b/i);
+
+  const staffExceptionSql = seen.find(item => /SchedulingTimeline:staff_schedule_exceptions/.test(item.sql))?.sql || '';
+  assert.match(staffExceptionSql, /\bSELECT\s+id,\s*staff_id,\s*exception_date,\s*location_id,\s*exception_type,\s*starts_local,\s*ends_local,\s*reason\b/i);
 });
 
 test('multi-practitioner projection preserves PR #380 appointment_staff fan-out without collapsing the appointment', async () => {
@@ -250,4 +266,46 @@ test('Google Calendar cannot silently become optional for the read-only projecti
     engine.listTimeline({ ...range, viewer: allBusinessViewer, staffIds: [1] }),
     error => error.code === 'SCHEDULING_GOOGLE_CALENDAR_REQUIRED',
   );
+});
+
+test('SchedulingTimeline SQL projection is locked to canonical production schema migrations', () => {
+  const source = repoFile('src/services/schedulingEngine.js');
+  const migration003 = repoFile('migrations/003_crm_catalogue_resources.sql');
+  const migration005 = repoFile('migrations/005_crm_appointments_calendar.sql');
+  const migration015 = repoFile('migrations/015_staff_working_hours.sql');
+  const migration020 = repoFile('migrations/020_staff_scheduling_classification.sql');
+  const migration021 = repoFile('migrations/021_location_working_hours.sql');
+  const migration022 = repoFile('migrations/022_sa_public_holidays_and_location_exceptions.sql');
+  const migration024 = repoFile('migrations/024_regular_staff_clinic_hours_inheritance.sql');
+  const migration033 = repoFile('migrations/033_staff_business_roles_calendar_scope.sql');
+
+  assert.doesNotMatch(source, /SchedulingTimeline:staff_leave_requests/i);
+  assert.doesNotMatch(source, /\bFROM\s+staff_leave_requests\b/i);
+
+  assert.match(migration003, /CREATE TABLE IF NOT EXISTS staff[\s\S]*\bdisplay_name\s+TEXT/i);
+  assert.match(migration020, /ADD COLUMN IF NOT EXISTS scheduling_type\s+TEXT/i);
+  assert.match(migration033, /ADD COLUMN IF NOT EXISTS business_role\s+TEXT[\s\S]*ADD COLUMN IF NOT EXISTS calendar_scope\s+TEXT/i);
+  assert.match(source, /SchedulingTimeline:staff[\s\S]*SELECT id, display_name, scheduling_type, calendar_scope, business_role[\s\S]*FROM staff/i);
+
+  assert.match(migration005, /CREATE TABLE IF NOT EXISTS appointments[\s\S]*\bstarts_at\s+TIMESTAMPTZ[\s\S]*\bends_at\s+TIMESTAMPTZ[\s\S]*\bstatus\s+TEXT[\s\S]*\bsource\s+TEXT/i);
+  assert.match(migration005, /CREATE TABLE IF NOT EXISTS appointment_staff[\s\S]*\bstaff_id\s+BIGINT[\s\S]*\bstaff_name_snapshot\s+TEXT/i);
+  assert.match(migration005, /CREATE TABLE IF NOT EXISTS calendar_blocks[\s\S]*\bstaff_id\s+BIGINT[\s\S]*\bblock_type\s+TEXT[\s\S]*\bstarts_at\s+TIMESTAMPTZ[\s\S]*\bends_at\s+TIMESTAMPTZ[\s\S]*\btitle\s+TEXT[\s\S]*\bsource\s+TEXT/i);
+
+  assert.match(migration015, /CREATE TABLE IF NOT EXISTS staff_working_hours[\s\S]*\bstaff_id\s+BIGINT[\s\S]*\blocation_id\s+BIGINT[\s\S]*\bday_of_week\s+SMALLINT[\s\S]*\bstarts_local\s+TIME[\s\S]*\bends_local\s+TIME[\s\S]*\bactive\s+BOOLEAN/i);
+  assert.match(source, /SchedulingTimeline:staff_working_hours[\s\S]*SELECT staff_id, day_of_week, starts_local, ends_local, location_id, active[\s\S]*FROM staff_working_hours/i);
+
+  assert.match(migration024, /CREATE TABLE IF NOT EXISTS staff_recurring_day_closures[\s\S]*\bstaff_id\s+BIGINT[\s\S]*\blocation_id\s+BIGINT[\s\S]*\bday_of_week\s+SMALLINT/i);
+  assert.match(source, /SchedulingTimeline:staff_recurring_day_closures[\s\S]*SELECT staff_id, day_of_week, location_id[\s\S]*FROM staff_recurring_day_closures/i);
+
+  assert.match(migration015, /CREATE TABLE IF NOT EXISTS staff_schedule_exceptions[\s\S]*\bid\s+BIGINT[\s\S]*\bstaff_id\s+BIGINT[\s\S]*\blocation_id\s+BIGINT[\s\S]*\bexception_date\s+DATE[\s\S]*\bexception_type\s+TEXT[\s\S]*\bstarts_local\s+TIME[\s\S]*\bends_local\s+TIME[\s\S]*\breason\s+TEXT/i);
+  assert.match(source, /SchedulingTimeline:staff_schedule_exceptions[\s\S]*SELECT id, staff_id, exception_date, location_id, exception_type, starts_local, ends_local, reason[\s\S]*FROM staff_schedule_exceptions/i);
+
+  assert.match(migration021, /CREATE TABLE IF NOT EXISTS location_working_hours[\s\S]*\blocation_id\s+BIGINT[\s\S]*\bday_of_week\s+INTEGER[\s\S]*\bstarts_local\s+TIME[\s\S]*\bends_local\s+TIME[\s\S]*\bactive\s+BOOLEAN/i);
+  assert.match(source, /SchedulingTimeline:location_working_hours[\s\S]*SELECT lwh\.location_id, lwh\.day_of_week, lwh\.starts_local, lwh\.ends_local, lwh\.active[\s\S]*FROM location_working_hours lwh/i);
+
+  assert.match(migration022, /CREATE TABLE IF NOT EXISTS location_hours_exceptions[\s\S]*\blocation_id\s+BIGINT[\s\S]*\bexception_date\s+DATE[\s\S]*\bexception_type\s+TEXT[\s\S]*\bstarts_local\s+TIME[\s\S]*\bends_local\s+TIME[\s\S]*\breason\s+TEXT/i);
+  assert.match(source, /SchedulingTimeline:location_hours_exceptions[\s\S]*SELECT lhe\.location_id, lhe\.exception_date, lhe\.exception_type, lhe\.starts_local, lhe\.ends_local, lhe\.reason[\s\S]*FROM location_hours_exceptions lhe/i);
+
+  assert.match(migration022, /CREATE TABLE IF NOT EXISTS public_holidays[\s\S]*\bholiday_date\s+DATE[\s\S]*\bname\s+TEXT[\s\S]*\bcountry_code\s+TEXT[\s\S]*\bobserved\s+BOOLEAN/i);
+  assert.match(source, /SchedulingTimeline:public_holidays[\s\S]*SELECT holiday_date, name, observed[\s\S]*FROM public_holidays/i);
 });
