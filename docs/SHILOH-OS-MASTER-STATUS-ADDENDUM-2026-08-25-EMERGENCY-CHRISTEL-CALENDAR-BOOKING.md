@@ -4,65 +4,85 @@ Date: 2026-08-25
 
 ## Terminal durable state
 
-`SHILOH-EMERGENCY-CHRISTEL-CALENDAR-BOOKING` is COMPLETE — MERGED / CI GREEN / VERIFIED LIVE.
+`SHILOH-EMERGENCY-CHRISTEL-CALENDAR-BOOKING` is COMPLETE — GENUINE PRODUCTION ACCEPTANCE PASSED / DO NOT REOPEN.
 
 Control authority remains PR #477 — Authorize emergency Christel Calendar booking path.
-Implementation completion authority is PR #478 — Complete emergency Christel Calendar booking acceptance proof.
+Original bounded implementation authority: PR #478 — Complete emergency Christel Calendar booking acceptance proof.
 
-Exact final implementation branch head: `738c56157bfdf295503113351bc624b646e757c4`
-Authoritative implementation merge/main SHA: `565c7d42887bc6c6f487c806f673b8a2ceaf7ba0`
-Exact verified-live Render deploy: `dep-da6h37bm8hqs738lhn60`
+Production repair chain discovered only through genuine use:
+- PR #480 — browser-session viewer-scope compatibility bridge;
+- PR #481 — canonical `appointment_staff` SchedulingTimeline projection;
+- PR #482 — canonical `calendar_blocks` SchedulingTimeline projection;
+- PR #484 — complete SchedulingTimeline production-schema contract repair.
+
+Final repair branch head: `2891ac9ee3f7891f946c0e2b560decd2867b7072`.
+Authoritative application/main SHA after PR #484: `d92cf4f725435f47bc9ef6528220c0b7ddaa9edb`.
+Exact genuine-acceptance Render deploy: `dep-da6i4m3l550s73blai60` — LIVE.
+
+PR #479 remains historical reconciliation for the original implementation milestone. This addendum supersedes its residual first-use observation by recording the subsequent production repairs and genuine successful production acceptance.
 
 ## Durable operational outcome
 
-Calendar is now an authenticated staff/Admin operational booking surface for the bounded Christel emergency path. Canonical Shiloh/Postgres appointment state remains the source of truth and all booking mutations continue through the existing guarded booking owner.
+Calendar is an authenticated staff/Admin operational booking surface for the bounded Christel emergency path. Canonical Shiloh/Postgres appointment state remains the source of truth, and all booking mutations continue through the existing guarded canonical Admin booking owner.
 
-Christel's authorized path remains:
-- initiation from her existing canonical authenticated Shiloh Admin WhatsApp identity;
-- short-lived, high-entropy, single-use browser bootstrap bound server-side to her canonical staff/Admin authority;
-- exchange into the existing opaque server-side browser session;
-- Calendar -> Create Booking;
-- canonical eligible bookings for Christel and Abigail through the existing scheduling engine.
+The authorized path is proven end-to-end through presentation:
+- Christel initiates from her canonical authenticated Shiloh Admin WhatsApp identity using `Open Calendar`;
+- Shiloh issues a short-lived, high-entropy, single-use browser bootstrap bound to current canonical staff/Admin authority;
+- bootstrap exchange establishes the existing opaque server-side browser session;
+- authenticated Calendar renders the canonical read-only timeline and real appointments;
+- `Create booking` is visible in the authorized Christel session;
+- the genuine Create Booking screen renders canonical CRM lookup, treatment, eligible-practitioner, date/time, and guarded review controls.
 
-The implementation preserves staff-session, same-origin, CSRF, expiry, rotation, revocation and current-authority controls. Calendar has not been made public and authentication has not been globally disabled.
+No appointment was prepared, reviewed, confirmed, or created merely to prove the production path.
 
-## Verified scheduling safeguards
+## Final executable and CI evidence
 
-Approved-leave parity is executable through canonical full-day `staff_schedule_exceptions`.
+- SchedulingTimeline production-schema contract: 7/7.
+- Emergency bootstrap security: 11/11.
+- Emergency booking acceptance: 20/20.
+- Full regression: 1047/1047, 0 failed.
+- PR #484 exact-head CI: run `32811293866`, job `97690986311` — SUCCESS.
+- Post-merge main CI: run `32811395578`, job `97691268462` — SUCCESS.
 
-Before appointment insertion, stale-slot confirmation revalidates:
-- client/service/practitioner eligibility;
-- clinic schedule;
-- staff schedule;
-- CRM appointment conflicts;
-- shared Google Calendar conflicts;
-- practitioner Google Calendar conflicts.
+## Genuine production proof
 
-Calendar Create Booking delegates to canonical CRM lookup and canonical guarded Admin booking rather than introducing a second booking authority.
+On live deploy `dep-da6i4m3l550s73blai60` at commit `d92cf4f725435f47bc9ef6528220c0b7ddaa9edb`:
 
-Acceptance evidence:
-- bootstrap/security: 11/11;
-- booking acceptance tests 11–30: 20/20;
-- full regression: 1038/1038, 0 failed;
-- PR CI #1405 / run `32806750538` / job `97678252705`: SUCCESS;
-- post-merge main CI #1406 / run `32806829774` / job `97678481722`: SUCCESS.
+1. Christel sent `Open Calendar`.
+2. The secure one-time bootstrap exchange returned HTTP 200.
+3. The authenticated Calendar subsequently returned HTTP 200.
+4. The canonical read-only timeline rendered real appointments.
+5. `Create booking` was visible only in the authorized Christel session.
+6. Christel opened `Create booking`.
+7. The genuine production Create Booking screen rendered successfully with the canonical guarded booking inputs and `Review booking` controls.
+8. No error-level logs occurred during the Create Booking presentation proof.
+9. No synthetic or real appointment was created, prepared, reviewed, or confirmed.
 
-## Production state
+Render independently confirms the exact deploy is LIVE and bound to the authoritative application commit above.
 
-Render deploy `dep-da6h37bm8hqs738lhn60` is LIVE at implementation commit `565c7d42887bc6c6f487c806f673b8a2ceaf7ba0`.
+## Durable scheduling and security safeguards
 
-Production startup verified migration `079_emergency_christel_calendar_bootstrap.sql`, including checksum validation and application. Google Calendar provider health passed, application startup succeeded, `/health` repeatedly returned HTTP 200 on the new instance, and no post-deploy error-level logs were found.
+- Calendar remains private; authentication is mandatory.
+- The Christel-only emergency pilot boundary remains intact.
+- SchedulingTimeline remains fail-closed.
+- Canonical `appointment_staff` remains practitioner-assignment authority, including multi-practitioner fan-out.
+- Canonical `calendar_blocks` remains interval-based Shiloh block authority.
+- Approved leave remains single-source through full-day canonical `staff_schedule_exceptions`.
+- Existing schedule exceptions and location/holiday scheduling authorities remain canonical.
+- Google Calendar provider classification, all-day semantics, and conflict safeguards remain authoritative, including PR #395 behavior.
+- Booking writes remain exclusively through the existing guarded canonical Admin booking engine.
+- Final booking confirmation still revalidates client/service/practitioner eligibility, clinic schedule, staff schedule, CRM conflicts, shared Google Calendar, and practitioner Google Calendar before insertion.
+- Staff-session, same-origin, CSRF, expiry, rotation, revocation, and current-authority checks remain in force.
+- No public/no-auth Calendar access, global authentication disable, or duplicate booking authority is authorized.
 
-No synthetic production bootstrap link or production/test appointment was created merely for verification.
+## Parallel Meta state
 
-## Residual observation
+Meta staff OTP/template provider convergence remains a separate parallel track under 30 — WhatsApp & Meta Integration. It is not a prerequisite for the completed Christel browser Calendar booking capability.
 
-The available Render read-only tooling does not expose environment-variable values. The first genuine Christel operational use should therefore serve as runtime confirmation of the bootstrap flag path. This is an operational observation only; it does not reopen implementation or block COMPLETE status.
+## Preserved boundaries and next-order work
 
-Meta staff-OTP/template convergence remains a separate parallel unit under 30 — WhatsApp & Meta Integration and is not a prerequisite for Christel browser Calendar booking.
+This completion does not authorize broad staff rollout, public Calendar exposure, global auth bypass, unrelated booking/schedule mutations, Google authority weakening, or any change outside existing separately authorized capabilities.
 
-## Preserved boundaries
+Any future mobile Calendar layout or presentation polish is a separate lower-priority 10 — Booking & Admin UX unit. It is not a blocker to this terminal reconciliation.
 
-This completion does not authorize broad staff rollout, reschedule/cancel/drag-drop, schedule/block/leave mutations beyond existing separately authorized capabilities, practitioner reassignment, Google authority reduction/removal, public Calendar access, or clinic-wide authentication bypass.
-
-Do not reopen or recreate the completed Booking implementation absent new defect evidence or a separately authorized controlled unit.
+Do not reopen or recreate `SHILOH-EMERGENCY-CHRISTEL-CALENDAR-BOOKING` absent new defect evidence or a separately authorized controlled unit.
