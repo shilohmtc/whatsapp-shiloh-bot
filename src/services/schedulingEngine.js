@@ -306,7 +306,7 @@ function createSchedulingEngine({
        ORDER BY a.starts_at, a.id, ast.staff_id`, [range.from, range.to, permittedStaffIds]);
 
     const blockResult = await query(`/* SchedulingTimeline:calendar_blocks */
-      SELECT id, staff_id, starts_at, ends_at, all_day, block_type, title, source AS record_source
+      SELECT id, staff_id, starts_at, ends_at, block_type, title, source AS record_source
         FROM calendar_blocks
        WHERE staff_id = ANY($3::bigint[])
          AND starts_at < $2::timestamptz
@@ -371,7 +371,7 @@ function createSchedulingEngine({
       staffIds: [Number(row.staff_id)],
       startsAt: row.starts_at,
       endsAt: row.ends_at,
-      allDay: row.all_day === true,
+      allDay: false,
       blockType: row.block_type,
       title: row.title || null,
       recordSource: row.record_source || null,
