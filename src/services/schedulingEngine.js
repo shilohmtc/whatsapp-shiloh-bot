@@ -118,17 +118,6 @@ function aggregateAppointments(rows, permittedStaffIds) {
       });
     }
   }
-
-  for (const [key, item] of appointments) {
-    if (!item.staffIds.length) {
-      const row = rows.find(candidate => String(candidate.appointment_id) === key);
-      const legacyId = Number(row?.legacy_staff_id);
-      if (Number.isSafeInteger(legacyId) && allowed.has(legacyId)) {
-        item.staffIds.push(legacyId);
-        item.staff.push({ staffId: legacyId, nameSnapshot: row.legacy_staff_name || null, source: 'appointments_legacy_staff' });
-      }
-    }
-  }
   return [...appointments.values()];
 }
 
@@ -305,23 +294,15 @@ function createSchedulingEngine({
     }
 
     const appointmentResult = await query(`/* SchedulingTimeline:appointments */
-      SELECT a.id AS appointment_id, a.staff_id AS legacy_staff_id, a.staff_name AS legacy_staff_name,
+      SELECT a.id AS appointment_id,
              a.starts_at, a.ends_at, a.status, a.source AS record_source,
              ast.staff_id AS assigned_staff_id, ast.staff_name_snapshot
         FROM appointments a
-        LEFT JOIN appointment_staff ast
+        JOIN appointment_staff ast
           ON ast.appointment_id=a.id AND ast.staff_id = ANY($3::bigint[])
        WHERE a.status <> 'cancelled'
          AND a.starts_at < $2::timestamptz
          AND a.ends_at > $1::timestamptz
-         AND (
-           EXISTS (SELECT 1 FROM appointment_staff permitted
-                    WHERE permitted.appointment_id=a.id AND permitted.staff_id = ANY($3::bigint[]))
-           OR (
-             NOT EXISTS (SELECT 1 FROM appointment_staff assigned WHERE assigned.appointment_id=a.id)
-             AND a.staff_id = ANY($3::bigint[])
-           )
-         )
        ORDER BY a.starts_at, a.id, ast.staff_id`, [range.from, range.to, permittedStaffIds]);
 
     const blockResult = await query(`/* SchedulingTimeline:calendar_blocks */
