@@ -1,6 +1,6 @@
 const { pool } = require("../db/pool");
 const { sendWhatsAppTemplate } = require("./whatsapp");
-const { getProfile } = require("./profile");
+const { resolveClientFacingNameByPhone } = require("./clientFacingNameAuthority");
 const { createPendingExperience } = require("./customerExperience");
 const logger = require("../lib/logger");
 
@@ -139,19 +139,8 @@ async function claimDueFollowup() {
 async function undoClaim(id,column){if(!["reminder_sent_at","followup_sent_at"].includes(column))return;await pool.query(`UPDATE appointment_lifecycle SET ${column}=NULL,updated_at=NOW() WHERE id=$1`,[id]);}
 
 async function customerName(phone){
-  const cleanPhone=normalizePhone(phone);
-  const crm=await pool.query(`
-    SELECT MIN(c.display_name) AS display_name
-      FROM clients c
-      JOIN client_contacts cc ON cc.client_id=c.id
-     WHERE cc.normalized_value=$1
-       AND cc.contact_type IN ('whatsapp','mobile','phone')
-       AND c.status='active'
-    HAVING COUNT(DISTINCT c.id)=1`,[cleanPhone]);
-  const canonicalName=String(crm.rows[0]?.display_name||'').trim();
-  if(canonicalName)return canonicalName;
-  const profile=await getProfile(cleanPhone);
-  return profile?.name||"there";
+  const resolved = await resolveClientFacingNameByPhone(normalizePhone(phone));
+  return resolved.name || "there";
 }
 
 async function deliverClaimedFollowup(appointment, followupTemplate, followupActionsTemplate, deps = {}) {

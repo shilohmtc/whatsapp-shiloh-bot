@@ -177,13 +177,16 @@ test('imported DOB and gender are not seeded into a fresh archive-aware claim se
   assert.match(onboarding, /clientId:\s*known\?\.id \|\| null/);
 });
 
-test('archive-aware completion locks same canonical client and preserves provenance/history', () => {
+test('archive-aware completion locks same canonical client and preserves provenance/history while name promotion owns the display-name projection', () => {
   const onboarding = source('src/services/clientIdentityOnboarding.js');
   assert.match(onboarding, /let clientId = session\.client_id/);
   assert.match(onboarding, /SELECT id,source,status FROM clients WHERE id=\$1 FOR UPDATE/);
   assert.match(onboarding, /canonicalClient\.status === "archived"/);
   assert.match(onboarding, /clientSource !== "goldie_import"/);
-  assert.match(onboarding, /UPDATE clients SET status='active',display_name=\$2,date_of_birth=\$3::date/);
+  assert.match(onboarding, /UPDATE clients SET status='active',date_of_birth=\$2::date/);
+  assert.match(onboarding, /promoteClientFacingNameInTransaction/);
+  assert.match(onboarding, /EVIDENCE_TYPES\.VERIFIED_REGISTRATION_INTAKE/);
+  assert.doesNotMatch(onboarding, /UPDATE clients SET status='active',display_name/);
   assert.doesNotMatch(onboarding, /UPDATE clients SET[^`]*source\s*=/s);
   assert.doesNotMatch(onboarding, /(?:UPDATE|DELETE FROM) appointments/i);
 });

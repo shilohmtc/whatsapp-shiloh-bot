@@ -1,6 +1,7 @@
 const { pool } = require('../db/pool');
 const { applyMigrationFile } = require('./migrations');
 const { sendWhatsAppTemplate } = require('./whatsapp');
+const { resolveClientFacingName } = require('./clientFacingNameAuthority');
 const logger = require('../lib/logger');
 
 const MIGRATION = '065_client_reschedule_approved_confirmation.sql';
@@ -111,10 +112,10 @@ async function loadApprovedRequestContext(requestId) {
            request.proposed_starts_at,request.proposed_ends_at,
            request.client_notified_at,request.client_notification_claimed_at,
            request.client_notification_suppressed_at,
+           appointment.client_id,
            appointment.starts_at AS current_starts_at,
            appointment.ends_at AS current_ends_at,
            appointment.status AS appointment_status,
-           COALESCE(client.display_name,appointment.source_client_name,'there') AS client_name,
            COALESCE((SELECT string_agg(COALESCE(service.name,item.service_name_snapshot), ' + ' ORDER BY item.position)
                        FROM appointment_services item
                        LEFT JOIN services service ON service.id=item.service_id
@@ -132,11 +133,17 @@ async function loadApprovedRequestContext(requestId) {
              LIMIT 1) AS client_phone
       FROM appointment_reschedule_requests request
       JOIN appointments appointment ON appointment.id=request.appointment_id
-      LEFT JOIN clients client ON client.id=appointment.client_id
      WHERE request.id=$1
      LIMIT 1
   `, [Number(requestId)]);
-  return result.rows[0] || null;
+  const context = result.rows[0] || null;
+  if (!context) return null;
+  const nameResolution = context.client_id ? await resolveClientFacingName(context.client_id) : null;
+  return {
+    ...context,
+    client_name: nameResolution?.name || null,
+    name_authority_id: nameResolution?.authorityId || null,
+  };
 }
 
 function canonicalOutcomeState(context) {
@@ -272,6 +279,7 @@ async function attemptApprovedRescheduleConfirmation(requestId, auditEventId = n
       templateName: TEMPLATE_NAME,
       providerMessageId: provider?.messages?.[0]?.id || null,
       idempotentDelivery: true,
+      nameAuthorityId: context.name_authority_id || null,
     })]);
     logger.info({ appointmentId: Number(context.appointment_id), requestId: Number(requestId), templateName: TEMPLATE_NAME }, 'Approved reschedule customer confirmation sent');
     return { sent: true, templateName: TEMPLATE_NAME };

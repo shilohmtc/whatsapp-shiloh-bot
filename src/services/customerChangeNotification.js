@@ -1,5 +1,6 @@
 const { pool } = require('../db/pool');
 const { sendWhatsAppTemplate } = require('./whatsapp');
+const { resolveClientFacingName } = require('./clientFacingNameAuthority');
 const {
   DEFINITIONS,
   getClientLifecycleTemplateStatus,
@@ -106,7 +107,6 @@ async function latestAuditEvent(appointmentId, changeKind) {
 async function loadAppointmentSnapshot(appointmentId) {
   const result = await pool.query(`
     SELECT a.id,a.client_id,a.starts_at,a.ends_at,a.status,a.total_price,
-           COALESCE(c.display_name,a.source_client_name,'there') AS client_name,
            COALESCE((SELECT string_agg(COALESCE(s.name,aps.service_name_snapshot), ' + ' ORDER BY aps.position)
                        FROM appointment_services aps
                        LEFT JOIN services s ON s.id=aps.service_id
@@ -123,9 +123,15 @@ async function loadAppointmentSnapshot(appointmentId) {
              ORDER BY cc.is_primary DESC,cc.verified_at DESC NULLS LAST,cc.id
              LIMIT 1) AS client_phone
       FROM appointments a
-      LEFT JOIN clients c ON c.id=a.client_id
      WHERE a.id=$1`, [appointmentId]);
-  return result.rows[0] || null;
+  const appointment = result.rows[0] || null;
+  if (!appointment) return null;
+  const nameResolution = appointment.client_id ? await resolveClientFacingName(appointment.client_id) : null;
+  return {
+    ...appointment,
+    client_name: nameResolution?.name || null,
+    name_authority_id: nameResolution?.authorityId || null,
+  };
 }
 
 async function getTemplateStatus(force = false) {
@@ -271,7 +277,7 @@ async function attemptCustomerChangeNotification(auditEventId) {
       VALUES($1,'appointment',$2,$3::jsonb)`, [
       item.change_kind === 'cancellation' ? 'customer.cancellation_confirmation_sent' : 'customer.booking_update_confirmation_sent',
       String(appointment.id),
-      JSON.stringify({ sourceAuditEventId: Number(auditEventId), changeKind: item.change_kind, templateName, providerMessageId: provider?.messages?.[0]?.id || null, idempotentDelivery: true }),
+      JSON.stringify({ sourceAuditEventId: Number(auditEventId), changeKind: item.change_kind, templateName, providerMessageId: provider?.messages?.[0]?.id || null, idempotentDelivery: true, nameAuthorityId: appointment.name_authority_id || null }),
     ]);
     logger.info({ appointmentId: appointment.id, auditEventId: Number(auditEventId), changeKind: item.change_kind, templateName }, 'Customer booking-change confirmation sent');
     return { sent: true, templateName };
