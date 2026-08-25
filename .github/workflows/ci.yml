@@ -55,6 +55,8 @@ jobs:
           SHILOH_STAFF_BROWSER_PILOT_MODE_ENABLED: 'false'
           SHILOH_STAFF_BROWSER_PILOT_ADMIN_IDS: ''
         run: node --test tests/staff-calendar-pilot-gate.test.js
+      - name: Run provider-independent auth and real browser-cookie tests
+        run: node --test tests/provider-independent-staff-auth.test.js
       - name: Run focused emergency Christel Calendar bootstrap security tests
         run: node --test tests/emergency-christel-calendar-bootstrap.test.js
       - name: Run focused emergency Christel Calendar booking acceptance tests
