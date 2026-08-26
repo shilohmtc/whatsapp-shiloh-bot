@@ -1,5 +1,12 @@
 -- Durable, idempotent initial client-booking confirmation obligations.
 -- Migration 082 is reserved by the independent WS-10 recovery-hash correction.
+--
+-- Expand/contract rule: client_id remains nullable in migration 083 so the
+-- currently deployed pre-083 artifact can continue inserting its legacy
+-- delivery rows during Render zero-downtime replacement and remains a valid
+-- code-only rollback target. New code still writes client_id for every new
+-- obligation. NOT NULL enforcement belongs in a later controlled contract
+-- migration after the old artifact is retired as a rollback target.
 
 ALTER TABLE customer_message_deliveries
   DROP CONSTRAINT IF EXISTS customer_message_deliveries_status_check;
@@ -20,9 +27,6 @@ UPDATE customer_message_deliveries delivery
   FROM appointments appointment
  WHERE delivery.appointment_id = appointment.id
    AND delivery.client_id IS NULL;
-
-ALTER TABLE customer_message_deliveries
-  ALTER COLUMN client_id SET NOT NULL;
 
 DO $$
 BEGIN
