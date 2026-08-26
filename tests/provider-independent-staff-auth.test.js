@@ -27,6 +27,7 @@ const {
 } = require('../src/presentation/staffCalendarAccessUx');
 
 const FIXED_NOW = new Date('2026-08-25T12:00:00.000Z');
+const RECOVERY_HASH_PATTERN = /^scrypt\$16384\$8\$1\$[A-Za-z0-9_-]{22}\$[A-Za-z0-9_-]{43}$/;
 
 function deterministicRandom() {
   let value = 1;
@@ -99,6 +100,7 @@ function memoryDb({
   recoveryCodes = [],
   sessions: seededSessions = [],
   forceTotpAdvanceMiss = false,
+  failRecoveryInsertAt = null,
 } = {}) {
   const state = {
     admins: new Map(admins.map((admin) => [Number(admin.id), { ...admin }])),
@@ -112,6 +114,7 @@ function memoryDb({
     totpAdvanceTransitions: 0,
     recoveryConsumptionTransitions: 0,
     breakGlassConsumptionTransitions: 0,
+    recoveryInsertAttempts: 0,
   };
   let transactionTail = Promise.resolve();
 
@@ -229,6 +232,10 @@ function memoryDb({
         return { rows: [], rowCount: count };
       }
       if (q.startsWith('INSERT INTO staff_auth_recovery_codes')) {
+        state.recoveryInsertAttempts += 1;
+        if (state.recoveryInsertAttempts === failRecoveryInsertAt) {
+          throw new Error('simulated recovery-code persistence failure');
+        }
         state.recoveryCodes.push({ id: state.recoveryCodes.length + 1, admin_id: Number(params[0]), generation: Number(params[1]), code_hash: params[2], created_at: params[3], consumed_at: null, revoked_at: null });
         return { rows: [], rowCount: 1 };
       }
@@ -283,6 +290,17 @@ function memoryDb({
 
   function transactionClient() {
     let releaseTransaction = null;
+    let snapshot = null;
+    function clone(value) {
+      return structuredClone(value);
+    }
+    function restoreMap(target, source) {
+      target.clear();
+      for (const [key, value] of source) target.set(key, value);
+    }
+    function restoreArray(target, source) {
+      target.splice(0, target.length, ...source);
+    }
     return {
       async query(sql, params = []) {
         const q = String(sql).replace(/\s+/g, ' ').trim();
@@ -292,11 +310,36 @@ function memoryDb({
           transactionTail = new Promise((resolve) => { unlock = resolve; });
           await previous;
           releaseTransaction = unlock;
+          snapshot = {
+            admins: clone(state.admins),
+            credentials: clone(state.credentials),
+            recoveryCodes: clone(state.recoveryCodes),
+            rate: clone(state.rate),
+            sessions: clone(state.sessions),
+            breakGlass: clone(state.breakGlass),
+            audits: clone(state.audits),
+            totpAdvanceTransitions: state.totpAdvanceTransitions,
+            recoveryConsumptionTransitions: state.recoveryConsumptionTransitions,
+            breakGlassConsumptionTransitions: state.breakGlassConsumptionTransitions,
+          };
         }
         try {
           return await client.query(sql, params);
         } finally {
           if ((q === 'COMMIT' || q === 'ROLLBACK') && releaseTransaction) {
+            if (q === 'ROLLBACK' && snapshot) {
+              restoreMap(state.admins, snapshot.admins);
+              restoreMap(state.credentials, snapshot.credentials);
+              restoreArray(state.recoveryCodes, snapshot.recoveryCodes);
+              restoreMap(state.rate, snapshot.rate);
+              restoreArray(state.sessions, snapshot.sessions);
+              restoreArray(state.breakGlass, snapshot.breakGlass);
+              restoreArray(state.audits, snapshot.audits);
+              state.totpAdvanceTransitions = snapshot.totpAdvanceTransitions;
+              state.recoveryConsumptionTransitions = snapshot.recoveryConsumptionTransitions;
+              state.breakGlassConsumptionTransitions = snapshot.breakGlassConsumptionTransitions;
+            }
+            snapshot = null;
             const unlock = releaseTransaction;
             releaseTransaction = null;
             unlock();
@@ -318,6 +361,7 @@ function memoryDb({
     get totpAdvanceTransitions() { return state.totpAdvanceTransitions; },
     get recoveryConsumptionTransitions() { return state.recoveryConsumptionTransitions; },
     get breakGlassConsumptionTransitions() { return state.breakGlassConsumptionTransitions; },
+    get recoveryInsertAttempts() { return state.recoveryInsertAttempts; },
     query: client.query.bind(client),
     async connect() { return transactionClient(); },
   };
@@ -465,6 +509,38 @@ test('TOTP secret is 160-bit and AES-256-GCM storage is versioned, authenticated
   assert.notEqual(encrypted.ciphertext, secret);
   assert.equal(auth.decryptTotpSecret({ ciphertext: encrypted.ciphertext, nonce: encrypted.nonce, authTag: encrypted.authTag, keyVersion: encrypted.keyVersion }, 1, keyring), secret);
   assert.throws(() => auth.decryptTotpSecret({ ciphertext: encrypted.ciphertext, nonce: encrypted.nonce, authTag: encrypted.authTag, keyVersion: encrypted.keyVersion }, 2, keyring), /DECRYPTION_FAILED/);
+});
+
+test('migration 082 accepts only the exact runtime scrypt recovery-hash encoding and is wired after immutable 081', async () => {
+  const migration = fs.readFileSync(path.join(__dirname, '..', 'migrations/082_staff_auth_recovery_hash_constraint.sql'), 'utf8');
+  const constraint = migration.match(/CHECK \(code_hash ~ '([^']+)'\)/);
+  assert.ok(constraint);
+  assert.equal(constraint[1], RECOVERY_HASH_PATTERN.source);
+  assert.equal((migration.match(/ALTER TABLE staff_auth_recovery_codes/g) || []).length, 1);
+  assert.match(migration, /DROP CONSTRAINT staff_auth_recovery_hash_check/);
+  assert.match(migration, /ADD CONSTRAINT staff_auth_recovery_hash_check/);
+  assert.doesNotMatch(migration, /\b(?:INSERT|UPDATE|DELETE|TRUNCATE)\b/i);
+
+  const valid = await auth.hashRecoveryCode('ABCD'.repeat(8), () => Buffer.alloc(16, 4));
+  assert.match(valid, RECOVERY_HASH_PATTERN);
+  assert.deepEqual(valid.split('$').slice(0, 4), ['scrypt', '16384', '8', '1']);
+  assert.equal(valid.split('$')[4].length, 22);
+  assert.equal(valid.split('$')[5].length, 43);
+
+  for (const malformed of [
+    valid.replace(/^scrypt/, 'bcrypt'),
+    valid.replace('$16384$', '$32768$'),
+    valid.replace('$8$', '$4$'),
+    valid.replace('$1$', '$2$'),
+    valid.replace(/\$([A-Za-z0-9_-]{22})\$/, (_, salt) => `$${salt.slice(1)}$`),
+    `${valid}=`,
+    valid.replace(/([A-Za-z0-9_-])$/, '+'),
+    `${valid}$extra`,
+    valid.replace('$1$', '$1'),
+  ]) assert.doesNotMatch(malformed, RECOVERY_HASH_PATTERN);
+
+  const ensureScript = fs.readFileSync(path.join(__dirname, '..', 'scripts/ensure-provider-independent-staff-auth.js'), 'utf8');
+  assert.ok(ensureScript.indexOf('081_provider_independent_staff_auth.sql') < ensureScript.indexOf('082_staff_auth_recovery_hash_constraint.sql'));
 });
 
 test('valid RFC 6238 SHA-1 six-digit TOTP creates the existing opaque session with canonical authorization', async () => {
@@ -687,8 +763,62 @@ test('enrollment returns QR/manual material once, requires possession proof, and
   assert.equal(confirmed.recoveryCodes.length, 10);
   assert.equal(new Set(confirmed.recoveryCodes).size, 10);
   assert.ok(confirmed.recoveryCodes.every((item) => item.replace(/-/g, '').length === 32));
-  assert.equal(db.credentials.get(1).pending_secret_ciphertext, null);
+  const credential = db.credentials.get(1);
+  assert.equal(credential.status, 'active');
+  assert.equal(credential.pending_secret_ciphertext, null);
+  assert.equal(credential.recovery_generation, 1);
+  assert.equal(db.recoveryCodes.length, 10);
+  assert.ok(db.recoveryCodes.every((item) => RECOVERY_HASH_PATTERN.test(item.code_hash)));
   assert.equal(db.recoveryCodes.some((item) => confirmed.recoveryCodes.includes(item.code_hash)), false);
+  const persistedEvidence = JSON.stringify({
+    queries: db.calls.map((call) => call.params),
+    audits: db.audits,
+    recoveryCodes: db.recoveryCodes,
+  });
+  for (const codeValue of confirmed.recoveryCodes) {
+    assert.equal(persistedEvidence.includes(codeValue), false);
+    assert.equal(persistedEvidence.includes(codeValue.replace(/-/g, '')), false);
+  }
+  assert.deepEqual(
+    db.audits.find((event) => event.eventType === 'enrollment_confirmed').metadata,
+    { recoveryCodeCount: 10 }
+  );
+});
+
+test('recovery-code persistence failure rolls the enrollment transaction back before activation or success audit', async () => {
+  const env = enabledEnv();
+  const db = memoryDb({
+    sessions: [{ id: 99, admin_id: 1, recovery_required: true, revoked_at: null }],
+    failRecoveryInsertAt: 4,
+  });
+  const randomBytes = deterministicRandom();
+  const service = auth.createProviderIndependentStaffAuthService({
+    db,
+    env,
+    now: () => FIXED_NOW,
+    randomBytes,
+    qrToDataURL: async () => 'data:image/png;base64,dGVzdA==',
+  });
+  const session = { ok: true, adminId: 1, sessionId: 99, authenticatedAt: FIXED_NOW, recoveryRequired: true };
+  const started = await service.startEnrollment({ session, requestFingerprintHash: 'a'.repeat(64) });
+  const pendingBeforeConfirmation = structuredClone(db.credentials.get(1));
+  const code = auth.createTotp(started.manualKey.replace(/\s/g, '')).generate({ timestamp: FIXED_NOW.getTime() });
+
+  await assert.rejects(
+    service.confirmEnrollment({ session, code, requestFingerprintHash: 'a'.repeat(64) }),
+    /simulated recovery-code persistence failure/
+  );
+
+  assert.equal(db.recoveryInsertAttempts, 4);
+  assert.equal(db.recoveryCodes.length, 0);
+  assert.deepEqual(db.credentials.get(1), pendingBeforeConfirmation);
+  assert.equal(db.credentials.get(1).status, 'pending');
+  assert.equal(db.credentials.get(1).secret_ciphertext, undefined);
+  assert.equal(db.credentials.get(1).confirmed_at, undefined);
+  assert.equal(db.credentials.get(1).recovery_generation, 0);
+  assert.equal(db.sessions[0].recovery_required, true);
+  assert.equal(db.audits.some((event) => event.eventType === 'enrollment_confirmed'), false);
+  assert.equal(db.calls.some((call) => call.sql.startsWith("UPDATE staff_totp_credentials SET status = 'active'")), false);
 });
 
 test('recovery code is atomically single-use and its session cannot authorize Calendar until replacement', async () => {
