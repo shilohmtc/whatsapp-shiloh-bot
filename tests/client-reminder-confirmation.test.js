@@ -8,6 +8,7 @@ const reminder = fs.readFileSync(path.join(root, 'src/services/appointmentRemind
 const lifecycle = fs.readFileSync(path.join(root, 'src/services/appointmentLifecycle.js'), 'utf8');
 const care = fs.readFileSync(path.join(root, 'src/services/customerCare.js'), 'utf8');
 const bookingConfirmation = fs.readFileSync(path.join(root, 'src/services/customerBookingConfirmation.js'), 'utf8');
+const calendarCreateBookingRoute = fs.readFileSync(path.join(root, 'src/routes/calendarCreateBooking.js'), 'utf8');
 const reminderTemplate = fs.readFileSync(path.join(root, 'src/services/reminderActionTemplateProvisioning.js'), 'utf8');
 const whatsapp = fs.readFileSync(path.join(root, 'src/services/whatsapp.js'), 'utf8');
 const { parseConfirmationCommand } = require('../src/services/appointmentReminderConfirmation');
@@ -94,20 +95,29 @@ test('booking confirmation has a durable per-appointment delivery claim', () => 
   assert.match(bookingConfirmation, /already_sent_or_in_progress/);
 });
 
-test('booking lifecycle is enrolled before the confirmation delivery claim and provider send', () => {
-  const enroll = bookingConfirmation.indexOf('await enrollAppointmentLifecycle');
+test('unverified booking-confirmation recipient is exposed as manual action rather than ordinary retry', () => {
+  assert.match(bookingConfirmation, /return 'client_contact_unverified'/);
+  assert.match(bookingConfirmation, /exactPhoneCandidates/);
+  assert.match(bookingConfirmation, /return 'client_contact_ambiguous'/);
+  assert.match(calendarCreateBookingRoute, /'client_contact_unverified'/);
+  assert.match(calendarCreateBookingRoute, /'client_contact_ambiguous'/);
+  assert.match(calendarCreateBookingRoute, /status: manualAction \? 'manual_action_required' : 'retry_pending'/);
+});
+
+test('durable confirmation claim precedes lifecycle enrollment and provider send', () => {
+  const enroll = bookingConfirmation.indexOf('await enrollLifecycle');
   const claim = bookingConfirmation.indexOf('claimed=await claimBookingConfirmation');
-  const sendTemplate = bookingConfirmation.indexOf('await sendWhatsAppTemplate', claim);
-  const sendText = bookingConfirmation.indexOf('await sendWhatsAppMessage', claim);
-  assert.ok(enroll >= 0 && claim > enroll);
+  const sendTemplate = bookingConfirmation.indexOf('await sendTemplate', claim);
+  const sendText = bookingConfirmation.indexOf('await sendMessage', claim);
+  assert.ok(claim >= 0 && enroll > claim);
   assert.ok(sendTemplate > claim && sendText > claim);
 });
 
 test('definitive provider failure releases the claim but post-send bookkeeping failure cannot duplicate', () => {
   assert.match(bookingConfirmation, /providerAccepted=true/);
   assert.match(bookingConfirmation, /if\(claimed&&!providerAccepted\)/);
-  assert.match(bookingConfirmation, /releaseBookingConfirmationClaim\(appointmentId\)/);
-  assert.match(bookingConfirmation, /providerAccepted\?'delivery_state_uncertain':'error'/);
+  assert.match(bookingConfirmation, /releaseBookingConfirmationClaim\(appointmentId,[^;]+,db\)/);
+  assert.match(bookingConfirmation, /uncertain\?'delivery_state_uncertain':'send_failed'/);
   const accepted = bookingConfirmation.indexOf('providerAccepted=true');
   const marked = bookingConfirmation.indexOf('await markBookingConfirmationSent', accepted);
   const audit = bookingConfirmation.indexOf("customer.booking_confirmation_sent", marked);

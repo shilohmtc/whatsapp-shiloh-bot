@@ -75,7 +75,11 @@ const { submitBookingConfirmationTemplate } = require("./src/services/bookingCon
 const { submitBookingConfirmationV2Template } = require("./src/services/bookingConfirmationV2TemplateProvisioning");
 const { DEFINITIONS: CLIENT_LIFECYCLE_TEMPLATE_DEFINITIONS, getClientLifecycleTemplateStatus, submitClientLifecycleTemplate } = require("./src/services/clientLifecycleTemplateProvisioning");
 const { inspectMetaTemplateInventory } = require("./src/services/metaTemplateContracts");
-const { ensureDeliveryTable: ensureBookingConfirmationDeliverySchema } = require("./src/services/customerBookingConfirmation");
+const { applyMigrationFile } = require("./src/services/migrations");
+const {
+  ensureDeliveryTable: ensureBookingConfirmationDeliverySchema,
+  startCustomerBookingConfirmationScheduler,
+} = require("./src/services/customerBookingConfirmation");
 
 const app = express();
 app.disable("x-powered-by");
@@ -142,11 +146,12 @@ async function start() {
   const mediHeelOwnership = await ensureChristelMediHeelOwnership(); logger.info(mediHeelOwnership, "Christel MediHeel ownership verified");
   const christelCatalogueCorrection = await ensureChristelServiceCatalogueCorrection(); logger.info(christelCatalogueCorrection, "Christel service catalogue correction verified");
   await ensureHistoricalFinalizationFinancialSchema(); logger.info({ initialized: true }, "Historical finalization financial schema verified");
-  await ensureBookingConfirmationDeliverySchema(); logger.info({ initialized: true, migration: '071_booking_confirmation_template_evidence.sql', templateEvidenceColumns: true }, "Booking confirmation delivery evidence schema verified");
+  const initialConfirmationMigration = await applyMigrationFile('083_initial_booking_confirmation_guarantee.sql');
+  await ensureBookingConfirmationDeliverySchema(); logger.info({ initialized: true, migrations: ['071_booking_confirmation_template_evidence.sql', '083_initial_booking_confirmation_guarantee.sql'], migrationAppliedNow: initialConfirmationMigration.applied, checksumVerified: initialConfirmationMigration.checksumVerified === true, durableRetryColumns: true }, "Booking confirmation delivery evidence schema verified");
   const dummyTestCleanup = await runDummyTestAppointmentCleanup(); if (dummyTestCleanup.enabled) logger.info(dummyTestCleanup, "Dummy Test booking cleanup startup gate completed");
   try { await runConfiguredClientProvenanceAudit(logger); } catch (error) { logger.error({ err: error }, "Read-only CRM provenance audit failed"); }
   await provisionStaffFinalizationTemplateSafely(); await provisionStaffFinalizationActionTemplateSafely(); await provisionBookingConfirmationTemplateSafely(); await provisionBookingConfirmationV2IfExplicitlyEnabled(); await provisionClientLifecycleTemplatesIfExplicitlyEnabled(); await auditMetaTemplateInventoryIfExplicitlyEnabled();
-  server = app.listen(PORT, () => { logger.info({ port: PORT }, "Shiloh started"); startConversationSessionCleanupScheduler(); startTemporarySessionCleanupScheduler(); startGoogleBusinessProfileSyncScheduler(); startAppointmentLifecycleScheduler(); startCustomerCareScheduler(); startBookingIntegrityScheduler(); startMandatoryDemoCleanupScheduler(); startAttendanceFinalizationReminderScheduler(); startHistoricalFinalizationPromptScheduler(); });
+  server = app.listen(PORT, () => { logger.info({ port: PORT }, "Shiloh started"); startConversationSessionCleanupScheduler(); startTemporarySessionCleanupScheduler(); startGoogleBusinessProfileSyncScheduler(); startAppointmentLifecycleScheduler(); startCustomerCareScheduler(); startBookingIntegrityScheduler(); startCustomerBookingConfirmationScheduler(); startMandatoryDemoCleanupScheduler(); startAttendanceFinalizationReminderScheduler(); startHistoricalFinalizationPromptScheduler(); });
 }
 start().catch((error) => { logger.fatal({ err: error }, "Shiloh failed during startup"); process.exit(1); });
 function shutdown(signal) { logger.info({ signal }, "Shutting down Shiloh"); if (!server) return process.exit(0); server.close(() => { logger.info("HTTP server closed"); process.exit(0); }); setTimeout(() => { logger.error("Forced shutdown after timeout"); process.exit(1); }, 10000).unref(); }
