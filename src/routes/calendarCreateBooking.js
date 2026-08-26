@@ -31,6 +31,24 @@ function statusForError(error) {
   return 503;
 }
 
+function customerConfirmationState(result) {
+  const delivery = result?.customerConfirmation || {};
+  if (delivery.sent === true || delivery.deliveryStatus === 'sent') {
+    return { status: 'sent', sent: true, retryable: false, reason: null };
+  }
+  const reason = String(delivery.reason || result?.customerConfirmationObligation?.reason || 'confirmation_not_sent');
+  if (delivery.deliveryStatus === 'uncertain' || reason === 'delivery_state_uncertain') {
+    return { status: 'delivery_status_uncertain', sent: false, retryable: false, reason: 'delivery_state_uncertain' };
+  }
+  const manualAction = ['client_contact_not_found', 'client_name_authority_not_found', 'canonical_client_inactive'].includes(reason);
+  return {
+    status: manualAction ? 'manual_action_required' : 'retry_pending',
+    sent: false,
+    retryable: manualAction ? true : delivery.retryable !== false,
+    reason,
+  };
+}
+
 function createCalendarCreateBookingRouter({
   env = process.env,
   sessionService,
@@ -126,7 +144,11 @@ function createCalendarCreateBookingRouter({
       if (result.status !== 'created') {
         return res.status(409).json({ status: result.status, reply: result.reply || 'Booking was not created.' });
       }
-      return res.status(201).json({ status: 'created', appointmentId: result.appointmentId });
+      return res.status(201).json({
+        status: 'created',
+        appointmentId: result.appointmentId,
+        customerConfirmation: customerConfirmationState(result),
+      });
     } catch (error) {
       const status = statusForError(error);
       if (status !== 503) return res.status(status).json({ error: error.message, code: error.code, requestId: req.id });
@@ -141,4 +163,5 @@ module.exports = {
   createCalendarCreateBookingRouter,
   setBookingSecurityHeaders,
   statusForError,
+  customerConfirmationState,
 };

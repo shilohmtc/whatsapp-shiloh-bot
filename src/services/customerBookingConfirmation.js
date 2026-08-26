@@ -14,7 +14,9 @@ const logger = require('../lib/logger');
 const LIVE_BOOKING_CONFIRMATION_V1 = 'shiloh_booking_confirmation_v1';
 const LIVE_BOOKING_CONFIRMATION_V2 = 'shiloh_booking_confirmation_v2';
 const CURRENT_BOOKING_CONFIRMATION_TEMPLATES = new Set([LIVE_BOOKING_CONFIRMATION_V1, LIVE_BOOKING_CONFIRMATION_V2]);
+const BOOKING_CONFIRMATION_RETRY_MS = 5 * 60 * 1000;
 let deliveryTableReady = false;
+let deliveryScheduler = null;
 
 function fmtDate(v){return new Intl.DateTimeFormat('en-ZA',{timeZone:'Africa/Johannesburg',weekday:'long',day:'2-digit',month:'long',year:'numeric'}).format(new Date(v));}
 function fmtTime(v){return new Intl.DateTimeFormat('en-ZA',{timeZone:'Africa/Johannesburg',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(v));}
@@ -41,49 +43,192 @@ async function ensureDeliveryTable(){
     CREATE TABLE IF NOT EXISTS customer_message_deliveries (
       appointment_id BIGINT NOT NULL REFERENCES appointments(id) ON DELETE CASCADE,
       message_kind TEXT NOT NULL,
-      status TEXT NOT NULL CHECK (status IN ('sending','sent')),
+      status TEXT NOT NULL CHECK (status IN ('pending','sending','sent','failed','uncertain')),
       claimed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       sent_at TIMESTAMPTZ,
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       template_name TEXT,
       provider_message_id TEXT,
+      client_id BIGINT NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+      contact_id BIGINT REFERENCES client_contacts(id) ON DELETE SET NULL,
+      name_authority_id BIGINT REFERENCES client_facing_name_authorities(id) ON DELETE SET NULL,
+      attempt_count INTEGER NOT NULL DEFAULT 0 CHECK (attempt_count >= 0),
+      last_attempt_at TIMESTAMPTZ,
+      next_attempt_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      last_error TEXT,
       PRIMARY KEY (appointment_id,message_kind)
     )
   `);
   await pool.query(`
     ALTER TABLE customer_message_deliveries
       ADD COLUMN IF NOT EXISTS template_name TEXT,
-      ADD COLUMN IF NOT EXISTS provider_message_id TEXT
+      ADD COLUMN IF NOT EXISTS provider_message_id TEXT,
+      ADD COLUMN IF NOT EXISTS client_id BIGINT REFERENCES clients(id) ON DELETE CASCADE,
+      ADD COLUMN IF NOT EXISTS contact_id BIGINT REFERENCES client_contacts(id) ON DELETE SET NULL,
+      ADD COLUMN IF NOT EXISTS name_authority_id BIGINT REFERENCES client_facing_name_authorities(id) ON DELETE SET NULL,
+      ADD COLUMN IF NOT EXISTS attempt_count INTEGER NOT NULL DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS last_attempt_at TIMESTAMPTZ,
+      ADD COLUMN IF NOT EXISTS next_attempt_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      ADD COLUMN IF NOT EXISTS last_error TEXT
+  `);
+  await pool.query(`
+    UPDATE customer_message_deliveries delivery
+       SET client_id=appointment.client_id
+      FROM appointments appointment
+     WHERE delivery.appointment_id=appointment.id
+       AND delivery.client_id IS NULL
+  `);
+  await pool.query(`ALTER TABLE customer_message_deliveries ALTER COLUMN client_id SET NOT NULL`);
+  await pool.query(`
+    DO $$
+    DECLARE status_constraint TEXT;
+    BEGIN
+      SELECT pg_get_constraintdef(oid)
+        INTO status_constraint
+        FROM pg_constraint
+       WHERE conrelid='customer_message_deliveries'::regclass
+         AND conname='customer_message_deliveries_status_check';
+      IF status_constraint IS NULL OR POSITION('pending' IN status_constraint)=0 OR POSITION('failed' IN status_constraint)=0 OR POSITION('uncertain' IN status_constraint)=0 THEN
+        ALTER TABLE customer_message_deliveries DROP CONSTRAINT IF EXISTS customer_message_deliveries_status_check;
+        ALTER TABLE customer_message_deliveries ADD CONSTRAINT customer_message_deliveries_status_check
+          CHECK (status IN ('pending','sending','sent','failed','uncertain'));
+      END IF;
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+         WHERE conrelid='customer_message_deliveries'::regclass
+           AND conname='customer_message_deliveries_attempt_count_check'
+      ) THEN
+        ALTER TABLE customer_message_deliveries ADD CONSTRAINT customer_message_deliveries_attempt_count_check
+          CHECK (attempt_count >= 0);
+      END IF;
+    END $$
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_customer_message_deliveries_retry
+      ON customer_message_deliveries(next_attempt_at,appointment_id)
+      WHERE message_kind='booking_confirmation' AND status IN ('pending','failed')
   `);
   deliveryTableReady=true;
 }
 
-async function claimBookingConfirmation(appointmentId){
-  await ensureDeliveryTable();
-  const legacy=await pool.query(`SELECT 1 FROM crm_audit_events WHERE action='customer.booking_confirmation_sent' AND entity_type='appointment' AND entity_id=$1 LIMIT 1`,[appointmentId]);
-  if(legacy.rowCount)return false;
-  const claimed=await pool.query(`
-    INSERT INTO customer_message_deliveries (appointment_id,message_kind,status)
-    VALUES ($1,'booking_confirmation','sending')
+async function loadBookingConfirmationAuthority(appointmentId,db=pool){
+  const result=await db.query(`
+    SELECT a.id AS appointment_id,a.client_id,c.status AS client_status,
+           contact.id AS contact_id,contact.normalized_value AS client_phone,
+           name_authority.id AS name_authority_id
+      FROM appointments a
+      JOIN clients c ON c.id=a.client_id
+      LEFT JOIN LATERAL (
+        SELECT cc.id,cc.normalized_value
+          FROM client_contacts cc
+         WHERE cc.client_id=c.id
+           AND LOWER(cc.contact_type) IN ('whatsapp','mobile','phone','telephone')
+           AND cc.normalized_value ~ '^[0-9]{10,15}$'
+         ORDER BY cc.is_primary DESC,cc.verified_at DESC NULLS LAST,
+                  CASE LOWER(cc.contact_type) WHEN 'whatsapp' THEN 0 WHEN 'mobile' THEN 1 ELSE 2 END,
+                  cc.id
+         LIMIT 1
+      ) contact ON TRUE
+      LEFT JOIN LATERAL (
+        SELECT authority.id
+          FROM client_facing_name_authorities authority
+         WHERE authority.client_id=c.id AND authority.revoked_at IS NULL
+         ORDER BY authority.promoted_at DESC,authority.id DESC
+         LIMIT 1
+      ) name_authority ON TRUE
+     WHERE a.id=$1`,[appointmentId]);
+  return result.rows[0]||null;
+}
+
+function initialDeliveryFailure(authority){
+  if(!authority)return 'appointment_not_found';
+  if(authority.client_status!=='active')return 'canonical_client_inactive';
+  if(!authority.contact_id||!authority.client_phone)return 'client_contact_not_found';
+  if(!authority.name_authority_id)return 'client_name_authority_not_found';
+  return null;
+}
+
+async function queueCustomerBookingConfirmation(appointmentId,{db=pool}={}){
+  if(db===pool)await ensureDeliveryTable();
+  const legacy=await db.query(`SELECT 1 FROM crm_audit_events WHERE action='customer.booking_confirmation_sent' AND entity_type='appointment' AND entity_id=$1 LIMIT 1`,[appointmentId]);
+  if(legacy.rowCount)return {queued:false,status:'sent',reason:'already_sent'};
+  const authority=await loadBookingConfirmationAuthority(appointmentId,db);
+  if(!authority)return {queued:false,status:'failed',reason:'appointment_not_found'};
+  const failure=initialDeliveryFailure(authority);
+  const inserted=await db.query(`
+    INSERT INTO customer_message_deliveries
+      (appointment_id,message_kind,status,client_id,contact_id,name_authority_id,next_attempt_at,last_error)
+    VALUES ($1,'booking_confirmation',$2,$3,$4,$5,NOW(),$6)
     ON CONFLICT (appointment_id,message_kind) DO NOTHING
-    RETURNING appointment_id
-  `,[appointmentId]);
+    RETURNING appointment_id,status
+  `,[appointmentId,failure?'failed':'pending',authority.client_id,authority.contact_id,authority.name_authority_id,failure]);
+  if(!inserted.rowCount){
+    const existing=await db.query(`SELECT status,last_error FROM customer_message_deliveries WHERE appointment_id=$1 AND message_kind='booking_confirmation'`,[appointmentId]);
+    return {queued:false,status:existing.rows[0]?.status||'unknown',reason:existing.rows[0]?.last_error||'already_queued'};
+  }
+  await db.query(`
+    INSERT INTO crm_audit_events(action,entity_type,entity_id,metadata)
+    VALUES('customer.booking_confirmation_queued','appointment',$1,$2::jsonb)`,[
+    String(appointmentId),
+    JSON.stringify({clientId:Number(authority.client_id),contactId:authority.contact_id?Number(authority.contact_id):null,nameAuthorityId:authority.name_authority_id?Number(authority.name_authority_id):null,initialStatus:failure?'failed':'pending',reason:failure}),
+  ]);
+  return {queued:true,status:failure?'failed':'pending',reason:failure,clientId:Number(authority.client_id),contactId:authority.contact_id?Number(authority.contact_id):null,nameAuthorityId:authority.name_authority_id?Number(authority.name_authority_id):null};
+}
+
+async function claimBookingConfirmation(appointmentId,{clientId=null,contactId=null,nameAuthorityId=null,db=pool}={}){
+  if(db===pool)await ensureDeliveryTable();
+  const legacy=await db.query(`SELECT 1 FROM crm_audit_events WHERE action='customer.booking_confirmation_sent' AND entity_type='appointment' AND entity_id=$1 LIMIT 1`,[appointmentId]);
+  if(legacy.rowCount){
+    await db.query(`UPDATE customer_message_deliveries SET status='sent',sent_at=COALESCE(sent_at,NOW()),updated_at=NOW(),last_error=NULL WHERE appointment_id=$1 AND message_kind='booking_confirmation'`,[appointmentId]);
+    return false;
+  }
+  const claimed=await db.query(`
+    UPDATE customer_message_deliveries
+       SET status='sending',claimed_at=NOW(),updated_at=NOW(),last_attempt_at=NOW(),
+           attempt_count=attempt_count+1,last_error=NULL,
+           client_id=COALESCE($2,client_id),contact_id=COALESCE($3,contact_id),name_authority_id=COALESCE($4,name_authority_id)
+     WHERE appointment_id=$1 AND message_kind='booking_confirmation'
+       AND status IN ('pending','failed') AND next_attempt_at<=NOW()
+     RETURNING appointment_id
+  `,[appointmentId,clientId,contactId,nameAuthorityId]);
   return claimed.rowCount===1;
 }
 
-async function releaseBookingConfirmationClaim(appointmentId){
-  await pool.query(`DELETE FROM customer_message_deliveries WHERE appointment_id=$1 AND message_kind='booking_confirmation' AND status='sending'`,[appointmentId]);
+async function releaseBookingConfirmationClaim(appointmentId,reason='send_failed',db=pool){
+  await db.query(`
+    UPDATE customer_message_deliveries
+       SET status='failed',updated_at=NOW(),next_attempt_at=NOW()+INTERVAL '5 minutes',last_error=$2
+     WHERE appointment_id=$1 AND message_kind='booking_confirmation' AND status='sending'`,[appointmentId,String(reason||'send_failed').slice(0,1000)]);
 }
 
-async function markBookingConfirmationSent(appointmentId,{templateName=null,providerMessageId=null}={}){
-  await pool.query(`UPDATE customer_message_deliveries SET status='sent',sent_at=NOW(),updated_at=NOW(),template_name=$2,provider_message_id=$3 WHERE appointment_id=$1 AND message_kind='booking_confirmation' AND status='sending'`,[appointmentId,templateName,providerMessageId]);
+async function markBookingConfirmationSent(appointmentId,{templateName=null,providerMessageId=null}={},db=pool){
+  const marked=await db.query(`UPDATE customer_message_deliveries SET status='sent',sent_at=NOW(),updated_at=NOW(),next_attempt_at=NOW(),last_error=NULL,template_name=$2,provider_message_id=$3 WHERE appointment_id=$1 AND message_kind='booking_confirmation' AND status='sending'`,[appointmentId,templateName,providerMessageId]);
+  if(marked.rowCount!==1)throw new Error('Booking confirmation accepted but durable sent transition failed');
 }
 
-async function ensureToken(appointmentId){
-  const existing=await pool.query(`SELECT token FROM appointment_calendar_share_tokens WHERE appointment_id=$1`,[appointmentId]);
+async function markBookingConfirmationFailure(appointmentId,reason,{clientId=null,contactId=null,nameAuthorityId=null,db=pool}={}){
+  await db.query(`
+    UPDATE customer_message_deliveries
+       SET status='failed',updated_at=NOW(),last_attempt_at=NOW(),attempt_count=attempt_count+1,
+           next_attempt_at=NOW()+INTERVAL '5 minutes',last_error=$2,
+           client_id=COALESCE($3,client_id),contact_id=$4,name_authority_id=$5
+     WHERE appointment_id=$1 AND message_kind='booking_confirmation' AND status IN ('pending','failed')`,[
+    appointmentId,String(reason||'delivery_unavailable').slice(0,1000),clientId,contactId,nameAuthorityId,
+  ]);
+}
+
+async function markBookingConfirmationUncertain(appointmentId,db=pool){
+  await db.query(`
+    UPDATE customer_message_deliveries
+       SET status='uncertain',updated_at=NOW(),next_attempt_at=NOW(),last_error='provider_delivery_unknown'
+     WHERE appointment_id=$1 AND message_kind='booking_confirmation' AND status='sending'`,[appointmentId]);
+}
+
+async function ensureToken(appointmentId,db=pool){
+  const existing=await db.query(`SELECT token FROM appointment_calendar_share_tokens WHERE appointment_id=$1`,[appointmentId]);
   if(existing.rows[0]?.token)return existing.rows[0].token;
   const token=crypto.randomBytes(24).toString('base64url');
-  const created=await pool.query(`INSERT INTO appointment_calendar_share_tokens (appointment_id,token) VALUES ($1,$2) ON CONFLICT (appointment_id) DO UPDATE SET appointment_id=EXCLUDED.appointment_id RETURNING token`,[appointmentId,token]);
+  const created=await db.query(`INSERT INTO appointment_calendar_share_tokens (appointment_id,token) VALUES ($1,$2) ON CONFLICT (appointment_id) DO UPDATE SET appointment_id=EXCLUDED.appointment_id RETURNING token`,[appointmentId,token]);
   return created.rows[0].token;
 }
 
@@ -102,31 +247,55 @@ async function sendOptionalConfirmationAction(label, sendAction, context){
   }
 }
 
-async function sendCustomerBookingConfirmation(data){
+async function sendCustomerBookingConfirmation(data,{
+  db=pool,
+  sendMessage=sendWhatsAppMessage,
+  sendTemplate=sendWhatsAppTemplate,
+  sendCta=sendWhatsAppCtaUrl,
+  sendButtons=sendWhatsAppReplyButtons,
+  enrollLifecycle=enrollAppointmentLifecycle,
+  resolveName=resolveClientFacingName,
+  env=process.env,
+}={}){
   const {appointmentId,clientId,clientName:_suppliedClientName,serviceName,staffName,locationName,startsAt,endsAt,source='shiloh'}=data;
   let claimed=false;
+  let providerAttempted=false;
   let providerAccepted=false;
   let acceptedProviderMessageId=null;
   try{
-    const nameResolution=await resolveClientFacingName(clientId);
+    await queueCustomerBookingConfirmation(appointmentId,{db});
+    const authority=await loadBookingConfirmationAuthority(appointmentId,db);
+    const authorityFailure=initialDeliveryFailure(authority);
+    if(authorityFailure){
+      await markBookingConfirmationFailure(appointmentId,authorityFailure,{clientId:authority?.client_id||clientId,contactId:authority?.contact_id||null,nameAuthorityId:authority?.name_authority_id||null,db});
+      return {sent:false,reason:authorityFailure,deliveryStatus:'manual_action_required',retryable:true};
+    }
+    const nameResolution=await resolveName(authority.client_id,db);
+    if(!nameResolution?.name||!nameResolution?.authorityId){
+      await markBookingConfirmationFailure(appointmentId,'client_name_authority_not_found',{clientId:authority.client_id,contactId:authority.contact_id,nameAuthorityId:null,db});
+      return {sent:false,reason:'client_name_authority_not_found',deliveryStatus:'manual_action_required',retryable:true};
+    }
     const clientName=nameResolution.name;
-    const contact=await pool.query(`SELECT normalized_value FROM client_contacts WHERE client_id=$1 AND contact_type IN ('whatsapp','phone','mobile') AND normalized_value IS NOT NULL ORDER BY is_primary DESC, id LIMIT 1`,[clientId]);
-    const phone=contact.rows[0]?.normalized_value;if(!phone)return {sent:false,reason:'no_phone'};
-    const token=await ensureToken(appointmentId);const root=baseUrl();
+    const phone=authority.client_phone;
+    claimed=await claimBookingConfirmation(appointmentId,{clientId:authority.client_id,contactId:authority.contact_id,nameAuthorityId:nameResolution.authorityId||authority.name_authority_id,db});
+    if(!claimed){
+      const existing=await db.query(`SELECT status,last_error FROM customer_message_deliveries WHERE appointment_id=$1 AND message_kind='booking_confirmation'`,[appointmentId]);
+      const state=existing.rows[0];
+      return {sent:false,reason:state?.status==='sent'?'already_sent':state?.last_error||'already_sent_or_in_progress',deliveryStatus:state?.status||'unknown'};
+    }
+    const token=await ensureToken(appointmentId,db);const root=baseUrl();
     const ics=root?`${root}/calendar/${token}.ics`:'';
     const google=googleCalendarUrl({serviceName,staffName,locationName,startsAt,endsAt});
     const date=fmtDate(startsAt),time=`${fmtTime(startsAt)}–${fmtTime(endsAt)}`;
-    const template=process.env.WHATSAPP_BOOKING_CONFIRMATION_TEMPLATE;
+    const template=env.WHATSAPP_BOOKING_CONFIRMATION_TEMPLATE;
 
-    await enrollAppointmentLifecycle({appointmentId,clientId,phone,service:serviceName,appointmentAt:startsAt,appointmentEndsAt:endsAt,therapist:staffName,source});
-
-    claimed=await claimBookingConfirmation(appointmentId);
-    if(!claimed)return {sent:false,reason:'already_sent_or_in_progress'};
+    await enrollLifecycle({appointmentId,clientId:authority.client_id,phone,service:serviceName,appointmentAt:startsAt,appointmentEndsAt:endsAt,therapist:staffName,source});
 
     let confirmationActions={googleCalendar:false,appleOutlook:false,changeButtons:false,postConfirmationMenu:false};
     if(template){
       const payload=bookingConfirmationTemplatePayload({template,appointmentId,clientName,serviceName,staffName,date,time,google,ics});
-      const response=await sendWhatsAppTemplate(phone,template,payload.bodyParameters,process.env.WHATSAPP_TEMPLATE_LANGUAGE||'en',payload.quickReplyPayloads);
+      providerAttempted=true;
+      const response=await sendTemplate(phone,template,payload.bodyParameters,env.WHATSAPP_TEMPLATE_LANGUAGE||'en',payload.quickReplyPayloads);
       acceptedProviderMessageId=providerMessageId(response);
       providerAccepted=true;
     }else{
@@ -134,46 +303,53 @@ async function sendCustomerBookingConfirmation(data){
       const lines=['*Booking confirmed 🌿*','',greeting,'',`✨ *Service:* ${serviceName}`,`👤 *With:* ${staffName}`,`📅 *Date:* ${date}`,`🕙 *Time:* ${time}`];
       if(locationName)lines.push(`📍 *Location:* ${locationName}`);
       lines.push('','We look forward to seeing you. 🌿');
-      const response=await sendWhatsAppMessage(phone,lines.join('\n'));
+      providerAttempted=true;
+      const response=await sendMessage(phone,lines.join('\n'));
       acceptedProviderMessageId=providerMessageId(response);
       providerAccepted=true;
     }
 
+    await markBookingConfirmationSent(appointmentId,{templateName:template||null,providerMessageId:acceptedProviderMessageId},db);
+
     const supplementalActionsSuppressed=!shouldSendLegacyConfirmationSupplements(template);
     if(!supplementalActionsSuppressed){
-      const actionContext={appointmentId,clientId};
-      confirmationActions.googleCalendar=await sendOptionalConfirmationAction('google_calendar',()=>sendWhatsAppCtaUrl(phone,'Add to Google Calendar','Google Calendar',google),actionContext);
+      const actionContext={appointmentId,clientId:Number(authority.client_id)};
+      confirmationActions.googleCalendar=await sendOptionalConfirmationAction('google_calendar',()=>sendCta(phone,'Add to Google Calendar','Google Calendar',google),actionContext);
       if(ics){
-        confirmationActions.appleOutlook=await sendOptionalConfirmationAction('apple_outlook_calendar',()=>sendWhatsAppCtaUrl(phone,'Add to Apple / Outlook','Apple / Outlook',ics),actionContext);
+        confirmationActions.appleOutlook=await sendOptionalConfirmationAction('apple_outlook_calendar',()=>sendCta(phone,'Add to Apple / Outlook','Apple / Outlook',ics),actionContext);
       }
-      confirmationActions.changeButtons=await sendOptionalConfirmationAction('booking_change_buttons',()=>sendWhatsAppReplyButtons(phone,'*Need to make a change?*\nUse a button below, or type *RESCHEDULE* or *CANCEL*.',[
+      confirmationActions.changeButtons=await sendOptionalConfirmationAction('booking_change_buttons',()=>sendButtons(phone,'*Need to make a change?*\nUse a button below, or type *RESCHEDULE* or *CANCEL*.',[
         {id:'client_reschedule_booking',title:'Reschedule'},
         {id:'client_cancel_booking',title:'Cancel booking'},
       ]),actionContext);
-      confirmationActions.postConfirmationMenu=await sendOptionalConfirmationAction('post_confirmation_menu',()=>sendWhatsAppReplyButtons(phone,'*What would you like to do next?*\nYou can also type *BOOK ANOTHER TREATMENT*, *MY APPOINTMENTS*, or *MAIN MENU*.',postConfirmationButtons()),actionContext);
+      confirmationActions.postConfirmationMenu=await sendOptionalConfirmationAction('post_confirmation_menu',()=>sendButtons(phone,'*What would you like to do next?*\nYou can also type *BOOK ANOTHER TREATMENT*, *MY APPOINTMENTS*, or *MAIN MENU*.',postConfirmationButtons()),actionContext);
     }
 
-    await markBookingConfirmationSent(appointmentId,{templateName:template||null,providerMessageId:acceptedProviderMessageId});
-    await pool.query(`INSERT INTO crm_audit_events (action,entity_type,entity_id,metadata) VALUES ('customer.booking_confirmation_sent','appointment',$1,$2::jsonb)`,[appointmentId,JSON.stringify({clientId,calendarLinks:true,template:Boolean(template),templateName:template||null,providerMessageId:acceptedProviderMessageId,lifecycleEnrolled:true,idempotentDelivery:true,supplementalActionsSuppressed,confirmationActions,nameAuthorityId:nameResolution.authorityId||null})]);
-    return {sent:true,phone,templateName:template||null,providerMessageId:acceptedProviderMessageId,supplementalActionsSuppressed,confirmationActions};
+    await db.query(`INSERT INTO crm_audit_events (action,entity_type,entity_id,metadata) VALUES ('customer.booking_confirmation_sent','appointment',$1,$2::jsonb)`,[appointmentId,JSON.stringify({clientId:Number(authority.client_id),contactId:Number(authority.contact_id),calendarLinks:true,template:Boolean(template),templateName:template||null,providerMessageId:acceptedProviderMessageId,lifecycleEnrolled:true,idempotentDelivery:true,supplementalActionsSuppressed,confirmationActions,nameAuthorityId:Number(nameResolution.authorityId)})]);
+    return {sent:true,deliveryStatus:'sent',templateName:template||null,providerMessageId:acceptedProviderMessageId,supplementalActionsSuppressed,confirmationActions};
   }catch(error){
     if(claimed&&!providerAccepted){
-      try{await releaseBookingConfirmationClaim(appointmentId);}catch(releaseError){logger.error({err:releaseError,appointmentId},'Booking confirmation claim release failed');}
+      try{
+        if(providerAttempted&&!error.response)await markBookingConfirmationUncertain(appointmentId,db);
+        else await releaseBookingConfirmationClaim(appointmentId,providerAttempted?'provider_rejected':'pre_send_failure',db);
+      }catch(releaseError){logger.error({err:releaseError,appointmentId},'Booking confirmation claim release failed');}
     }
     logger.error({err:error,appointmentId,providerAccepted},'Customer booking confirmation failed');
-    return {sent:false,reason:providerAccepted?'delivery_state_uncertain':'error'};
+    const uncertain=providerAccepted||(providerAttempted&&!error.response);
+    return {sent:false,reason:uncertain?'delivery_state_uncertain':'send_failed',deliveryStatus:uncertain?'uncertain':'retry_pending',retryable:!uncertain};
   }
 }
 
-async function practitionerApprovalStatus(appointmentId){
-  const table=await pool.query(`SELECT to_regclass('public.appointment_booking_approvals') AS table_name`);
+async function practitionerApprovalStatus(appointmentId,db=pool){
+  const table=await db.query(`SELECT to_regclass('public.appointment_booking_approvals') AS table_name`);
   if(!table.rows[0]?.table_name)return null;
-  const result=await pool.query(`SELECT status FROM appointment_booking_approvals WHERE appointment_id=$1`,[appointmentId]);
+  const result=await db.query(`SELECT status FROM appointment_booking_approvals WHERE appointment_id=$1`,[appointmentId]);
   return result.rows[0]?.status||null;
 }
 
-async function sendCustomerBookingConfirmationForAppointment(appointmentId){
-  const r=await pool.query(`
+async function sendCustomerBookingConfirmationForAppointment(appointmentId,options={}){
+  const db=options.db||pool;
+  const r=await db.query(`
     SELECT a.id,a.client_id,a.starts_at,a.ends_at,a.source,l.name AS location_name,
            COALESCE((SELECT string_agg(service_name_snapshot,' + ' ORDER BY position) FROM appointment_services WHERE appointment_id=a.id),a.title,'Shiloh appointment') AS service_name,
            COALESCE((SELECT string_agg(staff_name_snapshot,' + ' ORDER BY position) FROM appointment_staff WHERE appointment_id=a.id),'Shiloh practitioner') AS staff_name
@@ -181,12 +357,41 @@ async function sendCustomerBookingConfirmationForAppointment(appointmentId){
      WHERE a.id=$1 AND a.status<>'cancelled'`,[appointmentId]);
   const a=r.rows[0];if(!a)return {sent:false,reason:'appointment_not_found'};
   if(a.source==='shiloh_client_whatsapp'){
-    const approval=await practitionerApprovalStatus(appointmentId);
+    const approval=await practitionerApprovalStatus(appointmentId,db);
     if(approval!=='approved')return {sent:false,reason:'practitioner_approval_required'};
   }
-  const already=await pool.query(`SELECT 1 FROM crm_audit_events WHERE action='customer.booking_confirmation_sent' AND entity_type='appointment' AND entity_id=$1 LIMIT 1`,[appointmentId]);
+  const already=await db.query(`SELECT 1 FROM crm_audit_events WHERE action='customer.booking_confirmation_sent' AND entity_type='appointment' AND entity_id=$1 LIMIT 1`,[appointmentId]);
   if(already.rowCount)return {sent:false,reason:'already_sent'};
-  return sendCustomerBookingConfirmation({appointmentId:a.id,clientId:a.client_id,serviceName:a.service_name,staffName:a.staff_name,locationName:a.location_name,startsAt:a.starts_at,endsAt:a.ends_at,source:a.source||'shiloh'});
+  const queued=await queueCustomerBookingConfirmation(appointmentId,{db});
+  if(queued.status==='sent')return {sent:false,reason:'already_sent',deliveryStatus:'sent'};
+  return sendCustomerBookingConfirmation({appointmentId:a.id,clientId:a.client_id,serviceName:a.service_name,staffName:a.staff_name,locationName:a.location_name,startsAt:a.starts_at,endsAt:a.ends_at,source:a.source||'shiloh'},{...options,db});
 }
 
-module.exports={sendCustomerBookingConfirmation,sendCustomerBookingConfirmationForAppointment,googleCalendarUrl,claimBookingConfirmation,releaseBookingConfirmationClaim,markBookingConfirmationSent,ensureDeliveryTable,ensureToken,practitionerApprovalStatus,shouldSendLegacyConfirmationSupplements,bookingConfirmationTemplatePayload,providerMessageId,LIVE_BOOKING_CONFIRMATION_V1,LIVE_BOOKING_CONFIRMATION_V2};
+async function flushCustomerBookingConfirmations(){
+  await ensureDeliveryTable();
+  const due=await pool.query(`
+    SELECT appointment_id
+      FROM customer_message_deliveries
+     WHERE message_kind='booking_confirmation'
+       AND status IN ('pending','failed')
+       AND next_attempt_at<=NOW()
+     ORDER BY next_attempt_at,appointment_id
+     LIMIT 25`);
+  const results=[];
+  for(const row of due.rows){
+    results.push({appointmentId:Number(row.appointment_id),result:await sendCustomerBookingConfirmationForAppointment(row.appointment_id)});
+  }
+  return {attempted:results.length,results};
+}
+
+function startCustomerBookingConfirmationScheduler(){
+  if(deliveryScheduler)return;
+  setImmediate(()=>flushCustomerBookingConfirmations().catch((error)=>logger.error({err:error},'Initial booking confirmation retry scan failed')));
+  deliveryScheduler=setInterval(()=>{
+    flushCustomerBookingConfirmations().catch((error)=>logger.error({err:error},'Initial booking confirmation retry scan failed'));
+  },BOOKING_CONFIRMATION_RETRY_MS);
+  deliveryScheduler.unref?.();
+  logger.info({retryMinutes:BOOKING_CONFIRMATION_RETRY_MS/60000},'Initial booking confirmation scheduler started');
+}
+
+module.exports={sendCustomerBookingConfirmation,sendCustomerBookingConfirmationForAppointment,queueCustomerBookingConfirmation,loadBookingConfirmationAuthority,initialDeliveryFailure,flushCustomerBookingConfirmations,startCustomerBookingConfirmationScheduler,googleCalendarUrl,claimBookingConfirmation,releaseBookingConfirmationClaim,markBookingConfirmationSent,markBookingConfirmationFailure,markBookingConfirmationUncertain,ensureDeliveryTable,ensureToken,practitionerApprovalStatus,shouldSendLegacyConfirmationSupplements,bookingConfirmationTemplatePayload,providerMessageId,LIVE_BOOKING_CONFIRMATION_V1,LIVE_BOOKING_CONFIRMATION_V2,BOOKING_CONFIRMATION_RETRY_MS};

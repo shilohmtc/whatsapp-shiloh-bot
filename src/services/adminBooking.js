@@ -11,6 +11,10 @@ const {
   createPractitionerBookingEvent,
   cancelPractitionerBookingEvent,
 } = require("./practitionerGoogleCalendar");
+const {
+  queueCustomerBookingConfirmation,
+  sendCustomerBookingConfirmationForAppointment,
+} = require("./customerBookingConfirmation");
 
 function formatLocalDateTime(value) {
   return new Intl.DateTimeFormat("en-ZA", {
@@ -148,6 +152,7 @@ async function confirmAdminBooking(admin, options = {}) {
   let practitionerEventCreatedByThisAttempt = false;
   let practitionerEventStaffName = null;
   let practitionerEventAppointmentId = null;
+  let customerConfirmationObligation = null;
   try {
     await db.query("BEGIN");
 
@@ -333,12 +338,32 @@ async function confirmAdminBooking(admin, options = {}) {
       })]
     );
 
+    customerConfirmationObligation = await queueCustomerBookingConfirmation(appointment.id, { db });
+    if (!customerConfirmationObligation?.queued && customerConfirmationObligation?.status !== "sent") {
+      throw new Error(`Initial booking confirmation obligation was not durably queued: ${customerConfirmationObligation?.reason || "unknown"}`);
+    }
+
     await db.query(`DELETE FROM admin_booking_sessions WHERE admin_id = $1`, [admin.id]);
     await db.query("COMMIT");
+
+    let customerConfirmation;
+    try {
+      customerConfirmation = await sendCustomerBookingConfirmationForAppointment(appointment.id);
+    } catch (error) {
+      console.error("Initial booking confirmation attempt failed after durable queue", { appointmentId: appointment.id, error: error.message });
+      customerConfirmation = { sent: false, deliveryStatus: "retry_pending", reason: "attempt_unavailable", retryable: true };
+    }
+    const customerConfirmationLine = customerConfirmation?.sent
+      ? "• Client confirmation: sent"
+      : customerConfirmation?.deliveryStatus === "uncertain"
+        ? "• CLIENT CONFIRMATION DELIVERY STATUS UNCERTAIN — verify with the client before resending"
+        : `• CLIENT CONFIRMATION NOT SENT — ${customerConfirmation?.deliveryStatus === "retry_pending" ? "automatic retry queued; " : ""}confirm manually now`;
 
     return {
       status: "created",
       appointmentId: appointment.id,
+      customerConfirmation,
+      customerConfirmationObligation,
       googleCalendarEventId: googleCalendarResult.event?.id || null,
       practitionerCalendarId: practitionerCalendarResult.calendarId || null,
       reply: [
@@ -350,6 +375,7 @@ async function confirmAdminBooking(admin, options = {}) {
         `• Location: ${session.location_name}`,
         googleCalendarResult.enabled ? "• Shiloh — Bookings: synced" : "• Shiloh — Bookings: not enabled yet",
         practitionerCalendarResult.enabled && practitionerCalendarResult.configured ? `• ${session.staff_name} Google Calendar: synced` : null,
+        customerConfirmationLine,
         "",
         "The production write occurred only after explicit CONFIRM BOOKING plus final clinic-hours, staff-schedule, CRM-conflict and Google Calendar checks.",
       ].filter(Boolean).join("\n"),
