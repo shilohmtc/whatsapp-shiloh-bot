@@ -16,6 +16,10 @@ function memoryDeliveryDb({
   clientStatus = 'active',
   contactId = 501,
   phone = '27820000001',
+  contactVerified = true,
+  identityVerificationId = 701,
+  verificationClientId = clientId,
+  verificationContactId = contactId,
   nameAuthorityId = 301,
   source = 'shiloh_calendar',
 } = {}) {
@@ -36,6 +40,10 @@ function memoryDeliveryDb({
       client_status: clientStatus,
       contact_id: contactId,
       client_phone: phone,
+      contact_verified: contactVerified,
+      identity_verification_id: identityVerificationId,
+      verification_client_id: verificationClientId,
+      verification_contact_id: verificationContactId,
       name_authority_id: nameAuthorityId,
     },
     delivery: null,
@@ -98,7 +106,7 @@ function memoryDeliveryDb({
       if (q.startsWith('SELECT status,last_error FROM customer_message_deliveries')) {
         return { rows: state.delivery ? [{ status: state.delivery.status, last_error: state.delivery.last_error }] : [], rowCount: state.delivery ? 1 : 0 };
       }
-      if (q.startsWith('UPDATE customer_message_deliveries SET status=\'sending\'')) {
+      if (q.startsWith("UPDATE customer_message_deliveries SET status='sending'")) {
         if (!state.delivery || !['pending', 'failed'].includes(state.delivery.status) || state.delivery.retry_due === false) return { rows: [], rowCount: 0 };
         state.delivery.status = 'sending';
         state.delivery.attempt_count += 1;
@@ -119,7 +127,7 @@ function memoryDeliveryDb({
         }
         return { rows: [], rowCount: 1 };
       }
-      if (q.startsWith('UPDATE customer_message_deliveries SET status=\'failed\'')) {
+      if (q.startsWith("UPDATE customer_message_deliveries SET status='failed'")) {
         if (!state.delivery) return { rows: [], rowCount: 0 };
         state.delivery.status = 'failed';
         state.delivery.last_error = params[1];
@@ -186,6 +194,7 @@ test('browser booking commit durably queues exactly one initial confirmation bef
   assert.equal(db.state.delivery.client_id, 101);
   assert.equal(db.state.delivery.contact_id, 501);
   assert.equal(db.state.delivery.name_authority_id, 301);
+  assert.equal(first.identityVerificationId, 701);
   assert.equal(db.state.audits.filter((event) => event.action === 'customer.booking_confirmation_queued').length, 1);
 
   const adminBooking = fs.readFileSync(path.join(ROOT, 'src/services/adminBooking.js'), 'utf8');
@@ -199,7 +208,7 @@ test('browser booking commit durably queues exactly one initial confirmation bef
   assert.match(adminBooking, /CLIENT CONFIRMATION DELIVERY STATUS UNCERTAIN/);
 });
 
-test('committed appointment sends the approved initial template with authoritative client, contact and booking details once', async () => {
+test('committed appointment sends the approved initial template with authoritative client, verified contact and booking details once', async () => {
   const db = memoryDeliveryDb();
   const providerCalls = [];
   const provider = async (...args) => {
@@ -233,6 +242,8 @@ test('committed appointment sends the approved initial template with authoritati
   assert.equal(db.state.delivery.provider_message_id, 'wamid.initial.901');
   assert.equal(db.state.delivery.attempt_count, 1);
   assert.equal(db.state.audits.filter((event) => event.action === 'customer.booking_confirmation_sent').length, 1);
+  const sentAudit = db.state.audits.find((event) => event.action === 'customer.booking_confirmation_sent');
+  assert.equal(sentAudit.metadata.identityVerificationId, 701);
   assert.equal(JSON.stringify(db.state.delivery).includes('27820000001'), false);
   assert.equal(JSON.stringify(db.state.audits).includes('27820000001'), false);
 });
@@ -321,9 +332,9 @@ test('ambiguous transport result becomes actionable uncertain state and is never
   assert.equal(attempts, 1);
 });
 
-test('missing contact and inactive canonical authority fail visibly without selecting a same-name duplicate', async () => {
+test('missing contact, missing name authority and inactive canonical authority fail visibly without selecting a same-name duplicate', async () => {
   for (const fixture of [
-    { contactId: null, phone: null, expected: 'client_contact_not_found' },
+    { contactId: null, phone: null, identityVerificationId: null, verificationContactId: null, expected: 'client_contact_not_found' },
     { nameAuthorityId: null, expected: 'client_name_authority_not_found' },
     { clientStatus: 'inactive', expected: 'canonical_client_inactive' },
   ]) {
@@ -355,6 +366,88 @@ test('missing contact and inactive canonical authority fail visibly without sele
   assert.match(ux, /BOOKED — CLIENT CONFIRMATION NOT SENT/);
 });
 
+test('unverified imported contact is durable manual action and never reaches the provider', async () => {
+  const db = memoryDeliveryDb({
+    contactVerified: false,
+    identityVerificationId: null,
+    verificationClientId: null,
+    verificationContactId: null,
+  });
+  let providerCalls = 0;
+  const result = await confirmation.sendCustomerBookingConfirmationForAppointment(901, deliveryOptions(db, async () => {
+    providerCalls += 1;
+    return { messages: [{ id: 'must-not-send' }] };
+  }));
+
+  assert.equal(result.sent, false);
+  assert.equal(result.reason, 'client_contact_unverified');
+  assert.equal(result.deliveryStatus, 'manual_action_required');
+  assert.equal(providerCalls, 0);
+  assert.equal(db.state.delivery.status, 'failed');
+  assert.equal(db.state.delivery.last_error, 'client_contact_unverified');
+});
+
+test('identity verification must be bound to the exact canonical client and selected contact', async () => {
+  for (const fixture of [
+    { verificationClientId: 999 },
+    { verificationContactId: 999 },
+    { identityVerificationId: null, verificationClientId: null, verificationContactId: null },
+  ]) {
+    const db = memoryDeliveryDb(fixture);
+    let providerCalls = 0;
+    const result = await confirmation.sendCustomerBookingConfirmationForAppointment(901, deliveryOptions(db, async () => {
+      providerCalls += 1;
+      return { messages: [{ id: 'must-not-send' }] };
+    }));
+    assert.equal(result.sent, false);
+    assert.equal(result.reason, 'client_contact_unverified');
+    assert.equal(result.deliveryStatus, 'manual_action_required');
+    assert.equal(providerCalls, 0);
+  }
+
+  const authoritySql = fs.readFileSync(path.join(ROOT, 'src/services/customerBookingConfirmation.js'), 'utf8');
+  assert.match(authoritySql, /v\.client_id=c\.id/);
+  assert.match(authoritySql, /v\.client_contact_id=cc\.id/);
+  assert.match(authoritySql, /v\.status='active'/);
+  assert.match(authoritySql, /cc\.verified_at IS NOT NULL/);
+  assert.match(authoritySql, /LOWER\(cc\.contact_type\) IN \('whatsapp','mobile'\)/);
+});
+
+test('manual-action obligation becomes sendable exactly once after exact recipient authority is established', async () => {
+  const db = memoryDeliveryDb({
+    appointmentId: 906,
+    contactVerified: false,
+    identityVerificationId: null,
+    verificationClientId: null,
+    verificationContactId: null,
+  });
+  let providerCalls = 0;
+  const options = deliveryOptions(db, async () => {
+    providerCalls += 1;
+    return { messages: [{ id: 'wamid.initial.906' }] };
+  });
+
+  const blocked = await confirmation.sendCustomerBookingConfirmationForAppointment(906, options);
+  assert.equal(blocked.sent, false);
+  assert.equal(blocked.reason, 'client_contact_unverified');
+  assert.equal(providerCalls, 0);
+  assert.equal(db.state.delivery.status, 'failed');
+
+  db.state.authority.contact_verified = true;
+  db.state.authority.identity_verification_id = 706;
+  db.state.authority.verification_client_id = 101;
+  db.state.authority.verification_contact_id = 501;
+  db.state.delivery.retry_due = true;
+
+  const sent = await confirmation.sendCustomerBookingConfirmationForAppointment(906, options);
+  const replay = await confirmation.sendCustomerBookingConfirmationForAppointment(906, options);
+  assert.equal(sent.sent, true);
+  assert.equal(replay.sent, false);
+  assert.equal(replay.reason, 'already_sent');
+  assert.equal(providerCalls, 1);
+  assert.equal(db.state.delivery.status, 'sent');
+});
+
 test('rolled-back or failed booking cannot retain an initial confirmation obligation', async () => {
   const db = memoryDeliveryDb({ appointmentId: 903 });
   await db.query('BEGIN');
@@ -367,13 +460,19 @@ test('rolled-back or failed booking cannot retain an initial confirmation obliga
   assert.match(adminBooking, /catch \(error\) \{[\s\S]*await db\.query\("ROLLBACK"\)/);
 });
 
-test('migration 083 upgrades only initial-confirmation delivery evidence and preserves independent workstreams', () => {
+test('migration 083 is expand-only for old-artifact compatibility and preserves independent workstreams', () => {
   const migration = fs.readFileSync(path.join(ROOT, 'migrations/083_initial_booking_confirmation_guarantee.sql'), 'utf8');
+  const service = fs.readFileSync(path.join(ROOT, 'src/services/customerBookingConfirmation.js'), 'utf8');
   assert.match(migration, /customer_message_deliveries_status_check/);
   assert.match(migration, /'pending', 'sending', 'sent', 'failed', 'uncertain'/);
   assert.match(migration, /attempt_count/);
   assert.match(migration, /next_attempt_at/);
   assert.match(migration, /contact_id/);
   assert.match(migration, /name_authority_id/);
+  assert.match(migration, /client_id BIGINT REFERENCES clients\(id\)/);
+  assert.doesNotMatch(migration, /ALTER COLUMN client_id SET NOT NULL/);
+  assert.doesNotMatch(service, /ALTER COLUMN client_id SET NOT NULL/);
+  assert.doesNotMatch(service, /client_id BIGINT NOT NULL REFERENCES clients\(id\)/);
+  assert.match(service, /client_id BIGINT REFERENCES clients\(id\)/);
   assert.doesNotMatch(migration, /staff_totp|staff_auth|emergency_calendar_bootstrap/i);
 });
