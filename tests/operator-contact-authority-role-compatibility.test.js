@@ -27,6 +27,7 @@ test('legacy owner compatibility remains bounded by business_role=owner', () => 
     OPERATOR_ROLES.OPERATIONS_ADMIN
   );
   assert.equal(operatorRoleForAdmin({ role: 'owner', business_role: 'employee_practitioner' }), null);
+  assert.equal(operatorRoleForAdmin({ role: 'owner', business_role: 'business_admin' }), null);
 });
 
 test('native capability roles remain unchanged and non-operators remain denied', () => {
