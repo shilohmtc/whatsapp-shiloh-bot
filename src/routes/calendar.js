@@ -8,6 +8,7 @@ const { createPilotGuardedStaffBrowserSessionService } = require('../services/st
 const { createStaffBrowserSessionRouter } = require('./staffBrowserSession');
 const { createStaffBrowserChallengeDispatcher } = require('../services/staffBrowserChallengeDelivery');
 const { createOptionalCalendarSessionMiddleware } = require('../middleware/staffBrowserSession');
+const { createOperatorContactAuthorityRouter } = require('./operatorContactAuthority');
 const router = express.Router();
 
 const baseStaffBrowserSessionService = createStaffBrowserSessionService({
@@ -42,6 +43,7 @@ router.get('/:token.ics',async(req,res,next)=>{try{
 
 router.use('/staff-auth', createStaffBrowserSessionRouter({ service: staffBrowserSessionService }));
 router.use('/staff', staffCalendarAccessUxRoutes);
+router.use('/client-authority', createOperatorContactAuthorityRouter({ sessionService: staffBrowserSessionService }));
 router.use('/book', createCalendarCreateBookingRouter({ sessionService: staffBrowserSessionService }));
 router.use('/read-only', createOptionalCalendarSessionMiddleware({ service: staffBrowserSessionService }), calendarReadOnlyUxRoutes);
 

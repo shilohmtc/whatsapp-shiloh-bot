@@ -17,7 +17,7 @@ function styles() {
 
 function renderCalendarCreateBookingPage({ options = { staff: [], services: [] }, date = '', clientScriptPath = '/calendar/book/client.js' } = {}) {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Create Shiloh booking</title><style>${styles()}</style><script src="${escapeHtml(clientScriptPath)}" defer></script></head><body data-calendar-create-booking="true"><div class="shell">
-    <header class="topbar"><div><h1>Create booking</h1><p>Christel emergency Calendar booking • guarded canonical write</p></div><a data-back-calendar href="/calendar/read-only${date ? `?view=day&date=${escapeHtml(date)}` : ''}">← Back to Calendar</a></header>
+    <header class="topbar"><div><h1>Create booking</h1><p>Christel emergency Calendar booking • guarded canonical write</p></div><div class="actions"><a href="/calendar/client-authority">Confirm client contact</a><a data-back-calendar href="/calendar/read-only${date ? `?view=day&date=${escapeHtml(date)}` : ''}">← Back to Calendar</a></div></header>
     <main>
       <section class="panel"><div class="steps">
         <div class="field"><label for="booking-date">Date</label><input id="booking-date" type="date" value="${escapeHtml(date)}" required></div>
