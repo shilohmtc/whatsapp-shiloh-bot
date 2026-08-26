@@ -33,7 +33,7 @@ function canonicalId(value, code, message) {
   return id;
 }
 
-// The legacy role column still contains admin/manager. These mappings expose the
+// The legacy role column still contains admin/manager/owner. These mappings expose the
 // ratified capability roles without renaming production accounts or adding a
 // second staff-authority model: JP's business_admin authority is super_admin and
 // Christel's owner authority is operations_admin.
@@ -42,7 +42,7 @@ function operatorRoleForAdmin(admin = {}) {
   const businessRole = String(admin.business_role || '').trim().toLowerCase();
   if (role === OPERATOR_ROLES.SUPER_ADMIN || role === OPERATOR_ROLES.OPERATIONS_ADMIN) return role;
   if (businessRole === 'business_admin' && role === 'admin') return OPERATOR_ROLES.SUPER_ADMIN;
-  if (businessRole === 'owner' && ['manager', 'admin'].includes(role)) return OPERATOR_ROLES.OPERATIONS_ADMIN;
+  if (businessRole === 'owner' && ['owner', 'manager', 'admin'].includes(role)) return OPERATOR_ROLES.OPERATIONS_ADMIN;
   return null;
 }
 
