@@ -97,7 +97,10 @@ test('booking confirmation has a durable per-appointment delivery claim', () => 
 
 test('unverified booking-confirmation recipient is exposed as manual action rather than ordinary retry', () => {
   assert.match(bookingConfirmation, /return 'client_contact_unverified'/);
+  assert.match(bookingConfirmation, /exactPhoneCandidates/);
+  assert.match(bookingConfirmation, /return 'client_contact_ambiguous'/);
   assert.match(calendarCreateBookingRoute, /'client_contact_unverified'/);
+  assert.match(calendarCreateBookingRoute, /'client_contact_ambiguous'/);
   assert.match(calendarCreateBookingRoute, /status: manualAction \? 'manual_action_required' : 'retry_pending'/);
 });
 

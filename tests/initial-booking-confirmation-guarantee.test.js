@@ -46,6 +46,21 @@ function memoryDeliveryDb({
       verification_contact_id: verificationContactId,
       name_authority_id: nameAuthorityId,
     },
+    phoneCandidateRows: contactId && phone ? [{
+      id: clientId,
+      display_name: 'Ma Marinda',
+      date_of_birth: '1970-01-01',
+      status: clientStatus,
+      source: 'whatsapp_registration',
+      gender: null,
+      registration_status: 'complete',
+      profile_incomplete: 'false',
+      contact_id: contactId,
+      contact_type: 'whatsapp',
+      normalized_value: phone,
+      verified_at: contactVerified ? '2026-08-26T00:00:00.000Z' : null,
+      has_appointment_history: true,
+    }] : [],
     delivery: null,
     audits: [],
     calls: [],
@@ -82,6 +97,10 @@ function memoryDeliveryDb({
         return state.appointment && Number(params[0]) === Number(state.appointment.id)
           ? { rows: [{ ...state.authority }], rowCount: 1 }
           : { rows: [], rowCount: 0 };
+      }
+      if (q.startsWith('SELECT c.id, c.display_name') && q.includes("cc.contact_type IN ('whatsapp','mobile')")) {
+        const rows = state.phoneCandidateRows.filter((row) => row.normalized_value === params[0]);
+        return { rows: clone(rows), rowCount: rows.length };
       }
       if (q.startsWith('INSERT INTO customer_message_deliveries')) {
         if (state.delivery) return { rows: [], rowCount: 0 };
@@ -206,6 +225,112 @@ test('browser booking commit durably queues exactly one initial confirmation bef
   assert.ok(appointmentInsert >= 0 && obligation > appointmentInsert && commit > obligation && attempt > commit);
   assert.match(adminBooking, /CLIENT CONFIRMATION NOT SENT/);
   assert.match(adminBooking, /CLIENT CONFIRMATION DELIVERY STATUS UNCERTAIN/);
+});
+
+test('queue-time phone ownership ambiguity creates a durable manual-action obligation without a delivery claim', async () => {
+  const db = memoryDeliveryDb({ appointmentId: 907 });
+  db.state.phoneCandidateRows.push({
+    ...db.state.phoneCandidateRows[0],
+    id: 202,
+    display_name: 'Another active client',
+    contact_id: 902,
+    contact_type: 'mobile',
+  });
+
+  const queued = await confirmation.queueCustomerBookingConfirmation(907, { db });
+
+  assert.equal(queued.queued, true);
+  assert.equal(queued.status, 'failed');
+  assert.equal(queued.reason, 'client_contact_ambiguous');
+  assert.equal(db.state.delivery.status, 'failed');
+  assert.equal(db.state.delivery.last_error, 'client_contact_ambiguous');
+  assert.equal(db.state.calls.some((call) => call.sql.startsWith("UPDATE customer_message_deliveries SET status='sending'")), false);
+  assert.equal(db.state.audits.some((event) => event.action === 'customer.booking_confirmation_sent'), false);
+  assert.equal(JSON.stringify(db.state.delivery).includes('27820000001'), false);
+  assert.equal(JSON.stringify(db.state.audits).includes('27820000001'), false);
+  assert.deepEqual(db.state.audits[0].metadata, {
+    initialStatus: 'failed',
+    reason: 'client_contact_ambiguous',
+  });
+  assert.deepEqual(customerConfirmationState({ customerConfirmationObligation: queued }), {
+    status: 'manual_action_required',
+    sent: false,
+    retryable: true,
+    reason: 'client_contact_ambiguous',
+  });
+});
+
+test('queue-time ownership revalidation requires the exact canonical client and selected contact ID', async () => {
+  for (const mutateCandidate of [
+    (candidate) => ({ ...candidate, id: 202 }),
+    (candidate) => ({ ...candidate, contact_id: 902 }),
+  ]) {
+    const db = memoryDeliveryDb({ appointmentId: 909 });
+    db.state.phoneCandidateRows = [mutateCandidate(db.state.phoneCandidateRows[0])];
+
+    const queued = await confirmation.queueCustomerBookingConfirmation(909, { db });
+
+    assert.equal(queued.queued, true);
+    assert.equal(queued.status, 'failed');
+    assert.equal(queued.reason, 'client_contact_ambiguous');
+    assert.equal(db.state.delivery.last_error, 'client_contact_ambiguous');
+  }
+});
+
+test('delivery-time ownership drift blocks claim, lifecycle and provider, then the same obligation retries exactly once after resolution', async () => {
+  const db = memoryDeliveryDb({ appointmentId: 908 });
+  let providerCalls = 0;
+  let lifecycleCalls = 0;
+  let ambiguityIntroduced = false;
+  const blockedOptions = deliveryOptions(db, async () => {
+    providerCalls += 1;
+    return { messages: [{ id: 'must-not-send-while-ambiguous' }] };
+  });
+  blockedOptions.enrollLifecycle = async () => { lifecycleCalls += 1; return { id: 1 }; };
+  blockedOptions.resolveName = async () => {
+    if (!ambiguityIntroduced) {
+      db.state.phoneCandidateRows.push({
+        ...db.state.phoneCandidateRows[0],
+        id: 202,
+        display_name: 'Another active client',
+        contact_id: 902,
+        contact_type: 'mobile',
+      });
+      ambiguityIntroduced = true;
+    }
+    return { name: 'Ma Marinda', authorityId: 301 };
+  };
+
+  const blocked = await confirmation.sendCustomerBookingConfirmationForAppointment(908, blockedOptions);
+
+  assert.equal(blocked.sent, false);
+  assert.equal(blocked.reason, 'client_contact_ambiguous');
+  assert.equal(blocked.deliveryStatus, 'manual_action_required');
+  assert.equal(providerCalls, 0);
+  assert.equal(lifecycleCalls, 0);
+  assert.equal(db.state.delivery.status, 'failed');
+  assert.equal(db.state.delivery.last_error, 'client_contact_ambiguous');
+  assert.equal(db.state.calls.some((call) => call.sql.startsWith("UPDATE customer_message_deliveries SET status='sending'")), false);
+  assert.equal(db.state.audits.some((event) => event.action === 'customer.booking_confirmation_sent'), false);
+
+  db.state.phoneCandidateRows = db.state.phoneCandidateRows.filter((row) => Number(row.id) === 101);
+  db.state.delivery.retry_due = true;
+  const retryOptions = deliveryOptions(db, async () => {
+    providerCalls += 1;
+    return { messages: [{ id: 'wamid.initial.908' }] };
+  });
+  retryOptions.enrollLifecycle = async () => { lifecycleCalls += 1; return { id: 1 }; };
+
+  const retried = await confirmation.sendCustomerBookingConfirmationForAppointment(908, retryOptions);
+  const replay = await confirmation.sendCustomerBookingConfirmationForAppointment(908, retryOptions);
+
+  assert.equal(retried.sent, true);
+  assert.equal(replay.sent, false);
+  assert.equal(replay.reason, 'already_sent');
+  assert.equal(providerCalls, 1);
+  assert.equal(lifecycleCalls, 1);
+  assert.equal(db.state.delivery.status, 'sent');
+  assert.equal(db.state.audits.filter((event) => event.action === 'customer.booking_confirmation_sent').length, 1);
 });
 
 test('committed appointment sends the approved initial template with authoritative client, verified contact and booking details once', async () => {

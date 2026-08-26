@@ -9,6 +9,7 @@ const {
 const { postConfirmationButtons, bookingConfirmationV2QuickReplyPayloads } = require('./clientBookingInteractive');
 const { createAppointment: enrollAppointmentLifecycle } = require('./appointmentLifecycle');
 const { resolveClientFacingName } = require('./clientFacingNameAuthority');
+const { exactPhoneCandidates } = require('./clientVerifiedIdentity');
 const logger = require('../lib/logger');
 
 const LIVE_BOOKING_CONFIRMATION_V1 = 'shiloh_booking_confirmation_v1';
@@ -166,13 +167,26 @@ function initialDeliveryFailure(authority){
   return null;
 }
 
+async function contactOwnershipFailure(authority,db=pool){
+  const candidates=await exactPhoneCandidates(authority.client_phone,db);
+  const candidate=candidates[0];
+  const contactIds=candidate?.contact_ids||[];
+  if(candidates.length!==1
+    ||String(candidate.id)!==String(authority.client_id)
+    ||!contactIds.some((contactId)=>String(contactId)===String(authority.contact_id))){
+    return 'client_contact_ambiguous';
+  }
+  return null;
+}
+
 async function queueCustomerBookingConfirmation(appointmentId,{db=pool}={}){
   if(db===pool)await ensureDeliveryTable();
   const legacy=await db.query(`SELECT 1 FROM crm_audit_events WHERE action='customer.booking_confirmation_sent' AND entity_type='appointment' AND entity_id=$1 LIMIT 1`,[appointmentId]);
   if(legacy.rowCount)return {queued:false,status:'sent',reason:'already_sent'};
   const authority=await loadBookingConfirmationAuthority(appointmentId,db);
   if(!authority)return {queued:false,status:'failed',reason:'appointment_not_found'};
-  const failure=initialDeliveryFailure(authority);
+  const initialFailure=initialDeliveryFailure(authority);
+  const failure=initialFailure||await contactOwnershipFailure(authority,db);
   const inserted=await db.query(`
     INSERT INTO customer_message_deliveries
       (appointment_id,message_kind,status,client_id,contact_id,name_authority_id,next_attempt_at,last_error)
@@ -184,11 +198,14 @@ async function queueCustomerBookingConfirmation(appointmentId,{db=pool}={}){
     const existing=await db.query(`SELECT status,last_error FROM customer_message_deliveries WHERE appointment_id=$1 AND message_kind='booking_confirmation'`,[appointmentId]);
     return {queued:false,status:existing.rows[0]?.status||'unknown',reason:existing.rows[0]?.last_error||'already_queued'};
   }
+  const auditMetadata=failure==='client_contact_ambiguous'
+    ? {initialStatus:'failed',reason:failure}
+    : {clientId:Number(authority.client_id),contactId:authority.contact_id?Number(authority.contact_id):null,identityVerificationId:authority.identity_verification_id?Number(authority.identity_verification_id):null,nameAuthorityId:authority.name_authority_id?Number(authority.name_authority_id):null,initialStatus:failure?'failed':'pending',reason:failure};
   await db.query(`
     INSERT INTO crm_audit_events(action,entity_type,entity_id,metadata)
     VALUES('customer.booking_confirmation_queued','appointment',$1,$2::jsonb)`,[
     String(appointmentId),
-    JSON.stringify({clientId:Number(authority.client_id),contactId:authority.contact_id?Number(authority.contact_id):null,identityVerificationId:authority.identity_verification_id?Number(authority.identity_verification_id):null,nameAuthorityId:authority.name_authority_id?Number(authority.name_authority_id):null,initialStatus:failure?'failed':'pending',reason:failure}),
+    JSON.stringify(auditMetadata),
   ]);
   return {queued:true,status:failure?'failed':'pending',reason:failure,clientId:Number(authority.client_id),contactId:authority.contact_id?Number(authority.contact_id):null,identityVerificationId:authority.identity_verification_id?Number(authority.identity_verification_id):null,nameAuthorityId:authority.name_authority_id?Number(authority.name_authority_id):null};
 }
@@ -295,6 +312,11 @@ async function sendCustomerBookingConfirmation(data,{
     }
     const clientName=nameResolution.name;
     const phone=authority.client_phone;
+    const ownershipFailure=await contactOwnershipFailure(authority,db);
+    if(ownershipFailure){
+      await markBookingConfirmationFailure(appointmentId,ownershipFailure,{clientId:authority.client_id,contactId:authority.contact_id,nameAuthorityId:nameResolution.authorityId||authority.name_authority_id,db});
+      return {sent:false,reason:ownershipFailure,deliveryStatus:'manual_action_required',retryable:true};
+    }
     claimed=await claimBookingConfirmation(appointmentId,{clientId:authority.client_id,contactId:authority.contact_id,nameAuthorityId:nameResolution.authorityId||authority.name_authority_id,db});
     if(!claimed){
       const existing=await db.query(`SELECT status,last_error FROM customer_message_deliveries WHERE appointment_id=$1 AND message_kind='booking_confirmation'`,[appointmentId]);
