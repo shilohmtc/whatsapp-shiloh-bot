@@ -8,6 +8,7 @@ const reminder = fs.readFileSync(path.join(root, 'src/services/appointmentRemind
 const lifecycle = fs.readFileSync(path.join(root, 'src/services/appointmentLifecycle.js'), 'utf8');
 const care = fs.readFileSync(path.join(root, 'src/services/customerCare.js'), 'utf8');
 const bookingConfirmation = fs.readFileSync(path.join(root, 'src/services/customerBookingConfirmation.js'), 'utf8');
+const calendarCreateBookingRoute = fs.readFileSync(path.join(root, 'src/routes/calendarCreateBooking.js'), 'utf8');
 const reminderTemplate = fs.readFileSync(path.join(root, 'src/services/reminderActionTemplateProvisioning.js'), 'utf8');
 const whatsapp = fs.readFileSync(path.join(root, 'src/services/whatsapp.js'), 'utf8');
 const { parseConfirmationCommand } = require('../src/services/appointmentReminderConfirmation');
@@ -92,6 +93,12 @@ test('booking confirmation has a durable per-appointment delivery claim', () => 
   assert.match(bookingConfirmation, /PRIMARY KEY \(appointment_id,message_kind\)/);
   assert.match(bookingConfirmation, /ON CONFLICT \(appointment_id,message_kind\) DO NOTHING/);
   assert.match(bookingConfirmation, /already_sent_or_in_progress/);
+});
+
+test('unverified booking-confirmation recipient is exposed as manual action rather than ordinary retry', () => {
+  assert.match(bookingConfirmation, /return 'client_contact_unverified'/);
+  assert.match(calendarCreateBookingRoute, /'client_contact_unverified'/);
+  assert.match(calendarCreateBookingRoute, /status: manualAction \? 'manual_action_required' : 'retry_pending'/);
 });
 
 test('durable confirmation claim precedes lifecycle enrollment and provider send', () => {
