@@ -40,7 +40,7 @@ function customerConfirmationState(result) {
   if (delivery.deliveryStatus === 'uncertain' || reason === 'delivery_state_uncertain') {
     return { status: 'delivery_status_uncertain', sent: false, retryable: false, reason: 'delivery_state_uncertain' };
   }
-  const manualAction = ['client_contact_not_found', 'client_name_authority_not_found', 'canonical_client_inactive'].includes(reason);
+  const manualAction = ['client_contact_not_found', 'client_contact_unverified', 'client_name_authority_not_found', 'canonical_client_inactive'].includes(reason);
   return {
     status: manualAction ? 'manual_action_required' : 'retry_pending',
     sent: false,
