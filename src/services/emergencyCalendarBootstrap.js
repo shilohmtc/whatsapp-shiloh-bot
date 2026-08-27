@@ -196,7 +196,7 @@ function createEmergencyCalendarBootstrapService({
          RETURNING id`,
         [bootstrap.id, current]
       );
-      if (consumed.rows.length !== 1) {
+      if (Number(consumed.rowCount ?? consumed.rows.length) !== 1) {
         await client.query('ROLLBACK');
         return { ok: false, code: 'EMERGENCY_CALENDAR_INVALID_BOOTSTRAP' };
       }
