@@ -18,7 +18,7 @@ test('next-available picker aggregates authoritative slots and excludes current 
   assert.match(helper, /getNextOpenClinicDates/);
   assert.match(helper, /listAvailableSlots/);
   assert.match(helper, /excludeAppointmentId: context\.id/);
-  assert.match(helper, /ignoreEventId: context\.event_id \|\| null/);
+  assert.doesNotMatch(helper, /ignoreEventId|appointment_calendar_events/);
   assert.match(helper, /startMs === currentStart/);
   assert.match(helper, /Next available times/);
   assert.match(helper, /More times/);

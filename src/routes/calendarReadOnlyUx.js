@@ -36,18 +36,30 @@ function statusForError(error) {
 }
 
 function safeUnavailableMessage(error) {
-  if (error?.code === 'SCHEDULING_GOOGLE_CALENDAR_REQUIRED') return 'Google Calendar provider state is unavailable, so Shiloh Calendar is failing closed.';
   if (error?.code === 'CALENDAR_UX_STAFF_FILTER_FORBIDDEN') return 'That practitioner is outside your authenticated Calendar scope.';
   if (statusForError(error) === 400) return 'The requested Calendar view or filter is invalid.';
   if (statusForError(error) === 403) return 'Your authenticated Shiloh access does not permit this Calendar view.';
   return 'SchedulingTimeline is unavailable, so Shiloh Calendar is failing closed.';
 }
 
+function bookingOperationalActions(dateKey, bookingPath = '/calendar/book') {
+  const href = `${bookingPath}?date=${encodeURIComponent(String(dateKey || ''))}`;
+  return [{ label: 'Create booking', href, tone: 'primary' }];
+}
+
+function applyCalendarResponsivePolish(html) {
+  return String(html).replace(
+    '.controls{position:sticky;top:0;z-index:5;grid-template-columns:1fr 1fr;',
+    '.controls{position:sticky;top:0;z-index:5;grid-template-columns:1fr;',
+  );
+}
+
+// Compatibility fallback for renderers that do not yet consume operationalActions.
+// Authority is resolved server-side before this decoration is ever used.
 function decorateEmergencyBookingEntry(html, dateKey, bookingPath = '/calendar/book') {
   const href = `${bookingPath}?date=${encodeURIComponent(String(dateKey || ''))}`;
   return String(html)
-    .replace('<div class="access-controls">', `<div class="access-controls"><a class="nav-button" href="${href}">Create booking</a><a class="nav-button" href="/calendar/client-authority">Confirm client contact</a>`)
-    .replace('Africa/Johannesburg • Read-only • Google-only busy is non-canonical', 'Africa/Johannesburg • Read-only timeline • Google-only busy is non-canonical')
+    .replace('<div class="access-controls">', `<div class="access-controls"><a class="nav-button" href="${href}">Create booking</a>`)
     .replace('Read-only operational view. Booking, reschedule, cancellation, block, leave and schedule mutations are not available here.', 'Timeline remains read-only. New booking creation uses the separately guarded canonical workflow. Reschedule, cancellation, drag/drop, reassignment, block, leave and schedule mutations are not available here.');
 }
 
@@ -84,20 +96,31 @@ function createCalendarReadOnlyHandler({
         staff: req.query?.staff,
         viewer,
       });
+
+      let bookingAllowed = false;
+      if (isEmergencyCalendarBookingEnabled(env)) {
+        try {
+          await bookingService.resolveOperator(req.staffBrowserSession?.adminId);
+          bookingAllowed = true;
+        } catch (_bookingAuthorityError) {
+          // Timeline remains safe. Booking entry fails closed while /calendar/book
+          // independently revalidates current operator authority.
+        }
+      }
+
       let html = renderPage(model, {
         basePath: req.baseUrl || '/calendar/read-only',
         staffAccessPath,
         staffAccessScriptPath: `${staffAccessPath}/client.js`,
+        operationalActions: bookingAllowed ? bookingOperationalActions(model.dateKey, bookingPath) : [],
+        timelineReadOnlyMessage: bookingAllowed
+          ? 'Timeline remains read-only. New booking creation uses the separately guarded canonical workflow. Reschedule, cancellation, drag/drop, reassignment, block, leave and schedule mutations are not available here.'
+          : 'Read-only operational view. Booking, reschedule, cancellation, block, leave and schedule mutations are not available here.',
       });
+      html = applyCalendarResponsivePolish(html);
 
-      if (isEmergencyCalendarBookingEnabled(env)) {
-        try {
-          await bookingService.resolveOperator(req.staffBrowserSession?.adminId);
-          html = decorateEmergencyBookingEntry(html, model.dateKey, bookingPath);
-        } catch (_bookingAuthorityError) {
-          // The timeline is still safe to render, but booking entry must fail closed.
-          // The /calendar/book surface independently revalidates the same authority.
-        }
+      if (bookingAllowed && !String(html).includes('aria-label="Calendar actions"')) {
+        html = decorateEmergencyBookingEntry(html, model.dateKey, bookingPath);
       }
       return res.status(200).type('html').send(html);
     } catch (error) {
@@ -125,3 +148,5 @@ module.exports.isFeatureEnabled = isFeatureEnabled;
 module.exports.resolveServerViewer = resolveServerViewer;
 module.exports.setCalendarSecurityHeaders = setCalendarSecurityHeaders;
 module.exports.decorateEmergencyBookingEntry = decorateEmergencyBookingEntry;
+module.exports.bookingOperationalActions = bookingOperationalActions;
+module.exports.applyCalendarResponsivePolish = applyCalendarResponsivePolish;

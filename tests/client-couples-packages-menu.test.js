@@ -101,7 +101,7 @@ test('migration creates one Shiloh-owned Couples Massage service and booking-onl
   assert.doesNotMatch(sql, /INSERT INTO client_contacts/i);
 });
 
-test('booking commit locks and writes both practitioners atomically and compensates calendar mirrors', () => {
+test('booking commit locks and writes both practitioners atomically without external mirrors', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'services', 'clientCouplesMassageBooking.js'), 'utf8');
   assert.match(source, /lockIds = foundation\.staff\.map/);
   assert.match(source, /pg_advisory_xact_lock/);
@@ -109,25 +109,26 @@ test('booking commit locks and writes both practitioners atomically and compensa
   assert.match(source, /INSERT INTO appointment_staff/);
   assert.match(source, /INSERT INTO appointment_companions/);
   assert.match(source, /'booking_backup',FALSE/);
-  assert.match(source, /createPractitionerBookingEvent/);
-  assert.match(source, /cancelPractitionerBookingEvents\(\{ appointmentId: createdAppointmentId/);
+  assert.doesNotMatch(source, /createPractitionerBookingEvent|cancelPractitionerBookingEvents|appointment_calendar_events/);
   assert.match(source, /stageCreatedBookingForApproval/);
   assert.match(source, /POLICY_TEXT/);
 });
 
-test('Admin cancellation locks every assigned practitioner and cancels every practitioner mirror', () => {
+test('Admin cancellation locks every assigned practitioner and leaves external snapshots untouched', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'services', 'adminAppointmentCancellation.js'), 'utf8');
   assert.match(source, /getAppointmentStaff\(appointmentId,client\)/);
   assert.match(source, /for\(const staff of assignedStaff\)\{await client\.query\(`SELECT pg_advisory_xact_lock/);
-  assert.match(source, /cancelPractitionerBookingEvents\(\{ appointmentId, staffNames \}\)/);
+  assert.match(source, /historical_snapshot_untouched/);
+  assert.doesNotMatch(source, /cancelPractitionerBookingEvents|appointment_calendar_events/);
 });
 
-test('Client cancellation routes multi-staff bookings through all-staff locks and mirror cleanup while reschedule already fails closed', () => {
+test('Client cancellation locks all assigned staff while leaving historical external snapshots untouched', () => {
   const patchSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'bootstrap', 'clientMultiStaffAppointmentChangePatch.js'), 'utf8');
   const appointmentChangeSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'services', 'appointmentChange.js'), 'utf8');
   const preload = fs.readFileSync(path.join(__dirname, '..', 'src', 'bootstrap', 'clientCouplesPackagesPatch.js'), 'utf8');
   assert.match(patchSource, /for \(const staff of assignedStaff\) await db\.query\('SELECT pg_advisory_xact_lock/);
-  assert.match(patchSource, /cancelPractitionerBookingEvents\(\{ appointmentId, staffNames \}\)/);
+  assert.match(patchSource, /historical_snapshot_untouched/);
+  assert.doesNotMatch(patchSource, /cancelPractitionerBookingEvents|appointment_calendar_events|googleBookingCalendar/);
   assert.match(patchSource, /multiStaffSafe: true/);
   assert.match(appointmentChangeSource, /staff_count\)!==1/);
   assert.match(appointmentChangeSource, /complex practitioner setup/);

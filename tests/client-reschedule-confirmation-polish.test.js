@@ -17,7 +17,7 @@ test('successful reschedule reply stays client-friendly while using the existing
   assert.match(availabilitySource, /processAppointmentChangeMessage/);
   assert.match(availabilitySource, /✅ Appointment rescheduled/);
   assert.match(availabilitySource, /We look forward to seeing you\. 🌿/);
-  assert.match(availabilitySource, /Your Shiloh CRM booking and Google Calendar event are synchronized/);
+  assert.match(availabilitySource, /Your Shiloh appointment is updated/);
 });
 
 test('successful reschedule schedules the same calendar and change controls as booking confirmation', () => {

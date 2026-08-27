@@ -51,11 +51,15 @@ test('booking-path audit covers unavailable practitioner and fail-closed slot co
     'src/services/availabilityService.js',
     'src/services/clientBookingCommit.js'
   );
+  const operationalSources = combined(
+    'src/services/clientBookingAvailability.js',
+    'src/services/availabilityService.js',
+    'src/services/clientBookingCommit.js'
+  );
   assert.match(availability, /revalidat/i);
   assert.match(availability, /conflict/i);
   assert.match(availability, /stale|unavailable/i);
-  assert.match(availability, /checkCalendarAvailability/);
-  assert.match(availability, /checkPractitionerCalendarAvailability|practitioner calendar/i);
+  assert.doesNotMatch(operationalSources, /checkCalendarAvailability|checkPractitionerCalendarAvailability|appointment_calendar_events/);
 });
 
 test('booking-path audit covers explicit policy acceptance before canonical appointment creation', () => {
@@ -71,30 +75,24 @@ test('booking-path audit covers explicit policy acceptance before canonical appo
   assert.match(policy, /FOR UPDATE/);
 });
 
-test('booking-path audit covers shared and practitioner calendar mirroring plus integrity monitoring', () => {
+test('booking-path audit covers Google decommission plus legacy integrity monitoring', () => {
   const calendars = combined(
     'tests/practitioner-calendar-sync.test.js',
     'tests/client-canonical-booking-commit.test.js',
     'src/services/googleBookingCalendar.js',
     'src/services/bookingIntegrityMonitor.js'
   );
-  assert.match(calendars, /createBookingEvent/);
-  assert.match(calendars, /createPractitionerBookingEvent|practitionerCalendar/i);
+  assert.match(calendars, /SHILOH_CALENDAR_SOLE_AUTHORITY|decommissioned/i);
   assert.match(calendars, /shilohAppointmentId/);
   assert.match(calendars, /booking_integrity/i);
 });
 
 test('booking-path audit covers client cancellation and rescheduling against canonical calendars', () => {
-  const changes = combined(
-    'src/services/appointmentChange.js',
-    'src/services/googleBookingCalendar.js',
-    'tests/p0-regression.test.js'
-  );
+  const changes = source('src/services/appointmentChange.js');
   assert.match(changes, /client\.appointment_cancelled/);
   assert.match(changes, /client\.appointment_rescheduled/);
-  assert.match(changes, /cancelBookingEvent/);
-  assert.match(changes, /updateBookingEvent/);
-  assert.match(changes, /checkCalendarAvailability/);
+  assert.match(changes, /pg_advisory_xact_lock/);
+  assert.doesNotMatch(changes, /cancelBookingEvent|updateBookingEvent|checkCalendarAvailability|appointment_calendar_events/);
 });
 
 test('booking-path production test suite remains non-mutating by default', () => {

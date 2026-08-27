@@ -24,13 +24,10 @@ async function loadContext(appointmentId) {
     SELECT a.id,a.location_id,a.starts_at,
            ast.staff_id,
            aps.service_id,
-           ace.event_id,
            e.expires_at AS package_expires_at
       FROM appointments a
       JOIN appointment_staff ast ON ast.appointment_id=a.id
       JOIN appointment_services aps ON aps.appointment_id=a.id
-      LEFT JOIN appointment_calendar_events ace
-        ON ace.appointment_id=a.id AND ace.provider='google_calendar' AND ace.sync_status='synced'
       LEFT JOIN package_session_redemptions red
         ON red.appointment_id=a.id AND red.status IN ('reserved','redeemed')
       LEFT JOIN client_package_entitlements e ON e.id=red.entitlement_id
@@ -58,7 +55,6 @@ async function collectNextSlots(appointmentId) {
       locationId: context.location_id,
       intervalMinutes: 15,
       excludeAppointmentId: context.id,
-      ignoreEventId: context.event_id || null,
     });
     for (const slot of result.slots || []) {
       const startMs = new Date(slot.starts_at).getTime();
@@ -104,7 +100,7 @@ async function nextAvailableInteractive(appointmentId, page = 1) {
   const packageNote = context.package_expires_at ? ` Package validity ends ${dayDateLabel(context.package_expires_at)}.` : '';
   return {
     type: 'list',
-    body: `*Next available times*\nChoose a replacement slot. Shiloh has already applied clinic hours, practitioner schedule, CRM appointments and Google Calendar.${packageNote} Availability is checked again before saving.`,
+    body: `*Next available times*\nChoose a replacement slot. Shiloh has already applied clinic hours, practitioner schedule, canonical appointments and blocks.${packageNote} Availability is checked again before saving.`,
     buttonText: 'Available times',
     sectionTitle: `Next available ${safePage}/${totalPages}`.slice(0, 24),
     rows,

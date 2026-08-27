@@ -100,13 +100,12 @@ test('normal Marietjie and Christel bookings remain self-approval only', () => {
   assert.match(approval, /context\.observer_staff_id/);
 });
 
-test('approval unlocks final customer confirmation while decline releases the held slot', () => {
+test('approval unlocks final customer confirmation while decline releases the canonical held slot', () => {
   assert.match(approval, /sendCustomerBookingConfirmationForAppointment/);
   assert.match(approval, /status\s*=\s*'approved'/);
   assert.match(approval, /status\s*=\s*'declined'/);
   assert.match(approval, /SET status\s*=\s*'cancelled'/);
-  assert.match(approval, /cancelBookingEvent/);
-  assert.match(approval, /cancelPractitionerBookingEvent/);
+  assert.doesNotMatch(approval, /cancelBookingEvent|cancelPractitionerBookingEvent|appointment_calendar_events/);
   assert.match(confirmation, /Booking confirmed/);
 });
 

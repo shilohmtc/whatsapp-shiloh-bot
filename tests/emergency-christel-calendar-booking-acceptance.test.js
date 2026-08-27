@@ -431,31 +431,28 @@ test('29 stale-slot schedule or conflict changes fail closed by discarding the p
   const confirmSource = adminBookingSource.slice(confirmStart);
   const scheduleAt = confirmSource.indexOf('const schedule = await checkAuthoritativeSchedule');
   const conflictAt = confirmSource.indexOf('const conflicts = await getConflicts');
-  const externalAt = confirmSource.indexOf('const externalCalendar = await checkCalendarAvailability');
   const appointmentInsertAt = confirmSource.indexOf('INSERT INTO appointments');
   const scheduleBranch = confirmSource.slice(scheduleAt, conflictAt);
-  const conflictBranch = confirmSource.slice(conflictAt, externalAt);
+  const conflictBranch = confirmSource.slice(conflictAt, appointmentInsertAt);
   assert.match(scheduleBranch, /DELETE FROM admin_booking_sessions/);
   assert.match(scheduleBranch, /status: "schedule_changed"/);
   assert.match(scheduleBranch, /Nothing was written/);
   assert.match(conflictBranch, /DELETE FROM admin_booking_sessions/);
   assert.match(conflictBranch, /status: "conflict"/);
   assert.match(conflictBranch, /Nothing was written/);
-  assert.ok(appointmentInsertAt > externalAt);
+  assert.ok(appointmentInsertAt > conflictAt);
 });
 
-test('30 final booking writes remain exclusively canonical and retain shared/practitioner Calendar guards before the insert', () => {
+test('30 final booking writes remain exclusively canonical with no external provider guard or mirror', () => {
   const confirmStart = adminBookingSource.indexOf('async function confirmAdminBooking');
   const confirmSource = adminBookingSource.slice(confirmStart);
-  const sharedCalendarAt = confirmSource.indexOf('await checkCalendarAvailability');
-  const practitionerCalendarAt = confirmSource.indexOf('await checkPractitionerCalendarAvailability');
   const appointmentInsertAt = confirmSource.indexOf('INSERT INTO appointments');
   assert.doesNotMatch(calendarServiceSource, /INSERT INTO appointments|INSERT INTO appointment_services|INSERT INTO appointment_staff/);
   assert.doesNotMatch(calendarRouteSource, /INSERT INTO appointments|INSERT INTO appointment_services|INSERT INTO appointment_staff/);
   assert.match(confirmSource, /INSERT INTO appointments/);
   assert.match(confirmSource, /INSERT INTO appointment_services/);
   assert.match(confirmSource, /INSERT INTO appointment_staff/);
-  assert.ok(sharedCalendarAt >= 0 && sharedCalendarAt < appointmentInsertAt);
-  assert.ok(practitionerCalendarAt > sharedCalendarAt && practitionerCalendarAt < appointmentInsertAt);
+  assert.ok(appointmentInsertAt >= 0);
+  assert.doesNotMatch(confirmSource, /checkCalendarAvailability|checkPractitionerCalendarAvailability|appointment_calendar_events/);
   assert.match(confirmSource, /bookingSource = options\.source \|\| "shiloh_admin_whatsapp"/);
 });

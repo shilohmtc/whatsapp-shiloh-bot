@@ -22,15 +22,15 @@ test('calendar appointment presentation uses native location and hides internal 
   assert.doesNotMatch(calendarSource, /locationName\?`Location:/);
 });
 
-test('client WhatsApp booking carries the uniquely resolved WhatsApp identity into calendar creation', () => {
+test('client WhatsApp booking resolves one identity without exposing it to an external calendar', () => {
   assert.match(clientCommitSource, /resolveClientByWhatsApp/);
   assert.match(clientCommitSource, /identity\.status !== 'unique'/);
-  assert.match(clientCommitSource, /clientMobile: normalizedPhone/);
+  assert.doesNotMatch(clientCommitSource, /clientMobile: normalizedPhone|createBookingEvent|appointment_calendar_events/);
 });
 
-test('admin booking resolves canonical CRM contact before calendar creation', () => {
+test('admin booking resolves canonical CRM contact only for governed confirmation delivery', () => {
   assert.match(adminBookingSource, /client_contacts/);
-  assert.match(adminBookingSource, /clientMobile: session\.client_mobile/);
+  assert.doesNotMatch(adminBookingSource, /clientMobile: session\.client_mobile|createBookingEvent|appointment_calendar_events/);
 });
 
 test('calendar mobile survives later event updates and remains descriptive only', () => {

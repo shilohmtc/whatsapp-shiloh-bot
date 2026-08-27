@@ -1,13 +1,6 @@
 const { pool } = require('../db/pool');
 const appointmentChange = require('../services/appointmentChange');
 const { normalizePhone } = require('../services/clientIdentityOnboarding');
-const {
-  calendarEnabled,
-  findBookingEventByAppointmentId,
-  cancelBookingEvent,
-} = require('../services/googleBookingCalendar');
-const { cancelPractitionerBookingEvents } = require('../services/practitionerGoogleCalendar');
-const logger = require('../lib/logger');
 
 const originalProcessAppointmentChangeMessage = appointmentChange.processAppointmentChangeMessage;
 
@@ -36,25 +29,9 @@ async function multiStaffContext(phone, appointmentId, db = pool) {
 }
 
 async function syncMultiStaffCancellation(appointmentId, staffNames) {
-  if (!calendarEnabled()) return { enabled: false, status: 'disabled', practitionerResults: [] };
-  let eventId = null;
-  try {
-    const mapping = await pool.query(`SELECT event_id FROM appointment_calendar_events WHERE appointment_id=$1 AND provider='google_calendar' LIMIT 1`, [appointmentId]);
-    eventId = mapping.rows[0]?.event_id || null;
-    if (!eventId) eventId = (await findBookingEventByAppointmentId(appointmentId))?.id || null;
-    if (eventId) {
-      await cancelBookingEvent(eventId);
-      await pool.query(`UPDATE appointment_calendar_events SET sync_status='cancelled',last_error=NULL,updated_at=NOW() WHERE appointment_id=$1 AND provider='google_calendar'`, [appointmentId]);
-    }
-    const practitionerResults = await cancelPractitionerBookingEvents({ appointmentId, staffNames });
-    return { enabled: true, status: eventId ? 'cancelled' : 'no_event', eventId, practitionerResults };
-  } catch (error) {
-    logger.error({ err: error, appointmentId }, 'Client multi-staff cancellation Google Calendar sync failed');
-    try {
-      await pool.query(`UPDATE appointment_calendar_events SET sync_status='error',last_error=$2,updated_at=NOW() WHERE appointment_id=$1 AND provider='google_calendar'`, [appointmentId, String(error.message || error).slice(0, 2000)]);
-    } catch (_) {}
-    return { enabled: true, status: 'error', error: error.message, practitionerResults: [] };
-  }
+  void appointmentId;
+  void staffNames;
+  return { enabled: false, status: 'historical_snapshot_untouched', practitionerResults: [] };
 }
 
 async function cancelMultiStaffAppointment(phone, appointmentId) {

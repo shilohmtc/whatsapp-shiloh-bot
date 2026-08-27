@@ -37,18 +37,16 @@ test('only one pending reschedule request may exist per appointment and it has n
   assert.doesNotMatch(service, /setTimeout|expirePending/i);
 });
 
-test('request path revalidates canonical and connected-calendar availability under practitioner lock', () => {
+test('request path revalidates canonical Shiloh availability under practitioner lock', () => {
   const create = service.match(/async function createPendingRescheduleRequest[\s\S]*?async function loadRequestContext/);
   assert.ok(create);
   assert.match(create[0], /pg_advisory_xact_lock/);
   assert.match(create[0], /loadAppointmentForRequest\(phone, appointment\.id, db, true\)/);
   assert.match(create[0], /validateCandidate/);
-  assert.match(create[0], /validateExternalCalendars/);
   assert.match(service, /checkClinicHours/);
   assert.match(service, /checkAuthoritativeSchedule/);
   assert.match(service, /canonicalConflicts/);
-  assert.match(service, /checkCalendarAvailability/);
-  assert.match(service, /checkPractitionerCalendarAvailability/);
+  assert.doesNotMatch(service, /validateExternalCalendars|checkCalendarAvailability|checkPractitionerCalendarAvailability|appointment_calendar_events/);
 });
 
 test('same-practitioner single-service boundary and immutable snapshots fail closed', () => {
@@ -113,18 +111,15 @@ test('approve revalidates before canonical mutation and decline never mutates ap
   const snapshot = approve[0].indexOf('canonicalStillMatchesRequest');
   const lock = approve[0].indexOf('pg_advisory_xact_lock', snapshot);
   const candidate = approve[0].indexOf('validateCandidate', lock);
-  const external = approve[0].indexOf('validateExternalCalendars', candidate);
-  const mutate = approve[0].indexOf('UPDATE appointments SET starts_at=', external);
-  assert.ok(snapshot >= 0 && lock > snapshot && candidate > lock && external > candidate && mutate > external);
+  const mutate = approve[0].indexOf('UPDATE appointments SET starts_at=', candidate);
+  assert.ok(snapshot >= 0 && lock > snapshot && candidate > lock && mutate > candidate);
   assert.doesNotMatch(decline[0], /UPDATE appointments SET starts_at=/);
   assert.match(decline[0], /canonicalStillMatchesRequest/);
   assert.match(decline[0], /status='declined'/);
 });
 
-test('approved reschedule synchronizes both calendar mirrors and compensates on failure', () => {
-  assert.match(service, /updateBookingEvent/);
-  assert.match(service, /syncPractitionerBookingEvent/);
-  assert.match(service, /client_reschedule_approval_compensation/);
+test('approved reschedule changes only canonical Shiloh truth and needs no mirror compensation', () => {
+  assert.doesNotMatch(service, /updateBookingEvent|syncPractitionerBookingEvent|appointment_calendar_events|calendar compensation/);
   assert.match(service, /original_starts_at/);
   assert.match(service, /original_ends_at/);
 });

@@ -3,7 +3,6 @@ const { processAdminAppointmentCancellationMessage, hasPendingCancellationIntent
 const { pool } = require('../db/pool');
 const { checkClinicHours } = require('./clinicHours');
 const { checkAuthoritativeSchedule } = require('./adminAvailability');
-const { checkCalendarAvailability, updateBookingEvent } = require('./googleBookingCalendar');
 
 function appointmentIdFromBody(body = '') {
   const match = String(body || '').match(/Manage booking #(\d+)/i);
@@ -115,7 +114,7 @@ async function changeToPackageService(sender, appointmentId, serviceId) {
   const contextResult = await pool.query(`
     SELECT a.id,a.client_id,a.location_id,a.starts_at,a.ends_at,a.total_price,a.currency,
            COALESCE(c.display_name,a.source_client_name,'Client') client_name,
-           l.name location_name, ace.event_id,
+           l.name location_name,
            ast.staff_id,COALESCE(st.display_name,ast.staff_name_snapshot) staff_name,
            aps.id appointment_service_id,COALESCE(s0.name,aps.service_name_snapshot) old_service
       FROM appointments a
@@ -125,7 +124,6 @@ async function changeToPackageService(sender, appointmentId, serviceId) {
       LEFT JOIN staff st ON st.id=ast.staff_id
       JOIN appointment_services aps ON aps.appointment_id=a.id
       LEFT JOIN services s0 ON s0.id=aps.service_id
-      LEFT JOIN appointment_calendar_events ace ON ace.appointment_id=a.id AND ace.provider='google_calendar' AND ace.sync_status='synced'
      WHERE a.id=$1 AND a.status<>'cancelled'`, [appointmentId]);
   if (contextResult.rowCount !== 1) return { handled: true, admin, reply: 'Package conversion is currently limited to single-service, single-practitioner bookings.' };
   const a = contextResult.rows[0];
@@ -137,9 +135,6 @@ async function changeToPackageService(sender, appointmentId, serviceId) {
   if (schedule.partialUnavailable || (schedule.allDayUnavailable && !schedule.insideAvailableException) || !schedule.covered) return { handled: true, admin, reply: 'The 50-minute package session does not fit the practitioner schedule at this time. No change was saved.' };
   const conflict = await pool.query(`SELECT a.id FROM appointments a JOIN appointment_staff ast ON ast.appointment_id=a.id WHERE ast.staff_id=$1 AND a.id<>$2 AND a.status<>'cancelled' AND a.starts_at<$4 AND a.ends_at>$3 LIMIT 1`, [a.staff_id, appointmentId, starts, ends]);
   if (conflict.rowCount) return { handled: true, admin, reply: 'The 50-minute package session would conflict with another CRM appointment. No change was saved.' };
-  const external = await checkCalendarAvailability({ startsAt: starts, endsAt: ends, staffName: a.staff_name, ignoreEventId: a.event_id || null });
-  if (external.enabled && !external.available) return { handled: true, admin, reply: 'The 50-minute package session would conflict with the shared Shiloh calendar. No change was saved.' };
-
   const db = await pool.connect();
   let entitlement;
   try {
@@ -168,11 +163,10 @@ async function changeToPackageService(sender, appointmentId, serviceId) {
     throw error;
   } finally { db.release(); }
 
-  if (a.event_id) await updateBookingEvent({ eventId: a.event_id, appointmentId, startsAt: starts, endsAt: ends, clientName: a.client_name, serviceName: pkg.service_name, staffName: a.staff_name, locationName: a.location_name });
   const refreshed = await primeAppointment(sender, appointmentId);
   if (!refreshed?.handled) return refreshed || { handled: false };
   const remainingAfter = entitlement.remaining - 1;
-  return { ...refreshed, admin, interactive: refreshed.interactive ? { ...refreshed.interactive, body: `✅ Service changed to *${pkg.service_name}*. One prepaid package credit is reserved (${remainingAfter} remaining after this booking). Google Calendar was updated.\n\n${refreshed.interactive.body}` } : refreshed.interactive };
+  return { ...refreshed, admin, interactive: refreshed.interactive ? { ...refreshed.interactive, body: `✅ Service changed to *${pkg.service_name}*. One prepaid package credit is reserved (${remainingAfter} remaining after this booking). Shiloh Calendar was updated.\n\n${refreshed.interactive.body}` } : refreshed.interactive };
 }
 
 async function processStatelessAdminBookingUpdateMessage(sender, text) {

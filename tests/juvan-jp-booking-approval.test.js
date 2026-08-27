@@ -117,10 +117,9 @@ test('controlled decision revalidates current identity and appointment truth und
   assert.match(approval, /already been \$\{locked\.status\} by \$\{winner\}/);
 });
 
-test('approval and decline preserve existing idempotent client confirmation and Calendar release safeguards', () => {
+test('approval and decline preserve idempotent client confirmation without external mirror mutation', () => {
   assert.match(approval, /sendCustomerBookingConfirmationForAppointment\(locked\.appointment_id\)/);
-  assert.match(approval, /cancelBookingEvent\(locked\.shared_event_id\)/);
-  assert.match(approval, /cancelPractitionerBookingEvent/);
+  assert.doesNotMatch(approval, /cancelBookingEvent|cancelPractitionerBookingEvent|appointment_calendar_events/);
   assert.match(approval, /appointment_status_history/);
   assert.match(approval, /client\.booking_approval\.approved/);
   assert.match(approval, /client\.booking_approval\.declined/);

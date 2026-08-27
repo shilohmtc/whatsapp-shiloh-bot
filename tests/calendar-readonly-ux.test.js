@@ -14,7 +14,7 @@ const {
 function timelineFixture() {
   const appointments = [{
     kind: 'appointment', canonical: true, source: 'appointments', id: 880,
-    startsAt: '2026-08-24T07:00:00.000Z', endsAt: '2026-08-24T08:30:00.000Z', status: 'booked',
+    startsAt: '2026-08-24T07:00:00.000Z', endsAt: '2026-08-24T08:30:00.000Z', status: 'booked', clientName: 'Taylor Client', serviceName: 'Therapeutic Massage',
     staffIds: [1, 2],
     staff: [
       { staffId: 1, nameSnapshot: 'Julia', source: 'appointment_staff' },
@@ -146,17 +146,18 @@ test('PR #380 multi-practitioner appointment renders once as one canonical share
   const html = renderCalendarPage(model, { basePath: '/calendar/read-only' });
   const matches = html.match(/data-event-id="appointment-880"/g) || [];
   assert.equal(matches.length, 1, 'shared appointment must not be cloned into practitioner pseudo-appointments');
-  assert.match(html, /Multi-practitioner appointment #880/);
+  assert.match(html, /Taylor Client/);
+  assert.match(html, /Therapeutic Massage/);
+  assert.match(html, /Appointment #880/);
   assert.match(html, /Julia \+ Christel/);
   assert.match(html, /one canonical booking/i);
 });
 
-test('PR #395 Google-only busy is visibly non-canonical and practitioner-aware', async () => {
+test('Google-only and non-canonical debug items are not rendered', async () => {
   const model = await buildDayModel();
   const html = renderCalendarPage(model, { basePath: '/calendar/read-only' });
-  assert.match(html, /Google-only busy/);
-  assert.match(html, /Non-canonical • Google Calendar • PR #395 classification/);
-  assert.match(html, /data-canonical="false"/);
+  assert.doesNotMatch(html, /Google-only|Non-canonical|google-shared|data-canonical="false"/i);
+  assert.match(html, /Shiloh is the scheduling authority/);
 });
 
 test('provider or SchedulingTimeline failure renders explicit unavailable state without leaking scheduling data', async () => {

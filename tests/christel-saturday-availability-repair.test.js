@@ -45,10 +45,9 @@ test('Christel 90-minute Saturday service fits canonical 08:00-14:00 envelope wh
   assert.ok(starts.some((minute) => minute >= 11 * 60 + 30));
 });
 
-test('canonical availability still preserves schedule, appointment, block and Google conflict gates', () => {
+test('canonical availability preserves schedule, appointment and block conflict gates only', () => {
   assert.match(availabilitySource, /staff_schedule_exceptions/);
   assert.match(availabilitySource, /appointment_staff/);
   assert.match(availabilitySource, /calendar_blocks/);
-  assert.match(availabilitySource, /applyGoogleCalendarConflicts/);
-  assert.match(availabilitySource, /checkCalendarAvailability/);
+  assert.doesNotMatch(availabilitySource, /applyGoogleCalendarConflicts|checkCalendarAvailability|googleBookingCalendar/);
 });

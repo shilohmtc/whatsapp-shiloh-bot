@@ -5,7 +5,6 @@ const nextAvailable = require('../services/adminBookingNextAvailable');
 const { listAvailableSlots } = require('../services/availabilityService');
 const { checkClinicHours } = require('../services/clinicHours');
 const { checkAuthoritativeSchedule } = require('../services/adminAvailability');
-const { checkCalendarAvailability } = require('../services/googleBookingCalendar');
 const {
   loadAdminBookingTimeInputSession,
   clearAdminBookingTimeInputSession,
@@ -85,15 +84,13 @@ async function loadRescheduleContext(appointmentId) {
            COALESCE(c.display_name,a.source_client_name,'Client') AS client_name,
            ast.staff_id,COALESCE(st.display_name,ast.staff_name_snapshot) AS staff_name,
            aps.service_id,COALESCE(s.name,aps.service_name_snapshot) AS service_name,
-           ace.event_id,e.expires_at AS package_expires_at
+           e.expires_at AS package_expires_at
       FROM appointments a
       LEFT JOIN clients c ON c.id=a.client_id
       JOIN appointment_staff ast ON ast.appointment_id=a.id
       LEFT JOIN staff st ON st.id=ast.staff_id
       JOIN appointment_services aps ON aps.appointment_id=a.id
       LEFT JOIN services s ON s.id=aps.service_id
-      LEFT JOIN appointment_calendar_events ace
-        ON ace.appointment_id=a.id AND ace.provider='google_calendar' AND ace.sync_status='synced'
       LEFT JOIN package_session_redemptions red
         ON red.appointment_id=a.id AND red.status IN ('reserved','redeemed')
       LEFT JOIN client_package_entitlements e ON e.id=red.entitlement_id
@@ -116,7 +113,6 @@ async function validateRescheduleCandidate(context, timestamp) {
     locationId: context.location_id,
     intervalMinutes: 15,
     excludeAppointmentId: context.id,
-    ignoreEventId: context.event_id || null,
   });
   const exact = (result.slots || []).find((slot) => new Date(slot.starts_at).getTime() === starts.getTime());
   if (!exact) return { ok: false, reason: `${fmtTime(starts)} is not currently an authoritative available start time for this booking.` };
@@ -165,16 +161,13 @@ async function loadServiceContext(appointmentId, serviceId) {
            ast.staff_id,COALESCE(st.display_name,ast.staff_name_snapshot) AS staff_name,
            aps.service_id AS current_service_id,COALESCE(current_s.name,aps.service_name_snapshot) AS current_service_name,
            COALESCE(aps.duration_minutes_snapshot,current_s.duration_minutes,0) AS current_duration,
-           COALESCE(aps.price_snapshot,a.total_price) AS current_price,
-           ace.event_id
+           COALESCE(aps.price_snapshot,a.total_price) AS current_price
       FROM appointments a
       LEFT JOIN clients c ON c.id=a.client_id
       JOIN appointment_staff ast ON ast.appointment_id=a.id
       LEFT JOIN staff st ON st.id=ast.staff_id
       JOIN appointment_services aps ON aps.appointment_id=a.id
       LEFT JOIN services current_s ON current_s.id=aps.service_id
-      LEFT JOIN appointment_calendar_events ace
-        ON ace.appointment_id=a.id AND ace.provider='google_calendar' AND ace.sync_status='synced'
      WHERE a.id=$1 AND a.status<>'cancelled'`, [appointmentId]);
   if (a.rowCount !== 1) return null;
   const target = await pool.query(`
@@ -214,8 +207,6 @@ async function validateServiceCandidate(context) {
   }
   const conflict = await pool.query(`SELECT a.id FROM appointments a JOIN appointment_staff ast ON ast.appointment_id=a.id WHERE ast.staff_id=$1 AND a.id<>$2 AND a.status<>'cancelled' AND a.starts_at<$4 AND a.ends_at>$3 LIMIT 1`, [context.staff_id, context.id, starts, ends]);
   if (conflict.rowCount) return { ok: false, reason: 'The replacement duration would overlap another CRM appointment.' };
-  const external = await checkCalendarAvailability({ startsAt: starts, endsAt: ends, staffName: context.staff_name, ignoreEventId: context.event_id || null });
-  if (external.enabled && !external.available) return { ok: false, reason: 'The replacement duration would conflict with the Shiloh calendar.' };
   return { ok: true, minutes, ends };
 }
 

@@ -29,6 +29,8 @@ jobs:
         run: node --test tests/scheduling-engine-readonly-projection.test.js
       - name: Run focused Calendar UX security tests
         run: node --test tests/calendar-readonly-ux.test.js
+      - name: Run focused Shiloh-only cockpit polish tests
+        run: node --test tests/calendar-operational-cockpit-polish-v2.test.js tests/shiloh-only-calendar-authority-google-decommission-p0.test.js
       - name: Run focused Christel Calendar viewer-scope bridge tests
         run: node --test tests/christel-calendar-viewer-scope-bridge.test.js
       - name: Run focused staff browser session security tests
@@ -73,3 +75,12 @@ jobs:
           SHILOH_STAFF_BROWSER_PILOT_MODE_ENABLED: 'false'
           SHILOH_STAFF_BROWSER_PILOT_ADMIN_IDS: ''
         run: npm test
+      - name: Generate Calendar cockpit visual proof
+        run: node scripts/calendar-cockpit-visual-proof.js
+      - name: Upload Calendar cockpit visual proof
+        uses: actions/upload-artifact@v4
+        with:
+          name: calendar-cockpit-visual-proof
+          path: artifacts/calendar-cockpit-visual-proof
+          if-no-files-found: error
+          retention-days: 14
