@@ -10,15 +10,37 @@ const {
   cleanupUnusedProvisionalClient,
 } = require('./adminProvisionalClient');
 const {
-  EMERGENCY_ADMIN_ID,
   isEmergencyCalendarBookingEnabled,
-  isEmergencyChristelAuthority,
 } = require('./emergencyCalendarBootstrap');
+const {
+  createOperatorContactAuthorityService,
+} = require('./operatorContactAuthority');
+
+const GOVERNED_PRACTITIONERS = new Set(['christel', 'abigail', 'marietjie']);
+const JP_UNION_PRINCIPALS = Object.freeze(['christel', 'abigail']);
+const BOOKING_BOUND_BUSINESS_ROLES = new Set(['employee_practitioner', 'tenant_practitioner']);
 
 function bookingError(code, message) {
   const error = new Error(message);
   error.code = code;
   return error;
+}
+
+function clean(value = '') {
+  return String(value || '').trim().replace(/\s+/g, ' ');
+}
+
+function normalizedAdminName(admin = {}) {
+  return clean(admin.display_name).toLowerCase();
+}
+
+function hasPermission(admin, permission) {
+  return admin?.permissions && admin.permissions[permission] === true;
+}
+
+function positiveId(value) {
+  const number = Number(value);
+  return Number.isSafeInteger(number) && number > 0 ? number : null;
 }
 
 function localDateTimeFromInputs(date, time) {
@@ -75,6 +97,36 @@ function provisionalOutcomeError(outcome) {
   return null;
 }
 
+function staticScopeForAdmin(admin = {}) {
+  if (admin.admin_active !== true || !hasPermission(admin, 'appointment:create') || !hasPermission(admin, 'client:lookup')) {
+    return null;
+  }
+  const name = normalizedAdminName(admin);
+  const staffId = positiveId(admin.staff_id);
+  if (name === 'jean-pierre') {
+    if (
+      admin.business_role !== 'business_admin'
+      || admin.calendar_scope !== 'all_business'
+      || admin.service_scope !== 'all_services'
+    ) return null;
+    return { key: 'jp_christel_abigail_union', sourceStaffIds: null };
+  }
+  if (name === 'christel') {
+    if (admin.business_role !== 'owner' || !staffId || admin.staff_status !== 'active') return null;
+    return { key: 'christel_own_services', sourceStaffIds: [staffId] };
+  }
+  if (name === 'abigail' || name === 'marietjie') {
+    if (
+      !staffId
+      || admin.staff_status !== 'active'
+      || admin.service_scope !== 'own_services'
+      || !BOOKING_BOUND_BUSINESS_ROLES.has(String(admin.business_role || '').toLowerCase())
+    ) return null;
+    return { key: `${name}_own_services`, sourceStaffIds: [staffId] };
+  }
+  return null;
+}
+
 function createCalendarCreateBookingService({
   db = pool,
   env = process.env,
@@ -84,16 +136,40 @@ function createCalendarCreateBookingService({
   cancelBooking = cancelPendingBooking,
   provisionalClientCreator = createProvisionalClient,
   provisionalClientCleanup = cleanupUnusedProvisionalClient,
+  contactAuthorityService = null,
 } = {}) {
   if (!db || typeof db.query !== 'function') throw new Error('Calendar Create Booking db is required');
+  const clientAuthority = contactAuthorityService || createOperatorContactAuthorityService({ db });
+
+  async function resolveJpUnionSourceStaffIds() {
+    const result = await db.query(
+      `SELECT st.id, LOWER(st.display_name) AS principal
+         FROM staff st
+        WHERE st.status = 'active'
+          AND LOWER(st.display_name) = ANY($1::text[])
+        ORDER BY LOWER(st.display_name), st.id`,
+      [JP_UNION_PRINCIPALS]
+    );
+    const byPrincipal = new Map(JP_UNION_PRINCIPALS.map((name) => [name, []]));
+    for (const row of result.rows) {
+      const principal = String(row.principal || '').toLowerCase();
+      if (byPrincipal.has(principal) && positiveId(row.id)) byPrincipal.get(principal).push(Number(row.id));
+    }
+    if (JP_UNION_PRINCIPALS.some((name) => byPrincipal.get(name).length !== 1)) {
+      throw bookingError(
+        'CALENDAR_BOOKING_SCOPE_UNRESOLVED',
+        'JP booking authority cannot be resolved to exactly one active Christel and Abigail practitioner record.'
+      );
+    }
+    return JP_UNION_PRINCIPALS.map((name) => byPrincipal.get(name)[0]);
+  }
 
   async function resolveOperator(adminId) {
     if (!isEmergencyCalendarBookingEnabled(env)) {
-      throw bookingError('CALENDAR_BOOKING_DISABLED', 'Emergency Calendar booking is not enabled.');
+      throw bookingError('CALENDAR_BOOKING_DISABLED', 'Calendar booking is not enabled.');
     }
-    if (Number(adminId) !== EMERGENCY_ADMIN_ID) {
-      throw bookingError('CALENDAR_BOOKING_FORBIDDEN', 'This browser session cannot create Calendar bookings.');
-    }
+    const id = positiveId(adminId);
+    if (!id) throw bookingError('CALENDAR_BOOKING_FORBIDDEN', 'This browser session cannot create Calendar bookings.');
     const result = await db.query(
       `SELECT a.id, a.staff_id, a.display_name, a.role, a.business_role, a.calendar_scope,
               a.service_scope, a.permissions, a.active AS admin_active,
@@ -101,18 +177,27 @@ function createCalendarCreateBookingService({
          FROM staff_admin_accounts a
          LEFT JOIN staff s ON s.id = a.staff_id
         WHERE a.id = $1
+          AND a.active = TRUE
         LIMIT 1`,
-      [EMERGENCY_ADMIN_ID]
+      [id]
     );
     const admin = result.rows[0] || null;
-    if (!isEmergencyChristelAuthority(admin, env)) {
-      throw bookingError('CALENDAR_BOOKING_FORBIDDEN', 'Current canonical Admin authority no longer permits emergency Calendar booking.');
+    const scope = staticScopeForAdmin(admin || {});
+    if (!admin || !scope || !GOVERNED_PRACTITIONERS.has(normalizedAdminName(admin)) && normalizedAdminName(admin) !== 'jean-pierre') {
+      throw bookingError('CALENDAR_BOOKING_FORBIDDEN', 'Current canonical staff authority does not permit Calendar booking.');
     }
-    return admin;
+    const sourceStaffIds = scope.sourceStaffIds || await resolveJpUnionSourceStaffIds();
+    return {
+      ...admin,
+      bookingScope: {
+        key: scope.key,
+        sourceStaffIds,
+      },
+    };
   }
 
   async function listBookableOptions(adminId) {
-    await resolveOperator(adminId);
+    const admin = await resolveOperator(adminId);
     const result = await db.query(
       `SELECT st.id AS staff_id, st.display_name AS staff_name,
               sv.id AS service_id, sv.name AS service_name,
@@ -123,9 +208,15 @@ function createCalendarCreateBookingService({
          JOIN services sv ON sv.id = ss.service_id
         WHERE st.status = 'active'
           AND st.client_bookable = TRUE
-          AND LOWER(st.display_name) IN ('christel', 'abigail')
           AND sv.status = 'active'
-        ORDER BY sv.name, st.display_name, sv.id, st.id`
+          AND EXISTS (
+                SELECT 1
+                  FROM staff_services authority_ss
+                 WHERE authority_ss.service_id = sv.id
+                   AND authority_ss.staff_id = ANY($1::bigint[])
+              )
+        ORDER BY sv.name, st.display_name, sv.id, st.id`,
+      [admin.bookingScope.sourceStaffIds]
     );
     const staffById = new Map();
     const servicesById = new Map();
@@ -146,7 +237,11 @@ function createCalendarCreateBookingService({
       }
       servicesById.get(serviceId).staffIds.push(staffId);
     }
-    return { staff: [...staffById.values()], services: [...servicesById.values()] };
+    return {
+      staff: [...staffById.values()],
+      services: [...servicesById.values()],
+      authority: { operatorAdminId: Number(admin.id), serviceScope: admin.bookingScope.key },
+    };
   }
 
   async function searchClients(adminId, query) {
@@ -161,10 +256,10 @@ function createCalendarCreateBookingService({
     };
   }
 
-  async function resolveEligibleSelection(staffId, serviceId) {
-    const staff = Number(staffId);
-    const service = Number(serviceId);
-    if (!Number.isSafeInteger(staff) || staff <= 0 || !Number.isSafeInteger(service) || service <= 0) {
+  async function resolveEligibleSelection(admin, staffId, serviceId) {
+    const staff = positiveId(staffId);
+    const service = positiveId(serviceId);
+    if (!staff || !service) {
       throw bookingError('CALENDAR_BOOKING_INVALID_SELECTION', 'Choose an eligible treatment and practitioner.');
     }
     const result = await db.query(
@@ -179,19 +274,30 @@ function createCalendarCreateBookingService({
           AND sv.id = $2
           AND st.status = 'active'
           AND st.client_bookable = TRUE
-          AND LOWER(st.display_name) IN ('christel', 'abigail')
           AND sv.status = 'active'
+          AND EXISTS (
+                SELECT 1
+                  FROM staff_services authority_ss
+                 WHERE authority_ss.service_id = sv.id
+                   AND authority_ss.staff_id = ANY($3::bigint[])
+              )
         LIMIT 1`,
-      [staff, service]
+      [staff, service, admin.bookingScope.sourceStaffIds]
     );
     const row = result.rows[0];
-    if (!row) throw bookingError('CALENDAR_BOOKING_INELIGIBLE_SELECTION', 'That treatment/practitioner combination is not currently bookable.');
+    if (!row) {
+      throw bookingError(
+        'CALENDAR_BOOKING_INELIGIBLE_SELECTION',
+        'That treatment/practitioner selection is outside the authenticated operator’s current service authority or is not bookable.'
+      );
+    }
     return row;
   }
 
   async function pendingBookingClient(adminId) {
     const result = await db.query(
-      `SELECT c.id, c.source
+      `SELECT c.id, c.source, abs.staff_id, abs.service_id, abs.location_id,
+              abs.starts_at, abs.ends_at, abs.state
          FROM admin_booking_sessions abs
          JOIN clients c ON c.id = abs.client_id
         WHERE abs.admin_id = $1
@@ -201,8 +307,35 @@ function createCalendarCreateBookingService({
     return result.rows[0] || null;
   }
 
+  async function resolvePreparedClientAuthority(admin, pending) {
+    if (!pending?.id) throw bookingError('CALENDAR_BOOKING_NO_PENDING', 'There is no pending Calendar booking to authorize.');
+    await resolveEligibleSelection(admin, pending.staff_id, pending.service_id);
+
+    let bookingContext = null;
+    try {
+      const issued = await clientAuthority.issueBookingAuthorityContext({
+        actorAdminId: Number(admin.id),
+        clientId: Number(pending.id),
+      });
+      bookingContext = issued?.bookingContext || null;
+    } catch (error) {
+      if (error?.code !== 'OPERATOR_AUTHORITY_FORBIDDEN') throw error;
+    }
+
+    const authority = await clientAuthority.loadClientAuthorityState({
+      actorAdminId: Number(admin.id),
+      clientId: Number(pending.id),
+      ...(bookingContext ? { bookingContext } : {}),
+    });
+    return {
+      clientId: Number(pending.id),
+      bookingContext,
+      authority,
+    };
+  }
+
   async function prepare({ adminId, clientId, newClient, staffId, serviceId, date, time } = {}) {
-    await resolveOperator(adminId);
+    const admin = await resolveOperator(adminId);
 
     const rawClientId = String(clientId || '').trim();
     const clientIdProvided = rawClientId.length > 0;
@@ -219,7 +352,7 @@ function createCalendarCreateBookingService({
       throw bookingError('CALENDAR_BOOKING_CLIENT_REQUIRED', 'Select one canonical CRM client or enter one new client.');
     }
 
-    const selected = await resolveEligibleSelection(staffId, serviceId);
+    const selected = await resolveEligibleSelection(admin, staffId, serviceId);
     const localDateTime = localDateTimeFromInputs(date, time);
 
     let resolvedClientId = validClientId ? Number(rawClientId) : null;
@@ -232,7 +365,7 @@ function createCalendarCreateBookingService({
       provisionalCreatedId = null;
       await provisionalClientCleanup({
         clientId: cleanupId,
-        adminId: EMERGENCY_ADMIN_ID,
+        adminId: Number(admin.id),
         reason,
       });
     }
@@ -242,7 +375,7 @@ function createCalendarCreateBookingService({
         const outcome = await provisionalClientCreator({
           fullName: newClientInput.fullName,
           mobileNumber: newClientInput.mobileNumber,
-          adminId: EMERGENCY_ADMIN_ID,
+          adminId: Number(admin.id),
         });
         const outcomeError = provisionalOutcomeError(outcome);
         if (outcomeError) throw outcomeError;
@@ -252,7 +385,7 @@ function createCalendarCreateBookingService({
       }
 
       const result = await prepareBooking({
-        adminId: EMERGENCY_ADMIN_ID,
+        adminId: Number(admin.id),
         clientId: resolvedClientId,
         staffName: selected.staff_name,
         serviceName: selected.service_name,
@@ -293,19 +426,25 @@ function createCalendarCreateBookingService({
     }
   }
 
+  async function preparedAuthority({ adminId } = {}) {
+    const admin = await resolveOperator(adminId);
+    const pending = await pendingBookingClient(Number(admin.id));
+    return resolvePreparedClientAuthority(admin, pending);
+  }
+
   async function discard({ adminId } = {}) {
-    await resolveOperator(adminId);
-    const pending = await pendingBookingClient(EMERGENCY_ADMIN_ID);
+    const admin = await resolveOperator(adminId);
+    const pending = await pendingBookingClient(Number(admin.id));
     if (!pending) return { status: 'no_pending', provisionalClientRemoved: false };
 
-    const cancelled = await cancelBooking(EMERGENCY_ADMIN_ID);
+    const cancelled = await cancelBooking(Number(admin.id));
     if (!cancelled) return { status: 'no_pending', provisionalClientRemoved: false };
 
     let cleanupStatus = null;
     if (pending.source === 'admin_provisional_booking') {
       const cleanup = await provisionalClientCleanup({
         clientId: Number(pending.id),
-        adminId: EMERGENCY_ADMIN_ID,
+        adminId: Number(admin.id),
         reason: 'calendar_booking_cancelled',
       });
       cleanupStatus = cleanup?.status || null;
@@ -320,7 +459,15 @@ function createCalendarCreateBookingService({
 
   async function confirm({ adminId } = {}) {
     const admin = await resolveOperator(adminId);
-    const pending = await pendingBookingClient(EMERGENCY_ADMIN_ID);
+    const pending = await pendingBookingClient(Number(admin.id));
+    const recipientAuthority = await resolvePreparedClientAuthority(admin, pending);
+    if (recipientAuthority.authority?.confirmationSafe !== true) {
+      throw bookingError(
+        'CALENDAR_BOOKING_CONFIRMATION_UNSAFE',
+        'This booking cannot be finalized until the selected client has authoritative contact and client-facing name evidence.'
+      );
+    }
+
     const result = await confirmBooking(admin, { source: 'shiloh_calendar' });
 
     if (result.status !== 'created' && pending?.source === 'admin_provisional_booking') {
@@ -330,12 +477,12 @@ function createCalendarCreateBookingService({
           WHERE admin_id = $1
             AND client_id = $2
           LIMIT 1`,
-        [EMERGENCY_ADMIN_ID, pending.id]
+        [Number(admin.id), pending.id]
       );
       if (!remaining.rowCount) {
         await provisionalClientCleanup({
           clientId: Number(pending.id),
-          adminId: EMERGENCY_ADMIN_ID,
+          adminId: Number(admin.id),
           reason: `calendar_booking_confirm_${String(result.status || 'failed')}`,
         });
       }
@@ -349,15 +496,20 @@ function createCalendarCreateBookingService({
     listBookableOptions,
     searchClients,
     prepare,
+    preparedAuthority,
     discard,
     confirm,
   };
 }
 
 module.exports = {
+  GOVERNED_PRACTITIONERS,
+  JP_UNION_PRINCIPALS,
+  BOOKING_BOUND_BUSINESS_ROLES,
   createCalendarCreateBookingService,
   localDateTimeFromInputs,
   serializeClient,
   normalizeNewClientInput,
+  staticScopeForAdmin,
   bookingError,
 };
