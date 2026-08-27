@@ -12,6 +12,26 @@ The Control Cockpit is the single visual cross-workstream projection of Shiloh O
 
 The Cockpit is **not an independent source of truth**. It projects the current authoritative Project Tracker, Master Status, merged Control decisions and current machine evidence.
 
+## Governing stabilization doctrine
+
+During the current stabilization phase, all Control Cockpit prioritization and new-work decisions must apply:
+
+`docs/SHILOH-OS-STABILIZATION-SIMPLIFICATION-DOCTRINE.md`
+
+The operative spine is:
+
+**Shiloh Calendar → Clean CRM V2 → WhatsApp communications / client registration**
+
+No unrelated P0/P1 feature accumulation, speculative refactoring or legacy-surface polish should interrupt that spine unless it removes a blocking dependency or remediates a genuine production/security defect.
+
+The current Master Status stabilization checkpoint is recorded in:
+
+`docs/SHILOH-OS-MASTER-STATUS-ADDENDUM-2026-08-27-STABILIZATION-SIMPLIFICATION.md`
+
+The doctrine also governs Workspace economy, OWN / INTEGRATE / RETIRE / NEVER BUILD decisions, control-surface hygiene and the optional bounded 00 standing-release model.
+
+**Important:** the dated 2026-08-25 snapshot later in this document is historical evidence only. It must not be treated as current machine state. 00 must read current GitHub / Render / provider evidence and newer Master Status addenda before acting.
+
 ## Primary human principals
 
 Shiloh OS is governed around two primary human principals:
@@ -67,7 +87,9 @@ Every active or recently closed unit must expose:
 - Tracker reconciliation state;
 - Master Status reconciliation state.
 
-## Current snapshot — 2026-08-25
+## Historical snapshot — 2026-08-25 — superseded as current state
+
+The table below is retained as historical Control evidence only. It is **not** a current workstream projection after the 2026-08-27 stabilization reset. Use current machine evidence plus the latest Master Status addendum for live decisions.
 
 | Stream | State | Current unit / authority | Current gate | Next owner |
 |---|---|---|---|---|
@@ -85,7 +107,9 @@ Client-facing-name terminal reconciliation authority: PR #492 / main `6b6b626e4f
 
 Durable name boundary: canonical `clients.id` remains identity authority; imported/Goldie/historical names remain aliases/provenance; a current client-facing name requires approved evidence; no active authority means neutral client-facing wording.
 
-## Current priority sequence
+## Historical priority sequence — superseded
+
+This sequence is retained only to explain the 2026-08-25 state and must not drive new work after the stabilization doctrine takes effect.
 
 1. **Meta Business Support** proceeds externally; 30 remains paused until substantive provider evidence arrives.
 2. There is currently **no active internal implementation unit** after completion of `SHILOH-CLIENT-FACING-NAME-AUTHORITY`.
@@ -111,6 +135,10 @@ Durable name boundary: canonical `clients.id` remains identity authority; import
 
 Routine machine evidence should be retrieved by 00 through available connectors rather than requiring JP to act as a human clipboard.
 
+During stabilization, 00 must also apply the doctrine's mandatory checkpoint before authorizing substantive new work:
+
+> **Does this advance the operational spine, remove a dependency, reduce lifetime complexity, or fix a genuine operational risk? If none applies, why are we doing it now?**
+
 ## 00 response standard
 
 For substantive cross-workstream requests, 00 should provide a compact Control Snapshot near the top of the response showing:
@@ -133,8 +161,9 @@ Then the normal Shiloh OS terminal fields remain mandatory:
 
 ## Governance constraints
 
-- The Cockpit does not authorize production mutations, bookings, outbound messages, destructive changes, permission changes or other security-sensitive actions.
+- The Cockpit does not independently authorize production mutations, bookings, outbound messages, destructive changes, permission changes or other security-sensitive actions.
 - Recommendation and authorization remain separate.
+- Any standing 00 release delegation must be explicitly activated by JP and remain within the boundaries recorded in the Stabilization & Simplification Doctrine.
 - Specialists must not maintain competing cross-stream boards.
 - Tracker and Master Status remain durable authority; the Cockpit is their readable operational projection.
 - Closed capabilities remain frozen and must not be recreated merely because a later unit touches an adjacent surface.
