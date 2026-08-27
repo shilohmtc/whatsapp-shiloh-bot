@@ -175,6 +175,12 @@ test('2 emergency bootstrap exchange viewer crosses the adapter and Calendar rea
     env: productionShapeEnv,
     buildModel: calendarUx.buildModel,
     renderPage: () => '<main><div class="access-controls"></div><p>Calendar</p></main>',
+    bookingService: {
+      async resolveOperator(adminId) {
+        assert.equal(adminId, exchanged.adminId);
+        return { id: adminId };
+      },
+    },
   });
   const res = fakeResponse();
   await handler(authenticatedRequest(exchanged.viewer, exchanged.adminId), res, () => {});
@@ -223,34 +229,58 @@ test('5 SchedulingTimeline itself still rejects raw browser-only scopes; the ada
   );
 });
 
-test('6 production-shaped pilot still permits only Admin 2 and blocks non-Christel Admins', () => {
+test('6 production-shaped pilot remains unchanged by WS-10 booking write authority', () => {
   assert.equal(isAdminAllowedByPilot(2, productionShapeEnv), true);
   assert.equal(isAdminAllowedByPilot(3, productionShapeEnv), false);
   assert.equal(isAdminAllowedByPilot(99, productionShapeEnv), false);
 });
 
-test('7 Create Booking presentation remains restricted to the emergency Christel session', async () => {
+test('7 Create Booking presentation follows canonical booking authority, not whole-Calendar visibility or a hard-coded Admin ID', async () => {
   const buildModel = async () => ({ dateKey: '2026-08-25' });
   const renderPage = () => '<main><div class="access-controls"></div><p>Calendar</p></main>';
-  const handler = createCalendarReadOnlyHandler({ env: productionShapeEnv, buildModel, renderPage });
+  const authorityCalls = [];
+  const bookingService = {
+    async resolveOperator(adminId) {
+      authorityCalls.push(adminId);
+      if ([2, 3].includes(Number(adminId))) return { id: Number(adminId) };
+      const error = new Error('forbidden');
+      error.code = 'CALENDAR_BOOKING_FORBIDDEN';
+      throw error;
+    },
+  };
+  const handler = createCalendarReadOnlyHandler({
+    env: productionShapeEnv,
+    buildModel,
+    renderPage,
+    bookingService,
+  });
 
   const christel = fakeResponse();
   await handler(authenticatedRequest({ calendarScope: 'business_all_staff' }, 2), christel, () => {});
   assert.equal(christel.statusCode, 200);
   assert.match(christel.body, /Create booking/);
 
-  const otherAdmin = fakeResponse();
-  await handler(authenticatedRequest({ calendarScope: 'business_all_staff' }, 3), otherAdmin, () => {});
-  assert.equal(otherAdmin.statusCode, 200);
-  assert.doesNotMatch(otherAdmin.body, /Create booking/);
+  const otherAuthorizedOperator = fakeResponse();
+  await handler(authenticatedRequest({ calendarScope: 'business_all_staff' }, 3), otherAuthorizedOperator, () => {});
+  assert.equal(otherAuthorizedOperator.statusCode, 200);
+  assert.match(otherAuthorizedOperator.body, /Create booking/);
+
+  const wholeCalendarOnlyViewer = fakeResponse();
+  await handler(authenticatedRequest({ calendarScope: 'business_all_staff' }, 99), wholeCalendarOnlyViewer, () => {});
+  assert.equal(wholeCalendarOnlyViewer.statusCode, 200);
+  assert.doesNotMatch(wholeCalendarOnlyViewer.body, /Create booking/);
+  assert.deepEqual(authorityCalls, [2, 3, 99]);
 });
 
 test('8 repair does not broaden SchedulingTimeline or create a second appointment-write path', () => {
   const schedulingSource = fs.readFileSync(path.join(__dirname, '../src/services/schedulingEngine.js'), 'utf8');
   const calendarBookingSource = fs.readFileSync(path.join(__dirname, '../src/services/calendarCreateBooking.js'), 'utf8');
+  const calendarRouteSource = fs.readFileSync(path.join(__dirname, '../src/routes/calendarReadOnlyUx.js'), 'utf8');
   assert.match(schedulingSource, /const KNOWN_SCOPES = new Set\(\[ALL_BUSINESS_SCOPE, \.\.\.OWN_SCOPES, 'none'\]\)/);
   assert.doesNotMatch(schedulingSource, /business_all_staff|own_staff/);
   assert.doesNotMatch(calendarBookingSource, /INSERT INTO appointments|INSERT INTO appointment_services|INSERT INTO appointment_staff/);
   assert.match(calendarBookingSource, /prepareBooking/);
   assert.match(calendarBookingSource, /confirmBooking/);
+  assert.match(calendarRouteSource, /bookingService\.resolveOperator\(req\.staffBrowserSession\?\.adminId\)/);
+  assert.doesNotMatch(calendarRouteSource, /EMERGENCY_ADMIN_ID/);
 });
