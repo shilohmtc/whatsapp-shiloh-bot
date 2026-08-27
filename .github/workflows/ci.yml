@@ -75,6 +75,15 @@ jobs:
           SHILOH_STAFF_BROWSER_PILOT_MODE_ENABLED: 'false'
           SHILOH_STAFF_BROWSER_PILOT_ADMIN_IDS: ''
         run: npm test
+      - name: Run authenticated Calendar mutation browser proof
+        run: node scripts/calendar-operational-mutations-browser-proof.js
+      - name: Upload authenticated Calendar mutation browser proof
+        uses: actions/upload-artifact@v4
+        with:
+          name: calendar-operational-mutations-browser-proof
+          path: artifacts/calendar-operational-mutations-browser-proof
+          if-no-files-found: error
+          retention-days: 14
       - name: Generate Calendar cockpit visual proof
         run: node scripts/calendar-cockpit-visual-proof.js
       - name: Upload Calendar cockpit visual proof
