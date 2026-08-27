@@ -31,8 +31,8 @@ test('client lookup is secondary under More while Help and diagnostics stay hidd
   const sections = parseVisibleMenu(practitionerMenu);
   const report = sectionInteractive('Reports', practitionerMenu);
   const more = sectionInteractive('More', practitionerMenu);
-  assert.deepEqual(report.rows.map((row) => row.id), ['admin_action_today_report', 'menu']);
-  assert.deepEqual(more.rows.map((row) => row.id), ['admin_action_client', 'menu']);
+  assert.deepEqual(report.rows.map((row) => row.id), ['admin_action_today_report', 'admin_open_menu']);
+  assert.deepEqual(more.rows.map((row) => row.id), ['admin_action_client', 'admin_open_menu']);
   assert.equal(sections.get('Reports').length, 1);
   assert.equal(sections.get('More').length, 1); // raw legacy menu still contains Help; presentation filters it.
   assert.equal(more.rows[0].title, 'Client details');
@@ -42,7 +42,7 @@ test('client lookup is secondary under More while Help and diagnostics stay hidd
 
 test('Reports collapses individual earnings entries into a role-aware Earnings action', () => {
   const report = sectionInteractive('Reports', christelMenu);
-  assert.deepEqual(report.rows.map((row) => row.id), ['admin_action_today_report', 'admin_action_earnings', 'menu']);
+  assert.deepEqual(report.rows.map((row) => row.id), ['admin_action_today_report', 'admin_action_earnings', 'admin_open_menu']);
 });
 
 test('every advertised stable action ID maps to an explicit guarded command', () => {
