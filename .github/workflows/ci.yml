@@ -60,7 +60,7 @@ jobs:
       - name: Run focused emergency Christel Calendar bootstrap security tests
         run: node --test tests/emergency-christel-calendar-bootstrap.test.js
       - name: Run focused WS-10 service-scoped Calendar authority tests
-        run: node --test tests/calendar-service-scoped-booking-authority.test.js
+        run: node --test tests/calendar-service-scoped-booking-authority.test.js tests/calendar-service-scope-matrix.test.js
       - name: Run focused emergency Christel Calendar booking acceptance tests
         run: node --test tests/emergency-christel-calendar-booking-acceptance.test.js
       - name: Run focused Calendar new-client booking acceptance tests
