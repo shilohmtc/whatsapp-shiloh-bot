@@ -196,3 +196,27 @@ Whenever JP is expected to paste instructions, a handoff, an authorization, a ve
 - Tracker and Master Status remain durable authority; the Cockpit is their readable operational projection.
 - Closed capabilities remain frozen and must not be recreated merely because a later unit touches an adjacent surface.
 - The Primary Human Authority standard defines governance roles but does not silently mutate external/runtime permissions.
+
+## Current stabilization checkpoint — 2026-08-27 — Calendar operational layer complete
+
+This section supersedes the historical 2026-08-25 snapshot for the current active stabilization sequence. Machine state must still be re-read immediately before release or production decisions.
+
+| Stream | State | Current unit / authority | Current gate | Next owner |
+|---|---|---|---|---|
+| **00 — Control & Reconciliation** | ✓ RECONCILED | `SHILOH-CALENDAR-OPERATIONAL-MUTATIONS-P0`; PR #516 merged at `c68d29ddadca78db98bf544ba804963df8685f4c`; Render `dep-da8a5gp5efls73dsig0g` live | Calendar P0 closure only; no remaining Calendar release gate | 20 — CRM & Identity |
+| **10 — Calendar & Booking Assurance** | ✓ COMPLETE / FROZEN | Operational mutations: reschedule/drag-drop, reassign, cancel, blocks, operational leave, working schedules | None. First genuine operator use is normal observation, not an engineering gate | None unless new defect evidence or separately authorized Calendar unit |
+| **20 — CRM & Identity** | ◆ CONTROL GATE | `SHILOH-CLEAN-CRM-V2-FOUNDATION-P0`; Draft PR #515, head `459f4518fa97eb93fe42224ae126ec4c6f078065` | 00 current-main/release compatibility and Calendar ↔ CRM V2 integration sequencing | 00, then 20 |
+
+Calendar operational-mutations terminal authority:
+
+- accepted PR head: `0259721712d6b1bfc47a5c37ce801ed98f61a5d2`;
+- accepted tree: `eaa9da88e5dfb172aef6cbd3e549e48f3188bec7`;
+- CI #1545 / run `33114163521`: SUCCESS;
+- authenticated non-production Chromium proof: PASS;
+- browser proof artifact #9663795180;
+- production merge/main: `c68d29ddadca78db98bf544ba804963df8685f4c`;
+- Render deploy `dep-da8a5gp5efls73dsig0g`: LIVE with `/health` HTTP 200.
+
+No real production Calendar object was mutated for release verification. Appointment #592 remained untouched. Do not manufacture a production mutation solely for proof.
+
+The active stabilization priority now advances from the Calendar operational layer to **Clean CRM V2**. Unrelated Calendar polish or feature work must not interrupt that P0 spine unless it removes a blocker or fixes a genuine production risk.
