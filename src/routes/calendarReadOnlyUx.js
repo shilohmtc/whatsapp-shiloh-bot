@@ -1,8 +1,10 @@
 const express = require('express');
+const { pool } = require('../db/pool');
 const calendarReadOnlyUx = require('../services/calendarReadOnlyUx');
 const { renderCalendarPage, renderUnavailablePage } = require('../presentation/calendarReadOnlyUx');
 const { isCalendarBridgeEnabled } = require('../middleware/staffBrowserSession');
-const { EMERGENCY_ADMIN_ID, isEmergencyCalendarBookingEnabled } = require('../services/emergencyCalendarBootstrap');
+const { isEmergencyCalendarBookingEnabled } = require('../services/emergencyCalendarBootstrap');
+const { createCalendarCreateBookingService } = require('../services/calendarCreateBooking');
 
 const CALENDAR_VIEWER_CONTEXT = Symbol.for('shiloh.calendar.server.viewer');
 
@@ -57,6 +59,7 @@ function createCalendarReadOnlyHandler({
   resolveViewer = resolveServerViewer,
   staffAccessPath = '/calendar/staff',
   bookingPath = '/calendar/book',
+  bookingService = createCalendarCreateBookingService({ db: pool, env }),
 } = {}) {
   return async function calendarReadOnlyHandler(req, res, next) {
     try {
@@ -86,8 +89,15 @@ function createCalendarReadOnlyHandler({
         staffAccessPath,
         staffAccessScriptPath: `${staffAccessPath}/client.js`,
       });
-      if (isEmergencyCalendarBookingEnabled(env) && Number(req.staffBrowserSession?.adminId) === EMERGENCY_ADMIN_ID) {
-        html = decorateEmergencyBookingEntry(html, model.dateKey, bookingPath);
+
+      if (isEmergencyCalendarBookingEnabled(env)) {
+        try {
+          await bookingService.resolveOperator(req.staffBrowserSession?.adminId);
+          html = decorateEmergencyBookingEntry(html, model.dateKey, bookingPath);
+        } catch (_bookingAuthorityError) {
+          // The timeline is still safe to render, but booking entry must fail closed.
+          // The /calendar/book surface independently revalidates the same authority.
+        }
       }
       return res.status(200).type('html').send(html);
     } catch (error) {
