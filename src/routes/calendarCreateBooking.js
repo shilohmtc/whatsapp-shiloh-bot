@@ -22,12 +22,17 @@ function setBookingSecurityHeaders(res) {
 }
 
 function statusForError(error) {
-  if (error?.code === 'CALENDAR_BOOKING_DISABLED') return 404;
-  if (error?.code === 'CALENDAR_BOOKING_FORBIDDEN') return 403;
-  if (error?.code === 'CALENDAR_BOOKING_NEW_CLIENT_AMBIGUOUS') return 409;
-  if (String(error?.code || '').startsWith('CALENDAR_BOOKING_NEW_CLIENT_INVALID_')) return 400;
-  if (String(error?.code || '').startsWith('CALENDAR_BOOKING_INVALID_') || error?.code === 'CALENDAR_BOOKING_CLIENT_REQUIRED') return 400;
-  if (error?.code === 'CALENDAR_BOOKING_INELIGIBLE_SELECTION') return 409;
+  const code = String(error?.code || '');
+  if (code === 'CALENDAR_BOOKING_DISABLED') return 404;
+  if (code === 'CALENDAR_BOOKING_FORBIDDEN' || code === 'CALENDAR_BOOKING_SCOPE_UNRESOLVED') return 403;
+  if (code === 'CALENDAR_BOOKING_NEW_CLIENT_AMBIGUOUS') return 409;
+  if (code === 'CALENDAR_BOOKING_INELIGIBLE_SELECTION' || code === 'CALENDAR_BOOKING_CONFIRMATION_UNSAFE' || code === 'CALENDAR_BOOKING_NO_PENDING') return 409;
+  if (code.startsWith('CALENDAR_BOOKING_NEW_CLIENT_INVALID_')) return 400;
+  if (code.startsWith('CALENDAR_BOOKING_INVALID_') || code === 'CALENDAR_BOOKING_CLIENT_REQUIRED') return 400;
+  if (code === 'OPERATOR_AUTHORITY_UNAUTHORIZED') return 401;
+  if (code === 'OPERATOR_AUTHORITY_FORBIDDEN' || code === 'OPERATOR_AUTHORITY_BOOKING_SCOPE_DENIED') return 403;
+  if (code.includes('BOOKING_CONTEXT') || code.endsWith('_MISMATCH') || code.endsWith('_AMBIGUOUS') || code.endsWith('_INACTIVE') || code.endsWith('_NOT_VERIFIED')) return 409;
+  if (code.startsWith('OPERATOR_AUTHORITY_') || code.startsWith('CLIENT_FACING_NAME_')) return 400;
   return 503;
 }
 
@@ -119,6 +124,20 @@ function createCalendarCreateBookingRouter({
       if (result.status !== 'pending_confirmation') {
         return res.status(409).json({ status: result.status, reply: result.reply || 'Booking cannot be prepared.' });
       }
+      return res.status(200).json(result);
+    } catch (error) {
+      const status = statusForError(error);
+      if (status !== 503) return res.status(status).json({ error: error.message, code: error.code, requestId: req.id });
+      return next(error);
+    }
+  });
+
+  // Read-only bridge from the authenticated pending booking to the frozen WS-20
+  // authority contract. Client/staff/service/location/slot are server-derived from
+  // admin_booking_sessions; no browser-submitted booking context grants authority.
+  router.post('/authority', sameOrigin, requireSession, async (req, res, next) => {
+    try {
+      const result = await bookingService.preparedAuthority({ adminId: req.staffBrowserSession.adminId });
       return res.status(200).json(result);
     } catch (error) {
       const status = statusForError(error);
