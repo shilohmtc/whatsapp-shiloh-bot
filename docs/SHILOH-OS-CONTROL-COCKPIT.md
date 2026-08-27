@@ -176,6 +176,16 @@ Then the normal Shiloh OS terminal fields remain mandatory:
 8. Exactly what JP should do next.
 9. Copy-ready handoff when another specialist owns the next action.
 
+### Copy-ready handoff presentation
+
+Whenever JP is expected to paste instructions, a handoff, an authorization, a verification request or any other payload into another Shiloh OS chat/stream, 00 must present the **exact paste payload inside a fenced code block** so the ChatGPT interface exposes a one-click Copy control.
+
+- Put explanatory commentary outside the fenced block.
+- Put only the exact destination payload inside the fenced block; do not mix optional commentary into it.
+- If JP must paste different payloads into different destinations, provide one separately labelled fenced block per destination.
+- Do not require JP to manually select prose from a normal paragraph when a copy-ready handoff is available.
+- This is a durable presentation/usability rule. It does not change ownership, authorization or production boundaries.
+
 ## Governance constraints
 
 - Recommendation and authorization remain separate for actions outside the standing operational-delegation boundary.
