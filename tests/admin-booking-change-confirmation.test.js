@@ -29,7 +29,7 @@ test('date/time selection validates authoritative 15-minute availability before 
   assert.match(source, /listAvailableSlots/);
   assert.match(source, /intervalMinutes:\s*15/);
   assert.match(source, /excludeAppointmentId:\s*context\.id/);
-  assert.match(source, /ignoreEventId:\s*context\.event_id/);
+  assert.doesNotMatch(source, /ignoreEventId|appointment_calendar_events|googleBookingCalendar/);
   assert.match(source, /\*Confirm date\/time change\*/);
   assert.match(source, /Nothing changes until you confirm/);
   assert.match(source, /manage_quick_reschedule_confirm_/);
@@ -64,7 +64,8 @@ test('service preview remains entitlement and practitioner aware while final con
   assert.match(source, /staff_services/);
   assert.match(source, /checkClinicHours/);
   assert.match(source, /checkAuthoritativeSchedule/);
-  assert.match(source, /checkCalendarAvailability/);
+  assert.match(source, /appointments a JOIN appointment_staff/);
+  assert.doesNotMatch(source, /checkCalendarAvailability|googleBookingCalendar|appointment_calendar_events/);
   assert.match(source, /originalStateless\(sender, `manage_service_pick_/);
 });
 

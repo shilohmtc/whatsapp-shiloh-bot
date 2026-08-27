@@ -1,11 +1,5 @@
 const { pool } = require("../db/pool");
 const { normalizePhone } = require("./clientIdentityOnboarding");
-const {
-  calendarEnabled,
-  findBookingEventByAppointmentId,
-  cancelBookingEvent,
-} = require("./googleBookingCalendar");
-const { cancelPractitionerBookingEvents } = require("./practitionerGoogleCalendar");
 
 let initialized = false;
 
@@ -58,23 +52,9 @@ async function clearIntent(phone) { await ensureTable(); await pool.query(`DELET
 async function saveIntent(phone, appointmentId, reason, status) { await ensureTable(); const result=await pool.query(`INSERT INTO admin_appointment_cancellation_intents (phone, appointment_id, reason, status, updated_at) VALUES ($1,$2,$3,$4,NOW()) ON CONFLICT (phone) DO UPDATE SET appointment_id=EXCLUDED.appointment_id,reason=EXCLUDED.reason,status=EXCLUDED.status,updated_at=NOW() RETURNING *`,[phone,appointmentId,reason||null,status]); return result.rows[0]; }
 
 async function syncCancelledAppointmentToGoogleCalendar(appointmentId, staffNames = []) {
-  if (!calendarEnabled()) return { enabled:false,status:"disabled",practitionerResults:[] };
-  const practitionerResults = [];
-  try {
-    const mapping=await pool.query(`SELECT event_id FROM appointment_calendar_events WHERE appointment_id=$1 AND provider='google_calendar' LIMIT 1`,[appointmentId]);
-    let eventId=mapping.rows[0]?.event_id||null;
-    if (!eventId) { const discovered=await findBookingEventByAppointmentId(appointmentId); eventId=discovered?.id||null; }
-    if (eventId) {
-      await cancelBookingEvent(eventId);
-      await pool.query(`INSERT INTO appointment_calendar_events (appointment_id, provider, calendar_id, event_id, sync_status, updated_at) VALUES ($1, 'google_calendar', $2, $3, 'cancelled', NOW()) ON CONFLICT (appointment_id, provider) DO UPDATE SET calendar_id=EXCLUDED.calendar_id,event_id=EXCLUDED.event_id,sync_status='cancelled',last_error=NULL,updated_at=NOW()`,[appointmentId,process.env.GOOGLE_BOOKING_CALENDAR_ID,eventId]);
-    }
-    practitionerResults.push(...await cancelPractitionerBookingEvents({ appointmentId, staffNames }));
-    return { enabled:true,status:eventId?"cancelled":"no_event",eventId,practitionerResults };
-  } catch(error) {
-    try { await pool.query(`UPDATE appointment_calendar_events SET sync_status='error', last_error=$2, updated_at=NOW() WHERE appointment_id=$1 AND provider='google_calendar'`,[appointmentId,String(error.message||error).slice(0,2000)]); } catch(_) {}
-    console.error("CRM-3 Google Calendar cancellation sync failed",{appointmentId,error:error.message});
-    return { enabled:true,status:"error",error:error.message,practitionerResults };
-  }
+  void appointmentId;
+  void staffNames;
+  return { enabled:false,status:"historical_snapshot_untouched",practitionerResults:[] };
 }
 
 async function cancelAppointment({ sender, adminId, appointmentId, reason }) {
@@ -115,7 +95,7 @@ async function processAdminAppointmentCancellationMessage(sender,text) {
   if(intent.status==="awaiting_confirmation"){
     if(!isConfirmation(value))return{handled:true,interactive:confirmationInteractive(appointment,intent.reason)};
     const result=await cancelAppointment({sender,adminId:admin.id,appointmentId:appointment.id,reason:intent.reason});await clearIntent(phone);
-    if(result.status==="cancelled"){const calendarLine=result.calendarSync?.enabled?(result.calendarSync.status==="cancelled"||result.calendarSync.status==="no_event"?"\nGoogle Calendars: synced.":"\n⚠️ CRM cancellation succeeded, but Google Calendar sync needs attention."):"";return{handled:true,cancelledAppointmentId:appointment.id,reply:`✅ Appointment #${appointment.id} cancelled.\nReason: ${intent.reason}${calendarLine}`};}
+    if(result.status==="cancelled")return{handled:true,cancelledAppointmentId:appointment.id,reply:`✅ Appointment #${appointment.id} cancelled.\nReason: ${intent.reason}`};
     if(result.status==="already_cancelled")return{handled:true,reply:`Appointment #${appointment.id} was already cancelled.`};if(result.status==="conflict")return{handled:true,reply:`Appointment #${appointment.id} changed before cancellation. No cancellation was written.`};return{handled:true,reply:`Appointment #${appointment.id} could not be found.`};
   }
   await clearIntent(phone);return{handled:false};

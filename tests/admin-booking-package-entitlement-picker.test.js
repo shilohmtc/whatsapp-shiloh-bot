@@ -21,9 +21,9 @@ test('package conversion reserves a credit and makes the prepaid appointment zer
   assert.match(source, /packageCreditReserved: true/);
 });
 
-test('package conversion retains schedule and calendar conflict checks', () => {
+test('package conversion retains canonical schedule and appointment conflict checks', () => {
   assert.match(source, /checkClinicHours/);
   assert.match(source, /checkAuthoritativeSchedule/);
-  assert.match(source, /checkCalendarAvailability/);
-  assert.match(source, /updateBookingEvent/);
+  assert.match(source, /appointments a JOIN appointment_staff/);
+  assert.doesNotMatch(source, /checkCalendarAvailability|updateBookingEvent|appointment_calendar_events/);
 });

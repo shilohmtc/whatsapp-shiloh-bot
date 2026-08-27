@@ -4,7 +4,6 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const { createSchedulingEngine } = require('../src/services/schedulingEngine');
-const { eventAppliesToStaff } = require('../src/services/googleBookingCalendar');
 
 function fixture(overrides = {}) {
   return {
@@ -178,7 +177,7 @@ test('multi-practitioner projection preserves PR #380 appointment_staff fan-out 
   assert.deepEqual(timeline.appointments[0].staff.map(item => item.source), ['appointment_staff', 'appointment_staff']);
 });
 
-test('Google external-busy projection reuses PR #395 staff classification and remains explicitly non-canonical', async () => {
+test('external provider events are ignored even when an injected provider reports conflicts', async () => {
   const sharedClinicEvent = {
     id: 'shared-clinic-busy',
     summary: 'Clinic maintenance',
@@ -203,24 +202,18 @@ test('Google external-busy projection reuses PR #395 staff classification and re
   const engine = createSchedulingEngine({
     query: fakeQuery(data),
     checkAvailability: async () => ({ status: 'available' }),
-    checkCalendarAvailability: async ({ staffName }) => ({
+    checkCalendarAvailability: async () => ({
       enabled: true,
       available: false,
-      conflicts: events.filter(event => eventAppliesToStaff(event, staffName)),
+      conflicts: events,
     }),
   });
 
   const timeline = await engine.listTimeline({ ...range, viewer: allBusinessViewer, staffIds: [1, 2] });
-  const shared = timeline.externalBusy.find(item => item.id === sharedClinicEvent.id);
-  const juliaOnly = timeline.externalBusy.find(item => item.id === juliaOnlyEvent.id);
-  const allDayShared = timeline.externalBusy.find(item => item.id === allDaySharedEvent.id);
-  assert.deepEqual(shared.staffIds, [1, 2], 'untagged shared event remains clinic-wide under PR #395');
-  assert.deepEqual(juliaOnly.staffIds, [1], 'practitioner-tagged event applies only to the matching practitioner under PR #395');
-  assert.equal(shared.canonical, false);
-  assert.equal(shared.source, 'google_calendar');
-  assert.equal(shared.provenance.authority, 'PR #395 Google conflict classification');
-  assert.equal(allDayShared.allDay, true, 'real Google all-day events retain provider-derived all-day presentation semantics');
-  assert.deepEqual(timeline.meta.nonCanonicalSources, ['google_calendar']);
+  assert.deepEqual(timeline.externalBusy, []);
+  assert.deepEqual(timeline.meta.nonCanonicalSources, []);
+  assert.equal(timeline.meta.schedulingAuthority, 'shiloh_canonical');
+  assert.equal(timeline.meta.googleCalendarRequired, false);
 });
 
 test('viewer calendar scope fails closed and own-scope viewers cannot request another practitioner timeline', async () => {
@@ -252,20 +245,18 @@ test('viewer calendar scope fails closed and own-scope viewers cannot request an
     staffIds: [1, 2],
   });
   assert.deepEqual(own.staff.map(item => item.id), [1]);
-  assert.equal(googleCalls.length, 1);
-  assert.equal(googleCalls[0].staffName, 'Julia');
+  assert.equal(googleCalls.length, 0);
 });
 
-test('Google Calendar cannot silently become optional for the read-only projection', async () => {
+test('read-only projection remains available when Google Calendar is disabled', async () => {
   const engine = createSchedulingEngine({
     query: fakeQuery(fixture()),
     checkAvailability: async () => ({ status: 'available' }),
     checkCalendarAvailability: async () => ({ enabled: false, available: true, conflicts: [] }),
   });
-  await assert.rejects(
-    engine.listTimeline({ ...range, viewer: allBusinessViewer, staffIds: [1] }),
-    error => error.code === 'SCHEDULING_GOOGLE_CALENDAR_REQUIRED',
-  );
+  const timeline = await engine.listTimeline({ ...range, viewer: allBusinessViewer, staffIds: [1] });
+  assert.equal(timeline.meta.schedulingAuthority, 'shiloh_canonical');
+  assert.equal(timeline.meta.googleCalendarRequired, false);
 });
 
 test('SchedulingTimeline SQL projection is locked to canonical production schema migrations', () => {

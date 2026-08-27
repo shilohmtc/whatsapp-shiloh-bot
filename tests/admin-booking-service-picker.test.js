@@ -22,11 +22,11 @@ test('replacement choices remain practitioner-scoped and exclude package-only/cu
   assert.match(source, /ss\.staff_id=ast\.staff_id AND ss\.service_id=s\.id/);
 });
 
-test('selected service still uses guarded mutation, schedule validation, calendar sync and audit', () => {
+test('selected service uses guarded mutation, canonical schedule validation and audit', () => {
   assert.match(source, /manage_service_pick_\(\\d\+\)/);
   assert.match(source, /validateWindow\(a, a\.staff\[0\]\.staff_id/);
   assert.match(source, /UPDATE appointment_services SET service_id=\$1/);
-  assert.match(source, /await syncCalendar\(after\)/);
+  assert.doesNotMatch(source, /syncCalendar|updateBookingEvent|appointment_calendar_events/);
   assert.match(source, /appointment\.service_updated/);
   assert.match(source, /selectedFromInteractiveList/);
 });

@@ -62,10 +62,7 @@ test('final booking still revalidates staff-service eligibility before productio
   assert.match(booking, /eligibility_changed/);
 });
 
-test('calendar-backed booking still uses canonical shared and practitioner Google calendar paths', () => {
-  assert.match(booking, /createBookingEvent\(/);
-  assert.match(booking, /createPractitionerBookingEvent\(/);
-  assert.match(booking, /appointment_calendar_events/);
-  assert.match(booking, /sharedGoogleCalendarChecked/);
-  assert.match(booking, /practitionerGoogleCalendarChecked/);
+test('booking commit uses Shiloh-only scheduling authority and creates no external mirror', () => {
+  assert.match(booking, /schedulingAuthority: "shiloh_canonical"/);
+  assert.doesNotMatch(booking, /createBookingEvent|createPractitionerBookingEvent|appointment_calendar_events|Google Calendar/);
 });

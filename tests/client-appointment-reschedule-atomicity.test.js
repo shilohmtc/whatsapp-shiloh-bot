@@ -26,7 +26,7 @@ test('reschedule date enters authoritative daypart and slot selection instead of
   assert.match(availabilitySource, /reschedule_daypart_evening/);
   assert.match(availabilitySource, /reschedule_slot_/);
   assert.match(availabilitySource, /service_id/);
-  assert.match(availabilitySource, /current CRM schedule and connected calendars/);
+  assert.match(availabilitySource, /Shiloh's canonical scheduling records/);
   assert.match(webhookSource, /processClientRescheduleAvailabilityMessage\(from,text\)/);
   assert.ok(webhookSource.indexOf('processClientRescheduleAvailabilityMessage(from,text)') < webhookSource.indexOf('processAppointmentChangeMessage(from,appointmentChangeText)'));
   assert.match(webhookSource, /sendAdminResult\(from,rescheduleAvailability\)/);
@@ -44,27 +44,22 @@ test('client reschedule locks the practitioner and revalidates authoritative ava
   const finalClinic = source.indexOf('const finalClinic=', advisory);
   const finalSchedule = source.indexOf('const finalSchedule=', finalClinic);
   const finalConflict = source.indexOf('const finalConflict=', finalSchedule);
-  const finalExternal = source.indexOf('const finalExternal=', finalConflict);
-  const update = source.indexOf('UPDATE appointments SET starts_at=', finalExternal);
+  const update = source.indexOf('UPDATE appointments SET starts_at=', finalConflict);
   assert.ok(begin >= 0 && advisory > begin);
   assert.ok(finalClinic > advisory && finalSchedule > finalClinic);
-  assert.ok(finalConflict > finalSchedule && finalExternal > finalConflict);
-  assert.ok(update > finalExternal);
+  assert.ok(finalConflict > finalSchedule);
+  assert.ok(update > finalConflict);
 });
 
 test('concurrent appointment movement fails closed instead of overwriting newer state', () => {
-  assert.match(source, /originalStartsAt=locked\.rows\[0\]\.starts_at/);
-  assert.match(source, /originalEndsAt=locked\.rows\[0\]\.ends_at/);
-  assert.match(source, /new Date\(originalStartsAt\).*new Date\(a\.starts_at\)/s);
+  assert.match(source, /new Date\(locked\.rows\[0\]\.starts_at\).*new Date\(a\.starts_at\)/s);
+  assert.match(source, /new Date\(locked\.rows\[0\]\.ends_at\).*new Date\(a\.ends_at\)/s);
   assert.match(source, /status:'changed'/);
 });
 
-test('failed multi-calendar reschedule compensates back to original appointment time', () => {
+test('failed canonical reschedule rolls back without external compensation', () => {
   const fn = source.match(/async function rescheduleCanonical[\s\S]*?async function processAppointmentChangeMessage/);
   assert.ok(fn);
-  assert.match(fn[0], /calendarMutationAttempted=true/);
   assert.match(fn[0], /ROLLBACK/);
-  assert.match(fn[0], /startsAt:originalStartsAt,endsAt:originalEndsAt/);
-  assert.match(fn[0], /Client reschedule calendar compensation failed/);
-  assert.match(fn[0], /sync_status='error'/);
+  assert.doesNotMatch(fn[0], /updateBookingEvent|appointment_calendar_events|calendar compensation/);
 });

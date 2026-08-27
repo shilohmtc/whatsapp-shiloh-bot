@@ -13,10 +13,9 @@ test('reschedule slot discovery can exclude the appointment being moved from CRM
   assert.match(reschedule, /excludeAppointmentId:\s*Number\(a\.id\)/);
 });
 
-test('reschedule slot discovery can exclude its own Google Calendar event', () => {
-  assert.match(availability, /ignoreEventId/);
-  assert.match(availability, /checkCalendarAvailability\(\{[\s\S]*ignoreEventId/);
-  assert.match(reschedule, /ignoreEventId/);
+test('reschedule slot discovery does not consult an external calendar event', () => {
+  assert.doesNotMatch(availability, /checkCalendarAvailability|googleBookingCalendar/);
+  assert.doesNotMatch(reschedule, /ignoreEventId|appointment_calendar_events|googleBookingCalendar/);
 });
 
 test('ordinary availability remains compatible when no exclusions are supplied', () => {

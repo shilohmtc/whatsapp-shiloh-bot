@@ -2,7 +2,6 @@ const { pool } = require('../db/pool');
 const { normalizePhone } = require('./clientIdentityOnboarding');
 const { checkClinicHours } = require('./clinicHours');
 const { checkAuthoritativeSchedule } = require('./adminAvailability');
-const { checkCalendarAvailability, updateBookingEvent } = require('./googleBookingCalendar');
 const { listAvailableSlots } = require('./availabilityService');
 const { getNextOpenClinicDates, shortDateTitle } = require('./clinicDateChoices');
 const { compactListTitle, fullLabelDescription } = require('../presentation/whatsappListRowPresentation');
@@ -29,7 +28,7 @@ async function adminFor(sender) {
 }
 
 async function loadAppointment(admin, id) {
-  const r = await pool.query(`SELECT a.id,a.client_id,a.location_id,a.starts_at,a.ends_at,a.status,a.total_price,a.currency,COALESCE(c.display_name,a.source_client_name,'Client') client_name,l.name location_name,ace.event_id FROM appointments a LEFT JOIN clients c ON c.id=a.client_id LEFT JOIN locations l ON l.id=a.location_id LEFT JOIN appointment_calendar_events ace ON ace.appointment_id=a.id AND ace.provider='google_calendar' AND ace.sync_status='synced' WHERE a.id=$1 AND a.status<>'cancelled'`, [id]);
+  const r = await pool.query(`SELECT a.id,a.client_id,a.location_id,a.starts_at,a.ends_at,a.status,a.total_price,a.currency,COALESCE(c.display_name,a.source_client_name,'Client') client_name,l.name location_name FROM appointments a LEFT JOIN clients c ON c.id=a.client_id LEFT JOIN locations l ON l.id=a.location_id WHERE a.id=$1 AND a.status<>'cancelled'`, [id]);
   if (!r.rowCount) return null;
   const a = r.rows[0];
   const staff = (await pool.query(`SELECT ast.staff_id,ast.staff_name_snapshot,s.display_name FROM appointment_staff ast LEFT JOIN staff s ON s.id=ast.staff_id WHERE ast.appointment_id=$1 ORDER BY ast.position`, [id])).rows;
@@ -78,13 +77,6 @@ async function upcomingAppointmentsInteractive(admin) {
     sectionTitle: 'Upcoming appointments',
     rows,
   };
-}
-
-async function syncCalendar(a) {
-  if (!a.event_id) return;
-  const staffName = a.staff.map((x) => x.display_name || x.staff_name_snapshot).join(' + ');
-  const serviceName = a.services.map((x) => x.name || x.service_name_snapshot).join(' + ');
-  await updateBookingEvent({ eventId: a.event_id, appointmentId: a.id, startsAt: a.starts_at, endsAt: a.ends_at, clientName: a.client_name, serviceName, staffName, locationName: a.location_name });
 }
 
 async function audit(admin, appointmentId, action, metadata) {
@@ -202,8 +194,6 @@ async function validateWindow(a, staffId, staffName, startsAt, endsAt) {
   if (schedule.partialUnavailable || (schedule.allDayUnavailable && !schedule.insideAvailableException) || !schedule.covered) return 'That time falls outside the practitioner’s allowed schedule.';
   const c = await pool.query(`SELECT a.id FROM appointments a JOIN appointment_staff ast ON ast.appointment_id=a.id WHERE ast.staff_id=$1 AND a.id<>$2 AND a.status<>'cancelled' AND a.starts_at<$4 AND a.ends_at>$3 LIMIT 1`, [staffId, a.id, startsAt, endsAt]);
   if (c.rowCount) return 'That practitioner already has another CRM appointment at that time.';
-  const external = await checkCalendarAvailability({ startsAt, endsAt, staffName, ignoreEventId: a.event_id || null });
-  if (external.enabled && !external.available) return 'The shared Shiloh calendar has another conflicting event at that time.';
   return null;
 }
 
@@ -220,7 +210,7 @@ async function dateChoiceInteractive(a) {
   buttons.push({ id: 'manage_reschedule_other', title: 'Other date' });
   return {
     type: 'button',
-    body: `${appointmentSummary(a)}\n\nChoose a date. Shiloh will show only slots that are currently bookable after clinic hours, practitioner schedule, CRM appointments and Google Calendar are applied.`,
+    body: `${appointmentSummary(a)}\n\nChoose a date. Shiloh will show only slots that are currently bookable after clinic hours, practitioner schedule, canonical appointments and blocks are applied.`,
     buttons: buttons.slice(0, 3),
   };
 }
@@ -229,7 +219,7 @@ async function slotsInteractive(a, date, page = 1) {
   if (a.staff.length !== 1 || a.services.length !== 1) return null;
   const staff = a.staff[0];
   const service = a.services[0];
-  const result = await listAvailableSlots({ staffId: staff.staff_id, serviceId: service.service_id, date, locationId: a.location_id, intervalMinutes: 15, excludeAppointmentId: a.id, ignoreEventId: a.event_id || null });
+  const result = await listAvailableSlots({ staffId: staff.staff_id, serviceId: service.service_id, date, locationId: a.location_id, intervalMinutes: 15, excludeAppointmentId: a.id });
   const safePage = Math.max(Number(page) || 1, 1);
   const offset = (safePage - 1) * SLOT_PAGE_SIZE;
   const pageSlots = result.slots.slice(offset, offset + SLOT_PAGE_SIZE);
@@ -251,7 +241,6 @@ async function applyReschedule(admin, a, starts) {
   if (problem) return { reply: `${problem}\n\nNo change was saved. Choose another available time.` };
   await pool.query(`UPDATE appointments SET starts_at=$1,ends_at=$2,updated_at=NOW() WHERE id=$3`, [starts, ends, a.id]);
   const after = await loadAppointment(admin, a.id);
-  await syncCalendar(after);
   await audit(admin, a.id, 'appointment.time_updated', { fromStart: a.starts_at, fromEnd: a.ends_at, toStart: starts, toEnd: ends, authoritativeSlotFlow: true });
   return { after };
 }
@@ -320,8 +309,8 @@ async function processAdminBookingUpdateMessage(sender, text) {
   if (n === 'manage_reschedule_other') { sessions.set(k, { step: 'time_other_date', appointmentId: a.id }); return { handled: true, admin, reply: 'Send the date as *DD/MM/YYYY*. Shiloh will then show authoritative available times.' }; }
   if (n === 'manage_reschedule_manual') { sessions.set(k, { step: 'time_manual', appointmentId: a.id }); return { handled: true, admin, reply: 'Send the new date and time as *DD/MM/YYYY HH:MM*. It will be fully re-checked before saving.' }; }
   if (s.step === 'time_other_date') { const date = parseDateOnly(raw); if (!date) return { handled: true, admin, reply: 'Use *DD/MM/YYYY*, for example *18/08/2026*.' }; sessions.set(k, { step: 'time_slot', appointmentId: a.id, date }); return { handled: true, admin, interactive: await slotsInteractive(a, date, 1) }; }
-  if (s.step === 'time_slot' && slotMatch) { const starts = new Date(Number(slotMatch[1])); if (Number.isNaN(starts.getTime())) return { handled: true, admin, reply: 'That slot is no longer valid. Choose another date/time.' }; const applied = await applyReschedule(admin, a, starts); if (applied.reply) return { handled: true, admin, reply: applied.reply }; sessions.set(k, { step: 'menu', appointmentId: a.id }); return { handled: true, admin, interactive: { ...manageInteractive(applied.after), body: `✅ Date/time updated and Google Calendar synchronized.\n\n${manageInteractive(applied.after).body}` } }; }
-  if (s.step === 'time_manual') { const starts = parseLocal(raw); if (!starts) return { handled: true, admin, reply: 'Use *DD/MM/YYYY HH:MM*, for example *18/08/2026 09:00*.' }; const applied = await applyReschedule(admin, a, starts); if (applied.reply) return { handled: true, admin, reply: applied.reply }; sessions.set(k, { step: 'menu', appointmentId: a.id }); return { handled: true, admin, interactive: { ...manageInteractive(applied.after), body: `✅ Date/time updated and Google Calendar synchronized.\n\n${manageInteractive(applied.after).body}` } }; }
+  if (s.step === 'time_slot' && slotMatch) { const starts = new Date(Number(slotMatch[1])); if (Number.isNaN(starts.getTime())) return { handled: true, admin, reply: 'That slot is no longer valid. Choose another date/time.' }; const applied = await applyReschedule(admin, a, starts); if (applied.reply) return { handled: true, admin, reply: applied.reply }; sessions.set(k, { step: 'menu', appointmentId: a.id }); return { handled: true, admin, interactive: { ...manageInteractive(applied.after), body: `✅ Date/time updated in Shiloh Calendar.\n\n${manageInteractive(applied.after).body}` } }; }
+  if (s.step === 'time_manual') { const starts = parseLocal(raw); if (!starts) return { handled: true, admin, reply: 'Use *DD/MM/YYYY HH:MM*, for example *18/08/2026 09:00*.' }; const applied = await applyReschedule(admin, a, starts); if (applied.reply) return { handled: true, admin, reply: applied.reply }; sessions.set(k, { step: 'menu', appointmentId: a.id }); return { handled: true, admin, interactive: { ...manageInteractive(applied.after), body: `✅ Date/time updated in Shiloh Calendar.\n\n${manageInteractive(applied.after).body}` } }; }
 
   if (s.step === 'service') {
     const services = await eligibleReplacementServices(a);
@@ -343,8 +332,8 @@ async function processAdminBookingUpdateMessage(sender, text) {
     const starts = new Date(a.starts_at); const ends = new Date(starts.getTime() + minutes * 60000);
     if (a.staff.length === 1) { const problem = await validateWindow(a, a.staff[0].staff_id, a.staff[0].display_name || a.staff[0].staff_name_snapshot, starts, ends); if (problem) return { handled: true, admin, reply: `${problem}\n\nNo service change was saved. Choose another eligible service.` }; }
     await transaction(async (db) => { await db.query(`UPDATE appointment_services SET service_id=$1,service_name_snapshot=$2,duration_minutes_snapshot=$3,price_snapshot=$4 WHERE id=$5`, [service.id, service.name, service.duration_minutes, service.price, a.services[0].id]); await db.query(`UPDATE appointments SET ends_at=$1,title=$2,updated_at=NOW() WHERE id=$3`, [ends, service.name, a.id]); });
-    const after = await loadAppointment(admin, a.id); await syncCalendar(after); await audit(admin, a.id, 'appointment.service_updated', { from: a.services[0].name || a.services[0].service_name_snapshot, to: service.name, selectedFromInteractiveList: Boolean(servicePickMatch) }); sessions.set(k, { step: 'menu', appointmentId: a.id });
-    return { handled: true, admin, interactive: { ...manageInteractive(after), body: `✅ Service changed to *${service.name}* and the Google Calendar event was updated.\n\n${manageInteractive(after).body}` } };
+    const after = await loadAppointment(admin, a.id); await audit(admin, a.id, 'appointment.service_updated', { from: a.services[0].name || a.services[0].service_name_snapshot, to: service.name, selectedFromInteractiveList: Boolean(servicePickMatch) }); sessions.set(k, { step: 'menu', appointmentId: a.id });
+    return { handled: true, admin, interactive: { ...manageInteractive(after), body: `✅ Service changed to *${service.name}* in Shiloh Calendar.\n\n${manageInteractive(after).body}` } };
   }
 
   if (s.step === 'staff') {
@@ -355,8 +344,8 @@ async function processAdminBookingUpdateMessage(sender, text) {
     for (const svc of a.services) { const ok = await pool.query(`SELECT 1 FROM staff_services WHERE staff_id=$1 AND service_id=$2`, [st.id, svc.service_id]); if (!ok.rowCount) return { handled: true, admin, reply: `${st.display_name} is not authorized for ${svc.name || svc.service_name_snapshot}.` }; }
     const problem = await validateWindow(a, st.id, st.display_name, a.starts_at, a.ends_at); if (problem) return { handled: true, admin, reply: problem };
     await transaction(async (db) => { await db.query(`DELETE FROM appointment_staff WHERE appointment_id=$1`, [a.id]); await db.query(`INSERT INTO appointment_staff(appointment_id,staff_id,position,staff_name_snapshot) VALUES($1,$2,1,$3)`, [a.id, st.id, st.display_name]); });
-    const after = await loadAppointment(admin, a.id); await syncCalendar(after); await audit(admin, a.id, 'appointment.staff_updated', { from: a.staff.map((x) => x.display_name || x.staff_name_snapshot), to: st.display_name }); sessions.set(k, { step: 'menu', appointmentId: a.id });
-    return { handled: true, admin, interactive: { ...manageInteractive(after), body: `✅ Practitioner changed to *${st.display_name}* and the Google Calendar event was updated.\n\n${manageInteractive(after).body}` } };
+    const after = await loadAppointment(admin, a.id); await audit(admin, a.id, 'appointment.staff_updated', { from: a.staff.map((x) => x.display_name || x.staff_name_snapshot), to: st.display_name }); sessions.set(k, { step: 'menu', appointmentId: a.id });
+    return { handled: true, admin, interactive: { ...manageInteractive(after), body: `✅ Practitioner changed to *${st.display_name}* in Shiloh Calendar.\n\n${manageInteractive(after).body}` } };
   }
 
   if (s.step === 'time') { const starts = parseLocal(raw); if (!starts) return { handled: true, admin, reply: 'Use *DD/MM/YYYY HH:MM*, for example 18/08/2026 09:00.' }; const applied = await applyReschedule(admin, a, starts); if (applied.reply) return { handled: true, admin, reply: applied.reply }; sessions.set(k, { step: 'menu', appointmentId: a.id }); return { handled: true, admin, interactive: manageInteractive(applied.after) }; }

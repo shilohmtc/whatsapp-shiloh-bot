@@ -36,7 +36,6 @@ function statusForError(error) {
 }
 
 function safeUnavailableMessage(error) {
-  if (error?.code === 'SCHEDULING_GOOGLE_CALENDAR_REQUIRED') return 'Google Calendar provider state is unavailable, so Shiloh Calendar is failing closed.';
   if (error?.code === 'CALENDAR_UX_STAFF_FILTER_FORBIDDEN') return 'That practitioner is outside your authenticated Calendar scope.';
   if (statusForError(error) === 400) return 'The requested Calendar view or filter is invalid.';
   if (statusForError(error) === 403) return 'Your authenticated Shiloh access does not permit this Calendar view.';
@@ -47,7 +46,7 @@ function decorateEmergencyBookingEntry(html, dateKey, bookingPath = '/calendar/b
   const href = `${bookingPath}?date=${encodeURIComponent(String(dateKey || ''))}`;
   return String(html)
     .replace('<div class="access-controls">', `<div class="access-controls"><a class="nav-button" href="${href}">Create booking</a><a class="nav-button" href="/calendar/client-authority">Confirm client contact</a>`)
-    .replace('Africa/Johannesburg • Read-only • Google-only busy is non-canonical', 'Africa/Johannesburg • Read-only timeline • Google-only busy is non-canonical')
+    .replace('Africa/Johannesburg • Read-only • Shiloh is the scheduling authority', 'Africa/Johannesburg • Read-only timeline • Shiloh is the scheduling authority')
     .replace('Read-only operational view. Booking, reschedule, cancellation, block, leave and schedule mutations are not available here.', 'Timeline remains read-only. New booking creation uses the separately guarded canonical workflow. Reschedule, cancellation, drag/drop, reassignment, block, leave and schedule mutations are not available here.');
 }
 

@@ -1,6 +1,5 @@
 const { pool } = require('../db/pool');
 const adminAvailability = require('./adminAvailability');
-const googleBookingCalendar = require('./googleBookingCalendar');
 
 const MAX_TIMELINE_DAYS = 31;
 const ALL_BUSINESS_SCOPE = 'all_business';
@@ -82,16 +81,6 @@ function canonical(kind, source, fields = {}) {
   };
 }
 
-function nonCanonical(kind, source, fields = {}, authority = source) {
-  return {
-    ...fields,
-    kind,
-    canonical: false,
-    source,
-    provenance: { authority, canonical: false },
-  };
-}
-
 function aggregateAppointments(rows, permittedStaffIds) {
   const allowed = new Set(permittedStaffIds);
   const appointments = new Map();
@@ -104,6 +93,8 @@ function aggregateAppointments(rows, permittedStaffIds) {
         endsAt: row.ends_at,
         status: row.status,
         recordSource: row.record_source || null,
+        clientName: row.client_name || 'Client',
+        serviceName: row.service_name || 'Appointment',
         staff: [],
         staffIds: [],
       });
@@ -210,45 +201,9 @@ function buildClosures(locationExceptions, publicHolidays) {
   return closures;
 }
 
-function eventTimes(event) {
-  return {
-    startsAt: event?.start?.dateTime || event?.start?.date || null,
-    endsAt: event?.end?.dateTime || event?.end?.date || null,
-  };
-}
-
-async function projectGoogleBusy(staff, from, to, checkCalendarAvailability) {
-  const projected = new Map();
-  for (const person of staff) {
-    const result = await checkCalendarAvailability({ startsAt: from, endsAt: to, staffName: person.display_name });
-    if (!result || result.enabled !== true) {
-      throw timelineError('SCHEDULING_GOOGLE_CALENDAR_REQUIRED', 'Google Calendar must remain enabled for SchedulingTimeline projection.');
-    }
-    for (const event of result.conflicts || []) {
-      const times = eventTimes(event);
-      const key = event.id || `${times.startsAt || ''}:${times.endsAt || ''}:${event.summary || ''}`;
-      let item = projected.get(key);
-      if (!item) {
-        item = nonCanonical('external_busy', 'google_calendar', {
-          id: event.id || key,
-          startsAt: times.startsAt,
-          endsAt: times.endsAt,
-          summary: event.summary || null,
-          allDay: Boolean(event?.start?.date && !event?.start?.dateTime),
-          staffIds: [],
-        }, 'PR #395 Google conflict classification');
-        projected.set(key, item);
-      }
-      if (!item.staffIds.includes(Number(person.id))) item.staffIds.push(Number(person.id));
-    }
-  }
-  return [...projected.values()];
-}
-
 function createSchedulingEngine({
   query = (text, params) => pool.query(text, params),
   checkAvailability = adminAvailability.checkAvailability,
-  checkCalendarAvailability = googleBookingCalendar.checkCalendarAvailability,
 } = {}) {
   async function listAvailability(input) {
     return checkAvailability(input);
@@ -266,7 +221,8 @@ function createSchedulingEngine({
           viewerScope: viewerFilter.scope,
           canonicalSources: [],
           nonCanonicalSources: [],
-          googleCalendarRequired: true,
+          schedulingAuthority: 'shiloh_canonical',
+          googleCalendarRequired: false,
         },
         staff: [], workingWindows: [], scheduleExceptions: [], leave: [], closures: [], appointments: [], blocks: [], externalBusy: [], events: [],
       };
@@ -288,7 +244,8 @@ function createSchedulingEngine({
           viewerScope: viewerFilter.scope,
           canonicalSources: ['staff'],
           nonCanonicalSources: [],
-          googleCalendarRequired: true,
+          schedulingAuthority: 'shiloh_canonical',
+          googleCalendarRequired: false,
         },
         staff: [], workingWindows: [], scheduleExceptions: [], leave: [], closures: [], appointments: [], blocks: [], externalBusy: [], events: [],
       };
@@ -297,8 +254,12 @@ function createSchedulingEngine({
     const appointmentResult = await query(`/* SchedulingTimeline:appointments */
       SELECT a.id AS appointment_id,
              a.starts_at, a.ends_at, a.status, a.source AS record_source,
+             COALESCE(c.display_name,a.source_client_name,'Client') AS client_name,
+             COALESCE((SELECT string_agg(aps.service_name_snapshot,' + ' ORDER BY aps.position)
+                         FROM appointment_services aps WHERE aps.appointment_id=a.id),a.title,'Appointment') AS service_name,
              ast.staff_id AS assigned_staff_id, ast.staff_name_snapshot
         FROM appointments a
+        LEFT JOIN clients c ON c.id=a.client_id
         JOIN appointment_staff ast
           ON ast.appointment_id=a.id AND ast.staff_id = ANY($3::bigint[])
        WHERE a.status <> 'cancelled'
@@ -392,8 +353,8 @@ function createSchedulingEngine({
     });
     const workingWindows = buildWorkingWindows(staff, staffHoursResult.rows || [], recurringClosureResult.rows || [], locationHoursResult.rows || []);
     const closures = buildClosures(locationExceptionResult.rows || [], holidayResult.rows || []);
-    const externalBusy = await projectGoogleBusy(staff, range.from, range.to, checkCalendarAvailability);
-    const events = [...appointments, ...blocks, ...leave, ...closures, ...externalBusy];
+    const externalBusy = [];
+    const events = [...appointments, ...blocks, ...leave, ...closures];
 
     return {
       meta: {
@@ -405,8 +366,9 @@ function createSchedulingEngine({
           'staff_recurring_day_closures', 'staff_schedule_exceptions',
           'location_working_hours', 'location_hours_exceptions', 'public_holidays',
         ],
-        nonCanonicalSources: ['google_calendar'],
-        googleCalendarRequired: true,
+        nonCanonicalSources: [],
+        schedulingAuthority: 'shiloh_canonical',
+        googleCalendarRequired: false,
       },
       staff: staff.map(row => ({
         id: Number(row.id),

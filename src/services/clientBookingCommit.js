@@ -3,16 +3,6 @@ const { getIntent, verifyService } = require('./bookingIntent');
 const { normalizePhone, resolveClientByWhatsApp, profileComplete } = require('./clientIdentityOnboarding');
 const { getDefaultActiveLocation, checkClinicHours } = require('./clinicHours');
 const { checkAvailability, checkAuthoritativeSchedule, getConflicts } = require('./adminAvailability');
-const {
-  checkCalendarAvailability,
-  createBookingEvent,
-  cancelBookingEvent,
-} = require('./googleBookingCalendar');
-const {
-  checkPractitionerCalendarAvailability,
-  createPractitionerBookingEvent,
-  cancelPractitionerBookingEvent,
-} = require('./practitionerGoogleCalendar');
 const logger = require('../lib/logger');
 
 const BOOKING_SOURCE = 'shiloh_client_whatsapp';
@@ -124,7 +114,7 @@ async function resolveCommitContext(phone, intent) {
     return {
       status: availability.status,
       retryTime: true,
-      reply: chooseAnotherTimeReply('That slot is no longer available after the final CRM, schedule and shared-calendar recheck.'),
+      reply: chooseAnotherTimeReply('That slot is no longer available after the final canonical appointment, schedule and block recheck.'),
     };
   }
 
@@ -133,19 +123,6 @@ async function resolveCommitContext(phone, intent) {
       status: 'past_time',
       retryTime: true,
       reply: chooseAnotherTimeReply('That selected time has already passed.'),
-    };
-  }
-
-  const practitionerCalendar = await checkPractitionerCalendarAvailability({
-    staffName: availability.staff.display_name,
-    startsAt: availability.startsAt,
-    endsAt: availability.endsAt,
-  });
-  if (practitionerCalendar.enabled && practitionerCalendar.configured && !practitionerCalendar.available) {
-    return {
-      status: 'practitioner_calendar_conflict',
-      retryTime: true,
-      reply: chooseAnotherTimeReply(`${availability.staff.display_name} is no longer free on the connected practitioner calendar at that time.`),
     };
   }
 
@@ -171,11 +148,6 @@ async function commitAcceptedClientBooking(phone) {
   }
 
   const db = await pool.connect();
-  let sharedEventCreatedByThisAttempt = null;
-  let practitionerEventCreatedByThisAttempt = false;
-  let practitionerEventAppointmentId = null;
-  let practitionerEventStaffName = null;
-
   try {
     await db.query('BEGIN');
 
@@ -280,28 +252,6 @@ async function commitAcceptedClientBooking(phone) {
       return { handled: true, status: 'conflict', reply: chooseAnotherTimeReply('Another appointment or staff calendar block now conflicts with that time.') };
     }
 
-    const sharedCalendar = await checkCalendarAvailability({
-      startsAt,
-      endsAt,
-      staffName: canonical.staff_name,
-    });
-    if (sharedCalendar.enabled && !sharedCalendar.available) {
-      await resetAcceptedIntentForNewSlot(normalizedPhone, db);
-      await db.query('COMMIT');
-      return { handled: true, status: 'shared_calendar_conflict', reply: chooseAnotherTimeReply('The shared Shiloh booking calendar is no longer clear for that time.') };
-    }
-
-    const practitionerCalendar = await checkPractitionerCalendarAvailability({
-      staffName: canonical.staff_name,
-      startsAt,
-      endsAt,
-    });
-    if (practitionerCalendar.enabled && practitionerCalendar.configured && !practitionerCalendar.available) {
-      await resetAcceptedIntentForNewSlot(normalizedPhone, db);
-      await db.query('COMMIT');
-      return { handled: true, status: 'practitioner_calendar_conflict', reply: chooseAnotherTimeReply(`${canonical.staff_name}’s connected practitioner calendar is no longer clear for that time.`) };
-    }
-
     const totalPrice = canonical.variable_price ? null : canonical.price;
     const appointmentResult = await db.query(`
       INSERT INTO appointments
@@ -322,46 +272,6 @@ async function commitAcceptedClientBooking(phone) {
         (appointment_id, staff_id, position, staff_name_snapshot)
       VALUES ($1, $2, 1, $3)
     `, [appointment.id, canonical.staff_id, canonical.staff_name]);
-
-    const eventData = {
-      appointmentId: appointment.id,
-      clientName: canonical.client_name,
-      clientMobile: normalizedPhone,
-      serviceName: canonical.service_name,
-      staffName: canonical.staff_name,
-      locationName: canonical.location_name,
-      startsAt,
-      endsAt,
-      source: BOOKING_SOURCE,
-    };
-
-    const sharedCalendarResult = await createBookingEvent(eventData);
-    if (sharedCalendarResult.enabled && sharedCalendarResult.event) {
-      if (!sharedCalendarResult.idempotentReplay) sharedEventCreatedByThisAttempt = sharedCalendarResult.event.id;
-      await db.query(`
-        INSERT INTO appointment_calendar_events
-          (appointment_id, provider, calendar_id, event_id, sync_status, updated_at)
-        VALUES ($1, 'google_calendar', $2, $3, 'synced', NOW())
-        ON CONFLICT (appointment_id, provider) DO UPDATE SET
-          calendar_id = EXCLUDED.calendar_id,
-          event_id = EXCLUDED.event_id,
-          sync_status = 'synced',
-          last_error = NULL,
-          updated_at = NOW()
-      `, [appointment.id, process.env.GOOGLE_BOOKING_CALENDAR_ID, sharedCalendarResult.event.id]);
-    }
-
-    const practitionerCalendarResult = await createPractitionerBookingEvent(eventData);
-    if (
-      practitionerCalendarResult.enabled
-      && practitionerCalendarResult.configured
-      && practitionerCalendarResult.event
-      && !practitionerCalendarResult.idempotentReplay
-    ) {
-      practitionerEventCreatedByThisAttempt = true;
-      practitionerEventAppointmentId = appointment.id;
-      practitionerEventStaffName = canonical.staff_name;
-    }
 
     await db.query(`
       INSERT INTO appointment_status_history
@@ -385,10 +295,8 @@ async function commitAcceptedClientBooking(phone) {
       policyAcceptedAt: lockedIntent.policy_accepted_at,
       authoritativeClinicHoursChecked: true,
       authoritativeScheduleChecked: true,
-      sharedGoogleCalendarChecked: sharedCalendar.enabled,
-      practitionerGoogleCalendarChecked: practitionerCalendar.enabled && practitionerCalendar.configured,
-      sharedGoogleCalendarEventId: sharedCalendarResult.event?.id || null,
-      practitionerCalendarId: practitionerCalendarResult.calendarId || null,
+      canonicalAppointmentConflictsChecked: true,
+      schedulingAuthority: 'shiloh_canonical',
     })]);
 
     await db.query('DELETE FROM booking_intents WHERE phone = $1', [normalizedPhone]);
@@ -404,34 +312,13 @@ async function commitAcceptedClientBooking(phone) {
         `• Practitioner: ${canonical.staff_name}`,
         `• Time: ${formatLocalDateTime(startsAt)}`,
         `• Location: ${canonical.location_name}`,
-        sharedCalendarResult.enabled ? '• Shiloh — Bookings: synced' : null,
-        practitionerCalendarResult.enabled && practitionerCalendarResult.configured ? `• ${canonical.staff_name} Google Calendar: synced` : null,
+        '• Scheduling authority: Shiloh Calendar',
         '',
-        'Your appointment is now confirmed in Shiloh’s canonical CRM after final availability and calendar revalidation.',
+        'Your appointment is now confirmed after final Shiloh availability revalidation.',
       ].filter(Boolean).join('\n'),
     };
   } catch (error) {
     try { await db.query('ROLLBACK'); } catch (_) {}
-
-    if (practitionerEventCreatedByThisAttempt && practitionerEventAppointmentId && practitionerEventStaffName) {
-      try {
-        await cancelPractitionerBookingEvent({
-          appointmentId: practitionerEventAppointmentId,
-          staffName: practitionerEventStaffName,
-        });
-      } catch (cleanupError) {
-        logger.error({ err: cleanupError, appointmentId: practitionerEventAppointmentId }, 'Client booking practitioner-calendar compensation failed');
-      }
-    }
-
-    if (sharedEventCreatedByThisAttempt) {
-      try {
-        await cancelBookingEvent(sharedEventCreatedByThisAttempt);
-      } catch (cleanupError) {
-        logger.error({ err: cleanupError, eventId: sharedEventCreatedByThisAttempt }, 'Client booking shared-calendar compensation failed');
-      }
-    }
-
     throw error;
   } finally {
     db.release();

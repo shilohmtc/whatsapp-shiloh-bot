@@ -16,16 +16,13 @@ test('admin guided booking routes past dates into historical manual entry instea
   assert.match(flow, /futureBias:\s*false/);
 });
 
-test('historical booking writes CRM and calendar truth without sending a client notification', () => {
+test('historical booking writes Shiloh truth without sending a client notification or touching external snapshots', () => {
   const historical = source('src/services/adminHistoricalBooking.js');
   assert.match(historical, /shiloh_admin_historical_manual/);
   assert.match(historical, /admin\.historical_booking_created/);
   assert.match(historical, /customerMessageSent: false/);
-  assert.match(historical, /sharedGoogleCalendarCreated:/);
-  assert.match(historical, /practitionerGoogleCalendarCreated:/);
-  assert.match(historical, /createBookingEvent/);
-  assert.match(historical, /createPractitionerBookingEvent/);
-  assert.match(historical, /appointment_calendar_events/);
+  assert.match(historical, /schedulingAuthority: 'shiloh_canonical'/);
+  assert.doesNotMatch(historical, /createBookingEvent|createPractitionerBookingEvent|appointment_calendar_events/);
   assert.doesNotMatch(historical, /sendWhatsAppMessage/);
   assert.match(historical, /remains unresolved\/scheduled/);
 });

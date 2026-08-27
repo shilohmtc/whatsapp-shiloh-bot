@@ -25,7 +25,7 @@ test('client availability reuses the canonical shared availability engine', () =
   assert.match(shared, /staff_working_hours/);
   assert.match(shared, /appointments a/);
   assert.match(shared, /calendar_blocks/);
-  assert.match(shared, /checkCalendarAvailability/);
+  assert.doesNotMatch(shared, /checkCalendarAvailability|googleBookingCalendar|appointment_calendar_events/);
 });
 
 test('client availability restricts candidates to active client-bookable practitioners', () => {

@@ -2,8 +2,6 @@ const { pool } = require('../db/pool');
 const { normalizePhone } = require('./clientIdentityOnboarding');
 const { sendWhatsAppMessage, sendWhatsAppReplyButtons, sendWhatsAppTemplate } = require('./whatsapp');
 const { sendCustomerBookingConfirmationForAppointment } = require('./customerBookingConfirmation');
-const { cancelBookingEvent } = require('./googleBookingCalendar');
-const { cancelPractitionerBookingEvent } = require('./practitionerGoogleCalendar');
 const {
   DEMO_KEY,
   resolveCurrentControlledDemoClient,
@@ -297,8 +295,7 @@ async function lockedDecisionContext(db, appointmentId) {
            a.client_id,a.starts_at,a.ends_at,a.status AS appointment_status,
            c.display_name AS client_name,
            COALESCE((SELECT string_agg(aps.service_name_snapshot,' + ' ORDER BY aps.position) FROM appointment_services aps WHERE aps.appointment_id=a.id),a.title) AS service_name,
-           COALESCE((SELECT string_agg(ast.staff_name_snapshot,' + ' ORDER BY ast.position) FROM appointment_staff ast WHERE ast.appointment_id=a.id),'Shiloh practitioner') AS staff_name,
-           (SELECT event_id FROM appointment_calendar_events ace WHERE ace.appointment_id=a.id AND ace.provider='google_calendar' LIMIT 1) AS shared_event_id
+           COALESCE((SELECT string_agg(ast.staff_name_snapshot,' + ' ORDER BY ast.position) FROM appointment_staff ast WHERE ast.appointment_id=a.id),'Shiloh practitioner') AS staff_name
       FROM appointment_booking_approvals aba
       JOIN appointments a ON a.id=aba.appointment_id
       JOIN clients c ON c.id=a.client_id
@@ -472,11 +469,6 @@ async function declineBookingRequest(admin, context) {
     db.release();
   }
 
-  if (locked.shared_event_id) {
-    try { await cancelBookingEvent(locked.shared_event_id); } catch (error) { logger.error({ err: error, appointmentId: locked.appointment_id }, 'Declined booking shared-calendar release failed'); }
-  }
-  const practitionerName = controlledValidation?.primary?.display_name || locked.staff_name;
-  try { await cancelPractitionerBookingEvent({ appointmentId: locked.appointment_id, staffName: practitionerName }); } catch (error) { logger.error({ err: error, appointmentId: locked.appointment_id }, 'Declined booking practitioner-calendar release failed'); }
   const phone = await clientPhone(locked.client_id);
   if (phone) {
     const template = process.env.WHATSAPP_BOOKING_DECLINED_TEMPLATE;

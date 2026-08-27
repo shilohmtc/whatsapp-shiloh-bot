@@ -10,17 +10,6 @@ const {
   profileComplete,
 } = require('./clientIdentityOnboarding');
 const {
-  calendarEnabled,
-  checkCalendarAvailability,
-  createBookingEvent,
-  cancelBookingEvent,
-} = require('./googleBookingCalendar');
-const {
-  checkPractitionerCalendarAvailability,
-  createPractitionerBookingEvent,
-  cancelPractitionerBookingEvents,
-} = require('./practitionerGoogleCalendar');
-const {
   POLICY_TEXT,
   POLICY_VERSION,
   ensurePolicySchema,
@@ -303,14 +292,6 @@ async function assertFinalAvailability(db, foundation, location, startsAt, endsA
     if (conflicts.length) return { ok: false, reason: `${staff.display_name} now has an appointment or block that conflicts with that time.` };
   }
 
-  for (const staff of foundation.staff) {
-    const shared = await checkCalendarAvailability({ staffName: staff.display_name, startsAt, endsAt });
-    if (shared.enabled && !shared.available) return { ok: false, reason: `${staff.display_name} is no longer clear on the connected Shiloh calendar.` };
-    const practitioner = await checkPractitionerCalendarAvailability({ staffName: staff.display_name, startsAt, endsAt });
-    if (practitioner.enabled && practitioner.configured && !practitioner.available) {
-      return { ok: false, reason: `${staff.display_name} is no longer clear on the connected practitioner calendar.` };
-    }
-  }
   return { ok: true };
 }
 
@@ -331,9 +312,6 @@ async function commitCouplesMassage(phone) {
   }
 
   const db = await pool.connect();
-  let createdAppointmentId = null;
-  let sharedEventId = null;
-  const practitionerEventsCreated = [];
   try {
     await db.query('BEGIN');
     const intentResult = await db.query(`
@@ -389,7 +367,6 @@ async function commitCouplesMassage(phone) {
     `, [identity.client.id, location.id, startsAt, endsAt, SERVICE_NAME,
       `Companion: ${intent.companion_name}. Backup mobile is stored appointment-scoped.`, PRICE, BOOKING_SOURCE]);
     const appointment = appointmentResult.rows[0];
-    createdAppointmentId = Number(appointment.id);
 
     await db.query(`
       INSERT INTO appointment_services
@@ -411,34 +388,6 @@ async function commitCouplesMassage(phone) {
       VALUES ($1,$2,$3,'booking_backup',FALSE)
     `, [appointment.id, intent.companion_name, intent.companion_mobile]);
 
-    const eventBase = {
-      appointmentId: appointment.id,
-      clientName: `${identity.client.display_name} + ${intent.companion_name}`,
-      clientMobile: normalizedPhone,
-      serviceName: SERVICE_NAME,
-      locationName: location.name,
-      startsAt,
-      endsAt,
-      source: 'shiloh_client_whatsapp_couples',
-    };
-
-    const sharedResult = await createBookingEvent({ ...eventBase, staffName: STAFF_NAMES.join(' & ') });
-    if (sharedResult.enabled && sharedResult.event) {
-      if (!sharedResult.idempotentReplay) sharedEventId = sharedResult.event.id;
-      await db.query(`
-        INSERT INTO appointment_calendar_events
-          (appointment_id, provider, calendar_id, event_id, sync_status, updated_at)
-        VALUES ($1,'google_calendar',$2,$3,'synced',NOW())
-        ON CONFLICT (appointment_id, provider) DO UPDATE SET
-          calendar_id=EXCLUDED.calendar_id,event_id=EXCLUDED.event_id,sync_status='synced',last_error=NULL,updated_at=NOW()
-      `, [appointment.id, process.env.GOOGLE_BOOKING_CALENDAR_ID, sharedResult.event.id]);
-    }
-
-    for (const staff of foundation.staff) {
-      const result = await createPractitionerBookingEvent({ ...eventBase, staffName: staff.display_name });
-      if (result.enabled && result.configured && result.event && !result.idempotentReplay) practitionerEventsCreated.push(staff.display_name);
-    }
-
     await db.query(`
       INSERT INTO appointment_status_history
         (appointment_id, from_status, to_status, changed_by, reason)
@@ -454,7 +403,7 @@ async function commitCouplesMassage(phone) {
       companionContactRole: 'booking_backup', companionMarketingConsent: false,
       startsAt, endsAt, durationMinutes: DURATION_MINUTES, price: PRICE,
       policyVersion: POLICY_VERSION, bothPractitionersLocked: true, bothPractitionersRechecked: true,
-      googleCalendarEnabled: calendarEnabled(),
+      schedulingAuthority: 'shiloh_canonical',
     })]);
 
     await db.query('DELETE FROM couples_booking_intents WHERE phone=$1', [normalizedPhone]);
@@ -476,14 +425,6 @@ async function commitCouplesMassage(phone) {
     };
   } catch (error) {
     try { await db.query('ROLLBACK'); } catch (_) {}
-    if (createdAppointmentId && practitionerEventsCreated.length) {
-      try { await cancelPractitionerBookingEvents({ appointmentId: createdAppointmentId, staffNames: practitionerEventsCreated }); }
-      catch (cleanupError) { logger.error({ err: cleanupError, appointmentId: createdAppointmentId }, 'Couples Massage practitioner-calendar compensation failed'); }
-    }
-    if (sharedEventId) {
-      try { await cancelBookingEvent(sharedEventId); }
-      catch (cleanupError) { logger.error({ err: cleanupError, eventId: sharedEventId }, 'Couples Massage shared-calendar compensation failed'); }
-    }
     throw error;
   } finally {
     db.release();

@@ -1,16 +1,6 @@
 const { pool } = require('../db/pool');
 const { checkClinicHours } = require('./clinicHours');
 const { checkAuthoritativeSchedule } = require('./adminAvailability');
-const {
-  checkCalendarAvailability,
-  findBookingEventByAppointmentId,
-  updateBookingEvent,
-} = require('./googleBookingCalendar');
-const {
-  checkPractitionerCalendarAvailability,
-  eventIdForAppointment,
-  syncPractitionerBookingEvent,
-} = require('./practitionerGoogleCalendar');
 const { sendWhatsAppTemplate } = require('./whatsapp');
 const logger = require('../lib/logger');
 
@@ -117,8 +107,7 @@ function appointmentContextQuery({ lock = false } = {}) {
            ast.staff_id,COALESCE(st.display_name,ast.staff_name_snapshot,'Shiloh practitioner') AS staff_name,
            aps.service_id,COALESCE(s.name,aps.service_name_snapshot,a.title,'Shiloh appointment') AS service_name,
            (SELECT COUNT(*)::int FROM appointment_staff x WHERE x.appointment_id=a.id) AS staff_count,
-           (SELECT COUNT(*)::int FROM appointment_services x WHERE x.appointment_id=a.id) AS service_count,
-           ace.event_id
+           (SELECT COUNT(*)::int FROM appointment_services x WHERE x.appointment_id=a.id) AS service_count
       FROM appointments a
       JOIN clients c ON c.id=a.client_id
       JOIN client_contacts cc ON cc.client_id=c.id
@@ -126,8 +115,6 @@ function appointmentContextQuery({ lock = false } = {}) {
       LEFT JOIN staff st ON st.id=ast.staff_id
       JOIN appointment_services aps ON aps.appointment_id=a.id AND aps.position=1
       LEFT JOIN services s ON s.id=aps.service_id
-      LEFT JOIN appointment_calendar_events ace
-        ON ace.appointment_id=a.id AND ace.provider='google_calendar'
      WHERE a.id=$2
        AND a.status<>'cancelled'
        AND cc.normalized_value=$1
@@ -226,33 +213,6 @@ async function validateCandidate({ db = pool, appointment, proposedStartsAt, pro
   return { ok: true };
 }
 
-async function validateExternalCalendars(appointment, startsAt, endsAt) {
-  let sharedEventId = appointment.event_id || null;
-  if (!sharedEventId) {
-    const found = await findBookingEventByAppointmentId(appointment.id);
-    sharedEventId = found?.id || null;
-  }
-  const shared = await checkCalendarAvailability({
-    startsAt,
-    endsAt,
-    staffName: appointment.staff_name,
-    ignoreEventId: sharedEventId || null,
-  });
-  if (shared.enabled && !shared.available) return { ok: false, reason: 'shared_calendar_conflict', sharedEventId };
-
-  const practitionerEventId = eventIdForAppointment(appointment.id);
-  const practitioner = await checkPractitionerCalendarAvailability({
-    staffName: appointment.staff_name,
-    startsAt,
-    endsAt,
-    ignoreEventId: practitionerEventId,
-  });
-  if (practitioner.enabled && practitioner.configured && !practitioner.available) {
-    return { ok: false, reason: 'practitioner_calendar_conflict', sharedEventId, practitionerEventId };
-  }
-  return { ok: true, sharedEventId, practitionerEventId };
-}
-
 function requestFailureReply(reason, staffName = 'the practitioner') {
   const copy = {
     past_time: 'That requested time has already passed.',
@@ -260,8 +220,6 @@ function requestFailureReply(reason, staffName = 'the practitioner') {
     staff_schedule: `${staffName} is not available at that requested time.`,
     crm_conflict: 'That requested time is no longer available.',
     reschedule_hold_conflict: 'That requested time is already being held for another pending change.',
-    shared_calendar_conflict: 'That requested time is no longer clear on the Shiloh calendar.',
-    practitioner_calendar_conflict: `${staffName} is no longer free on the connected practitioner calendar.`,
     complex_practitioner_setup: 'This appointment has a complex practitioner setup, so the clinic team needs to help reschedule it safely.',
     complex_service_setup: 'This appointment has a complex service setup, so the clinic team needs to help reschedule it safely.',
     approver_whatsapp_unavailable: `I can’t safely send ${staffName} the required approval request right now.`,
@@ -318,9 +276,6 @@ async function createPendingRescheduleRequest(phone, intent) {
 
   const initial = await validateCandidate({ appointment, proposedStartsAt, proposedEndsAt });
   if (!initial.ok) return { status: initial.reason, reply: requestFailureReply(initial.reason, appointment.staff_name) };
-  const initialExternal = await validateExternalCalendars(appointment, proposedStartsAt, proposedEndsAt);
-  if (!initialExternal.ok) return { status: initialExternal.reason, reply: requestFailureReply(initialExternal.reason, appointment.staff_name) };
-
   const db = await pool.connect();
   let request;
   try {
@@ -346,12 +301,6 @@ async function createPendingRescheduleRequest(phone, intent) {
       await db.query('ROLLBACK');
       return { status: final.reason, reply: requestFailureReply(final.reason, locked.staff_name) };
     }
-    const finalExternal = await validateExternalCalendars(locked, proposedStartsAt, proposedEndsAt);
-    if (!finalExternal.ok) {
-      await db.query('ROLLBACK');
-      return { status: finalExternal.reason, reply: requestFailureReply(finalExternal.reason, locked.staff_name) };
-    }
-
     const inserted = await db.query(`
       INSERT INTO appointment_reschedule_requests
         (appointment_id,client_id,service_id,approver_staff_id,requested_by_phone,
@@ -429,7 +378,6 @@ async function loadRequestContext(requestId, db = pool, lock = false) {
            ast.staff_id AS current_staff_id,aps.service_id AS current_service_id,
            (SELECT COUNT(*)::int FROM appointment_staff x WHERE x.appointment_id=a.id) AS staff_count,
            (SELECT COUNT(*)::int FROM appointment_services x WHERE x.appointment_id=a.id) AS service_count,
-           ace.event_id,
            (SELECT normalized_value FROM client_contacts cc WHERE cc.client_id=a.client_id AND LOWER(cc.contact_type) IN ('whatsapp','mobile','phone','telephone') AND cc.normalized_value IS NOT NULL ORDER BY cc.is_primary DESC,cc.id LIMIT 1) AS client_phone
       FROM appointment_reschedule_requests request
       JOIN appointments a ON a.id=request.appointment_id
@@ -438,7 +386,6 @@ async function loadRequestContext(requestId, db = pool, lock = false) {
       LEFT JOIN staff st ON st.id=ast.staff_id
       JOIN appointment_services aps ON aps.appointment_id=a.id AND aps.position=1
       LEFT JOIN services s ON s.id=aps.service_id
-      LEFT JOIN appointment_calendar_events ace ON ace.appointment_id=a.id AND ace.provider='google_calendar'
      WHERE request.id=$1
      LIMIT 1
      ${lock ? 'FOR UPDATE OF request,a,ast,aps' : ''}
@@ -519,9 +466,6 @@ async function queueApprovedCustomerUpdate(appointmentId) {
 async function approveRequest(admin, requestId) {
   const db = await pool.connect();
   let context = null;
-  let sharedEventId = null;
-  let sharedMutated = false;
-  let practitionerMutated = false;
   try {
     await db.query('BEGIN');
     context = await loadRequestContext(requestId, db, true);
@@ -549,7 +493,6 @@ async function approveRequest(admin, requestId) {
       service_name: context.service_name,
       staff_count: context.staff_count,
       service_count: context.service_count,
-      event_id: context.event_id,
     };
     const proposedStartsAt = new Date(context.proposed_starts_at);
     const proposedEndsAt = new Date(context.proposed_ends_at);
@@ -559,41 +502,8 @@ async function approveRequest(admin, requestId) {
       await db.query('COMMIT');
       return { handled: true, status: 'superseded', reply: `That requested time is no longer safely available (${candidate.reason}). The original appointment remains unchanged.` };
     }
-    const external = await validateExternalCalendars(appointment, proposedStartsAt, proposedEndsAt);
-    if (!external.ok) {
-      await supersedeRequest(db, context, admin.id, `calendar changed: ${external.reason}`);
-      await db.query('COMMIT');
-      return { handled: true, status: 'superseded', reply: 'That requested time is no longer clear on the connected calendars. The original appointment remains unchanged.' };
-    }
-    sharedEventId = external.sharedEventId || null;
-
     await db.query(`UPDATE appointments SET starts_at=$1,ends_at=$2,updated_at=NOW() WHERE id=$3`, [proposedStartsAt, proposedEndsAt, context.appointment_id]);
     await db.query(`UPDATE appointment_lifecycle SET appointment_at=$1,appointment_ends_at=$2,reminder_sent_at=NULL,updated_at=NOW() WHERE appointment_id=$3`, [proposedStartsAt, proposedEndsAt, context.appointment_id]);
-
-    if (sharedEventId) {
-      sharedMutated = true;
-      await updateBookingEvent({
-        eventId: sharedEventId,
-        appointmentId: context.appointment_id,
-        startsAt: proposedStartsAt,
-        endsAt: proposedEndsAt,
-        clientName: context.client_name,
-        serviceName: context.service_name,
-        staffName: context.staff_name,
-      });
-      await db.query(`UPDATE appointment_calendar_events SET sync_status='synced',last_error=NULL,updated_at=NOW() WHERE appointment_id=$1 AND provider='google_calendar'`, [context.appointment_id]);
-    }
-
-    practitionerMutated = true;
-    await syncPractitionerBookingEvent({
-      appointmentId: context.appointment_id,
-      clientName: context.client_name,
-      serviceName: context.service_name,
-      staffName: context.staff_name,
-      startsAt: proposedStartsAt,
-      endsAt: proposedEndsAt,
-      source: 'client_reschedule_approval',
-    });
 
     await db.query(`UPDATE appointment_reschedule_requests SET status='approved',decided_at=NOW(),decided_by_admin_id=$2,updated_at=NOW() WHERE id=$1 AND status='pending'`, [context.id, admin.id]);
     await db.query(`INSERT INTO appointment_status_history(appointment_id,from_status,to_status,changed_by,reason) VALUES($1,$2,$2,$3,'Client reschedule approved by practitioner')`, [context.appointment_id, context.appointment_status, `staff_admin:${admin.id}`]);
@@ -616,34 +526,6 @@ async function approveRequest(admin, requestId) {
     return { handled: true, status: 'approved', reply: `Approved by ${admin.display_name}. Appointment #${context.appointment_id} has been moved to ${fmtDateTime(proposedStartsAt)} and the client update has been queued.` };
   } catch (error) {
     try { await db.query('ROLLBACK'); } catch (_) {}
-    if (context && (sharedMutated || practitionerMutated)) {
-      try {
-        if (sharedMutated && sharedEventId) {
-          await updateBookingEvent({
-            eventId: sharedEventId,
-            appointmentId: context.appointment_id,
-            startsAt: context.original_starts_at,
-            endsAt: context.original_ends_at,
-            clientName: context.client_name,
-            serviceName: context.service_name,
-            staffName: context.staff_name,
-          });
-        }
-        if (practitionerMutated) {
-          await syncPractitionerBookingEvent({
-            appointmentId: context.appointment_id,
-            clientName: context.client_name,
-            serviceName: context.service_name,
-            staffName: context.staff_name,
-            startsAt: context.original_starts_at,
-            endsAt: context.original_ends_at,
-            source: 'client_reschedule_approval_compensation',
-          });
-        }
-      } catch (compensationError) {
-        logger.error({ err: compensationError, appointmentId: Number(context.appointment_id), requestId: Number(context.id) }, 'Practitioner-approved reschedule calendar compensation failed');
-      }
-    }
     throw error;
   } finally {
     db.release();

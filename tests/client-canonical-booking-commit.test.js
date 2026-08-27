@@ -23,7 +23,7 @@ test('canonical client booking can only consume an explicitly policy-accepted in
   assert.match(commit, /policy_accepted_at/);
 });
 
-test('client booking commit revalidates identity service eligibility schedules CRM conflicts and both Google calendars', () => {
+test('client booking commit revalidates identity, service eligibility and canonical Shiloh conflicts', () => {
   const commit = source('src/services/clientBookingCommit.js');
   assert.match(commit, /resolveClientByWhatsApp/);
   assert.match(commit, /profileComplete/);
@@ -32,31 +32,25 @@ test('client booking commit revalidates identity service eligibility schedules C
   assert.match(commit, /checkClinicHours/);
   assert.match(commit, /checkAuthoritativeSchedule/);
   assert.match(commit, /getConflicts/);
-  assert.match(commit, /checkCalendarAvailability/);
-  assert.match(commit, /checkPractitionerCalendarAvailability/);
+  assert.doesNotMatch(commit, /googleBookingCalendar|practitionerGoogleCalendar|checkCalendarAvailability/);
   assert.match(commit, /pg_advisory_xact_lock/);
 });
 
-test('successful client commit writes canonical appointment snapshots calendars history audit then consumes intent', () => {
+test('successful client commit writes canonical snapshots, history and audit then consumes intent', () => {
   const commit = source('src/services/clientBookingCommit.js');
   assert.match(commit, /INSERT INTO appointments/);
   assert.match(commit, /INSERT INTO appointment_services/);
   assert.match(commit, /INSERT INTO appointment_staff/);
-  assert.match(commit, /createBookingEvent\(eventData\)/);
-  assert.match(commit, /createPractitionerBookingEvent\(eventData\)/);
-  assert.match(commit, /INSERT INTO appointment_calendar_events/);
+  assert.doesNotMatch(commit, /createBookingEvent|createPractitionerBookingEvent|appointment_calendar_events/);
   assert.match(commit, /INSERT INTO appointment_status_history/);
   assert.match(commit, /'client\.booking_created'/);
   assert.match(commit, /DELETE FROM booking_intents WHERE phone = \$1/);
 });
 
-test('partial calendar writes are compensated if the canonical transaction fails', () => {
+test('canonical transaction failure rolls back without external compensation', () => {
   const commit = source('src/services/clientBookingCommit.js');
   assert.match(commit, /ROLLBACK/);
-  assert.match(commit, /cancelPractitionerBookingEvent/);
-  assert.match(commit, /cancelBookingEvent/);
-  assert.match(commit, /practitioner-calendar compensation failed/);
-  assert.match(commit, /shared-calendar compensation failed/);
+  assert.doesNotMatch(commit, /cancelPractitionerBookingEvent|cancelBookingEvent|calendar compensation/);
 });
 
 test('stale slots fail closed to time reselection while transient failures remain explicitly retryable', () => {

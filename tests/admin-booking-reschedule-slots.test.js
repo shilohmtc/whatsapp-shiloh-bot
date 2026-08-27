@@ -25,7 +25,7 @@ test('date/time change offers open clinic dates before asking for free text', ()
 test('reschedule slots use authoritative availability and exclude the appointment being moved', () => {
   assert.match(source, /listAvailableSlots/);
   assert.match(source, /excludeAppointmentId: a\.id/);
-  assert.match(source, /ignoreEventId: a\.event_id \|\| null/);
+  assert.doesNotMatch(source, /ignoreEventId|appointment_calendar_events/);
   assert.match(source, /intervalMinutes: 15/);
 });
 
@@ -37,8 +37,8 @@ test('selected slot is revalidated before canonical appointment mutation', () =>
   assert.match(source, /No change was saved\. Choose another available time/);
 });
 
-test('successful reschedule synchronizes Google Calendar and writes an audit event', () => {
-  assert.match(source, /await syncCalendar\(after\)/);
+test('successful reschedule writes Shiloh audit evidence without an external mirror mutation', () => {
+  assert.doesNotMatch(source, /syncCalendar|updateBookingEvent|Google Calendar/);
   assert.match(source, /appointment\.time_updated/);
   assert.match(source, /authoritativeSlotFlow: true/);
 });

@@ -72,22 +72,22 @@ test('role-specific admin menu contracts remain permission-gated', () => {
   assert.match(menu, /has\(admin,'schedule:manage'\)/);
 });
 
-test('booking updates retain clinic, staff, CRM and Google Calendar conflict guards', () => {
+test('booking updates retain clinic, staff and canonical Shiloh conflict guards', () => {
   const bookingUpdate = source('src/services/adminBookingUpdate.js');
   assert.match(bookingUpdate, /checkClinicHours/);
   assert.match(bookingUpdate, /checkAuthoritativeSchedule/);
   assert.match(bookingUpdate, /a\.starts_at<\$4 AND a\.ends_at>\$3/);
-  assert.match(bookingUpdate, /checkCalendarAvailability/);
+  assert.doesNotMatch(bookingUpdate, /checkCalendarAvailability|googleBookingCalendar|appointment_calendar_events/);
   assert.match(bookingUpdate, /ROLLBACK/);
   assert.match(bookingUpdate, /multi-service booking/i);
 });
 
-test('client cancellation remains explicit, scoped and calendar-synchronized', () => {
+test('client cancellation remains explicit, scoped and leaves external snapshots untouched', () => {
   const change = source('src/services/appointmentChange.js');
   assert.match(change, /cancel/i);
   assert.match(change, /confirmation|confirm/i);
   assert.match(change, /normalized_whatsapp|normalizePhone/i);
-  assert.match(change, /cancelBookingEvent|Google Calendar/i);
+  assert.doesNotMatch(change, /cancelBookingEvent|Google Calendar|appointment_calendar_events/i);
   assert.match(change, /crm_audit_events|audit/i);
 });
 

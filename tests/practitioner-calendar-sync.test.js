@@ -23,12 +23,9 @@ test('guided client booking cannot expose internal freelancers as practitioner c
   assert.match(flow, /no eligible practitioner in your booking scope is currently mapped/);
 });
 
-test('booking confirmation checks and creates both shared and practitioner calendar events', () => {
-  assert.match(booking, /checkPractitionerCalendarAvailability/);
-  assert.match(booking, /createPractitionerBookingEvent/);
-  assert.match(booking, /practitionerGoogleCalendarChecked/);
-  assert.match(booking, /Shiloh — Bookings: synced/);
-  assert.match(booking, /Google Calendar: synced/);
+test('booking confirmation creates no shared or practitioner calendar event', () => {
+  assert.doesNotMatch(booking, /checkPractitionerCalendarAvailability|createPractitionerBookingEvent|appointment_calendar_events|Google Calendar/);
+  assert.match(booking, /schedulingAuthority: "shiloh_canonical"/);
 });
 
 test('practitioner mirror uses the same deterministic CRM appointment event id', () => {
@@ -55,8 +52,6 @@ test('canonical cancellation removes practitioner mirror before shared event', (
   assert.ok(text.indexOf('cancelBookingEventOnCalendar(eventId,practitionerCalendarId)') < text.indexOf('cancelBookingEventOnCalendar(eventId,sharedCalendarId)'), 'practitioner mirror should be removed before shared event');
 });
 
-test('rollback compensation is proof-bound to the created appointment id', () => {
-  assert.match(booking, /practitionerEventAppointmentId = appointment\.id/);
-  assert.match(booking, /cancelPractitionerBookingEvent\(\{ appointmentId: practitionerEventAppointmentId, staffName: practitionerEventStaffName \}\)/);
-  assert.doesNotMatch(booking, /cancelPractitionerBookingEvent\(\{ appointmentId: null/);
+test('booking rollback requires no external mirror compensation', () => {
+  assert.doesNotMatch(booking, /practitionerEventAppointmentId|cancelPractitionerBookingEvent|cancelBookingEvent/);
 });

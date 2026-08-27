@@ -1,8 +1,6 @@
 const { pool } = require('../db/pool');
 const { checkClinicHours } = require('./clinicHours');
 const { checkAuthoritativeSchedule, getConflicts } = require('./adminAvailability');
-const { createBookingEvent, cancelBookingEvent } = require('./googleBookingCalendar');
-const { createPractitionerBookingEvent, cancelPractitionerBookingEvent } = require('./practitionerGoogleCalendar');
 
 const TZ = 'Africa/Johannesburg';
 
@@ -76,7 +74,7 @@ async function prepareHistoricalAdminBooking({ adminId, clientId, staffId, servi
     `• Time: ${formatLocalDateTime(state.startsAt)}`,
     `• Price: ${price}`,
     '',
-    'This will add the past appointment to Shiloh CRM and Google Calendar for reconciliation.',
+    'This will add the past appointment to Shiloh for reconciliation.',
     'No client booking notification will be sent.',
     'After confirmation, the visit will remain unresolved until you finalize it from Admin → Finalize past visits.',
     'Nothing has been written yet.',
@@ -85,10 +83,6 @@ async function prepareHistoricalAdminBooking({ adminId, clientId, staffId, servi
 
 async function confirmHistoricalAdminBooking(admin) {
   const db = await pool.connect();
-  let sharedEventId = null;
-  let practitionerEventCreated = false;
-  let practitionerStaffName = null;
-  let appointmentId = null;
   try {
     await db.query('BEGIN');
     const sessionResult = await db.query(
@@ -127,44 +121,26 @@ async function confirmHistoricalAdminBooking(admin) {
       `INSERT INTO appointments (client_id,location_id,starts_at,ends_at,status,title,total_price,currency,source)
        VALUES ($1,$2,$3,$4,'scheduled',$5,$6,'ZAR','shiloh_admin_historical_manual') RETURNING id,starts_at,ends_at,status`,
       [session.client_id, session.location_id, session.starts_at, session.ends_at, session.service_name, totalPrice]);
-    const appointment = appointmentResult.rows[0]; appointmentId = appointment.id;
+    const appointment = appointmentResult.rows[0];
     await db.query(`INSERT INTO appointment_services (appointment_id,service_id,position,service_name_snapshot,price_snapshot,duration_minutes_snapshot) VALUES ($1,$2,1,$3,$4,$5)`, [appointment.id, session.service_id, session.service_name, session.price, session.duration_minutes]);
     await db.query(`INSERT INTO appointment_staff (appointment_id,staff_id,position,staff_name_snapshot) VALUES ($1,$2,1,$3)`, [appointment.id, session.staff_id, session.staff_name]);
-
-    const eventData = { appointmentId: appointment.id, clientName: session.client_name, clientMobile: session.client_mobile,
-      serviceName: session.service_name, staffName: session.staff_name, locationName: session.location_name,
-      startsAt: session.starts_at, endsAt: session.ends_at, source: 'shiloh_admin_historical_manual' };
-    const shared = await createBookingEvent(eventData);
-    if (shared.enabled && shared.event) {
-      sharedEventId = shared.idempotentReplay ? null : shared.event.id;
-      await db.query(`INSERT INTO appointment_calendar_events (appointment_id,provider,calendar_id,event_id,sync_status,updated_at)
-        VALUES ($1,'google_calendar',$2,$3,'synced',NOW()) ON CONFLICT (appointment_id,provider) DO UPDATE SET
-        calendar_id=EXCLUDED.calendar_id,event_id=EXCLUDED.event_id,sync_status='synced',last_error=NULL,updated_at=NOW()`,
-        [appointment.id, process.env.GOOGLE_BOOKING_CALENDAR_ID, shared.event.id]);
-    }
-    const practitioner = await createPractitionerBookingEvent(eventData);
-    if (practitioner.enabled && practitioner.configured && practitioner.event && !practitioner.idempotentReplay) {
-      practitionerEventCreated = true; practitionerStaffName = session.staff_name;
-    }
 
     await db.query(`INSERT INTO appointment_status_history (appointment_id,from_status,to_status,changed_by,reason) VALUES ($1,NULL,'scheduled',$2,'Historical manual booking entered for reconciliation')`, [appointment.id, `admin:${admin.id}:${admin.display_name}`]);
     await db.query(`INSERT INTO crm_audit_events (actor_admin_id,action,entity_type,entity_id,metadata) VALUES ($1,'admin.historical_booking_created','appointment',$2,$3::jsonb)`,
       [admin.id, appointment.id, JSON.stringify({ historicalManualEntry: true, source: 'shiloh_admin_historical_manual', clientId: session.client_id,
         staffId: session.staff_id, serviceId: session.service_id, locationId: session.location_id, startsAt: session.starts_at, endsAt: session.ends_at,
         authoritativeClinicHoursChecked: true, authoritativeScheduleChecked: true, crmConflictChecked: true,
-        sharedGoogleCalendarCreated: Boolean(shared.enabled && shared.event), practitionerGoogleCalendarCreated: Boolean(practitioner.enabled && practitioner.configured && practitioner.event), customerMessageSent: false })]);
+        schedulingAuthority: 'shiloh_canonical', customerMessageSent: false })]);
     await db.query(`DELETE FROM admin_booking_sessions WHERE admin_id=$1`, [admin.id]);
     await db.query('COMMIT');
     return { status: 'created', appointmentId: appointment.id, reply: [
       `✅ Historical booking recorded — appointment #${appointment.id}.`, `• Client: ${session.client_name}`, `• Service: ${session.service_name}`,
       `• Staff: ${session.staff_name}`, `• Time: ${formatLocalDateTime(session.starts_at)}`, '',
-      shared.enabled && shared.event ? 'Google Calendar has been synchronized for this historical appointment.' : 'Google Calendar synchronization is not enabled on this environment.',
+      'No external calendar was read or changed.',
       'No client booking notification was sent.', 'The appointment remains unresolved/scheduled and can now be finalized from Admin → Finalize past visits.',
     ].join('\n') };
   } catch (error) {
     try { await db.query('ROLLBACK'); } catch (_) {}
-    if (practitionerEventCreated && appointmentId && practitionerStaffName) { try { await cancelPractitionerBookingEvent({ appointmentId, staffName: practitionerStaffName }); } catch (_) {} }
-    if (sharedEventId) { try { await cancelBookingEvent(sharedEventId); } catch (_) {} }
     throw error;
   } finally { db.release(); }
 }

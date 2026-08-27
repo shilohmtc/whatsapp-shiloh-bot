@@ -1,5 +1,4 @@
 const { pool } = require('../db/pool');
-const { checkCalendarAvailability } = require('./googleBookingCalendar');
 
 const TZ = 'Africa/Johannesburg';
 
@@ -30,48 +29,6 @@ async function getServiceAndStaff(staffId, serviceId) {
     [staffId, serviceId]
   );
   return result.rows[0] || null;
-}
-
-function eventInterval(event) {
-  const start = event?.start?.dateTime || event?.start?.date;
-  const end = event?.end?.dateTime || event?.end?.date;
-  if (!start || !end) return null;
-  return { start: new Date(start), end: new Date(end) };
-}
-
-function slotOverlapsCalendarConflict(slot, conflicts) {
-  const slotStart = new Date(slot.starts_at);
-  const slotEnd = new Date(slot.ends_at);
-  return conflicts.some((event) => {
-    const interval = eventInterval(event);
-    return interval && interval.start < slotEnd && interval.end > slotStart;
-  });
-}
-
-async function applyGoogleCalendarConflicts(slots, staffName, ignoreEventId = null) {
-  if (!slots.length) return { slots, calendarEnabled: false, calendarConflictCount: 0 };
-
-  // Fetch the relevant Google Calendar conflicts once for the full candidate range,
-  // then remove every candidate slot that overlaps one of those busy events.
-  // Reschedule callers may explicitly ignore the Google event for the appointment
-  // being moved; ordinary booking callers leave ignoreEventId unset.
-  const calendar = await checkCalendarAvailability({
-    startsAt: slots[0].starts_at,
-    endsAt: slots[slots.length - 1].ends_at,
-    staffName,
-    ignoreEventId: ignoreEventId || null,
-  });
-
-  if (!calendar.enabled) {
-    return { slots, calendarEnabled: false, calendarConflictCount: 0 };
-  }
-
-  const conflicts = calendar.conflicts || [];
-  return {
-    slots: slots.filter((slot) => !slotOverlapsCalendarConflict(slot, conflicts)),
-    calendarEnabled: true,
-    calendarConflictCount: conflicts.length,
-  };
 }
 
 async function listAvailableSlots({
@@ -237,20 +194,16 @@ async function listAvailableSlots({
     [date, staffId, locationId, totalMinutes, intervalMinutes, excludeAppointmentId]
   );
 
-  // CRM-3: Google Calendar is an additional busy-time source. If the integration
-  // is enabled, a Google API/config/auth failure is intentionally allowed to
-  // propagate so callers cannot label an unchecked slot as authoritative.
-  const calendarFiltered = await applyGoogleCalendarConflicts(result.rows, resource.staff_name, ignoreEventId);
-
   return {
-    status: calendarFiltered.slots.length ? 'available' : 'no_slots',
+    status: result.rows.length ? 'available' : 'no_slots',
     resource,
     date,
     totalMinutes,
     intervalMinutes,
-    calendarEnabled: calendarFiltered.calendarEnabled,
-    calendarConflictCount: calendarFiltered.calendarConflictCount,
-    slots: calendarFiltered.slots,
+    schedulingAuthority: 'shiloh_canonical',
+    calendarEnabled: false,
+    calendarConflictCount: 0,
+    slots: result.rows,
   };
 }
 
