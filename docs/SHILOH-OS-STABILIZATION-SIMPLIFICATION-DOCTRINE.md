@@ -174,6 +174,14 @@ Those remain explicit JP authorization gates.
 
 **Governance text alone does not activate standing release delegation. Activation requires an explicit JP authorization recorded by 00.**
 
+### Activation record
+
+Bounded standing 00 release delegation was explicitly activated by JP on **2026-08-27** and is recorded in:
+
+`docs/SHILOH-OS-MASTER-STATUS-ADDENDUM-2026-08-27-STABILIZATION-SIMPLIFICATION.md`
+
+The activation changes release ceremony only. It does not broaden the excluded-action boundary above and does not cause specialist or WS streams to acquire merge authority.
+
 ## 9. Infrastructure and product-surface discipline
 
 Treat infrastructure according to its role:
