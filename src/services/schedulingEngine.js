@@ -7,6 +7,7 @@ const OWN_SCOPES = new Set(['own_services', 'own_appointments']);
 const KNOWN_SCOPES = new Set([ALL_BUSINESS_SCOPE, ...OWN_SCOPES, 'none']);
 const BUSINESS_TIMEZONE = 'Africa/Johannesburg';
 const APPROVED_LEAVE_REASON = /^Approved leave request #\d+(?::\s*(.*))?$/i;
+const OPERATIONAL_LEAVE_REASON = /^Operational leave by Calendar admin #(\d+)(?::\s*(.*))?$/i;
 
 function timelineError(code, message) {
   const error = new Error(message);
@@ -95,6 +96,7 @@ function aggregateAppointments(rows, permittedStaffIds) {
         recordSource: row.record_source || null,
         clientName: row.client_name || 'Client',
         serviceName: row.service_name || 'Appointment',
+        revision: row.updated_at ? new Date(row.updated_at).toISOString() : null,
         staff: [],
         staffIds: [],
       });
@@ -131,11 +133,13 @@ function buildWorkingWindows(staff, staffHours, recurringClosures, locationHours
       if (explicit.length) {
         for (const row of explicit) {
           windows.push(canonical('working_window', 'staff_working_hours', {
+            id: row.id,
             staffId: person.id,
             dayOfWeek: day,
             startsLocal: row.starts_local,
             endsLocal: row.ends_local,
             locationId: row.location_id || null,
+            revision: row.updated_at ? new Date(row.updated_at).toISOString() : null,
             effectiveRule: 'explicit_staff_hours',
           }));
         }
@@ -253,7 +257,7 @@ function createSchedulingEngine({
 
     const appointmentResult = await query(`/* SchedulingTimeline:appointments */
       SELECT a.id AS appointment_id,
-             a.starts_at, a.ends_at, a.status, a.source AS record_source,
+             a.starts_at, a.ends_at, a.status, a.source AS record_source, a.updated_at,
              COALESCE(c.display_name,a.source_client_name,'Client') AS client_name,
              COALESCE((SELECT string_agg(aps.service_name_snapshot,' + ' ORDER BY aps.position)
                          FROM appointment_services aps WHERE aps.appointment_id=a.id),a.title,'Appointment') AS service_name,
@@ -268,7 +272,7 @@ function createSchedulingEngine({
        ORDER BY a.starts_at, a.id, ast.staff_id`, [range.from, range.to, permittedStaffIds]);
 
     const blockResult = await query(`/* SchedulingTimeline:calendar_blocks */
-      SELECT id, staff_id, starts_at, ends_at, block_type, title, source AS record_source
+      SELECT id, staff_id, location_id, starts_at, ends_at, block_type, title, source AS record_source, updated_at
         FROM calendar_blocks
        WHERE staff_id = ANY($3::bigint[])
          AND starts_at < $2::timestamptz
@@ -276,13 +280,13 @@ function createSchedulingEngine({
        ORDER BY starts_at, id`, [range.from, range.to, permittedStaffIds]);
 
     const staffHoursResult = await query(`/* SchedulingTimeline:staff_working_hours */
-      SELECT staff_id, day_of_week, starts_local, ends_local, location_id, active
+      SELECT id, staff_id, day_of_week, starts_local, ends_local, location_id, active, updated_at
         FROM staff_working_hours
        WHERE staff_id = ANY($1::bigint[]) AND active=TRUE
        ORDER BY staff_id, day_of_week, starts_local`, [permittedStaffIds]);
 
     const recurringClosureResult = await query(`/* SchedulingTimeline:staff_recurring_day_closures */
-      SELECT staff_id, day_of_week, location_id
+      SELECT id, staff_id, day_of_week, location_id, updated_at
         FROM staff_recurring_day_closures
        WHERE staff_id = ANY($1::bigint[])
        ORDER BY staff_id, day_of_week`, [permittedStaffIds]);
@@ -290,7 +294,7 @@ function createSchedulingEngine({
     const localFrom = localDateKey(range.start);
     const localTo = localDateKey(new Date(range.end.getTime() - 1));
     const staffExceptionResult = await query(`/* SchedulingTimeline:staff_schedule_exceptions */
-      SELECT id, staff_id, exception_date, location_id, exception_type, starts_local, ends_local, reason
+      SELECT id, staff_id, exception_date, location_id, exception_type, starts_local, ends_local, reason, updated_at
         FROM staff_schedule_exceptions
        WHERE staff_id = ANY($1::bigint[])
          AND exception_date BETWEEN $2::date AND $3::date
@@ -322,12 +326,14 @@ function createSchedulingEngine({
     const blocks = (blockResult.rows || []).map(row => canonical('calendar_block', 'calendar_blocks', {
       id: row.id,
       staffIds: [Number(row.staff_id)],
+      locationId: row.location_id ? Number(row.location_id) : null,
       startsAt: row.starts_at,
       endsAt: row.ends_at,
       allDay: false,
       blockType: row.block_type,
       title: row.title || null,
       recordSource: row.record_source || null,
+      revision: row.updated_at ? new Date(row.updated_at).toISOString() : null,
     }));
     const scheduleExceptions = (staffExceptionResult.rows || []).map(row => canonical('schedule_exception', 'staff_schedule_exceptions', {
       id: row.id,
@@ -338,17 +344,22 @@ function createSchedulingEngine({
       startsLocal: row.starts_local,
       endsLocal: row.ends_local,
       reason: row.reason || null,
+      revision: row.updated_at ? new Date(row.updated_at).toISOString() : null,
     }));
     const leave = (staffExceptionResult.rows || []).flatMap(row => {
       if (row.exception_type !== 'unavailable' || row.starts_local != null || row.ends_local != null) return [];
-      const match = String(row.reason || '').match(APPROVED_LEAVE_REASON);
-      if (!match) return [];
-      return [canonical('approved_leave', 'staff_schedule_exceptions', {
+      const approved = String(row.reason || '').match(APPROVED_LEAVE_REASON);
+      const operational = String(row.reason || '').match(OPERATIONAL_LEAVE_REASON);
+      if (!approved && !operational) return [];
+      return [canonical(operational ? 'operational_leave' : 'approved_leave', 'staff_schedule_exceptions', {
         id: row.id,
         staffIds: [Number(row.staff_id)],
+        locationId: row.location_id ? Number(row.location_id) : null,
         date: row.exception_date,
         allDay: true,
-        reason: String(match[1] || '').trim() || null,
+        reason: String((operational ? operational[2] : approved[1]) || '').trim() || null,
+        leaveProvenance: operational ? 'calendar_operational_leave' : 'approved_leave_request',
+        revision: row.updated_at ? new Date(row.updated_at).toISOString() : null,
       })];
     });
     const workingWindows = buildWorkingWindows(staff, staffHoursResult.rows || [], recurringClosureResult.rows || [], locationHoursResult.rows || []);
@@ -380,7 +391,8 @@ function createSchedulingEngine({
       workingWindows,
       scheduleExceptions,
       recurringClosures: (recurringClosureResult.rows || []).map(row => canonical('recurring_day_closure', 'staff_recurring_day_closures', {
-        staffId: Number(row.staff_id), dayOfWeek: Number(row.day_of_week), locationId: row.location_id ? Number(row.location_id) : null,
+        id: row.id, staffId: Number(row.staff_id), dayOfWeek: Number(row.day_of_week), locationId: row.location_id ? Number(row.location_id) : null,
+        revision: row.updated_at ? new Date(row.updated_at).toISOString() : null,
       })),
       leave,
       closures,

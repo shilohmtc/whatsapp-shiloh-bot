@@ -5,6 +5,7 @@ const { renderCalendarPage, renderUnavailablePage } = require('../presentation/c
 const { isCalendarBridgeEnabled } = require('../middleware/staffBrowserSession');
 const { isEmergencyCalendarBookingEnabled } = require('../services/emergencyCalendarBootstrap');
 const { createCalendarCreateBookingService } = require('../services/calendarCreateBooking');
+const { createCalendarOperationalMutationService } = require('../services/calendarOperationalMutations');
 
 const CALENDAR_VIEWER_CONTEXT = Symbol.for('shiloh.calendar.server.viewer');
 
@@ -72,6 +73,8 @@ function createCalendarReadOnlyHandler({
   staffAccessPath = '/calendar/staff',
   bookingPath = '/calendar/book',
   bookingService = createCalendarCreateBookingService({ db: pool, env }),
+  mutationService = createCalendarOperationalMutationService({ db: pool }),
+  operationalMutationsScriptPath = '/calendar/operations/client.js',
 } = {}) {
   return async function calendarReadOnlyHandler(req, res, next) {
     try {
@@ -108,14 +111,33 @@ function createCalendarReadOnlyHandler({
         }
       }
 
-      let html = renderPage(model, {
+      let mutationCapability = null;
+      if (req.staffBrowserSession?.adminId != null) {
+        try {
+          const operator = await mutationService.resolveOperator(req.staffBrowserSession.adminId);
+          mutationCapability = operator.mutationCapability || null;
+        } catch (_mutationAuthorityError) {
+          // The timeline remains readable within its existing viewer scope. Mutation
+          // controls fail closed and the operations endpoints revalidate independently.
+        }
+      }
+
+      const renderedModel = {
+        ...model,
+        mutationCapability: mutationCapability ? { ...mutationCapability, enabled: true } : { enabled: false },
+      };
+
+      let html = renderPage(renderedModel, {
         basePath: req.baseUrl || '/calendar/read-only',
         staffAccessPath,
         staffAccessScriptPath: `${staffAccessPath}/client.js`,
+        operationalMutationsScriptPath,
         operationalActions: bookingAllowed ? bookingOperationalActions(model.dateKey, bookingPath) : [],
-        timelineReadOnlyMessage: bookingAllowed
-          ? 'Timeline remains read-only. New booking creation uses the separately guarded canonical workflow. Reschedule, cancellation, drag/drop, reassignment, block, leave and schedule mutations are not available here.'
-          : 'Read-only operational view. Booking, reschedule, cancellation, block, leave and schedule mutations are not available here.',
+        timelineReadOnlyMessage: mutationCapability
+          ? 'Calendar operations update Shiloh canonical state only. Every save revalidates current authority, revision, schedules and conflicts; no client message is sent by these controls.'
+          : bookingAllowed
+            ? 'Timeline remains read-only. New booking creation uses the separately guarded canonical workflow. Reschedule, cancellation, drag/drop, reassignment, block, leave and schedule mutations are not available here.'
+            : 'Read-only operational view. Booking, reschedule, cancellation, block, leave and schedule mutations are not available here.',
       });
       html = applyCalendarResponsivePolish(html);
 
