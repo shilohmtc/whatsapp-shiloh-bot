@@ -23,7 +23,10 @@ function setAuthoritySecurityHeaders(res) {
 function statusForAuthorityError(error) {
   const code = String(error?.code || '');
   if (code === 'OPERATOR_AUTHORITY_UNAUTHORIZED') return 401;
-  if (code === 'OPERATOR_AUTHORITY_FORBIDDEN') return 403;
+  if (
+    code === 'OPERATOR_AUTHORITY_FORBIDDEN'
+    || code === 'OPERATOR_AUTHORITY_BOOKING_SCOPE_DENIED'
+  ) return 403;
   if (code.endsWith('_NOT_FOUND')) return 404;
   if (
     code.endsWith('_MISMATCH')
@@ -105,6 +108,7 @@ function createOperatorContactAuthorityRouter({
       const result = await authorityService.loadClientAuthorityState({
         actorAdminId: req.staffBrowserSession.adminId,
         clientId: req.body?.clientId,
+        bookingContext: req.body?.bookingContext,
       });
       return res.status(200).json(result);
     } catch (error) {
@@ -119,6 +123,7 @@ function createOperatorContactAuthorityRouter({
         clientId: req.body?.clientId,
         contactId: req.body?.contactId,
         confirmedValue: req.body?.confirmedValue,
+        bookingContext: req.body?.bookingContext,
       });
       return res.status(200).json(result);
     } catch (error) {
@@ -135,6 +140,7 @@ function createOperatorContactAuthorityRouter({
         expectedContactValue: req.body?.expectedContactValue,
         confirmedName: req.body?.confirmedName,
         explicitlyConfirmed: req.body?.explicitlyConfirmed === true,
+        bookingContext: req.body?.bookingContext,
       });
       return res.status(200).json(result);
     } catch (error) {
