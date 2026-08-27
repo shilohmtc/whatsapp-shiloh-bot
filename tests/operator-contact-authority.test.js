@@ -6,6 +6,8 @@ const vm = require('node:vm');
 
 const {
   AUTHORITY_VERSION,
+  BOOKING_CONTEXT_VERSION,
+  BOOKING_CONTEXT_TTL_MS,
   VERIFICATION_METHOD,
   OPERATOR_ROLES,
   operatorRoleForAdmin,
@@ -24,10 +26,33 @@ function clone(value) {
 
 function adminRows() {
   return {
-    1: { id: 1, display_name: 'Jean-Pierre', role: 'admin', business_role: 'business_admin', admin_active: true, staff_id: null, staff_status: null },
-    2: { id: 2, display_name: 'Christel', role: 'manager', business_role: 'owner', admin_active: true, staff_id: 9, staff_status: 'active' },
-    3: { id: 3, display_name: 'Read only', role: 'read_only', business_role: 'employee_practitioner', admin_active: true, staff_id: 10, staff_status: 'active' },
-    4: { id: 4, display_name: 'Practitioner', role: 'practitioner', business_role: 'employee_practitioner', admin_active: true, staff_id: 11, staff_status: 'active' },
+    1: { id: 1, display_name: 'Jean-Pierre', role: 'admin', business_role: 'business_admin', calendar_scope: 'all_business', service_scope: 'all_services', permissions: { 'appointment:create': true, 'client:lookup': true }, admin_active: true, staff_id: null, staff_status: null },
+    2: { id: 2, display_name: 'Christel', role: 'manager', business_role: 'owner', calendar_scope: 'all_business', service_scope: 'all_services', permissions: { 'appointment:create': true, 'client:lookup': true }, admin_active: true, staff_id: 9, staff_status: 'active' },
+    3: { id: 3, display_name: 'Read only', role: 'read_only', business_role: 'employee_practitioner', calendar_scope: 'own_appointments', service_scope: 'own_services', permissions: { 'appointment:create': false, 'client:lookup': true }, admin_active: true, staff_id: 10, staff_status: 'active' },
+    4: { id: 4, display_name: 'Abigail', role: 'practitioner', business_role: 'employee_practitioner', calendar_scope: 'own_appointments', service_scope: 'own_services', permissions: { 'appointment:create': true, 'client:lookup': true }, admin_active: true, staff_id: 11, staff_status: 'active' },
+    6: { id: 6, display_name: 'Marietjie', role: 'manager', business_role: 'tenant_practitioner', calendar_scope: 'own_services', service_scope: 'own_services', permissions: { 'appointment:create': true, 'client:lookup': true }, admin_active: true, staff_id: 12, staff_status: 'active' },
+  };
+}
+
+function bookingSession(adminId, overrides = {}) {
+  const actorStaffId = Number(adminId) === 6 ? 12 : 11;
+  return {
+    admin_id: Number(adminId),
+    client_id: CLIENT_ID,
+    staff_id: actorStaffId,
+    service_id: Number(adminId) === 6 ? 31 : 25,
+    location_id: 1,
+    starts_at: '2030-08-27T08:00:00.000Z',
+    ends_at: '2030-08-27T09:00:00.000Z',
+    state: 'confirm',
+    updated_at: new Date(Date.now() - 60 * 1000).toISOString(),
+    client_status: 'active',
+    booking_staff_status: 'active',
+    booking_service_status: 'active',
+    booking_location_status: 'active',
+    operator_service_authorized: true,
+    target_service_authorized: true,
+    ...overrides,
   };
 }
 
@@ -66,6 +91,7 @@ function memoryAuthorityDb({
     snapshot: null,
     duplicateOwner,
     failOnAudit,
+    bookingSessions: {},
   };
 
   function activeVerification(contactId, method = null) {
@@ -104,6 +130,31 @@ function memoryAuthorityDb({
       }
       state.snapshot = null;
       return { rows: [], rowCount: 0 };
+    }
+    if (q.startsWith('SELECT a.id,a.staff_id,a.display_name,a.role,a.business_role,a.calendar_scope')) {
+      const admin = state.admins[Number(params[0])] || null;
+      const booking = state.bookingSessions[Number(params[0])] || null;
+      if (!admin || !booking) return { rows: [], rowCount: 0 };
+      return {
+        rows: [{
+          ...clone(admin),
+          booking_client_id: booking.client_id,
+          booking_staff_id: booking.staff_id,
+          booking_service_id: booking.service_id,
+          booking_location_id: booking.location_id,
+          booking_starts_at: booking.starts_at,
+          booking_ends_at: booking.ends_at,
+          booking_state: booking.state,
+          booking_updated_at: booking.updated_at,
+          client_status: state.client.status,
+          booking_staff_status: booking.booking_staff_status,
+          booking_service_status: booking.booking_service_status,
+          booking_location_status: booking.booking_location_status,
+          operator_service_authorized: booking.operator_service_authorized,
+          target_service_authorized: booking.target_service_authorized,
+        }],
+        rowCount: 1,
+      };
     }
     if (q.includes('FROM staff_admin_accounts a')) {
       const admin = state.admins[Number(params[0])] || null;
@@ -236,6 +287,183 @@ test('current JP and Christel authority maps exactly to super_admin and operatio
   assert.equal(operatorRoleForAdmin(adminRows()[2]), OPERATOR_ROLES.OPERATIONS_ADMIN);
   assert.equal(operatorRoleForAdmin({ role: 'super_admin', business_role: 'business_admin' }), 'super_admin');
   assert.equal(operatorRoleForAdmin({ role: 'operations_admin', business_role: 'owner' }), 'operations_admin');
+});
+
+test('Abigail and Marietjie remain denied direct CRM authority without a guarded booking context', async () => {
+  for (const adminId of [4, 6]) {
+    const memory = memoryAuthorityDb();
+    memory.db.state.bookingSessions[adminId] = bookingSession(adminId);
+    await assert.rejects(
+      serviceFor(memory).confirmContact({
+        actorAdminId: adminId,
+        clientId: CLIENT_ID,
+        contactId: CONTACT_ID,
+        confirmedValue: NORMALIZED_PHONE,
+      }),
+      (error) => error?.code === 'OPERATOR_AUTHORITY_FORBIDDEN'
+    );
+    assert.equal(memory.db.state.verifications.length, 0);
+    assert.equal(memory.db.state.audits.length, 0);
+  }
+
+  const readOnly = memoryAuthorityDb();
+  readOnly.db.state.bookingSessions[3] = bookingSession(3);
+  await assert.rejects(
+    serviceFor(readOnly).issueBookingAuthorityContext({ actorAdminId: 3, clientId: CLIENT_ID }),
+    (error) => error?.code === 'OPERATOR_AUTHORITY_FORBIDDEN'
+  );
+});
+
+test('Abigail and Marietjie may establish separate contact and name authority only through an exact current in-scope booking context', async () => {
+  for (const adminId of [4, 6]) {
+    const memory = memoryAuthorityDb();
+    memory.db.state.bookingSessions[adminId] = bookingSession(adminId);
+    const service = serviceFor(memory);
+    const issued = await service.issueBookingAuthorityContext({ actorAdminId: adminId, clientId: CLIENT_ID });
+    assert.equal(issued.authorityMode, 'booking_bound');
+    assert.equal(issued.operatorRole, 'booking_operator');
+    assert.equal(issued.bookingContext.version, BOOKING_CONTEXT_VERSION);
+    assert.equal(issued.bookingContext.adminId, adminId);
+
+    const contact = await service.confirmContact({
+      actorAdminId: adminId,
+      clientId: CLIENT_ID,
+      contactId: CONTACT_ID,
+      confirmedValue: NORMALIZED_PHONE,
+      bookingContext: issued.bookingContext,
+    });
+    assert.equal(contact.authorityMode, 'booking_bound');
+    assert.equal(contact.authority.confirmationSafe, false);
+    assert.equal(memory.db.state.nameAuthority, null);
+    assert.equal(memory.db.state.audits[0].actorAdminId, adminId);
+    assert.equal(memory.db.state.audits[0].metadata.authorityMode, 'booking_bound');
+    assert.equal(memory.db.state.audits[0].metadata.bookingBoundContext.bookingSessionAdminId, adminId);
+
+    const name = await service.confirmName({
+      actorAdminId: adminId,
+      clientId: CLIENT_ID,
+      contactId: CONTACT_ID,
+      expectedContactValue: NORMALIZED_PHONE,
+      confirmedName: 'Jane Smith',
+      explicitlyConfirmed: true,
+      bookingContext: issued.bookingContext,
+    });
+    assert.equal(name.evidenceType, 'explicit_client_confirmation');
+    assert.equal(name.authorityMode, 'booking_bound');
+    assert.equal(name.authority.confirmationSafe, true);
+    assert.equal(memory.db.state.nameAuthority.actor_reference, `staff_admin:${adminId}`);
+    assert.equal(memory.db.state.audits.at(-1).actorAdminId, adminId);
+    assert.equal(memory.db.state.audits.at(-1).metadata.bookingBoundContext.bookingClientId, CLIENT_ID);
+  }
+});
+
+test('forged, cross-operator, stale and out-of-scope booking contexts fail before every identity write', async () => {
+  const fixtures = [
+    {
+      mutate(memory, context) { context.serviceId += 900; },
+      expected: 'OPERATOR_AUTHORITY_BOOKING_CONTEXT_STALE',
+    },
+    {
+      mutate(memory, context) { context.adminId = 6; },
+      expected: 'OPERATOR_AUTHORITY_BOOKING_CONTEXT_STALE',
+    },
+    {
+      mutate(memory) { memory.db.state.bookingSessions[4].updated_at = new Date().toISOString(); },
+      expected: 'OPERATOR_AUTHORITY_BOOKING_CONTEXT_STALE',
+    },
+    {
+      mutate(memory) { memory.db.state.bookingSessions[4].operator_service_authorized = false; },
+      expected: 'OPERATOR_AUTHORITY_BOOKING_SCOPE_DENIED',
+    },
+    {
+      mutate(memory) { memory.db.state.bookingSessions[4].target_service_authorized = false; },
+      expected: 'OPERATOR_AUTHORITY_BOOKING_SCOPE_DENIED',
+    },
+  ];
+  for (const fixture of fixtures) {
+    const memory = memoryAuthorityDb();
+    memory.db.state.bookingSessions[4] = bookingSession(4);
+    const service = serviceFor(memory);
+    const issued = await service.issueBookingAuthorityContext({ actorAdminId: 4, clientId: CLIENT_ID });
+    const context = clone(issued.bookingContext);
+    fixture.mutate(memory, context);
+    await assert.rejects(
+      service.confirmContact({
+        actorAdminId: 4,
+        clientId: CLIENT_ID,
+        contactId: CONTACT_ID,
+        confirmedValue: NORMALIZED_PHONE,
+        bookingContext: context,
+      }),
+      (error) => error?.code === fixture.expected
+    );
+    assert.equal(memory.db.state.verifications.length, 0);
+    assert.equal(memory.db.state.audits.length, 0);
+  }
+});
+
+test('an expired pending booking cannot issue client authority even when every canonical scope row still matches', async () => {
+  const memory = memoryAuthorityDb();
+  memory.db.state.bookingSessions[4] = bookingSession(4, {
+    updated_at: new Date(Date.now() - BOOKING_CONTEXT_TTL_MS - 1000).toISOString(),
+  });
+  await assert.rejects(
+    serviceFor(memory).issueBookingAuthorityContext({ actorAdminId: 4, clientId: CLIENT_ID }),
+    (error) => error?.code === 'OPERATOR_AUTHORITY_BOOKING_CONTEXT_STALE'
+  );
+  assert.equal(memory.db.state.verifications.length, 0);
+  assert.equal(memory.db.state.audits.length, 0);
+});
+
+test('inactive client or pending-booking client drift fails closed transactionally for a booking operator', async () => {
+  for (const fixture of [
+    { mutate(memory) { memory.db.state.client.status = 'inactive'; }, expected: 'OPERATOR_AUTHORITY_BOOKING_CONTEXT_STALE' },
+    { mutate(memory) { memory.db.state.bookingSessions[4].client_id = 202; }, expected: 'OPERATOR_AUTHORITY_BOOKING_CONTEXT_MISMATCH' },
+    { mutate(memory) { memory.db.state.contacts[0].client_id = 202; }, expected: 'OPERATOR_AUTHORITY_CONTACT_OWNER_MISMATCH' },
+  ]) {
+    const memory = memoryAuthorityDb();
+    memory.db.state.bookingSessions[4] = bookingSession(4);
+    const service = serviceFor(memory);
+    const issued = await service.issueBookingAuthorityContext({ actorAdminId: 4, clientId: CLIENT_ID });
+    fixture.mutate(memory);
+    await assert.rejects(
+      service.confirmContact({
+        actorAdminId: 4,
+        clientId: CLIENT_ID,
+        contactId: CONTACT_ID,
+        confirmedValue: NORMALIZED_PHONE,
+        bookingContext: issued.bookingContext,
+      }),
+      (error) => error?.code === fixture.expected
+    );
+    assert.equal(memory.db.state.verifications.length, 0);
+    assert.equal(memory.db.state.audits.length, 0);
+    assert.equal(memory.db.state.calls.some((call) => call.sql === 'ROLLBACK'), true);
+  }
+});
+
+test('booking-bound ambiguity fails closed and repeated legitimate affirmation remains idempotent', async () => {
+  const ambiguous = memoryAuthorityDb({ duplicateOwner: true });
+  ambiguous.db.state.bookingSessions[4] = bookingSession(4);
+  const ambiguousService = serviceFor(ambiguous);
+  const ambiguousContext = await ambiguousService.issueBookingAuthorityContext({ actorAdminId: 4, clientId: CLIENT_ID });
+  await assert.rejects(
+    ambiguousService.confirmContact({ actorAdminId: 4, clientId: CLIENT_ID, contactId: CONTACT_ID, confirmedValue: NORMALIZED_PHONE, bookingContext: ambiguousContext.bookingContext }),
+    (error) => error?.code === 'OPERATOR_AUTHORITY_CONTACT_AMBIGUOUS'
+  );
+  assert.equal(ambiguous.db.state.verifications.length, 0);
+
+  const memory = memoryAuthorityDb();
+  memory.db.state.bookingSessions[4] = bookingSession(4);
+  const service = serviceFor(memory);
+  const issued = await service.issueBookingAuthorityContext({ actorAdminId: 4, clientId: CLIENT_ID });
+  const input = { actorAdminId: 4, clientId: CLIENT_ID, contactId: CONTACT_ID, confirmedValue: NORMALIZED_PHONE, bookingContext: issued.bookingContext };
+  const first = await service.confirmContact(input);
+  const second = await service.confirmContact(input);
+  assert.equal(first.status, 'confirmed');
+  assert.equal(second.status, 'already_confirmed');
+  assert.equal(first.verificationId, second.verificationId);
+  assert.equal(memory.db.state.verifications.length, 1);
 });
 
 test('read-only, practitioner and inactive-linked staff authority is rejected', async () => {
@@ -493,6 +721,7 @@ test('authority establishment contains no client message, provider call, schema 
   const routeSource = fs.readFileSync(path.join(ROOT, 'src/routes/operatorContactAuthority.js'), 'utf8');
   const calendarRoute = fs.readFileSync(path.join(ROOT, 'src/routes/calendar.js'), 'utf8');
   assert.doesNotMatch(serviceSource, /sendWhatsApp|sendMessage|sendTemplate|provider|Meta|WABA/);
+  assert.doesNotMatch(serviceSource, /INSERT INTO appointments|UPDATE appointments|DELETE FROM appointments/);
   assert.doesNotMatch(serviceSource, /CREATE TABLE|ALTER TABLE|DROP TABLE/);
   assert.match(serviceSource, /client_contacts/);
   assert.match(serviceSource, /client_identity_verifications/);
@@ -503,7 +732,21 @@ test('authority establishment contains no client message, provider call, schema 
   assert.match(calendarRoute, /router\.use\('\/client-authority'/);
   assert.match(routeSource, /router\.post\('\/contact-confirm', sameOrigin, requireSession, requireCsrf/);
   assert.match(routeSource, /router\.post\('\/name-confirm', sameOrigin, requireSession, requireCsrf/);
+  assert.match(routeSource, /bookingContext: req\.body\?\.bookingContext/);
   assert.doesNotMatch(routeSource, /req\.body\?\.(actorAdminId|adminId|role|businessRole)/);
+});
+
+test('WS-10 receives a server-side context issuer while the broad authority page and search remain direct-role gated', () => {
+  const serviceSource = fs.readFileSync(path.join(ROOT, 'src/services/operatorContactAuthority.js'), 'utf8');
+  const routeSource = fs.readFileSync(path.join(ROOT, 'src/routes/operatorContactAuthority.js'), 'utf8');
+  assert.match(serviceSource, /async function issueBookingAuthorityContext/);
+  assert.match(serviceSource, /JOIN admin_booking_sessions abs ON abs\.admin_id=a\.id/);
+  assert.match(serviceSource, /operator_scope\.staff_id=a\.staff_id/);
+  assert.match(serviceSource, /operator_scope\.service_id=abs\.service_id/);
+  assert.match(serviceSource, /FOR UPDATE OF a,abs/);
+  assert.match(routeSource, /router\.get\('\/', requireSession[\s\S]*resolveAuthorizedOperator/);
+  assert.match(routeSource, /router\.post\('\/search'[\s\S]*authorityService\.searchClients/);
+  assert.doesNotMatch(routeSource, /issueBookingAuthorityContext/);
 });
 
 test('operator UX visibly separates unverified, ambiguous, contact-confirmed, name-unconfirmed and fully safe states', () => {

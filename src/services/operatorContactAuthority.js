@@ -12,12 +12,16 @@ const {
 const { normalizeZaMobile } = require('./adminProvisionalClient');
 
 const AUTHORITY_VERSION = 'operator_contact_confirmation_v1';
+const BOOKING_CONTEXT_VERSION = 'booking_bound_client_authority_v1';
+const BOOKING_CONTEXT_TTL_MS = 30 * 60 * 1000;
+const BOOKING_CONTEXT_CLOCK_SKEW_MS = 60 * 1000;
 const VERIFICATION_METHOD = 'operator_confirmed';
 const OPERATOR_ROLES = Object.freeze({
   SUPER_ADMIN: 'super_admin',
   OPERATIONS_ADMIN: 'operations_admin',
 });
 const USABLE_CONTACT_TYPES = new Set(['whatsapp', 'mobile']);
+const BOOKING_BOUND_BUSINESS_ROLES = new Set(['employee_practitioner', 'tenant_practitioner']);
 
 function authorityError(code, message) {
   const error = new Error(message);
@@ -31,6 +35,91 @@ function canonicalId(value, code, message) {
   const id = Number(raw);
   if (!Number.isSafeInteger(id)) throw authorityError(code, message);
   return id;
+}
+
+function canonicalTimestamp(value, code, message) {
+  const timestamp = new Date(value);
+  if (!value || Number.isNaN(timestamp.getTime())) throw authorityError(code, message);
+  return timestamp.toISOString();
+}
+
+function bookingContextFromRow(row = {}) {
+  return {
+    version: BOOKING_CONTEXT_VERSION,
+    adminId: Number(row.id),
+    clientId: Number(row.booking_client_id),
+    staffId: Number(row.booking_staff_id),
+    serviceId: Number(row.booking_service_id),
+    locationId: Number(row.booking_location_id),
+    startsAt: canonicalTimestamp(
+      row.booking_starts_at,
+      'OPERATOR_AUTHORITY_BOOKING_CONTEXT_INVALID',
+      'The guarded booking context is invalid.'
+    ),
+    endsAt: canonicalTimestamp(
+      row.booking_ends_at,
+      'OPERATOR_AUTHORITY_BOOKING_CONTEXT_INVALID',
+      'The guarded booking context is invalid.'
+    ),
+    revision: canonicalTimestamp(
+      row.booking_updated_at,
+      'OPERATOR_AUTHORITY_BOOKING_CONTEXT_INVALID',
+      'The guarded booking context is invalid.'
+    ),
+  };
+}
+
+function normalizeBookingContext(value = {}) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw authorityError(
+      'OPERATOR_AUTHORITY_BOOKING_CONTEXT_INVALID',
+      'A valid guarded booking context is required.'
+    );
+  }
+  if (value.version !== BOOKING_CONTEXT_VERSION) {
+    throw authorityError(
+      'OPERATOR_AUTHORITY_BOOKING_CONTEXT_INVALID',
+      'The guarded booking context version is invalid.'
+    );
+  }
+  return {
+    version: BOOKING_CONTEXT_VERSION,
+    adminId: canonicalId(value.adminId, 'OPERATOR_AUTHORITY_BOOKING_CONTEXT_INVALID', 'The guarded booking context is invalid.'),
+    clientId: canonicalId(value.clientId, 'OPERATOR_AUTHORITY_BOOKING_CONTEXT_INVALID', 'The guarded booking context is invalid.'),
+    staffId: canonicalId(value.staffId, 'OPERATOR_AUTHORITY_BOOKING_CONTEXT_INVALID', 'The guarded booking context is invalid.'),
+    serviceId: canonicalId(value.serviceId, 'OPERATOR_AUTHORITY_BOOKING_CONTEXT_INVALID', 'The guarded booking context is invalid.'),
+    locationId: canonicalId(value.locationId, 'OPERATOR_AUTHORITY_BOOKING_CONTEXT_INVALID', 'The guarded booking context is invalid.'),
+    startsAt: canonicalTimestamp(value.startsAt, 'OPERATOR_AUTHORITY_BOOKING_CONTEXT_INVALID', 'The guarded booking context is invalid.'),
+    endsAt: canonicalTimestamp(value.endsAt, 'OPERATOR_AUTHORITY_BOOKING_CONTEXT_INVALID', 'The guarded booking context is invalid.'),
+    revision: canonicalTimestamp(value.revision, 'OPERATOR_AUTHORITY_BOOKING_CONTEXT_INVALID', 'The guarded booking context is invalid.'),
+  };
+}
+
+function sameBookingContext(left, right) {
+  return left.version === right.version
+    && left.adminId === right.adminId
+    && left.clientId === right.clientId
+    && left.staffId === right.staffId
+    && left.serviceId === right.serviceId
+    && left.locationId === right.locationId
+    && left.startsAt === right.startsAt
+    && left.endsAt === right.endsAt
+    && left.revision === right.revision;
+}
+
+function bookingAuthorityEvidence(operator = {}) {
+  if (operator.authorityMode !== 'booking_bound' || !operator.bookingContext) return null;
+  return {
+    version: operator.bookingContext.version,
+    bookingSessionAdminId: operator.bookingContext.adminId,
+    bookingClientId: operator.bookingContext.clientId,
+    bookingStaffId: operator.bookingContext.staffId,
+    bookingServiceId: operator.bookingContext.serviceId,
+    bookingLocationId: operator.bookingContext.locationId,
+    bookingStartsAt: operator.bookingContext.startsAt,
+    bookingEndsAt: operator.bookingContext.endsAt,
+    bookingSessionRevision: operator.bookingContext.revision,
+  };
 }
 
 // The legacy role column still contains admin/manager/owner. These mappings expose the
@@ -104,6 +193,137 @@ function createOperatorContactAuthorityService({
       );
     }
     return { ...admin, operatorRole };
+  }
+
+  async function resolveCurrentBookingBoundOperator(actorAdminId, clientId, queryable = db, { lock = false } = {}) {
+    const adminId = canonicalId(
+      actorAdminId,
+      'OPERATOR_AUTHORITY_UNAUTHORIZED',
+      'An authenticated staff operator is required.'
+    );
+    const canonicalClientId = canonicalId(
+      clientId,
+      'OPERATOR_AUTHORITY_CLIENT_INVALID',
+      'Select one exact canonical client.'
+    );
+    const result = await queryable.query(
+      `SELECT a.id,a.staff_id,a.display_name,a.role,a.business_role,a.calendar_scope,
+              a.service_scope,a.permissions,a.active AS admin_active,
+              actor_staff.status AS staff_status,
+              abs.client_id AS booking_client_id,abs.staff_id AS booking_staff_id,
+              abs.service_id AS booking_service_id,abs.location_id AS booking_location_id,
+              abs.starts_at AS booking_starts_at,abs.ends_at AS booking_ends_at,
+              abs.state AS booking_state,abs.updated_at AS booking_updated_at,
+              c.status AS client_status,booking_staff.status AS booking_staff_status,
+              service.status AS booking_service_status,location.status AS booking_location_status,
+              EXISTS (
+                SELECT 1 FROM staff_services operator_scope
+                 WHERE operator_scope.staff_id=a.staff_id
+                   AND operator_scope.service_id=abs.service_id
+              ) AS operator_service_authorized,
+              EXISTS (
+                SELECT 1 FROM staff_services target_scope
+                 WHERE target_scope.staff_id=abs.staff_id
+                   AND target_scope.service_id=abs.service_id
+              ) AS target_service_authorized
+         FROM staff_admin_accounts a
+         JOIN admin_booking_sessions abs ON abs.admin_id=a.id
+         LEFT JOIN staff actor_staff ON actor_staff.id=a.staff_id
+         JOIN clients c ON c.id=abs.client_id
+         JOIN staff booking_staff ON booking_staff.id=abs.staff_id
+         JOIN services service ON service.id=abs.service_id
+         JOIN locations location ON location.id=abs.location_id
+        WHERE a.id=$1
+          AND a.active=TRUE
+        LIMIT 1${lock ? '\n        FOR UPDATE OF a,abs' : ''}`,
+      [adminId]
+    );
+    const row = result.rows[0] || null;
+    const permissions = row?.permissions && typeof row.permissions === 'object' && !Array.isArray(row.permissions)
+      ? row.permissions
+      : {};
+    const eligibleRole = BOOKING_BOUND_BUSINESS_ROLES.has(String(row?.business_role || '').toLowerCase());
+    const eligibleOperator = row
+      && row.staff_id != null
+      && row.staff_status === 'active'
+      && row.service_scope === 'own_services'
+      && eligibleRole
+      && permissions['appointment:create'] === true
+      && permissions['client:lookup'] === true;
+    if (!eligibleOperator) {
+      throw authorityError(
+        'OPERATOR_AUTHORITY_FORBIDDEN',
+        'Current staff authority does not permit booking-bound client confirmation.'
+      );
+    }
+    if (String(row.booking_client_id) !== String(canonicalClientId)) {
+      throw authorityError(
+        'OPERATOR_AUTHORITY_BOOKING_CONTEXT_MISMATCH',
+        'The guarded booking no longer belongs to the selected canonical client.'
+      );
+    }
+    const bookingRevisionTime = new Date(row.booking_updated_at).getTime();
+    const bookingContextAge = Date.now() - bookingRevisionTime;
+    const activeBooking = row.booking_state === 'confirm'
+      && row.client_status === 'active'
+      && row.booking_staff_status === 'active'
+      && row.booking_service_status === 'active'
+      && row.booking_location_status === 'active'
+      && new Date(row.booking_starts_at).getTime() > Date.now()
+      && new Date(row.booking_ends_at).getTime() > new Date(row.booking_starts_at).getTime()
+      && bookingContextAge >= -BOOKING_CONTEXT_CLOCK_SKEW_MS
+      && bookingContextAge <= BOOKING_CONTEXT_TTL_MS;
+    if (!activeBooking) {
+      throw authorityError(
+        'OPERATOR_AUTHORITY_BOOKING_CONTEXT_STALE',
+        'The guarded booking context is no longer active. Prepare the booking again before confirming identity.'
+      );
+    }
+    if (row.operator_service_authorized !== true || row.target_service_authorized !== true) {
+      throw authorityError(
+        'OPERATOR_AUTHORITY_BOOKING_SCOPE_DENIED',
+        'The guarded booking is outside the authenticated operator’s canonical service scope.'
+      );
+    }
+    const bookingContext = bookingContextFromRow(row);
+    return {
+      ...row,
+      operatorRole: 'booking_operator',
+      authorityMode: 'booking_bound',
+      bookingContext,
+    };
+  }
+
+  // WS-10 integration contract: call only after its guarded booking owner has
+  // prepared admin_booking_sessions for the authenticated operator. Return the
+  // server-derived context to that flow, then pass it unchanged to state/contact/name
+  // methods. Every use re-reads and compares canonical booking and scope state;
+  // possession of this browser-visible value is never authorization by itself.
+  async function issueBookingAuthorityContext({ actorAdminId, clientId } = {}) {
+    const operator = await resolveCurrentBookingBoundOperator(actorAdminId, clientId);
+    return {
+      authorityMode: operator.authorityMode,
+      operatorRole: operator.operatorRole,
+      bookingContext: operator.bookingContext,
+    };
+  }
+
+  async function resolveAuthorityOperator({ actorAdminId, clientId, bookingContext } = {}, queryable = db, { lock = false } = {}) {
+    try {
+      const operator = await resolveAuthorizedOperator(actorAdminId, queryable, { lock });
+      return { ...operator, authorityMode: 'direct_operator', bookingContext: null };
+    } catch (error) {
+      if (error?.code !== 'OPERATOR_AUTHORITY_FORBIDDEN' || !bookingContext) throw error;
+    }
+    const expectedContext = normalizeBookingContext(bookingContext);
+    const operator = await resolveCurrentBookingBoundOperator(actorAdminId, clientId, queryable, { lock });
+    if (!sameBookingContext(expectedContext, operator.bookingContext)) {
+      throw authorityError(
+        'OPERATOR_AUTHORITY_BOOKING_CONTEXT_STALE',
+        'The guarded booking context changed. Reload the booking before confirming identity.'
+      );
+    }
+    return operator;
   }
 
   async function searchClients({ actorAdminId, query } = {}) {
@@ -194,8 +414,8 @@ function createOperatorContactAuthorityService({
     };
   }
 
-  async function loadClientAuthorityState({ actorAdminId, clientId } = {}) {
-    const operator = await resolveAuthorizedOperator(actorAdminId);
+  async function loadClientAuthorityState({ actorAdminId, clientId, bookingContext } = {}) {
+    const operator = await resolveAuthorityOperator({ actorAdminId, clientId, bookingContext });
     const rows = await clientAuthorityRows(clientId);
     const contacts = [];
     for (const row of rows.contacts) {
@@ -230,6 +450,7 @@ function createOperatorContactAuthorityService({
       && nameAuthority.status === 'authoritative';
     return {
       operatorRole: operator.operatorRole,
+      authorityMode: operator.authorityMode,
       client: {
         id: Number(rows.client.id),
         displayName: rows.client.authoritative_name || rows.client.display_name || 'Unnamed client',
@@ -330,9 +551,13 @@ function createOperatorContactAuthorityService({
     }
   }
 
-  async function confirmContact({ actorAdminId, clientId, contactId, confirmedValue } = {}) {
+  async function confirmContact({ actorAdminId, clientId, contactId, confirmedValue, bookingContext } = {}) {
     const operation = await withTransaction(async (queryable) => {
-      const operator = await resolveAuthorizedOperator(actorAdminId, queryable, { lock: true });
+      const operator = await resolveAuthorityOperator(
+        { actorAdminId, clientId, bookingContext },
+        queryable,
+        { lock: true }
+      );
       const locked = await lockExactContactAuthority(queryable, {
         clientId,
         contactId,
@@ -344,6 +569,9 @@ function createOperatorContactAuthorityService({
         actorAdminId: Number(operator.id),
         clientId: Number(locked.client.id),
         clientContactId: Number(locked.contact.id),
+        ...(bookingAuthorityEvidence(operator)
+          ? { bookingBoundContext: bookingAuthorityEvidence(operator) }
+          : {}),
       };
       const existing = await queryable.query(
         `SELECT id,verified_at,evidence_reference
@@ -408,6 +636,10 @@ function createOperatorContactAuthorityService({
             verificationId: Number(verification.id),
             verificationMethod: VERIFICATION_METHOD,
             operatorRole: operator.operatorRole,
+            authorityMode: operator.authorityMode,
+            ...(bookingAuthorityEvidence(operator)
+              ? { bookingBoundContext: bookingAuthorityEvidence(operator) }
+              : {}),
             idempotent,
             contactVerifiedAtEstablished: locked.contact.verified_at == null,
           }),
@@ -420,9 +652,13 @@ function createOperatorContactAuthorityService({
         verificationId: Number(verification.id),
         verificationMethod: VERIFICATION_METHOD,
         operatorRole: operator.operatorRole,
+        authorityMode: operator.authorityMode,
       };
     });
-    return { ...operation, authority: await loadClientAuthorityState({ actorAdminId, clientId }) };
+    return {
+      ...operation,
+      authority: await loadClientAuthorityState({ actorAdminId, clientId, bookingContext }),
+    };
   }
 
   async function confirmName({
@@ -432,6 +668,7 @@ function createOperatorContactAuthorityService({
     expectedContactValue,
     confirmedName,
     explicitlyConfirmed,
+    bookingContext,
   } = {}) {
     if (explicitlyConfirmed !== true) {
       throw authorityError(
@@ -442,7 +679,11 @@ function createOperatorContactAuthorityService({
     const name = normalizeClientName(confirmedName);
     if (!name) throw authorityError('OPERATOR_AUTHORITY_NAME_INVALID', 'Enter the exact name explicitly confirmed by the client.');
     const operation = await withTransaction(async (queryable) => {
-      const operator = await resolveAuthorizedOperator(actorAdminId, queryable, { lock: true });
+      const operator = await resolveAuthorityOperator(
+        { actorAdminId, clientId, bookingContext },
+        queryable,
+        { lock: true }
+      );
       const locked = await lockExactContactAuthority(queryable, {
         clientId,
         contactId,
@@ -477,6 +718,9 @@ function createOperatorContactAuthorityService({
           actorAdminId: Number(operator.id),
           clientContactId: Number(locked.contact.id),
           identityVerificationId: Number(verification.id),
+          ...(bookingAuthorityEvidence(operator)
+            ? { bookingBoundContext: bookingAuthorityEvidence(operator) }
+            : {}),
         },
         actorType: 'staff',
         actorReference: `staff_admin:${operator.id}`,
@@ -494,6 +738,10 @@ function createOperatorContactAuthorityService({
             identityVerificationId: Number(verification.id),
             evidenceType: EVIDENCE_TYPES.EXPLICIT_CLIENT_CONFIRMATION,
             operatorRole: operator.operatorRole,
+            authorityMode: operator.authorityMode,
+            ...(bookingAuthorityEvidence(operator)
+              ? { bookingBoundContext: bookingAuthorityEvidence(operator) }
+              : {}),
           }),
         ]
       );
@@ -504,13 +752,19 @@ function createOperatorContactAuthorityService({
         nameAuthorityId: Number(authority.authorityId),
         evidenceType: EVIDENCE_TYPES.EXPLICIT_CLIENT_CONFIRMATION,
         operatorRole: operator.operatorRole,
+        authorityMode: operator.authorityMode,
       };
     });
-    return { ...operation, authority: await loadClientAuthorityState({ actorAdminId, clientId }) };
+    return {
+      ...operation,
+      authority: await loadClientAuthorityState({ actorAdminId, clientId, bookingContext }),
+    };
   }
 
   return {
     resolveAuthorizedOperator,
+    issueBookingAuthorityContext,
+    resolveAuthorityOperator,
     searchClients,
     loadClientAuthorityState,
     confirmContact,
@@ -520,11 +774,18 @@ function createOperatorContactAuthorityService({
 
 module.exports = {
   AUTHORITY_VERSION,
+  BOOKING_CONTEXT_VERSION,
+  BOOKING_CONTEXT_TTL_MS,
   VERIFICATION_METHOD,
   OPERATOR_ROLES,
   USABLE_CONTACT_TYPES,
+  BOOKING_BOUND_BUSINESS_ROLES,
   authorityError,
   operatorRoleForAdmin,
+  bookingContextFromRow,
+  normalizeBookingContext,
+  sameBookingContext,
+  bookingAuthorityEvidence,
   normalizedUsablePhone,
   serializeSearchClient,
   createOperatorContactAuthorityService,
