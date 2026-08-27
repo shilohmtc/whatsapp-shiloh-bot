@@ -27,6 +27,7 @@ function hasPermission(admin, permission) {
 function isCalendarHandoffAuthority(admin, env = process.env) {
   const adminId = Number(admin?.id);
   if (!Number.isSafeInteger(adminId) || adminId <= 0 || admin?.admin_active !== true) return false;
+  if (adminId === EMERGENCY_ADMIN_ID) return isEmergencyChristelAuthority(admin, env);
   if (!isAdminAllowedByPilot(adminId, env)) return false;
   if (!admin.staff_id || admin.staff_status !== 'active') return false;
   return Boolean(deriveCalendarViewer(admin));
@@ -111,13 +112,13 @@ function createEmergencyCalendarBootstrapService({
     const client = typeof db.connect === 'function' ? await db.connect() : db;
     try {
       await client.query('BEGIN');
+      await client.query(`SELECT pg_advisory_xact_lock(hashtextextended('emergency-calendar-bootstrap-whatsapp:' || $1::text, 0))`, [normalized]);
       const admin = await resolveAuthority(client, { whatsapp: normalized, forUpdate: true });
       if (!admin) {
         await client.query('ROLLBACK');
         return { ok: false, code: 'EMERGENCY_CALENDAR_FORBIDDEN' };
       }
       const adminId = Number(admin.id);
-      await client.query(`SELECT pg_advisory_xact_lock(hashtextextended('emergency-calendar-bootstrap:' || $1::text, 0))`, [adminId]);
       const token = randomOpaqueToken(randomBytes, BOOTSTRAP_TOKEN_BYTES);
       const tokenHash = sha256(token);
       await client.query(
