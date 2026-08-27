@@ -86,24 +86,26 @@ Every active or recently closed unit must expose:
 
 | Stream | State | Current unit / authority | Current gate | Next owner |
 |---|---|---|---|---|
-| **00 — Control & Reconciliation** | ▶ ACTIVE | `SHILOH-OS-BUSINESS-OWNER-AND-DELEGATED-TECHNICAL-AUTHORITY`; Draft PR #508 | Docs/governance review only; no runtime mutation | 00; 10/20 returns continue independently |
-| **10 — Calendar & Booking Assurance** | ▶ ACTIVE | `SHILOH-CALENDAR-SERVICE-SCOPED-BOOKING-CONFIRMATION-P0`; issue #505. PR #504 remains HOLD | Implement service-scoped own-identity booking and confirmation-safe finalization; integrate #506 | 10, then 00 |
-| **20 — CRM & Identity** | ▶ ACTIVE | `SHILOH-CALENDAR-BOOKING-BOUND-CLIENT-AUTHORITY-P0`; issue #506 | Implement least-privilege booking-bound contact/name authority seam | 20, then 00/10 integration |
+| **00 — Control & Reconciliation** | ▶ ACTIVE | `SHILOH-OS-BUSINESS-OWNER-AND-DELEGATED-TECHNICAL-AUTHORITY`; Draft PR #508 | Docs/governance review only; no runtime mutation | 00; #505 continues independently |
+| **10 — Calendar & Booking Assurance** | ▶ ACTIVE | `SHILOH-CALENDAR-SERVICE-SCOPED-BOOKING-CONFIRMATION-P0`; issue #505. PR #504 remains HOLD | Integrate accepted WS-20 PR #507 contract; complete service-scoped own-identity booking and confirmation-safe finalization | 10, then 00 |
+| **20 — CRM & Identity** | ◆ CONTROL GATE | `SHILOH-CALENDAR-BOOKING-BOUND-CLIENT-AUTHORITY-P0`; issue #506; Draft PR #507 at `3191235ef71b319cd643fc7bb77043c0d61d6397` | IMPLEMENTATION COMPLETE / DO NOT REDO; unmerged and undeployed pending integrated #505 reconciliation | 10 integration, then 00 |
 | **30 — WhatsApp & Meta Integration** | ⏸ WAITING EXTERNAL | Meta verification convergence | Meta Business Support | Meta Support, then 00 |
-| **40 — Production & DevOps** | ○ OBSERVER / IDLE | Evidence observer | No production mutation authorized for #504/#505/#506/#508 | Called only for bounded runtime/deploy evidence |
+| **40 — Production & DevOps** | ○ OBSERVER / IDLE | Evidence observer | No production mutation authorized for #504/#505/#507/#508 | Called only for bounded runtime/deploy evidence |
 
 Current human authority model: **Christel = Business Owner / Primary Shiloh Admin**; **JP = Delegated Technical/System Super Admin**.
 
 Current production/main authority at this snapshot: `bfba3b0047faf4e960c114d178fe0da9dd63b7e3` (PR #500 merge; initial booking confirmation guarantee).
 
-PR #504 is open/draft/unmerged and remains **HOLD / DO NOT MERGE / DO NOT DEPLOY** while the active Calendar P0 authority/confirmation gaps are closed.
+WS-20 issue #506 is implementation-complete at Draft PR #507 / exact head `3191235ef71b319cd643fc7bb77043c0d61d6397`; CI #1489 (`33054776443`) is successful. This is not merge, deploy or production acceptance. The accepted server-derived `bookingContext` contract is now a pinned dependency of #505.
+
+PR #504 is open/draft/unmerged and remains **HOLD / DO NOT MERGE / DO NOT DEPLOY** while the active Calendar P0 authority/confirmation work is integrated and reconciled.
 
 ## Current priority sequence
 
-1. **#505 / 10 — Calendar & Booking Assurance:** implement service-scoped booking authority for the authorized staff model and make confirmation safety a final-booking acceptance condition.
-2. **#506 / 20 — CRM & Identity:** implement the canonical booking-bound contact/name authority seam needed by Calendar without creating a second identity system or broad CRM-admin privilege.
+1. **#505 / 10 — Calendar & Booking Assurance:** integrate the accepted #507 server-derived booking-authority context, complete the service-scoped booking authority matrix, and make `confirmationSafe === true` a final-booking acceptance condition before ordinary appointment creation.
+2. **#507 / #506 — CRM & Identity:** implementation is COMPLETE / DO NOT REDO at exact head `3191235ef71b319cd643fc7bb77043c0d61d6397`; keep DRAFT / UNMERGED / UNDEPLOYED while #505 integrates the contract.
 3. **#504 — Calendar cockpit polish:** remain HOLD; reconcile/rebase only after the P0 operational authority/confirmation contract is accepted.
-4. **#508 / 00 governance correction:** docs-only and deliberately non-blocking to #505/#506; reconcile the corrected business-owner/delegated-technical model without mutating runtime permissions.
+4. **#508 / 00 governance correction:** docs-only and deliberately non-blocking to #505; reconcile the corrected business-owner/delegated-technical model without mutating runtime permissions.
 5. **30 — WhatsApp & Meta Integration:** remains WAITING EXTERNAL on Meta Business Support unless substantive provider evidence changes the gate.
 6. **40 — Production & DevOps:** remains observer-only until a bounded runtime/DB/deploy evidence request is routed.
 
