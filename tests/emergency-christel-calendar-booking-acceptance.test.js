@@ -74,6 +74,20 @@ function eligibleRow(overrides = {}) {
   };
 }
 
+function pendingRow(overrides = {}) {
+  return {
+    id: 123,
+    source: 'goldie_import',
+    staff_id: 9,
+    service_id: 44,
+    location_id: 1,
+    starts_at: '2026-08-28T08:15:00.000Z',
+    ends_at: '2026-08-28T09:15:00.000Z',
+    state: 'confirm',
+    ...overrides,
+  };
+}
+
 const calendarServiceSource = fs.readFileSync(path.join(__dirname, '../src/services/calendarCreateBooking.js'), 'utf8');
 const calendarRouteSource = fs.readFileSync(path.join(__dirname, '../src/routes/calendarCreateBooking.js'), 'utf8');
 const adminBookingSource = fs.readFileSync(path.join(__dirname, '../src/services/adminBooking.js'), 'utf8');
@@ -100,14 +114,20 @@ test('12 booking routes stay private and mutating operations retain same-origin,
   assert.doesNotMatch(calendarRouteSource, /ADMIN_API_KEY|publicBooking|allowAnonymous/);
 });
 
-test('13 only the exact emergency Christel Admin id can enter Calendar Create Booking', async () => {
-  const db = scriptedDb(async () => { throw new Error('wrong admin id must fail before database access'); });
+test('13 Calendar Create Booking rejects authenticated admins outside the frozen #505 principal matrix', async () => {
+  const db = scriptedDb(async (call) => {
+    if (call.sql.includes('FROM staff_admin_accounts a')) {
+      return { rows: [authorityRow({ id: 99, display_name: 'Other Admin' })], rowCount: 1 };
+    }
+    return { rows: [], rowCount: 0 };
+  });
   const service = createCalendarCreateBookingService({ db, env: enabledEnv });
   await assert.rejects(
-    service.listBookableOptions(EMERGENCY_ADMIN_ID + 1),
+    service.listBookableOptions(99),
     (error) => error?.code === 'CALENDAR_BOOKING_FORBIDDEN'
   );
-  assert.equal(db.calls.length, 0);
+  assert.equal(db.calls.length, 1);
+  assert.match(db.calls[0].sql, /FROM staff_admin_accounts a/);
 });
 
 test('14 current canonical Christel authority is revalidated on every booking operation', async () => {
@@ -137,11 +157,13 @@ test('14 current canonical Christel authority is revalidated on every booking op
   assert.equal(authorityChecks, 2);
 });
 
-test('15 bookable options are bounded to active client-bookable Christel or Abigail canonical staff-service mappings', async () => {
+test('15 bookable options remain active/client-bookable and are bounded by Christel canonical service relationships', async () => {
   let optionsSql = '';
+  let optionsParams = null;
   const db = authorityDb(async (call) => {
     if (call.sql.includes('JOIN staff_services ss')) {
       optionsSql = call.sql;
+      optionsParams = call.params;
       return { rows: [eligibleRow(), eligibleRow({ staff_id: 10, staff_name: 'Christel' })], rowCount: 2 };
     }
     return { rows: [], rowCount: 0 };
@@ -152,8 +174,12 @@ test('15 bookable options are bounded to active client-bookable Christel or Abig
   assert.match(optionsSql, /JOIN staff_services ss/);
   assert.match(optionsSql, /st\.status = 'active'/);
   assert.match(optionsSql, /st\.client_bookable = TRUE/);
-  assert.match(optionsSql, /LOWER\(st\.display_name\) IN \('christel', 'abigail'\)/);
   assert.match(optionsSql, /sv\.status = 'active'/);
+  assert.match(optionsSql, /FROM staff_services authority_ss/);
+  assert.match(optionsSql, /authority_ss\.service_id = sv\.id/);
+  assert.match(optionsSql, /authority_ss\.staff_id = ANY\(\$1::bigint\[\]\)/);
+  assert.doesNotMatch(optionsSql, /LOWER\(st\.display_name\) IN/);
+  assert.deepEqual(optionsParams, [[9]]);
 });
 
 test('16 client search delegates to the canonical CRM finder with a bounded normalized query', async () => {
@@ -220,11 +246,13 @@ test('20 date and time input is strict, Johannesburg-local shaped, and rejects i
   assert.throws(() => localDateTimeFromInputs('2026-08-28', '24:00'), (error) => error?.code === 'CALENDAR_BOOKING_INVALID_SLOT');
 });
 
-test('21 exact active staff-service eligibility is revalidated immediately before canonical prepare delegation', async () => {
+test('21 exact active staff-service eligibility and operator service authority are revalidated immediately before canonical prepare delegation', async () => {
   let selectionSql = '';
+  let selectionParams = null;
   const db = authorityDb(async (call) => {
     if (call.sql.includes('JOIN staff_services ss')) {
       selectionSql = call.sql;
+      selectionParams = call.params;
       return { rows: [], rowCount: 0 };
     }
     return { rows: [], rowCount: 0 };
@@ -238,8 +266,12 @@ test('21 exact active staff-service eligibility is revalidated immediately befor
   assert.match(selectionSql, /sv\.id = \$2/);
   assert.match(selectionSql, /st\.status = 'active'/);
   assert.match(selectionSql, /st\.client_bookable = TRUE/);
-  assert.match(selectionSql, /LOWER\(st\.display_name\) IN \('christel', 'abigail'\)/);
   assert.match(selectionSql, /sv\.status = 'active'/);
+  assert.match(selectionSql, /FROM staff_services authority_ss/);
+  assert.match(selectionSql, /authority_ss\.service_id = sv\.id/);
+  assert.match(selectionSql, /authority_ss\.staff_id = ANY\(\$3::bigint\[\]\)/);
+  assert.doesNotMatch(selectionSql, /LOWER\(st\.display_name\) IN/);
+  assert.deepEqual(selectionParams, [9, 44, [9]]);
 });
 
 test('22 Calendar prepare delegates exact client, provider, service and local slot to the canonical Admin booking engine', async () => {
@@ -292,11 +324,28 @@ test('23 canonical prepare denials pass through unchanged and Calendar code cann
   assert.doesNotMatch(calendarRouteSource, /INSERT INTO appointments/);
 });
 
-test('24 Calendar confirm delegates to canonical confirmation with the bounded shiloh_calendar source', async () => {
+test('24 Calendar confirm requires confirmation-safe authority then delegates with the bounded shiloh_calendar source', async () => {
   const confirmCalls = [];
+  const db = authorityDb(async (call) => {
+    if (call.sql.includes('FROM admin_booking_sessions abs')) return { rows: [pendingRow()], rowCount: 1 };
+    if (call.sql.includes('JOIN staff_services ss')) return { rows: [eligibleRow()], rowCount: 1 };
+    return { rows: [], rowCount: 0 };
+  });
+  const contactAuthorityService = {
+    async issueBookingAuthorityContext() {
+      const error = new Error('Christel uses direct operator authority');
+      error.code = 'OPERATOR_AUTHORITY_FORBIDDEN';
+      throw error;
+    },
+    async loadClientAuthorityState(input) {
+      assert.deepEqual(input, { actorAdminId: EMERGENCY_ADMIN_ID, clientId: 123 });
+      return { confirmationSafe: true, stage: 'confirmation_safe' };
+    },
+  };
   const service = createCalendarCreateBookingService({
-    db: authorityDb(),
+    db,
     env: enabledEnv,
+    contactAuthorityService,
     confirmBooking: async (...args) => {
       confirmCalls.push(args);
       return { status: 'created', appointmentId: 777 };
