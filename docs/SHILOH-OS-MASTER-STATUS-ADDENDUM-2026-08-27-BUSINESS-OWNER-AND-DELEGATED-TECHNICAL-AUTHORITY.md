@@ -89,9 +89,13 @@ A capability is not considered fully productized merely because its backend path
 
 ## Current P0 work is not blocked
 
-This documentation correction does not block or reopen the current Calendar/identity P0 implementation packages routed as GitHub issues #505 and #506. Their capability-specific service-scope and confirmation-safety contracts remain active unless 00 separately reconciles them.
+This documentation correction does not block or reopen the current Calendar/identity P0 packages.
 
-PR #504 remains on its existing Control hold until the active Calendar P0 gaps are reconciled.
+WS-20 issue #506 is now **IMPLEMENTATION COMPLETE / DO NOT REDO** at Draft PR #507, exact head `3191235ef71b319cd643fc7bb77043c0d61d6397`, with CI #1489 / run `33054776443` successful. That acceptance covers the least-privilege server-side booking-bound contact/name authority primitive and its security proof. PR #507 remains DRAFT / UNMERGED / UNDEPLOYED; this Master record does not authorize merge or deployment.
+
+WS-10 issue #505 is the current integration owner. It must consume the accepted server-derived `bookingContext` contract, preserve the service-scope booking matrix, and make authoritative `confirmationSafe === true` a final-booking acceptance condition before ordinary Calendar appointment creation. #500 remains the delivery/idempotency owner after identity is safe.
+
+PR #504 remains on its existing Control hold until the Calendar P0 authority/confirmation package is integrated and reconciled.
 
 ## Reconciliation outcome
 
