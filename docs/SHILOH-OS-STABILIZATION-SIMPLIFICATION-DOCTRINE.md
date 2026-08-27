@@ -10,7 +10,7 @@ Status after merge: **ACTIVE GOVERNANCE STANDARD**
 
 This doctrine turns the architectural and operating lessons from the current Shiloh OS build into durable decision rules.
 
-It exists to prevent regression into superseded architecture, unnecessary feature accumulation, duplicated control surfaces, low-value refactoring, repetitive release ceremony, or wasteful Workspace use.
+It exists to prevent regression into superseded architecture, unnecessary feature accumulation, duplicated control surfaces, low-value refactoring, repetitive release ceremony, wasteful Workspace use, and unnecessary owner-level approval ceremony for bounded technical work.
 
 The objective remains:
 
@@ -67,7 +67,7 @@ Unless 00 explicitly changes the policy:
 - **GitHub** is engineering/control infrastructure, not a Shiloh product surface.
 - **Render** is commodity deployment infrastructure to integrate with, not product architecture to build around.
 
-These directions do not authorize destructive cleanup, provider disconnection, production migration or data deletion by themselves. Each concrete mutation remains subject to its own control boundary.
+These directions do not authorize destructive cleanup, provider disconnection, production migration or data deletion by themselves. Each concrete mutation remains subject to its applicable control boundary.
 
 ## 4. No feature accumulation during stabilization
 
@@ -132,55 +132,85 @@ For meaningful architecture, sequencing, cost, risk, product or implementation d
 
 Do not manufacture recommendations for straightforward requests where no meaningful decision exists.
 
-## 8. Standing release model
+## 8. Bounded operational delegation
 
-Specialist streams and `WS-*` execution streams **never self-merge** their own work.
+Specialist streams and `WS-*` execution streams **never independently self-authorize production or self-merge their own work**.
 
-The preferred release chain is:
+The preferred release and production chain remains:
 
-**00 control decision → specialist scope/acceptance → WS implementation when justified → specialist verification → tests/CI → 00 reconciliation → release gate → production proof → 00 reconciliation**
+**00 control decision → specialist scope/acceptance → WS implementation when justified → specialist verification → tests/CI → 00 reconciliation → release/operation → production proof → 00 reconciliation**
 
-### Optional standing 00 release delegation
+### Governing principle
 
-JP may grant 00 a bounded standing release delegation so JP does not become the repetitive human approval button for ordinary already-authorized releases.
+JP delegates technical stewardship to 00 under this principle:
 
-When such delegation is explicitly active, 00 may merge the exact accepted PR head and allow the repository's existing normal deployment mechanism without a fresh per-PR confirmation only if 00 independently verifies all of the following immediately before merge:
+> **JP owns irreversible business authority. 00 owns bounded, reversible technical execution and release judgment.**
 
-- the controlled unit was previously authorized;
+The purpose is to remove technical rubber-stamping by JP while preserving a genuine owner gate where the consequence is materially irreversible, changes business ownership/control, or creates a new real-world commitment.
+
+### Standing 00 operational delegation — ACTIVE
+
+The previously active standing release delegation is broadened to **bounded operational delegation** under JP's explicit 2026-08-27 approval recorded in:
+
+`docs/SHILOH-OS-MASTER-STATUS-ADDENDUM-2026-08-27-BOUNDED-OPERATIONAL-DELEGATION.md`
+
+00 may authorize, execute, or explicitly route a bounded technical action without a fresh per-action JP confirmation when all of the following are true:
+
+- the action advances an authorized/current Shiloh OS controlled unit, resolves a genuine defect/risk, completes release/cutover/verification, or removes a blocking dependency consistent with this doctrine;
+- 00 records the controlling unit and exact intended outcome before a substantive mutation;
+- current machine state is re-read immediately before the action where stale state could change the decision;
+- target, scope and expected blast radius are bounded and understood;
+- the action is reversible **or** has a credible restore/rollback/checkpoint path with no intentional irreversible loss;
+- backups, dry-run evidence, idempotency, locking, concurrency controls or staged rollout are used when materially relevant;
+- applicable tests/CI/validation are green or any exception is explicitly reconciled;
+- no hidden scope expansion, new human authority or new business commitment is introduced;
+- post-action verification is performed against the intended outcome; and
+- 00 stops and escalates instead of improvising if actual state materially differs from the assumptions that justified the action.
+
+For substantive production work, 00 remains accountable for the decision even when execution is explicitly routed to 10, 20, 30, 40 or a WS implementation stream. A specialist/WS stream does not gain independent standing production authority merely by being the executor.
+
+### Actions normally inside standing delegation
+
+Provided the safeguards above are satisfied, standing operational delegation may include:
+
+- merge and deployment of accepted/tested controlled-unit PRs;
+- routine redeploy/restart/recovery actions;
+- additive, backward-compatible schema migrations;
+- bounded data backfills or conversions that are non-destructive or rollback/restore protected, with exact scope, validation and idempotency/reconciliation appropriate to the risk;
+- reversible application, environment, feature-flag, routing or provider configuration changes that do not expose/rotate secrets, transfer provider ownership/control, materially broaden human permissions, or destructively remove provider assets;
+- already-authorized cutover and rollback switches;
+- bounded corrective data repairs where the authoritative source, exact target set, validation and rollback/restore path are established;
+- synthetic/test verification that does not create a real client/business commitment;
+- read-only production evidence gathering and health verification; and
+- already-authorized automatic product behavior, including ordinary system-generated communications, without requiring JP to approve each individual automated event.
+
+This list is illustrative, not a reason to bypass the control conditions above.
+
+### JP-only authority gates
+
+A fresh explicit JP authorization remains required for:
+
+- intentional destructive or materially irreversible loss/deletion of production or retained business data where a practical restore path is not part of the authorized action;
+- creation, disclosure, rotation, revocation or transfer of credentials/secrets, or transfer of ownership/control of an external provider account or asset;
+- destructive provider-account/asset deletion, irreversible provider disconnection, or ownership transfer;
+- materially broader human/admin/security permissions or authority;
+- a real client-facing action initiated by Shiloh OS itself that creates, cancels or materially changes a booking, financial obligation, refund, contract or other business commitment outside normal already-authorized product behavior or a specific human operator request;
+- legal, financial, contractual or ownership decisions that are genuinely irreversible or materially bind Shiloh; or
+- any action that 00 judges has an uncertain blast radius or lacks a credible verification/rollback boundary.
+
+A specific JP or authorized human-operator request for one of these actions remains valid authority for that exact action; it does not silently become a new standing permission.
+
+### Release verification remains mandatory
+
+Standing operational delegation does not weaken release engineering. Before merging a controlled-unit PR, 00 must still independently verify:
+
+- the controlled unit is current and authorized;
 - the exact PR head SHA is the accepted/tested SHA;
-- the PR scope and changed-file boundary match the authorization;
-- required focused and full tests are green or any permitted exception is explicitly reconciled;
-- required CI is green at the accepted head;
-- current `main` compatibility and merge ordering have been reconciled;
-- there is no unresolved production, security, provider or data gate;
-- no new out-of-scope authority or behavior was introduced; and
-- the merge remains inside the standing delegation boundary.
-
-An additive, backward-compatible, zero-backfill schema migration may fall inside standing delegation only when the controlled unit explicitly authorized schema work and 00 has inspected/reconciled the migration before release.
-
-Standing release delegation never implicitly includes:
-
-- destructive production data changes;
-- bulk migrations, backfills or data conversions;
-- real booking, cancellation or other client/appointment mutations performed as an operator action;
-- external client/staff messages outside already-authorized automatic product behavior;
-- credential, secret, provider or environment-configuration changes;
-- permission/security expansion;
-- destructive provider actions;
-- irreversible business decisions; or
-- work outside the previously authorized controlled unit.
-
-Those remain explicit JP authorization gates.
-
-**Governance text alone does not activate standing release delegation. Activation requires an explicit JP authorization recorded by 00.**
-
-### Activation record
-
-Bounded standing 00 release delegation was explicitly activated by JP on **2026-08-27** and is recorded in:
-
-`docs/SHILOH-OS-MASTER-STATUS-ADDENDUM-2026-08-27-STABILIZATION-SIMPLIFICATION.md`
-
-The activation changes release ceremony only. It does not broaden the excluded-action boundary above and does not cause specialist or WS streams to acquire merge authority.
+- PR scope and changed-file boundary match the authorization;
+- required focused/full tests and CI are green, or any permitted exception is explicitly reconciled;
+- current `main` compatibility and merge ordering are reconciled;
+- no unresolved production/security/provider/data gate blocks release; and
+- no out-of-scope authority or behavior was introduced.
 
 ## 9. Infrastructure and product-surface discipline
 
@@ -201,9 +231,9 @@ Once the operational spine is coherent enough that cleanup will not cause rework
 2. **40 — Render/environment inventory** — read-only first; classify configuration as KEEP / REMOVE LATER / LEGACY / UNKNOWN / SECRET-CREDENTIAL / FEATURE FLAG / PROVIDER DEPENDENCY.
 3. **30 — Admin WhatsApp menu RETIRE/KEEP audit** — shrink the menu around its future lightweight role rather than polishing legacy administration.
 4. **20/40 — Legacy CRM runtime retirement** after Calendar and WhatsApp cut over to CRM V2.
-5. **40 — Google production configuration retirement** only after Shiloh-only production proof and explicit production authority.
+5. **40 — Google production configuration retirement** only after Shiloh-only production proof and the applicable authority gate.
 
-Do not randomly delete Render variables, provider configuration or legacy data because they appear obsolete. Retire concrete dependencies only after their runtime paths are proven unused and the applicable production gate is authorized.
+Do not randomly delete Render variables, provider configuration or legacy data because they appear obsolete. Retire concrete dependencies only after their runtime paths are proven unused and the applicable control boundary is satisfied.
 
 ## 11. Mandatory 00 decision checkpoint
 
@@ -215,17 +245,8 @@ If there is no compelling answer, defer, retire or reject the work rather than a
 
 ## 12. Authority boundary
 
-This doctrine changes governance and prioritization only.
+This doctrine is both a governance standard and, under the active Section 8 delegation, a standing authorization for qualifying bounded technical execution by 00.
 
-It does **not** by itself authorize:
+It does **not** turn recommendation into unlimited authority. Actions inside Section 8 may proceed only when its control conditions are satisfied. Actions listed under the JP-only gates require fresh explicit JP authority unless the exact action has already been specifically requested by an authorized human operator.
 
-- a production mutation;
-- a merge or deployment unless a separate active standing release delegation or explicit release authorization applies;
-- a destructive action;
-- an external message;
-- a permission or credential change;
-- a provider/environment configuration change;
-- a real booking or cancellation; or
-- an irreversible business decision.
-
-Recommendation remains distinct from authorization.
+00 must prefer the smallest safe action, preserve reversibility, verify outcomes, and escalate uncertainty rather than infer broader authority.

@@ -24,17 +24,27 @@ The operative spine is:
 
 No unrelated P0/P1 feature accumulation, speculative refactoring or legacy-surface polish should interrupt that spine unless it removes a blocking dependency or remediates a genuine production/security defect.
 
-The current Master Status stabilization checkpoint is recorded in:
+The stabilization checkpoint is recorded in:
 
 `docs/SHILOH-OS-MASTER-STATUS-ADDENDUM-2026-08-27-STABILIZATION-SIMPLIFICATION.md`
 
-The doctrine also governs Workspace economy, OWN / INTEGRATE / RETIRE / NEVER BUILD decisions, control-surface hygiene and the **ACTIVE bounded 00 standing-release model**.
+The current operational-authority refinement is recorded in:
 
-### Standing release authority
+`docs/SHILOH-OS-MASTER-STATUS-ADDENDUM-2026-08-27-BOUNDED-OPERATIONAL-DELEGATION.md`
 
-Bounded standing 00 release delegation is **ACTIVE** under JP's explicit 2026-08-27 authorization recorded in the current Master Status stabilization addendum.
+The doctrine governs Workspace economy, OWN / INTEGRATE / RETIRE / NEVER BUILD decisions, control-surface hygiene and the **ACTIVE bounded 00 operational-delegation model**.
 
-00 may use that delegation only after independently satisfying every Section 8 pre-merge condition in the Stabilization & Simplification Doctrine. Specialist and WS streams never self-merge. Excluded destructive/data/provider/security/operator/business actions remain explicit JP gates.
+### Standing operational authority
+
+Bounded standing 00 operational delegation is **ACTIVE** under JP's 2026-08-27 approval recorded in the current bounded-operational-delegation Master Status addendum.
+
+Governing principle:
+
+> **JP owns irreversible business authority. 00 owns bounded, reversible technical execution and release judgment.**
+
+00 may exercise this delegation only after satisfying the Section 8 control conditions in the Stabilization & Simplification Doctrine. Specialist and WS streams do not independently acquire standing production authority and never self-merge their own work.
+
+The retained JP-only gates are limited to genuinely destructive/irreversible data loss, credentials/secrets or provider ownership/control, destructive/irreversible provider actions, materially broader human security authority, autonomously initiated real-world client/business commitments outside normal authorized product behavior, genuinely irreversible legal/financial/contractual/ownership decisions, and actions lacking a credible bounded verification/rollback boundary.
 
 **Important:** the dated 2026-08-25 snapshot later in this document is historical evidence only. It must not be treated as current machine state. 00 must read current GitHub / Render / provider evidence and newer Master Status addenda before acting.
 
@@ -47,7 +57,7 @@ Shiloh OS is governed around two primary human principals:
 
 Durable product principle: **JP governs Shiloh OS; Christel operates Shiloh OS.**
 
-This is a governance model, not a claim that every external/runtime permission has already been aligned. Concrete role, permission, credential, infrastructure or production-access changes remain separately controlled mutations.
+This is a governance model, not a claim that every existing runtime permission already matches it. Concrete role/permission alignment must follow the current authority model and remain auditable/fail-closed.
 
 Every material new capability must explicitly define the JP governance/admin path, the Christel operational/admin path, any JP-only/security-sensitive actions, and the applicable audit/fail-closed/non-self-escalation rules.
 
@@ -68,13 +78,13 @@ A Cockpit mismatch must be reconciled by 00; the lower-precedence source must no
 - `✓ COMPLETE / FROZEN` — controlled work is accepted; do not redo absent new defect evidence or fresh authorization.
 - `▶ ACTIVE` — this is an internal Shiloh OS execution unit currently owned by the named specialist.
 - `⏸ WAITING EXTERNAL` — Shiloh-side work is paused on an external provider or third party.
-- `◆ CONTROL GATE` — implementation or production mutation is waiting for a Control decision or explicit authorization.
+- `◆ CONTROL GATE` — implementation or a JP-only authority action is waiting for Control/owner resolution.
 - `○ OBSERVER / IDLE` — no active implementation ownership; may provide bounded evidence when requested.
 - `✕ BLOCKED` — an internal dependency or failed gate prevents progress and requires resolution.
 
 ## Controlled-unit lifecycle
 
-`Finding → Control decision → Authorized → Implementation → CI → Merge → Deploy → Production proof → Reconciled → Closed`
+`Finding → Control decision → Authorized → Implementation → CI → Merge → Deploy/Operation → Production proof → Reconciled → Closed`
 
 A unit may branch to `WAITING EXTERNAL` or `BLOCKED` and return to the lifecycle only when the external/internal gate changes.
 
@@ -132,12 +142,13 @@ This sequence is retained only to explain the 2026-08-25 state and must not driv
 - ownership changes;
 - a unit moves between ACTIVE, BLOCKED, WAITING EXTERNAL, COMPLETE or FROZEN;
 - a PR is opened, merged, closed or superseded when it changes authority;
-- a deployment becomes authoritative or fails;
+- a deployment/operation becomes authoritative or fails;
 - production proof changes completion state;
 - an external provider gate changes;
 - Tracker or Master Status is reconciled;
 - a `DO NOT REDO` boundary is established or lifted;
-- primary-human authority or role boundaries change.
+- primary-human authority or role boundaries change; or
+- the standing operational-delegation boundary changes.
 
 Routine machine evidence should be retrieved by 00 through available connectors rather than requiring JP to act as a human clipboard.
 
@@ -167,10 +178,11 @@ Then the normal Shiloh OS terminal fields remain mandatory:
 
 ## Governance constraints
 
-- The Cockpit does not independently authorize production mutations, bookings, outbound messages, destructive changes, permission changes or other security-sensitive actions.
-- Recommendation and authorization remain separate.
-- Bounded standing 00 release delegation is ACTIVE under JP's explicit 2026-08-27 authorization and remains strictly limited to the boundaries recorded in the Stabilization & Simplification Doctrine.
-- Specialists must not maintain competing cross-stream boards.
+- Recommendation and authorization remain separate for actions outside the standing operational-delegation boundary.
+- Bounded standing 00 operational delegation is ACTIVE and is strictly governed by Section 8 of the Stabilization & Simplification Doctrine and the bounded-operational-delegation Master Status addendum.
+- 00 may execute or explicitly route qualifying bounded technical production/release actions without fresh per-action JP confirmation when the Section 8 safeguards are satisfied.
+- JP-only authority remains required for the retained irreversible/ownership/security/business-commitment gates defined in Section 8.
+- Specialists and WS streams do not independently acquire standing production authority and never self-merge their own work.
 - Tracker and Master Status remain durable authority; the Cockpit is their readable operational projection.
 - Closed capabilities remain frozen and must not be recreated merely because a later unit touches an adjacent surface.
 - The Primary Human Authority standard defines governance roles but does not silently mutate external/runtime permissions.
