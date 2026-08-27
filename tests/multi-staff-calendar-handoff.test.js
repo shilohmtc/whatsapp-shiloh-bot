@@ -5,12 +5,14 @@ const path = require('node:path');
 
 const bootstrapPath = path.join(__dirname, '..', 'src', 'services', 'emergencyCalendarBootstrap.js');
 const interactivePath = path.join(__dirname, '..', 'src', 'services', 'adminInteractiveMenu.js');
+const sessionPath = path.join(__dirname, '..', 'src', 'services', 'staffBrowserSession.js');
 const bootstrapSource = fs.readFileSync(bootstrapPath, 'utf8');
 const interactiveSource = fs.readFileSync(interactivePath, 'utf8');
 const {
   isCalendarHandoffAuthority,
   isEmergencyChristelAuthority,
 } = require(bootstrapPath);
+const { deriveCalendarViewer } = require(sessionPath);
 const {
   isWorkspaceLauncherTerm,
   sectionInteractive,
@@ -23,14 +25,46 @@ const pilotFor = (...ids) => ({
   SHILOH_STAFF_BROWSER_PILOT_ADMIN_IDS: ids.join(','),
 });
 
-function ownStaffAdmin(overrides = {}) {
+function jpAdmin(overrides = {}) {
+  return {
+    id: 20,
+    staff_id: null,
+    display_name: 'Jean-Pierre',
+    role: 'admin',
+    business_role: 'business_admin',
+    calendar_scope: 'all_business',
+    service_scope: 'all_services',
+    permissions: {},
+    admin_active: true,
+    staff_status: null,
+    ...overrides,
+  };
+}
+
+function christelAdmin(overrides = {}) {
+  return {
+    id: 2,
+    staff_id: 100,
+    display_name: 'Christel',
+    role: 'owner',
+    business_role: 'owner',
+    calendar_scope: 'all_business',
+    service_scope: 'all_services',
+    permissions: { 'appointment:create': true, 'client:lookup': true },
+    admin_active: true,
+    staff_status: 'active',
+    ...overrides,
+  };
+}
+
+function abigailAdmin(overrides = {}) {
   return {
     id: 11,
     staff_id: 101,
     display_name: 'Abigail',
-    role: 'operations_admin',
-    business_role: 'staff',
-    calendar_scope: 'own',
+    role: 'practitioner',
+    business_role: 'employee_practitioner',
+    calendar_scope: 'own_appointments',
     service_scope: 'own_services',
     permissions: {},
     admin_active: true,
@@ -39,49 +73,70 @@ function ownStaffAdmin(overrides = {}) {
   };
 }
 
-test('Calendar handoff authority accepts an active canonical own-scope staff viewer without broadening them to business-wide authority', () => {
-  const admin = ownStaffAdmin();
+function marietjieAdmin(overrides = {}) {
+  return {
+    id: 12,
+    staff_id: 102,
+    display_name: 'Marietjie',
+    role: 'manager',
+    business_role: 'tenant_practitioner',
+    calendar_scope: 'own_services',
+    service_scope: 'own_services',
+    permissions: {},
+    admin_active: true,
+    staff_status: 'active',
+    ...overrides,
+  };
+}
+
+test('production-shaped JP is a business-wide Calendar viewer without practitioner linkage', () => {
+  const admin = jpAdmin();
+  assert.equal(admin.staff_id, null);
+  assert.deepEqual(deriveCalendarViewer(admin), { calendarScope: 'business_all_staff' });
   assert.equal(isCalendarHandoffAuthority(admin, noPilot), true);
   assert.equal(isEmergencyChristelAuthority(admin, noPilot), false);
 });
 
-test('Calendar handoff authority accepts business-wide JP/Christel-style viewers while preserving the legacy Christel compatibility predicate', () => {
-  const jp = ownStaffAdmin({
-    id: 20,
-    display_name: 'Jean-Pierre',
-    business_role: 'business_admin',
-    calendar_scope: 'all_business',
-    service_scope: 'all_services',
-  });
-  const christel = ownStaffAdmin({
-    id: 2,
-    display_name: 'Christel',
-    business_role: 'business_admin',
-    calendar_scope: 'all_business',
-    service_scope: 'all_services',
-    permissions: { 'appointment:create': true, 'client:lookup': true },
-  });
-  assert.equal(isCalendarHandoffAuthority(jp, noPilot), true);
-  assert.equal(isEmergencyChristelAuthority(jp, noPilot), false);
-  assert.equal(isCalendarHandoffAuthority(christel, noPilot), true);
-  assert.equal(isEmergencyChristelAuthority(christel, noPilot), true);
+test('production-shaped Christel retains strict legacy compatibility and business-wide viewing', () => {
+  const admin = christelAdmin();
+  assert.deepEqual(deriveCalendarViewer(admin), { calendarScope: 'business_all_staff' });
+  assert.equal(isCalendarHandoffAuthority(admin, noPilot), true);
+  assert.equal(isEmergencyChristelAuthority(admin, noPilot), true);
+});
+
+test('production-shaped Abigail and Marietjie receive whole-Calendar read viewers without changing their service scopes', () => {
+  const abigail = abigailAdmin();
+  const marietjie = marietjieAdmin();
+  assert.equal(abigail.service_scope, 'own_services');
+  assert.equal(marietjie.service_scope, 'own_services');
+  assert.deepEqual(deriveCalendarViewer(abigail), { calendarScope: 'business_all_staff' });
+  assert.deepEqual(deriveCalendarViewer(marietjie), { calendarScope: 'business_all_staff' });
+  assert.equal(isCalendarHandoffAuthority(abigail, noPilot), true);
+  assert.equal(isCalendarHandoffAuthority(marietjie, noPilot), true);
+});
+
+test('legacy literal own scope remains an own-staff viewer for compatibility', () => {
+  const admin = abigailAdmin({ calendar_scope: 'own' });
+  assert.deepEqual(deriveCalendarViewer(admin), { calendarScope: 'own_staff', staffId: 101 });
 });
 
 test('pilot gate is enforced by exact Admin id and fails closed for malformed or excluded pilot configuration', () => {
-  const admin = ownStaffAdmin({ id: 11 });
-  assert.equal(isCalendarHandoffAuthority(admin, pilotFor(11, 20)), true);
-  assert.equal(isCalendarHandoffAuthority(admin, pilotFor(20)), false);
-  assert.equal(isCalendarHandoffAuthority(admin, {
+  assert.equal(isCalendarHandoffAuthority(jpAdmin(), pilotFor(20)), true);
+  assert.equal(isCalendarHandoffAuthority(jpAdmin(), pilotFor(11, 12)), false);
+  assert.equal(isCalendarHandoffAuthority(abigailAdmin(), pilotFor(11, 20)), true);
+  assert.equal(isCalendarHandoffAuthority(abigailAdmin(), pilotFor(20)), false);
+  assert.equal(isCalendarHandoffAuthority(abigailAdmin(), {
     SHILOH_STAFF_BROWSER_PILOT_MODE_ENABLED: 'true',
     SHILOH_STAFF_BROWSER_PILOT_ADMIN_IDS: '11,not-an-id',
   }), false);
 });
 
-test('Calendar handoff authority fails closed without an active linked staff viewer', () => {
-  assert.equal(isCalendarHandoffAuthority(ownStaffAdmin({ admin_active: false }), noPilot), false);
-  assert.equal(isCalendarHandoffAuthority(ownStaffAdmin({ staff_status: 'inactive' }), noPilot), false);
-  assert.equal(isCalendarHandoffAuthority(ownStaffAdmin({ staff_id: null }), noPilot), false);
-  assert.equal(isCalendarHandoffAuthority(ownStaffAdmin({ calendar_scope: 'none' }), noPilot), false);
+test('staff-scoped Calendar handoff fails closed for inactive or unlinked practitioners while business-wide JP may remain unlinked', () => {
+  assert.equal(isCalendarHandoffAuthority(abigailAdmin({ admin_active: false }), noPilot), false);
+  assert.equal(isCalendarHandoffAuthority(abigailAdmin({ staff_status: 'inactive' }), noPilot), false);
+  assert.equal(isCalendarHandoffAuthority(abigailAdmin({ staff_id: null }), noPilot), false);
+  assert.equal(isCalendarHandoffAuthority(abigailAdmin({ calendar_scope: 'none' }), noPilot), false);
+  assert.equal(isCalendarHandoffAuthority(jpAdmin({ staff_id: null, staff_status: null }), noPilot), true);
 });
 
 test('Shiloh Workspace launcher puts Open Calendar before Admin and does not nest Calendar inside an Admin section', () => {
