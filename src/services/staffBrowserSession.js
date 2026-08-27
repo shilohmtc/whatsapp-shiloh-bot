@@ -56,6 +56,13 @@ function deriveCalendarViewer(admin) {
   if (calendarScope === 'all_business' && isBusinessWide(admin)) {
     return { calendarScope: 'business_all_staff' };
   }
+  if (
+    (calendarScope === 'own_services' || calendarScope === 'own_appointments') &&
+    admin.staff_id &&
+    admin.staff_status === 'active'
+  ) {
+    return { calendarScope: 'business_all_staff' };
+  }
   if (calendarScope === 'own' && admin.staff_id && admin.staff_status === 'active') {
     return { calendarScope: 'own_staff', staffId: Number(admin.staff_id) };
   }

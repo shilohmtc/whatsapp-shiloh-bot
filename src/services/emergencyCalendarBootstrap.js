@@ -6,6 +6,7 @@ const {
   sha256,
   randomOpaqueToken,
   deriveCalendarViewer,
+  issueStaffBrowserSession,
 } = require('./staffBrowserSession');
 const { isAdminAllowedByPilot } = require('./staffBrowserPilotGate');
 
@@ -21,6 +22,14 @@ function isEmergencyCalendarBookingEnabled(env = process.env) {
 
 function hasPermission(admin, permission) {
   return admin?.permissions && admin.permissions[permission] === true;
+}
+
+function isCalendarHandoffAuthority(admin, env = process.env) {
+  const adminId = Number(admin?.id);
+  if (!Number.isSafeInteger(adminId) || adminId <= 0 || admin?.admin_active !== true) return false;
+  if (adminId === EMERGENCY_ADMIN_ID) return isEmergencyChristelAuthority(admin, env);
+  if (!isAdminAllowedByPilot(adminId, env)) return false;
+  return Boolean(deriveCalendarViewer(admin));
 }
 
 function isEmergencyChristelAuthority(admin, env = process.env) {
@@ -67,11 +76,11 @@ function createEmergencyCalendarBootstrapService({
     if (whatsapp != null) {
       const normalized = normalizeWhatsapp(whatsapp);
       if (!normalized) return null;
-      values.push(normalized, EMERGENCY_ADMIN_ID);
-      predicate = 'a.normalized_whatsapp = $1 AND a.id = $2';
+      values.push(normalized);
+      predicate = 'a.normalized_whatsapp = $1';
     } else {
       const id = Number(adminId);
-      if (id !== EMERGENCY_ADMIN_ID) return null;
+      if (!Number.isSafeInteger(id) || id <= 0) return null;
       values.push(id);
       predicate = 'a.id = $1';
     }
@@ -82,11 +91,14 @@ function createEmergencyCalendarBootstrapService({
          FROM staff_admin_accounts a
          LEFT JOIN staff s ON s.id = a.staff_id
         WHERE ${predicate}
-        LIMIT 1${forUpdate ? '\n        FOR UPDATE OF a' : ''}`,
+          AND a.active = TRUE
+        ORDER BY a.id ASC
+        LIMIT 2${forUpdate ? '\n        FOR UPDATE OF a' : ''}`,
       values
     );
-    const admin = result.rows[0] || null;
-    return isEmergencyChristelAuthority(admin, env) ? admin : null;
+    if (result.rows.length !== 1) return null;
+    const admin = result.rows[0];
+    return isCalendarHandoffAuthority(admin, env) ? admin : null;
   }
 
   async function issueForWhatsapp({ whatsapp } = {}) {
@@ -94,35 +106,36 @@ function createEmergencyCalendarBootstrapService({
     const normalized = normalizeWhatsapp(whatsapp);
     if (!normalized) return { ok: false, code: 'EMERGENCY_CALENDAR_FORBIDDEN' };
 
-    const token = randomOpaqueToken(randomBytes, BOOTSTRAP_TOKEN_BYTES);
-    const tokenHash = sha256(token);
     const current = now();
     const expiresAt = new Date(current.getTime() + bootstrapTtlMs);
     const client = typeof db.connect === 'function' ? await db.connect() : db;
     try {
       await client.query('BEGIN');
-      await client.query(`SELECT pg_advisory_xact_lock(hashtextextended('emergency-calendar-bootstrap:' || $1::text, 0))`, [EMERGENCY_ADMIN_ID]);
+      await client.query(`SELECT pg_advisory_xact_lock(hashtextextended('emergency-calendar-bootstrap-whatsapp:' || $1::text, 0))`, [normalized]);
       const admin = await resolveAuthority(client, { whatsapp: normalized, forUpdate: true });
       if (!admin) {
         await client.query('ROLLBACK');
         return { ok: false, code: 'EMERGENCY_CALENDAR_FORBIDDEN' };
       }
+      const adminId = Number(admin.id);
+      const token = randomOpaqueToken(randomBytes, BOOTSTRAP_TOKEN_BYTES);
+      const tokenHash = sha256(token);
       await client.query(
         `UPDATE staff_browser_emergency_bootstraps
             SET revoked_at = $2
           WHERE admin_id = $1
             AND consumed_at IS NULL
             AND revoked_at IS NULL`,
-        [EMERGENCY_ADMIN_ID, current]
+        [adminId, current]
       );
       await client.query(
         `INSERT INTO staff_browser_emergency_bootstraps
            (admin_id, token_hash, issued_at, expires_at, issued_via)
          VALUES ($1, $2, $3, $4, 'whatsapp_admin')`,
-        [EMERGENCY_ADMIN_ID, tokenHash, current, expiresAt]
+        [adminId, tokenHash, current, expiresAt]
       );
       await client.query('COMMIT');
-      return { ok: true, token, expiresAt, adminId: EMERGENCY_ADMIN_ID };
+      return { ok: true, token, expiresAt, adminId, viewer: deriveCalendarViewer(admin) };
     } catch (error) {
       try { await client.query('ROLLBACK'); } catch (_) {}
       throw error;
@@ -137,11 +150,6 @@ function createEmergencyCalendarBootstrapService({
 
     const current = now();
     const tokenHash = sha256(token);
-    const sessionToken = randomOpaqueToken(randomBytes, 32);
-    const csrfToken = randomOpaqueToken(randomBytes, 32);
-    const sessionHash = sha256(sessionToken);
-    const csrfHash = sha256(csrfToken);
-    const expiresAt = new Date(current.getTime() + sessionTtlMs);
     const client = typeof db.connect === 'function' ? await db.connect() : db;
     try {
       await client.query('BEGIN');
@@ -154,7 +162,8 @@ function createEmergencyCalendarBootstrapService({
         [tokenHash]
       );
       const bootstrap = bootstrapResult.rows[0] || null;
-      if (!bootstrap || bootstrap.consumed_at || bootstrap.revoked_at || Number(bootstrap.admin_id) !== EMERGENCY_ADMIN_ID) {
+      const adminId = Number(bootstrap?.admin_id);
+      if (!bootstrap || bootstrap.consumed_at || bootstrap.revoked_at || !Number.isSafeInteger(adminId) || adminId <= 0) {
         await client.query('ROLLBACK');
         return { ok: false, code: 'EMERGENCY_CALENDAR_INVALID_BOOTSTRAP' };
       }
@@ -167,9 +176,9 @@ function createEmergencyCalendarBootstrapService({
         return { ok: false, code: 'EMERGENCY_CALENDAR_INVALID_BOOTSTRAP' };
       }
 
-      await client.query(`SELECT pg_advisory_xact_lock(hashtextextended('staff-browser-auth:' || $1::text, 0))`, [EMERGENCY_ADMIN_ID]);
-      const admin = await resolveAuthority(client, { adminId: bootstrap.admin_id, forUpdate: true });
-      if (!admin) {
+      await client.query(`SELECT pg_advisory_xact_lock(hashtextextended('staff-browser-auth:' || $1::text, 0))`, [adminId]);
+      const admin = await resolveAuthority(client, { adminId, forUpdate: true });
+      if (!admin || Number(admin.id) !== adminId) {
         await client.query(
           `UPDATE staff_browser_emergency_bootstraps SET revoked_at = $2 WHERE id = $1`,
           [bootstrap.id, current]
@@ -178,51 +187,32 @@ function createEmergencyCalendarBootstrapService({
         return { ok: false, code: 'EMERGENCY_CALENDAR_INVALID_BOOTSTRAP' };
       }
 
-      await client.query(
+      const consumed = await client.query(
         `UPDATE staff_browser_emergency_bootstraps
             SET consumed_at = $2
           WHERE id = $1
             AND consumed_at IS NULL
-            AND revoked_at IS NULL`,
+            AND revoked_at IS NULL
+         RETURNING id`,
         [bootstrap.id, current]
       );
-      const previousResult = await client.query(
-        `SELECT id
-           FROM staff_browser_sessions
-          WHERE admin_id = $1
-            AND revoked_at IS NULL
-          ORDER BY issued_at DESC, id DESC
-          LIMIT 1
-          FOR UPDATE`,
-        [EMERGENCY_ADMIN_ID]
-      );
-      const previousSessionId = previousResult.rows[0]?.id || null;
-      await client.query(
-        `UPDATE staff_browser_sessions
-            SET revoked_at = $2,
-                revoke_reason = 'rotated'
-          WHERE admin_id = $1
-            AND revoked_at IS NULL`,
-        [EMERGENCY_ADMIN_ID, current]
-      );
-      const inserted = await client.query(
-        `INSERT INTO staff_browser_sessions
-           (admin_id, token_hash, csrf_hash, issued_at, expires_at, rotated_from_session_id,
-            client_fingerprint_hash, auth_method, reauthenticated_at, recovery_required)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, 'emergency_bootstrap', $4, FALSE)
-         RETURNING id`,
-        [EMERGENCY_ADMIN_ID, sessionHash, csrfHash, current, expiresAt, previousSessionId, requestFingerprintHash]
-      );
+      if (Number(consumed.rowCount ?? consumed.rows.length) !== 1) {
+        await client.query('ROLLBACK');
+        return { ok: false, code: 'EMERGENCY_CALENDAR_INVALID_BOOTSTRAP' };
+      }
+
+      const session = await issueStaffBrowserSession({
+        client,
+        admin,
+        current,
+        randomBytes,
+        sessionTtlMs,
+        requestFingerprintHash,
+        authMethod: 'emergency_bootstrap',
+        recoveryRequired: false,
+      });
       await client.query('COMMIT');
-      return {
-        ok: true,
-        sessionToken,
-        csrfToken,
-        sessionId: inserted.rows[0].id,
-        expiresAt,
-        viewer: deriveCalendarViewer(admin),
-        adminId: EMERGENCY_ADMIN_ID,
-      };
+      return { ...session, adminId, viewer: deriveCalendarViewer(admin) };
     } catch (error) {
       try { await client.query('ROLLBACK'); } catch (_) {}
       throw error;
@@ -241,6 +231,7 @@ module.exports = {
   FEATURE_FLAG,
   PUBLIC_ORIGIN_FLAG,
   isEmergencyCalendarBookingEnabled,
+  isCalendarHandoffAuthority,
   isEmergencyChristelAuthority,
   emergencyCalendarPublicOrigin,
   buildEmergencyCalendarUrl,
