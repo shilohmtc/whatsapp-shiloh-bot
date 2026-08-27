@@ -75,17 +75,39 @@ When the operational spine is coherent enough to avoid rework:
 
 Specialist and WS streams must not self-merge.
 
-The Stabilization & Simplification Doctrine defines an optional bounded 00 standing release model so JP need not become a repetitive per-PR approval button.
+The Stabilization & Simplification Doctrine defines a bounded 00 standing release model so JP need not become a repetitive per-PR approval button.
 
-**This addendum does not itself activate standing release delegation.** Activation requires an explicit JP authorization recorded by 00. Until then, the existing explicit release gate remains authoritative.
+### Standing 00 release delegation — ACTIVE
 
-Even after activation, destructive production/data actions, bulk migrations/backfills, provider/environment/credential changes, permission/security expansion, external messages outside already-authorized automatic behavior, real operator booking/cancellation mutations and irreversible business decisions remain explicit JP gates.
+JP explicitly activated the bounded standing release delegation on **2026-08-27** with the authorization:
+
+> I authorize Shiloh OS — 00 — Control & Reconciliation to exercise the bounded standing release delegation defined in the Shiloh OS Stabilization & Simplification Doctrine.
+
+This is the durable 00 authorization record required by the doctrine.
+
+From this activation forward, 00 may merge an ordinary previously authorized controlled-unit PR and allow the repository's existing normal deployment mechanism **without a fresh per-PR JP confirmation** only when 00 independently verifies every release condition in Section 8 of the Stabilization & Simplification Doctrine immediately before merge, including exact accepted/tested head SHA, authorized changed-file boundary, required tests and CI, main compatibility/order, absence of unresolved production/security/provider/data gates, and scope remaining inside the standing delegation.
+
+Specialist streams and WS streams still never self-merge.
+
+Standing delegation still excludes, and therefore still requires an explicit JP authorization for:
+
+- destructive production data changes;
+- bulk migrations, backfills or data conversions;
+- real operator booking, cancellation or other client/appointment mutations;
+- external client/staff messages outside already-authorized automatic product behavior;
+- credential, secret, provider or environment-configuration changes;
+- permission/security expansion;
+- destructive provider actions;
+- irreversible business decisions; and
+- work outside the previously authorized controlled unit.
+
+Activation of standing release delegation does not itself approve any currently open PR. Each candidate release remains subject to the doctrine's exact pre-merge verification gate.
 
 ## Reconciliation
 
 After merge:
 
 - Master Status must treat this addendum and the doctrine as the current stabilization policy.
-- The Control Cockpit must point to the doctrine and must not present its 2026-08-25 snapshot as current machine state.
+- The Control Cockpit must point to the doctrine, show bounded standing 00 release delegation as ACTIVE, and must not present its 2026-08-25 snapshot as current machine state.
 - Project tracking should continue to use current GitHub issues/PRs and 00 control reconciliation rather than creating a parallel task board solely for this doctrine.
 - No completed engineering implementation is reopened by this governance amendment.
