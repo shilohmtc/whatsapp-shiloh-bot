@@ -11,6 +11,9 @@ const {
   renderCalendarCreateBookingPage,
   calendarCreateBookingClientScript,
 } = require('../presentation/calendarCreateBookingUx');
+const {
+  calendarCreateBookingClientChoiceScript,
+} = require('../presentation/calendarCreateBookingClientChoiceUx');
 
 function setBookingSecurityHeaders(res) {
   res.setHeader('Cache-Control', 'private, no-store, max-age=0');
@@ -60,6 +63,7 @@ function createCalendarCreateBookingRouter({
   bookingService = createCalendarCreateBookingService({ db: pool, env }),
   renderPage = renderCalendarCreateBookingPage,
   renderClient = calendarCreateBookingClientScript,
+  renderClientChoice = calendarCreateBookingClientChoiceScript,
 } = {}) {
   if (!sessionService) throw new Error('Calendar Create Booking staff session service is required');
   const router = express.Router();
@@ -92,7 +96,7 @@ function createCalendarCreateBookingRouter({
   router.get('/client.js', requireSession, async (req, res, next) => {
     try {
       await bookingService.resolveOperator(req.staffBrowserSession.adminId);
-      return res.status(200).type('application/javascript').send(renderClient());
+      return res.status(200).type('application/javascript').send(`${renderClient()}\n${renderClientChoice()}`);
     } catch (error) {
       if (statusForError(error) !== 503) return res.status(statusForError(error)).type('text/plain').send('Not Found');
       return next(error);
