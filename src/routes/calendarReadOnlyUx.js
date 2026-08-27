@@ -43,10 +43,17 @@ function safeUnavailableMessage(error) {
   return 'SchedulingTimeline is unavailable, so Shiloh Calendar is failing closed.';
 }
 
+function bookingOperationalActions(dateKey, bookingPath = '/calendar/book') {
+  const href = `${bookingPath}?date=${encodeURIComponent(String(dateKey || ''))}`;
+  return [{ label: 'Create booking', href, tone: 'primary' }];
+}
+
+// Compatibility fallback for alternate renderers that do not yet consume the explicit
+// operationalActions contract. Authority is still resolved server-side before decoration.
 function decorateEmergencyBookingEntry(html, dateKey, bookingPath = '/calendar/book') {
   const href = `${bookingPath}?date=${encodeURIComponent(String(dateKey || ''))}`;
   return String(html)
-    .replace('<div class="access-controls">', `<div class="access-controls"><a class="nav-button" href="${href}">Create booking</a><a class="nav-button" href="/calendar/client-authority">Confirm client contact</a>`)
+    .replace('<div class="access-controls">', `<div class="access-controls"><a class="nav-button" href="${href}">Create booking</a>`)
     .replace('Africa/Johannesburg • Read-only • Google-only busy is non-canonical', 'Africa/Johannesburg • Read-only timeline • Google-only busy is non-canonical')
     .replace('Read-only operational view. Booking, reschedule, cancellation, block, leave and schedule mutations are not available here.', 'Timeline remains read-only. New booking creation uses the separately guarded canonical workflow. Reschedule, cancellation, drag/drop, reassignment, block, leave and schedule mutations are not available here.');
 }
@@ -84,20 +91,30 @@ function createCalendarReadOnlyHandler({
         staff: req.query?.staff,
         viewer,
       });
+
+      let bookingAllowed = false;
+      if (isEmergencyCalendarBookingEnabled(env)) {
+        try {
+          await bookingService.resolveOperator(req.staffBrowserSession?.adminId);
+          bookingAllowed = true;
+        } catch (_bookingAuthorityError) {
+          // The timeline remains safe to render. Booking entry fails closed while the
+          // /calendar/book surface independently revalidates current operator authority.
+        }
+      }
+
       let html = renderPage(model, {
         basePath: req.baseUrl || '/calendar/read-only',
         staffAccessPath,
         staffAccessScriptPath: `${staffAccessPath}/client.js`,
+        operationalActions: bookingAllowed ? bookingOperationalActions(model.dateKey, bookingPath) : [],
+        timelineReadOnlyMessage: bookingAllowed
+          ? 'Timeline remains read-only. New booking creation uses the separately guarded canonical workflow. Reschedule, cancellation, drag/drop, reassignment, block, leave and schedule mutations are not available here.'
+          : 'Read-only operational view. Booking, reschedule, cancellation, block, leave and schedule mutations are not available here.',
       });
 
-      if (isEmergencyCalendarBookingEnabled(env)) {
-        try {
-          await bookingService.resolveOperator(req.staffBrowserSession?.adminId);
-          html = decorateEmergencyBookingEntry(html, model.dateKey, bookingPath);
-        } catch (_bookingAuthorityError) {
-          // The timeline is still safe to render, but booking entry must fail closed.
-          // The /calendar/book surface independently revalidates the same authority.
-        }
+      if (bookingAllowed && !String(html).includes('aria-label="Calendar actions"')) {
+        html = decorateEmergencyBookingEntry(html, model.dateKey, bookingPath);
       }
       return res.status(200).type('html').send(html);
     } catch (error) {
@@ -125,3 +142,4 @@ module.exports.isFeatureEnabled = isFeatureEnabled;
 module.exports.resolveServerViewer = resolveServerViewer;
 module.exports.setCalendarSecurityHeaders = setCalendarSecurityHeaders;
 module.exports.decorateEmergencyBookingEntry = decorateEmergencyBookingEntry;
+module.exports.bookingOperationalActions = bookingOperationalActions;

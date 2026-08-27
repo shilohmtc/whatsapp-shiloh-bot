@@ -154,8 +154,9 @@ test('PR #380 multi-practitioner appointment renders once as one canonical share
 test('PR #395 Google-only busy is visibly non-canonical and practitioner-aware', async () => {
   const model = await buildDayModel();
   const html = renderCalendarPage(model, { basePath: '/calendar/read-only' });
-  assert.match(html, /Google-only busy/);
-  assert.match(html, /Non-canonical • Google Calendar • PR #395 classification/);
+  assert.match(html, /Google busy/);
+  assert.match(html, /Google busy • non-canonical/);
+  assert.doesNotMatch(html, /PR #395 classification/);
   assert.match(html, /data-canonical="false"/);
 });
 
@@ -193,7 +194,7 @@ test('navigation is GET-only/read-only and existing appointment-share ICS route 
   const html = renderCalendarPage(model, { basePath: '/calendar/read-only' });
   assert.doesNotMatch(html, /<form|method="post"|fetch\(|XMLHttpRequest|draggable|contenteditable/i);
   assert.match(html, /Today/);
-  assert.match(html, />Day<|>Week<|>Agenda</);
+  assert.match(html, />Day<|>Week<|>Agenda/);
 
   const routeSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'routes', 'calendarReadOnlyUx.js'), 'utf8');
   assert.doesNotMatch(routeSource, /router\.(?:post|put|patch|delete)\s*\(/i);
