@@ -70,7 +70,32 @@ function authorityDb(extraHandler) {
 }
 
 function pendingResult(clientId, source = 'admin_provisional_booking') {
-  return { rows: [{ id: clientId, source }], rowCount: 1 };
+  return {
+    rows: [{
+      id: clientId,
+      source,
+      staff_id: 9,
+      service_id: 44,
+      location_id: 1,
+      starts_at: '2026-08-28T08:15:00.000Z',
+      ends_at: '2026-08-28T09:15:00.000Z',
+      state: 'confirm',
+    }],
+    rowCount: 1,
+  };
+}
+
+function safeDirectAuthorityService() {
+  return {
+    async issueBookingAuthorityContext() {
+      const error = new Error('Christel uses direct operator authority');
+      error.code = 'OPERATOR_AUTHORITY_FORBIDDEN';
+      throw error;
+    },
+    async loadClientAuthorityState() {
+      return { confirmationSafe: true, stage: 'confirmation_safe' };
+    },
+  };
 }
 
 function preparedResult(clientId, displayName = 'Jane Doe') {
@@ -353,12 +378,14 @@ test('failed final confirmation cleans a provisional client only after canonical
   const cleanupCalls = [];
   const db = authorityDb(async (call) => {
     if (call.sql.includes('FROM admin_booking_sessions abs')) return pendingResult(705);
+    if (call.sql.includes('JOIN staff_services ss')) return { rows: [eligibleRow()], rowCount: 1 };
     if (call.sql.includes('FROM admin_booking_sessions') && call.sql.includes('client_id = $2')) return { rows: [], rowCount: 0 };
     return { rows: [], rowCount: 0 };
   });
   const service = createCalendarCreateBookingService({
     db,
     env: enabledEnv,
+    contactAuthorityService: safeDirectAuthorityService(),
     confirmBooking: async () => ({ status: 'conflict', reply: 'Slot changed.' }),
     provisionalClientCleanup: async (payload) => { cleanupCalls.push(payload); return { status: 'removed' }; },
   });
@@ -372,11 +399,13 @@ test('successful final confirmation retains the provisional client as the booked
   let cleanupCalls = 0;
   const db = authorityDb(async (call) => {
     if (call.sql.includes('FROM admin_booking_sessions abs')) return pendingResult(706);
+    if (call.sql.includes('JOIN staff_services ss')) return { rows: [eligibleRow()], rowCount: 1 };
     return { rows: [], rowCount: 0 };
   });
   const service = createCalendarCreateBookingService({
     db,
     env: enabledEnv,
+    contactAuthorityService: safeDirectAuthorityService(),
     confirmBooking: async () => ({ status: 'created', appointmentId: 9001 }),
     provisionalClientCleanup: async () => { cleanupCalls += 1; },
   });
