@@ -29,7 +29,6 @@ function isCalendarHandoffAuthority(admin, env = process.env) {
   if (!Number.isSafeInteger(adminId) || adminId <= 0 || admin?.admin_active !== true) return false;
   if (adminId === EMERGENCY_ADMIN_ID) return isEmergencyChristelAuthority(admin, env);
   if (!isAdminAllowedByPilot(adminId, env)) return false;
-  if (!admin.staff_id || admin.staff_status !== 'active') return false;
   return Boolean(deriveCalendarViewer(admin));
 }
 
