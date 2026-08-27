@@ -135,7 +135,7 @@ test('single-practitioner projection preserves canonical appointment_staff assig
   assert.doesNotMatch(appointmentSql, /\ba\.staff_name\b/i);
 
   const blockSql = seen.find(item => /SchedulingTimeline:calendar_blocks/.test(item.sql))?.sql || '';
-  assert.match(blockSql, /\bSELECT\s+id,\s*staff_id,\s*starts_at,\s*ends_at,\s*block_type,\s*title,\s*source\s+AS\s+record_source\b/i);
+  assert.match(blockSql, /\bSELECT\s+id,\s*staff_id,\s*location_id,\s*starts_at,\s*ends_at,\s*block_type,\s*title,\s*source\s+AS\s+record_source,\s*updated_at\b/i);
   assert.doesNotMatch(blockSql, /\ball_day\b/i);
 
   const staffExceptionSql = seen.find(item => /SchedulingTimeline:staff_schedule_exceptions/.test(item.sql))?.sql || '';
@@ -283,13 +283,13 @@ test('SchedulingTimeline SQL projection is locked to canonical production schema
   assert.match(migration005, /CREATE TABLE IF NOT EXISTS calendar_blocks[\s\S]*\bstaff_id\s+BIGINT[\s\S]*\bblock_type\s+TEXT[\s\S]*\bstarts_at\s+TIMESTAMPTZ[\s\S]*\bends_at\s+TIMESTAMPTZ[\s\S]*\btitle\s+TEXT[\s\S]*\bsource\s+TEXT/i);
 
   assert.match(migration015, /CREATE TABLE IF NOT EXISTS staff_working_hours[\s\S]*\bstaff_id\s+BIGINT[\s\S]*\blocation_id\s+BIGINT[\s\S]*\bday_of_week\s+SMALLINT[\s\S]*\bstarts_local\s+TIME[\s\S]*\bends_local\s+TIME[\s\S]*\bactive\s+BOOLEAN/i);
-  assert.match(source, /SchedulingTimeline:staff_working_hours[\s\S]*SELECT staff_id, day_of_week, starts_local, ends_local, location_id, active[\s\S]*FROM staff_working_hours/i);
+  assert.match(source, /SchedulingTimeline:staff_working_hours[\s\S]*SELECT id, staff_id, day_of_week, starts_local, ends_local, location_id, active, updated_at[\s\S]*FROM staff_working_hours/i);
 
   assert.match(migration024, /CREATE TABLE IF NOT EXISTS staff_recurring_day_closures[\s\S]*\bstaff_id\s+BIGINT[\s\S]*\blocation_id\s+BIGINT[\s\S]*\bday_of_week\s+SMALLINT/i);
-  assert.match(source, /SchedulingTimeline:staff_recurring_day_closures[\s\S]*SELECT staff_id, day_of_week, location_id[\s\S]*FROM staff_recurring_day_closures/i);
+  assert.match(source, /SchedulingTimeline:staff_recurring_day_closures[\s\S]*SELECT id, staff_id, day_of_week, location_id, updated_at[\s\S]*FROM staff_recurring_day_closures/i);
 
   assert.match(migration015, /CREATE TABLE IF NOT EXISTS staff_schedule_exceptions[\s\S]*\bid\s+BIGINT[\s\S]*\bstaff_id\s+BIGINT[\s\S]*\blocation_id\s+BIGINT[\s\S]*\bexception_date\s+DATE[\s\S]*\bexception_type\s+TEXT[\s\S]*\bstarts_local\s+TIME[\s\S]*\bends_local\s+TIME[\s\S]*\breason\s+TEXT/i);
-  assert.match(source, /SchedulingTimeline:staff_schedule_exceptions[\s\S]*SELECT id, staff_id, exception_date, location_id, exception_type, starts_local, ends_local, reason[\s\S]*FROM staff_schedule_exceptions/i);
+  assert.match(source, /SchedulingTimeline:staff_schedule_exceptions[\s\S]*SELECT id, staff_id, exception_date, location_id, exception_type, starts_local, ends_local, reason, updated_at[\s\S]*FROM staff_schedule_exceptions/i);
 
   assert.match(migration021, /CREATE TABLE IF NOT EXISTS location_working_hours[\s\S]*\blocation_id\s+BIGINT[\s\S]*\bday_of_week\s+INTEGER[\s\S]*\bstarts_local\s+TIME[\s\S]*\bends_local\s+TIME[\s\S]*\bactive\s+BOOLEAN/i);
   assert.match(source, /SchedulingTimeline:location_working_hours[\s\S]*SELECT lwh\.location_id, lwh\.day_of_week, lwh\.starts_local, lwh\.ends_local, lwh\.active[\s\S]*FROM location_working_hours lwh/i);

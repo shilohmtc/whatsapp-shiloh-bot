@@ -44,6 +44,63 @@ async function getAppointmentStaff(appointmentId, db = pool) {
   const result = await db.query(`SELECT staff_id, staff_name_snapshot FROM appointment_staff WHERE appointment_id=$1 AND staff_id IS NOT NULL ORDER BY staff_id, position`, [appointmentId]);
   return result.rows.map((row) => ({ staffId: Number(row.staff_id), staffName: row.staff_name_snapshot }));
 }
+function canonicalRevision(value) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+async function cancelCanonicalAppointmentInTransaction(db, {
+  appointmentId,
+  actorAdminId,
+  reason,
+  expectedRevision = null,
+  allowedStatuses = null,
+  auditAction = 'admin.appointment_cancelled',
+  auditMetadata = {},
+}) {
+  const current = await db.query(`SELECT a.id,a.starts_at,a.ends_at,a.status,a.updated_at FROM appointments a WHERE a.id=$1 FOR UPDATE`, [appointmentId]);
+  const row = current.rows[0];
+  if (!row) return { status: 'not_found' };
+  if (row.status === 'cancelled') return { status: 'already_cancelled' };
+  if (Array.isArray(allowedStatuses) && !allowedStatuses.includes(row.status)) return { status: 'conflict' };
+  if (expectedRevision && canonicalRevision(row.updated_at) !== expectedRevision) return { status: 'conflict' };
+
+  const assignedStaff = await getAppointmentStaff(appointmentId, db);
+  for (const staff of assignedStaff) await db.query(`SELECT pg_advisory_xact_lock($1::bigint)`, [staff.staffId]);
+  const locked = await db.query(`SELECT status,updated_at FROM appointments WHERE id=$1 FOR UPDATE`, [appointmentId]);
+  if (
+    !locked.rows[0]
+    || locked.rows[0].status === 'cancelled'
+    || (Array.isArray(allowedStatuses) && !allowedStatuses.includes(locked.rows[0].status))
+    || (expectedRevision && canonicalRevision(locked.rows[0].updated_at) !== expectedRevision)
+  ) return { status: 'conflict' };
+
+  const updated = await db.query(
+    `UPDATE appointments SET status='cancelled',updated_at=NOW()
+      WHERE id=$1 AND status=$2
+    RETURNING id,starts_at,ends_at,status,updated_at`,
+    [appointmentId, row.status]
+  );
+  if (!updated.rows[0]) return { status: 'conflict' };
+  await db.query(`UPDATE appointment_lifecycle SET status='cancelled',updated_at=NOW() WHERE appointment_id=$1 AND status<>'cancelled'`, [appointmentId]);
+  await db.query(
+    `INSERT INTO appointment_status_history (appointment_id,from_status,to_status,changed_by,reason)
+     VALUES ($1,$2,'cancelled',$3,$4)`,
+    [appointmentId, row.status, `admin:${actorAdminId}`, clean(reason)]
+  );
+  await db.query(
+    `INSERT INTO crm_audit_events (actor_admin_id,action,entity_type,entity_id,metadata)
+     VALUES ($1,$2,'appointment',$3,$4::jsonb)`,
+    [actorAdminId, auditAction, appointmentId, JSON.stringify({
+      ...auditMetadata,
+      reason: clean(reason),
+      authoritativeAppointmentStateRechecked: true,
+      lockedStaffIds: assignedStaff.map((staff) => staff.staffId),
+      before: { status: row.status, revision: canonicalRevision(row.updated_at) },
+      after: { status: 'cancelled', revision: canonicalRevision(updated.rows[0].updated_at) },
+    })]
+  );
+  return { status: 'cancelled', appointment: updated.rows[0], assignedStaff };
+}
 function formatDateTime(value) { return new Intl.DateTimeFormat("en-ZA", { timeZone:"Africa/Johannesburg", weekday:"short", day:"2-digit", month:"short", year:"numeric", hour:"2-digit", minute:"2-digit", hour12:false }).format(new Date(value)); }
 function appointmentSummary(row) { return [`Appointment #${row.id}`, `• ${formatDateTime(row.starts_at)}–${new Intl.DateTimeFormat("en-ZA", { timeZone:"Africa/Johannesburg", hour:"2-digit", minute:"2-digit", hour12:false }).format(new Date(row.ends_at))}`, `• Client: ${row.client_name}`, row.services ? `• Service: ${row.services}` : null, row.staff ? `• Staff: ${row.staff}` : null].filter(Boolean).join("\n"); }
 async function getIntent(phone) { await ensureTable(); const result=await pool.query(`SELECT * FROM admin_appointment_cancellation_intents WHERE phone=$1`,[phone]); return result.rows[0]||null; }
@@ -59,26 +116,18 @@ async function syncCancelledAppointmentToGoogleCalendar(appointmentId, staffName
 
 async function cancelAppointment({ sender, adminId, appointmentId, reason }) {
   const client=await pool.connect();
-  let assignedStaff=[];
   try {
     await client.query("BEGIN");
-    const current=await client.query(`SELECT a.id,a.starts_at,a.ends_at,a.status FROM appointments a WHERE a.id=$1 FOR UPDATE`,[appointmentId]);
-    const row=current.rows[0];
-    if (!row) { await client.query("ROLLBACK"); return {status:"not_found"}; }
-    if (row.status==="cancelled") { await client.query("ROLLBACK"); return {status:"already_cancelled"}; }
-
-    assignedStaff=await getAppointmentStaff(appointmentId,client);
-    for(const staff of assignedStaff){await client.query(`SELECT pg_advisory_xact_lock($1::bigint)`,[staff.staffId]);}
-    const locked=await client.query(`SELECT status FROM appointments WHERE id=$1 FOR UPDATE`,[appointmentId]);
-    if(!locked.rows[0]||locked.rows[0].status==="cancelled"){await client.query("ROLLBACK");return{status:"conflict"};}
-
-    const updated=await client.query(`UPDATE appointments SET status='cancelled',updated_at=NOW() WHERE id=$1 AND status <> 'cancelled' RETURNING id,starts_at,ends_at,status`,[appointmentId]);
-    if(!updated.rows[0]){await client.query("ROLLBACK");return{status:"conflict"};}
-    await client.query(`INSERT INTO appointment_status_history (appointment_id,from_status,to_status,changed_by,reason) VALUES ($1,$2,'cancelled',$3,$4)`,[appointmentId,row.status,`admin:${adminId}`,clean(reason)]);
-    await client.query(`INSERT INTO crm_audit_events (actor_admin_id,action,entity_type,entity_id,metadata) VALUES ($1,'admin.appointment_cancelled','appointment',$2,$3::jsonb)`,[adminId,appointmentId,JSON.stringify({phone:normalizePhone(sender),reason:clean(reason),authoritativeAppointmentStateRechecked:true,lockedStaffIds:assignedStaff.map((staff)=>staff.staffId)})]);
+    const cancelled = await cancelCanonicalAppointmentInTransaction(client, {
+      appointmentId,
+      actorAdminId: adminId,
+      reason,
+      auditMetadata: { phone: normalizePhone(sender) },
+    });
+    if(cancelled.status!=="cancelled"){await client.query("ROLLBACK");return{status:cancelled.status};}
     await client.query("COMMIT");
-    const calendarSync=await syncCancelledAppointmentToGoogleCalendar(appointmentId,assignedStaff.map((staff)=>staff.staffName));
-    return {status:"cancelled",appointment:updated.rows[0],calendarSync};
+    const calendarSync=await syncCancelledAppointmentToGoogleCalendar(appointmentId,cancelled.assignedStaff.map((staff)=>staff.staffName));
+    return {status:"cancelled",appointment:cancelled.appointment,calendarSync};
   } catch(error){try{await client.query("ROLLBACK");}catch(_){} throw error;} finally{client.release();}
 }
 
@@ -100,4 +149,4 @@ async function processAdminAppointmentCancellationMessage(sender,text) {
   }
   await clearIntent(phone);return{handled:false};
 }
-module.exports={processAdminAppointmentCancellationMessage,hasPendingCancellationIntent,ensureTable,confirmationInteractive,cancelAppointment,syncCancelledAppointmentToGoogleCalendar,getAppointmentStaff};
+module.exports={processAdminAppointmentCancellationMessage,hasPendingCancellationIntent,ensureTable,confirmationInteractive,cancelAppointment,cancelCanonicalAppointmentInTransaction,syncCancelledAppointmentToGoogleCalendar,getAppointmentStaff};

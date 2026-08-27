@@ -116,8 +116,9 @@ test('booking commit locks and writes both practitioners atomically without exte
 
 test('Admin cancellation locks every assigned practitioner and leaves external snapshots untouched', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'services', 'adminAppointmentCancellation.js'), 'utf8');
-  assert.match(source, /getAppointmentStaff\(appointmentId,client\)/);
-  assert.match(source, /for\(const staff of assignedStaff\)\{await client\.query\(`SELECT pg_advisory_xact_lock/);
+  assert.match(source, /cancelCanonicalAppointmentInTransaction\(client/);
+  assert.match(source, /getAppointmentStaff\(appointmentId, db\)/);
+  assert.match(source, /for \(const staff of assignedStaff\) await db\.query\(`SELECT pg_advisory_xact_lock/);
   assert.match(source, /historical_snapshot_untouched/);
   assert.doesNotMatch(source, /cancelPractitionerBookingEvents|appointment_calendar_events/);
 });

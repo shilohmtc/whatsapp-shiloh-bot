@@ -9,6 +9,7 @@ const { createStaffBrowserSessionRouter } = require('./staffBrowserSession');
 const { createStaffBrowserChallengeDispatcher } = require('../services/staffBrowserChallengeDelivery');
 const { createOptionalCalendarSessionMiddleware } = require('../middleware/staffBrowserSession');
 const { createOperatorContactAuthorityRouter } = require('./operatorContactAuthority');
+const { createCalendarOperationalMutationRouter } = require('./calendarOperationalMutations');
 const router = express.Router();
 
 const baseStaffBrowserSessionService = createStaffBrowserSessionService({
@@ -45,6 +46,7 @@ router.use('/staff-auth', createStaffBrowserSessionRouter({ service: staffBrowse
 router.use('/staff', staffCalendarAccessUxRoutes);
 router.use('/client-authority', createOperatorContactAuthorityRouter({ sessionService: staffBrowserSessionService }));
 router.use('/book', createCalendarCreateBookingRouter({ sessionService: staffBrowserSessionService }));
+router.use('/operations', createCalendarOperationalMutationRouter({ sessionService: staffBrowserSessionService }));
 router.use('/read-only', createOptionalCalendarSessionMiddleware({ service: staffBrowserSessionService }), calendarReadOnlyUxRoutes);
 
 module.exports=router;
