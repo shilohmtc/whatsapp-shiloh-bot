@@ -1,133 +1,151 @@
-# Shiloh OS Primary Human Authority
+# Shiloh OS Business Ownership and Delegated Technical Authority
 
-Controlled unit: `SHILOH-OS-PRIMARY-HUMAN-AUTHORITY`
+Controlled unit: `SHILOH-OS-BUSINESS-OWNER-AND-DELEGATED-TECHNICAL-AUTHORITY`
 
 Owner: **00 — Control & Reconciliation**
 
 Status after merge: **ACTIVE GOVERNANCE STANDARD**
 
+Supersedes, where inconsistent, the earlier `SHILOH-OS-PRIMARY-HUMAN-AUTHORITY` wording.
+
 ## Control decision
 
-Shiloh OS is governed around two primary human principals with deliberately different authority levels:
+Shiloh OS must distinguish **business ownership** from **delegated technical/system authority**.
 
-- **JP — System Owner / Super Admin**
-- **Christel — Operations Admin**
+The durable human model is:
 
-All other human and technical principals derive bounded authority from this model.
+- **Christel — Business Owner / Primary Shiloh Admin**
+- **JP — Delegated Technical/System Super Admin**
 
-This is a governance authority model. It does **not**, by itself, mutate GitHub, Render, Meta, database, application, Calendar, CRM or other runtime permissions. Any concrete permission, role, credential, production configuration or access-control change remains a separately bounded implementation/mutation requiring the appropriate authority.
+Christel owns and operates **Shiloh Massage Therapy & Aesthetic Clinic**. JP helps Christel build, test, support, secure and improve Shiloh OS under delegated technical/system authority.
+
+`00 — Control & Reconciliation` is the engineering/control process for sequencing, authorization records, evidence, gates and reconciliation. It is not an independent human business owner.
+
+These titles describe governance intent and product authority. They do not assert that current runtime role names, accounts or external permissions already use the same labels.
 
 ## Governing principle
 
-Shiloh OS is built primarily for **JP to govern** and **Christel to operate**.
+> Christel owns and operates Shiloh Massage Therapy & Aesthetic Clinic. Shiloh OS should allow Christel to administer the business herself. JP helps build, govern technically, test and improve the system under delegated authority.
 
 The design goal is:
 
-- Christel can run normal clinic operations without needing JP for routine work.
-- JP retains control over changing what Shiloh OS itself is allowed to do, who may do it, and which security/production boundaries exist.
-- Neither operational convenience nor a feature-specific implementation may silently expand human authority.
+- Christel can run and administer normal clinic operations without needing JP, ChatGPT or an engineer for routine work.
+- Christel can delegate and revoke bounded operational or technical authority.
+- JP has the technical/system access needed to help build, test, support and improve Shiloh OS where that authority has been delegated.
+- Staff authority is explicit, least-privilege and attributable to the real authenticated operator.
+- Neither operational convenience nor technical access may silently expand a person's business authority.
 
-## JP — System Owner / Super Admin
+## Christel — Business Owner / Primary Shiloh Admin
 
-JP is the accountable human authority for the Shiloh OS system and business-governance boundary.
+Christel is the primary human business authority for Shiloh Massage Therapy & Aesthetic Clinic.
 
-JP owns or authorizes:
+Subject to canonical safeguards and the capabilities that have actually been implemented, the intended Shiloh Workspace experience must let Christel administer normal business operations herself, including:
 
-- final Shiloh OS governance decisions;
-- production/security boundary changes;
-- permission and role model changes;
-- structural CRM and booking authority changes;
-- integration ownership and credential/asset authority changes;
-- Render production configuration changes;
-- Meta system-user/token/asset/phone/WABA authority changes;
-- database structural changes and migration authorization;
-- GitHub merge/deployment authority where separately implemented;
-- destructive, irreversible or security-sensitive business/system actions;
-- delegation or revocation of bounded authority to other users.
+- adding and activating staff;
+- deactivating staff when access is no longer required;
+- assigning and changing operational roles;
+- assigning and changing service authority;
+- managing staff schedules, leave and availability;
+- managing Calendar and booking operations;
+- managing canonical CRM/client operations;
+- managing normal client lifecycle and communication workflows;
+- managing normal business configuration;
+- delegating and revoking bounded staff authority;
+- reviewing the audit trail for material business and staff changes.
 
-JP may also perform ordinary operational work, but the primary role is system ownership and governance.
+A normal operational change should not require Christel to edit code, modify database rows, use GitHub/Render/Meta administration directly, or ask JP/ChatGPT to act as the permanent operational control panel once the relevant Workspace capability is productized.
 
-## Christel — Operations Admin
+Christel's business ownership does not mean operational workflows should bypass canonical booking, CRM identity, eligibility, stale-slot, security, provider, audit or fail-closed safeguards. The product should make legitimate authority easy to exercise without creating bypasses.
 
-Christel is the primary clinic operations administrator.
+## JP — Delegated Technical/System Super Admin
 
-Subject to each capability's existing safeguards and any separately implemented role checks, Christel is the intended primary operator for:
+JP helps Christel build, test, support, secure and improve Shiloh OS under delegated technical/system authority.
 
-- Calendar and booking administration;
-- canonical CRM client administration;
-- normal client lifecycle operations;
-- staff schedule/availability administration where authorized;
-- treatment/service and booking workflow usage where authorized;
-- client communication workflows;
-- operational corrections that have an explicit audited business rule;
-- evidence-backed client-facing name corrections once `SHILOH-CLIENT-FACING-NAME-AUTHORITY` is implemented.
+Depending on the separately controlled capability, JP's delegated technical work may include:
 
-Christel does **not** receive implied authority to:
+- architecture and implementation;
+- testing and technical diagnostics;
+- security and integration administration;
+- controlled deployment execution and production support;
+- GitHub, Render, Meta, database or other infrastructure work where the applicable authority has been delegated;
+- system configuration and technical recovery work that is genuinely engineering/administration rather than routine clinic operation.
 
-- self-escalate permissions;
-- alter Shiloh OS governance rules;
-- change Meta tokens/system-user roles/assets/WABA ownership/phone registration;
-- change Render production configuration;
-- make database structural changes;
-- change security-critical credentials;
-- bypass canonical booking, CRM identity, eligibility, stale-slot or provider safeguards;
-- perform destructive/irreversible system changes unless JP has explicitly delegated that bounded action.
+JP is **not** represented as the owner of Shiloh Massage Therapy & Aesthetic Clinic and is not assumed to be a Shiloh employee or routine day-to-day clinic operator.
 
-## Default authority matrix
+Delegated technical authority does not transfer business ownership to JP. JP must not silently grant himself broader business authority merely because he has technical access. Routine operational actions are available to JP only where a capability-specific rule or delegation permits them.
 
-| Capability | JP — System Owner / Super Admin | Christel — Operations Admin |
+## Business authority and technical execution
+
+Business policy and technical execution are related but distinct:
+
+| Capability | Christel — Business Owner / Primary Shiloh Admin | JP — Delegated Technical/System Super Admin |
 |---|---|---|
-| View Control Cockpit / project status | Full | Operational visibility when productized |
-| Calendar & booking operations | Full | Full within existing booking safeguards |
-| CRM client administration | Full | Full within audited operational rules |
-| Client-facing name correction | Full when implemented | Allowed only through evidence-backed audited correction when implemented |
-| Staff schedules / leave / availability | Full | Operational admin where implemented |
-| Client communications | Full | Full within communication policy and workflow safeguards |
-| WhatsApp operational messaging | Full | Full where the operational workflow is authorized |
-| Meta token/system-user/asset configuration | Owner / explicit authority | No by default |
-| Render production configuration | Owner / explicit authority | No by default |
-| Database structural changes | Owner / authorization | No |
-| GitHub merge/deployment authority | Owner / authorization where implemented | No by default |
-| Permission / role changes | Owner | No self-escalation |
-| Destructive or irreversible business/system actions | Explicit JP authority | Only if specifically delegated |
+| Business ownership and clinic policy | Final business authority | Supports; no implied ownership |
+| Routine clinic operations | Primary admin/operator | Only where specifically delegated or capability-authorized |
+| Staff add/activate/deactivate | Business admin authority when productized | Build/support path; may assist if delegated |
+| Operational roles and service authority | Business admin authority when productized | Build/support path; no self-expansion |
+| Calendar / booking / CRM / communications | Business admin authority within canonical safeguards | Capability-specific delegated access only |
+| Staff schedules / leave / availability | Business admin authority when productized | Build/support path unless operationally delegated |
+| Technical architecture and implementation | Authorizes business requirement / outcome | Primary delegated technical execution |
+| GitHub / Render / Meta / DB technical administration | Business owner may authorize/delegate | Executes only within delegated technical scope |
+| Security-model or structural system changes | Business-owner decision where business authority is affected | Designs/implements under controlled technical authorization |
+| Destructive / irreversible business actions | Business-owner authority, with product safeguards | Technical execution only when explicitly delegated/authorized |
+| Delegation / revocation of business authority | Owner | Cannot self-delegate broader business authority |
 
-This table is the default governance model. A future controlled capability may define a narrower permission set, but it must not silently broaden Christel beyond these boundaries or reduce JP's System Owner authority without a fresh 00 Control decision.
+A capability-specific controlled unit may define a narrower operational scope. It must not silently contradict this ownership/delegation model.
+
+## Delegation and least privilege
+
+Business authority originates with Christel. Christel may delegate bounded operational or technical authority and may revoke it.
+
+Other staff roles derive from operational need and least privilege. They are not co-equal business owners unless the business ownership itself changes through an explicit governance decision.
+
+Staff must act as themselves. Material changes must be attributable to the authenticated operator. No user should be able to self-escalate through an ordinary operational workflow.
+
+Technical principals such as service accounts, Meta system users, Render services, database users, integrations and automation agents are technical identities only. They are never independent human business authority.
+
+## Shiloh Workspace product direction
+
+Normal business decisions should be configurable in Shiloh rather than requiring engineering intervention.
+
+The target Shiloh Workspace should make safe self-service possible for routine areas such as:
+
+- Today / operational attention;
+- Calendar and booking lifecycle;
+- Clients / CRM and governed identity actions;
+- Staff lifecycle, roles and service scope;
+- staff schedules, leave and availability;
+- communications and delivery exceptions;
+- normal business configuration and audit visibility.
+
+The product should prefer canonical configuration, service IDs/assignments and audited workflows over hard-coded person-specific exceptions.
+
+Engineering intervention remains appropriate for genuinely technical work such as structural system changes, new integrations, security-model changes, database migrations, production incidents, major feature development and technical infrastructure changes.
 
 ## Product acceptance rule
 
 Every material new Shiloh OS capability must explicitly answer:
 
-1. How does JP govern/administer this capability?
-2. How does Christel operate/administer this capability?
-3. Which actions are normal operational actions?
-4. Which actions require JP-level authority?
-5. Which actions are destructive, irreversible, security-sensitive or production-config changes and therefore need explicit authorization?
-6. What audit trail, fail-closed behavior and non-self-escalation rule applies?
+1. Can Christel administer the normal business operation herself through Shiloh Workspace?
+2. What may other staff do, and how is their authority bounded by role, service scope and operational need?
+3. What delegated technical/system path does JP need to build, test, support or administer the capability?
+4. Which decisions remain business-owner decisions for Christel even if technical execution is delegated?
+5. Which actions are routine operations versus security-sensitive, production, destructive or irreversible actions?
+6. What audit trail, fail-closed and non-self-escalation behavior applies?
+7. Can recurring configuration be made safely in Workspace instead of requiring a code change or manual engineering task?
 
-A capability is not considered fully governed merely because its functional path works.
+A capability is not considered fully productized merely because its functional backend path works.
 
-## Derived-role rule
+## Relationship to capability-specific authorities
 
-Other staff roles must be derived from operational need and least privilege. They are not co-equal primary principals unless 00 explicitly changes this standard.
+This governance correction does not automatically reopen or rewrite completed capability implementations. When a current capability's runtime role model does not yet match this standard, alignment must be separately scoped and tested rather than silently inferred.
 
-Technical principals (service accounts, Meta system users, Render services, database users, integrations, automation agents) are never treated as human business authority. They act only within explicitly granted technical scopes.
+Current capability-specific service scopes, identity evidence rules, booking safeguards, communication safeguards and production gates remain authoritative until their owning controlled units reconcile them.
 
-## Relationship to existing authorities
+## Runtime permission boundary
 
-This governance standard does not reopen completed units.
+This governance standard does **not**, by itself, mutate GitHub, Render, Meta, database, application, Calendar, CRM or other runtime permissions.
 
-In particular:
+No runtime role, production permission, credential, Meta asset, GitHub permission, Render configuration, CRM record, staff account, booking, appointment, Calendar event, database row or provider configuration may be changed solely because this document exists.
 
-- `SHILOH-EMERGENCY-CHRISTEL-CALENDAR-BOOKING` remains COMPLETE / FROZEN.
-- `SHILOH-CALENDAR-NEW-CLIENT-PROVISIONAL-BOOKING` remains COMPLETE / FROZEN.
-- imported-contact identity remediation remains COMPLETE / DO NOT REDO.
-- `SHILOH-CLIENT-FACING-NAME-AUTHORITY` remains owned by 20 — CRM & Identity and must implement its own evidence/audit rules.
-- Meta verification remains WAITING EXTERNAL / Meta Business Support.
-
-## Mutation boundary
-
-This governance unit authorizes the **authority model**, not concrete external permission mutations.
-
-No runtime role, production permission, credential, Meta asset, GitHub permission, Render configuration, CRM record, booking, appointment, Calendar event or database row may be changed solely because this document exists.
-
-Concrete permission implementation must be separately scoped, reviewed, tested and authorized.
+Concrete runtime alignment must be separately scoped, reviewed, tested and authorized.
