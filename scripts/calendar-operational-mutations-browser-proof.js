@@ -558,9 +558,11 @@ async function main() {
       'GET /calendar/operations/staff/1/schedule/4',
       'PUT /calendar/operations/staff/1/schedule/4',
     ]) assert.ok(endpointProof.includes(expected), `missing authenticated browser endpoint proof: ${expected}`);
+    const checkedOutHead = spawnSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).stdout.trim();
+    assert.match(checkedOutHead, /^[0-9a-f]{40}$/);
     const manifest = {
       generatedAt: new Date().toISOString(),
-      exactHead: process.env.GITHUB_SHA || null,
+      exactHead: checkedOutHead,
       environment: 'ephemeral HTTPS + synthetic fixtures + system Chromium',
       operators: operatorProof,
       ineligible: { adminId: 75, result: 'fail-closed', ...closed },
