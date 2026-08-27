@@ -28,7 +28,13 @@ The current Master Status stabilization checkpoint is recorded in:
 
 `docs/SHILOH-OS-MASTER-STATUS-ADDENDUM-2026-08-27-STABILIZATION-SIMPLIFICATION.md`
 
-The doctrine also governs Workspace economy, OWN / INTEGRATE / RETIRE / NEVER BUILD decisions, control-surface hygiene and the optional bounded 00 standing-release model.
+The doctrine also governs Workspace economy, OWN / INTEGRATE / RETIRE / NEVER BUILD decisions, control-surface hygiene and the **ACTIVE bounded 00 standing-release model**.
+
+### Standing release authority
+
+Bounded standing 00 release delegation is **ACTIVE** under JP's explicit 2026-08-27 authorization recorded in the current Master Status stabilization addendum.
+
+00 may use that delegation only after independently satisfying every Section 8 pre-merge condition in the Stabilization & Simplification Doctrine. Specialist and WS streams never self-merge. Excluded destructive/data/provider/security/operator/business actions remain explicit JP gates.
 
 **Important:** the dated 2026-08-25 snapshot later in this document is historical evidence only. It must not be treated as current machine state. 00 must read current GitHub / Render / provider evidence and newer Master Status addenda before acting.
 
@@ -163,7 +169,7 @@ Then the normal Shiloh OS terminal fields remain mandatory:
 
 - The Cockpit does not independently authorize production mutations, bookings, outbound messages, destructive changes, permission changes or other security-sensitive actions.
 - Recommendation and authorization remain separate.
-- Any standing 00 release delegation must be explicitly activated by JP and remain within the boundaries recorded in the Stabilization & Simplification Doctrine.
+- Bounded standing 00 release delegation is ACTIVE under JP's explicit 2026-08-27 authorization and remains strictly limited to the boundaries recorded in the Stabilization & Simplification Doctrine.
 - Specialists must not maintain competing cross-stream boards.
 - Tracker and Master Status remain durable authority; the Cockpit is their readable operational projection.
 - Closed capabilities remain frozen and must not be recreated merely because a later unit touches an adjacent surface.
