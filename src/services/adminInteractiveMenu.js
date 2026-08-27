@@ -10,9 +10,15 @@ const { processAdminPendingBookingApprovalsMessage } = require('./adminPendingBo
 const { processAdminScheduleUxMessage } = require('./adminScheduleUx');
 const { abigailEarningsButtons, christelEarningsButtons, marietjieEarningsButtons } = require('./adminEarningsButtons');
 const { canAccessFinalization } = require('./adminAppointmentsMenu');
+const {
+  buildEmergencyCalendarUrl,
+  createEmergencyCalendarBootstrapService,
+  emergencyCalendarPublicOrigin,
+} = require('./emergencyCalendarBootstrap');
 
 const SECTION_ORDER = ['Appointments', 'Reports', 'Clients', 'Services', 'Schedule', 'More'];
 const APPOINTMENT_PRIORITY = ['finalize', 'booking', 'manage_booking', 'today', 'tomorrow'];
+const calendarHandoffService = createEmergencyCalendarBootstrapService();
 
 const ACTIONS = [
   { key: 'today', labels: ["Today's clients", 'My clients today'], command: 'today', description: 'View today’s appointments' },
@@ -104,6 +110,17 @@ function visibleEntriesBySection(body = '') {
   sections.set('Reports', reports);
   return sections;
 }
+function workspaceLauncherInteractive(admin) {
+  const name = String(admin?.display_name || 'Shiloh staff').trim();
+  return {
+    type: 'button',
+    body: `*Shiloh Workspace 🌿*\n\nHello ${name}. Choose where you want to go.`,
+    buttons: [
+      { id: 'admin_open_calendar', title: 'Open Calendar' },
+      { id: 'admin_open_menu', title: 'Admin' },
+    ],
+  };
+}
 function topLevelInteractive(body) {
   const sections = visibleEntriesBySection(body);
   return {
@@ -118,7 +135,7 @@ function sectionInteractive(section, body) {
   if (section === 'Appointments') entries = entries.filter(({ action }) => action.key !== 'availability' && action.key !== 'demo_client').sort((a, b) => APPOINTMENT_PRIORITY.indexOf(a.action.key) - APPOINTMENT_PRIORITY.indexOf(b.action.key));
   if (!entries.length) return null;
   const rows = entries.map(({ action, title }) => ({ id: `admin_action_${action.key}`, title: action.key === 'schedule' ? 'Manage schedule' : (title.length <= 24 ? title : title.slice(0, 24)), description: action.description }));
-  rows.push({ id: 'menu', title: '← Back to Admin', description: 'Return to the main admin menu' });
+  rows.push({ id: 'admin_open_menu', title: '← Back to Admin', description: 'Return to the main admin menu' });
   return { type: 'list', body: `*${section}*\nChoose what you want to do.`, buttonText: section.length <= 20 ? section : 'Open options', rows, sectionTitle: section };
 }
 function earningsInteractive(body) {
@@ -151,6 +168,21 @@ async function getRoleScopedMenu(sender) {
   if (!result?.handled || !result?.interactive?.body) return result;
   return enrichPrivilegedReportsMenu(result);
 }
+async function issueCalendarHandoffForSender(sender) {
+  if (!emergencyCalendarPublicOrigin(process.env)) {
+    return { handled: true, reply: 'Calendar access is not available right now. Please try again later.' };
+  }
+  const issued = await calendarHandoffService.issueForWhatsapp({ whatsapp: sender });
+  if (!issued?.ok) {
+    return { handled: true, reply: 'Calendar access is not available for this staff account.' };
+  }
+  const url = buildEmergencyCalendarUrl(issued.token, process.env);
+  if (!url) return { handled: true, reply: 'Calendar access is not available right now. Please try again later.' };
+  return {
+    handled: true,
+    reply: `*Open Calendar*\n\nUse this one-time secure link to open Shiloh Calendar as your own staff account:\n${url}\n\nThe link expires shortly and can only be used once.`,
+  };
+}
 async function dispatchStableAction(sender, action) {
   if (action.key === 'today' || action.key === 'tomorrow') return processAdminAppointmentsByDateMessage(sender, action.command);
   if (action.key === 'help') return processAdminHelpMessage(sender, action.command);
@@ -173,6 +205,9 @@ async function dispatchStableAction(sender, action) {
   if (privileged.handled) return privileged;
   return processAdminMobileMenuMessage(sender, action.command);
 }
+function isWorkspaceLauncherTerm(raw = '') {
+  return /^(?:menu|home|start|hi|hello|hey|howzit|hiya|good morning|good afternoon|good evening)[!. ]*$/i.test(String(raw).trim());
+}
 async function processAdminInteractiveMenuMessage(sender, text) {
   const pendingApproval = await processAdminPendingBookingApprovalsMessage(sender, text);
   if (pendingApproval.handled) return pendingApproval;
@@ -187,6 +222,19 @@ async function processAdminInteractiveMenuMessage(sender, text) {
   const privileged = await processJeanPierreControlPlaneMessage(sender, text);
   if (privileged.handled) return privileged;
   const raw = String(text || '').trim();
+
+  if (isWorkspaceLauncherTerm(raw)) {
+    const menuResult = await getRoleScopedMenu(sender);
+    if (!menuResult?.handled || !menuResult?.admin) return menuResult;
+    return { handled: true, admin: menuResult.admin, interactive: workspaceLauncherInteractive(menuResult.admin) };
+  }
+  if (/^(?:admin_open_calendar|open calendar|calendar)$/i.test(raw)) return issueCalendarHandoffForSender(sender);
+  if (/^(?:admin_open_menu|admin|admin menu)$/i.test(raw)) {
+    const menuResult = await getRoleScopedMenu(sender);
+    if (!menuResult?.handled || !menuResult?.interactive?.body) return menuResult;
+    return { handled: true, admin: menuResult.admin, interactive: topLevelInteractive(menuResult.interactive.body) };
+  }
+
   const sectionMatch = raw.match(/^admin_section_(appointments|reports|clients|services|schedule|more)$/i);
   if (sectionMatch) {
     const menuResult = await getRoleScopedMenu(sender);
@@ -209,4 +257,20 @@ async function processAdminInteractiveMenuMessage(sender, text) {
   if (result?.handled && result?.interactive?.type === 'button' && /^\*Shiloh Admin 🌿\*/.test(result.interactive.body || '')) return { ...result, interactive: topLevelInteractive(result.interactive.body) };
   return result;
 }
-module.exports = { ACTIONS, actionForId, actionForLabel, compactMenuBody, dispatchStableAction, enrichJeanPierreMenu, enrichPrivilegedReportsMenu, isActionVisibleInMenu, parseVisibleMenu, processAdminInteractiveMenuMessage, sectionInteractive, topLevelInteractive };
+module.exports = {
+  ACTIONS,
+  actionForId,
+  actionForLabel,
+  compactMenuBody,
+  dispatchStableAction,
+  enrichJeanPierreMenu,
+  enrichPrivilegedReportsMenu,
+  isActionVisibleInMenu,
+  isWorkspaceLauncherTerm,
+  issueCalendarHandoffForSender,
+  parseVisibleMenu,
+  processAdminInteractiveMenuMessage,
+  sectionInteractive,
+  topLevelInteractive,
+  workspaceLauncherInteractive,
+};
