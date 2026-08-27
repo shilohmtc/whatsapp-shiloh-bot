@@ -6,68 +6,44 @@ Controlled unit: `SHILOH-OS-PRIMARY-HUMAN-AUTHORITY`
 
 Owner: **00 — Control & Reconciliation**
 
-Durable status after merge: **ACTIVE GOVERNANCE STANDARD**
+Current status: **SUPERSEDED / CORRECTED 2026-08-27**
 
-## Primary human principals
+Superseding record: `SHILOH-OS-MASTER-STATUS-ADDENDUM-2026-08-27-BUSINESS-OWNER-AND-DELEGATED-TECHNICAL-AUTHORITY.md`
 
-Shiloh OS now has two primary human principals:
+## Historical-record notice
 
-1. **JP — System Owner / Super Admin**
-2. **Christel — Operations Admin**
+This file is retained to preserve the 2026-08-25 governance history. Its former role labels and authority hierarchy are **not current Shiloh OS authority**.
+
+The original record described:
+
+- JP as `System Owner / Super Admin` and final system/business governance authority; and
+- Christel as `Operations Admin` / primary day-to-day clinic operator.
+
+That wording was based on incomplete business-ownership context and is superseded where inconsistent with the 2026-08-27 correction.
+
+Git history preserves the exact original text and change history; the current repository view deliberately marks the record as superseded so historical wording cannot be mistaken for current governance.
+
+## Current authority
+
+The durable current model is:
+
+- **Christel — Business Owner / Primary Shiloh Admin**
+- **JP — Delegated Technical/System Super Admin**
 
 Durable product principle:
 
-> Shiloh OS is built primarily for JP to govern and Christel to operate.
+> Christel owns and operates Shiloh Massage Therapy & Aesthetic Clinic. Shiloh OS should allow Christel to administer the business herself. JP helps build, govern technically, test and improve the system under delegated authority.
 
-## JP authority
-
-JP is the accountable human system owner and final governance authority for security, production boundaries, permissions/roles, structural system changes, integration ownership, destructive/irreversible actions and delegation of authority.
-
-## Christel authority
-
-Christel is the primary day-to-day clinic operations administrator for Calendar, booking, CRM and client communication workflows, subject to canonical safeguards, auditability and capability-specific rules.
-
-Christel does not receive implied infrastructure or self-escalation authority.
-
-## Least-privilege rule
-
-All other human roles derive from operational need and least privilege.
-
-Technical principals such as service accounts, system users, integrations, databases and deployment services are technical identities only; they are never independent human business authority.
-
-## Product-design implication
-
-Every future material capability must explicitly define:
-
-- JP governance/admin experience;
-- Christel operational/admin experience;
-- routine operational actions;
-- JP-only or security-sensitive actions;
-- audit and fail-closed behavior;
-- non-self-escalation behavior.
+`00 — Control & Reconciliation` remains the engineering/control process for sequencing, evidence, gates and reconciliation. It is not an independent human business owner.
 
 ## Runtime permission boundary
 
-This Master Status decision does not claim that every existing runtime permission already matches this model.
+The 2026-08-27 governance correction is documentation/governance authority only. It does not silently mutate GitHub, Render, Meta, database, application, Calendar, CRM, staff accounts, bookings, credentials or other runtime permissions/state.
 
-No GitHub permission, Render role, Meta asset, token, database permission, application role, CRM record or production configuration is changed by this governance unit.
+Concrete runtime alignment remains separately controlled.
 
-Any concrete permission alignment is a separate controlled implementation and must respect recommendation-vs-authorization boundaries.
+## Reconciliation rule
 
-## Existing authority retained
+Any current Control Cockpit, Master Status, Tracker projection, issue, PR or future capability specification that needs to state broad human business ownership must use the 2026-08-27 corrected model.
 
-- 10 Calendar/booking units remain COMPLETE / FROZEN.
-- 20 client-facing-name authority remains ACTIVE under its own Control authorization.
-- 30 Meta verification remains WAITING EXTERNAL on Meta Business Support.
-- 40 remains evidence/production observer when routed.
-- 00 remains authority, sequencing and reconciliation owner.
-
-## Reconciliation outcome
-
-After merge, the Project Tracker, Master Status and Control Cockpit must all show the same principal model:
-
-**JP = System Owner / Super Admin**
-
-**Christel = Operations Admin**
-
-No completed implementation is reopened by this governance decision.
+Capability-specific bounded permissions may remain narrower and must be implemented/reconciled through their own controlled units.
