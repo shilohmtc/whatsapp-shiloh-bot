@@ -93,7 +93,10 @@ test('Shiloh Workspace launcher puts Open Calendar before Admin and does not nes
   ]);
   assert.match(launcher.body, /^\*Shiloh Workspace 🌿\*/);
   assert.doesNotMatch(interactiveSource, /admin_action_open_calendar/);
-  assert.doesNotMatch(interactiveSource, /title: 'Open Calendar'.*sectionTitle/s);
+  const adminSection = sectionInteractive('Reports', '*Shiloh Admin 🌿*\n\n*Reports*\n1️⃣ Today\'s report');
+  assert.ok(adminSection);
+  assert.equal(adminSection.rows.some((row) => row.id === 'admin_open_calendar'), false);
+  assert.equal(adminSection.rows.some((row) => row.title === 'Open Calendar'), false);
 });
 
 test('Admin section back navigation returns to Admin root, not to the Workspace launcher', () => {
