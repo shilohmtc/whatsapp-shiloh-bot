@@ -9,7 +9,7 @@ const {
   renderOperationalActions,
   eventsForDate,
 } = require('../src/presentation/calendarReadOnlyUx');
-const { bookingOperationalActions } = require('../src/routes/calendarReadOnlyUx');
+const { bookingOperationalActions, applyCalendarResponsivePolish } = require('../src/routes/calendarReadOnlyUx');
 
 function model(view = 'day') {
   const appointment = {
@@ -126,12 +126,14 @@ test('operational action contract exposes only guarded Create booking', () => {
   assert.doesNotMatch(routeSource, /Confirm client contact|\/calendar\/client-authority/);
 });
 
-test('narrow-screen contract keeps 44px targets, sticky controls and one-day week scanning', () => {
-  const html = renderCalendarPage(model('week'));
+test('narrow-screen contract keeps all control groups inside one mobile column', () => {
+  const raw = renderCalendarPage(model('week'));
+  const html = applyCalendarResponsivePolish(raw);
   assert.match(html, /@media\(max-width:700px\)/);
   assert.match(html, /\.action-link,.signout-button\{min-height:44px/);
   assert.match(html, /\.nav-button,\.view-tab,\.filter,\.scope-pill\{min-height:44px/);
-  assert.match(html, /\.controls\{position:sticky/);
+  assert.match(html, /\.controls\{position:sticky;top:0;z-index:5;grid-template-columns:1fr;/);
+  assert.doesNotMatch(html, /\.controls\{position:sticky;top:0;z-index:5;grid-template-columns:1fr 1fr;/);
   assert.match(html, /minmax\(82vw,1fr\)/);
   assert.match(html, /scroll-snap-type:x proximity/);
 });

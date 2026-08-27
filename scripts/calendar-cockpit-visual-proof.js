@@ -5,6 +5,7 @@ const crypto = require('node:crypto');
 const { spawnSync } = require('node:child_process');
 const { pathToFileURL } = require('node:url');
 const { renderCalendarPage } = require('../src/presentation/calendarReadOnlyUx');
+const { applyCalendarResponsivePolish } = require('../src/routes/calendarReadOnlyUx');
 
 function chromeExecutable() {
   const candidates = [
@@ -75,10 +76,10 @@ fs.mkdirSync(outDir, { recursive: true });
 const manifest = [];
 
 for (const view of ['day', 'week', 'agenda']) {
-  const html = renderCalendarPage(buildModel(view), {
+  const html = applyCalendarResponsivePolish(renderCalendarPage(buildModel(view), {
     operationalActions: [{ label: 'Create booking', href: '/calendar/book?date=2026-08-27', tone: 'primary' }],
     timelineReadOnlyMessage: 'Timeline remains read-only. New booking creation uses the guarded Shiloh workflow.',
-  });
+  }));
   if (/Google-only|Non-canonical|PR #395|Confirm client contact|client-authority/i.test(html)) {
     throw new Error(`${view} visual proof contains prohibited legacy Calendar text`);
   }

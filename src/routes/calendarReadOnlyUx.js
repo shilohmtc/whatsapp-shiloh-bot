@@ -47,6 +47,13 @@ function bookingOperationalActions(dateKey, bookingPath = '/calendar/book') {
   return [{ label: 'Create booking', href, tone: 'primary' }];
 }
 
+function applyCalendarResponsivePolish(html) {
+  return String(html).replace(
+    '.controls{position:sticky;top:0;z-index:5;grid-template-columns:1fr 1fr;',
+    '.controls{position:sticky;top:0;z-index:5;grid-template-columns:1fr;',
+  );
+}
+
 // Compatibility fallback for renderers that do not yet consume operationalActions.
 // Authority is resolved server-side before this decoration is ever used.
 function decorateEmergencyBookingEntry(html, dateKey, bookingPath = '/calendar/book') {
@@ -110,6 +117,7 @@ function createCalendarReadOnlyHandler({
           ? 'Timeline remains read-only. New booking creation uses the separately guarded canonical workflow. Reschedule, cancellation, drag/drop, reassignment, block, leave and schedule mutations are not available here.'
           : 'Read-only operational view. Booking, reschedule, cancellation, block, leave and schedule mutations are not available here.',
       });
+      html = applyCalendarResponsivePolish(html);
 
       if (bookingAllowed && !String(html).includes('aria-label="Calendar actions"')) {
         html = decorateEmergencyBookingEntry(html, model.dateKey, bookingPath);
@@ -141,3 +149,4 @@ module.exports.resolveServerViewer = resolveServerViewer;
 module.exports.setCalendarSecurityHeaders = setCalendarSecurityHeaders;
 module.exports.decorateEmergencyBookingEntry = decorateEmergencyBookingEntry;
 module.exports.bookingOperationalActions = bookingOperationalActions;
+module.exports.applyCalendarResponsivePolish = applyCalendarResponsivePolish;
