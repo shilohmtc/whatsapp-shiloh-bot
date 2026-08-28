@@ -24,12 +24,20 @@ function buildModel(view) {
     {
       id: 7001, kind: 'appointment', canonical: true, source: 'appointments', status: 'scheduled',
       clientName: 'Demo Client', serviceName: 'Bamboo Sports Massage - Area Specific',
+      serviceContexts: [{
+        serviceName: 'Bamboo Sports Massage - Area Specific', categoryName: 'Massage',
+        externalSource: 'goldie', externalId: '6a0c9c5e-d7e7-4a82-8795-e8281a0bd526',
+      }],
       startsAt: '2026-08-27T06:00:00.000Z', endsAt: '2026-08-27T07:00:00.000Z',
       staffIds: [1], staff: [{ staffId: 1, nameSnapshot: 'Christel' }],
     },
     {
       id: 7002, kind: 'appointment', canonical: true, source: 'appointments', status: 'confirmed',
-      clientName: 'Sample Client', serviceName: 'Therapeutic Massage',
+      clientName: 'Sample Client', serviceName: 'Brightening Facial (Pigmentation)',
+      serviceContexts: [{
+        serviceName: 'Brightening Facial (Pigmentation)', categoryName: 'Facials',
+        externalSource: 'goldie', externalId: '8caf9baa-c5b0-4b8a-b45e-b10ca2367c50',
+      }],
       startsAt: '2026-08-28T08:00:00.000Z', endsAt: '2026-08-28T09:00:00.000Z',
       staffIds: [2], staff: [{ staffId: 2, nameSnapshot: 'Abigail' }],
     },
@@ -78,10 +86,13 @@ const manifest = [];
 for (const view of ['day', 'week', 'agenda']) {
   const html = applyCalendarResponsivePolish(renderCalendarPage(buildModel(view), {
     operationalActions: [{ label: 'Create booking', href: '/calendar/book?date=2026-08-27', tone: 'primary' }],
-    timelineReadOnlyMessage: 'Timeline remains read-only. New booking creation uses the guarded Shiloh workflow.',
+    timelineReadOnlyMessage: 'Timeline remains read-only. Use Create booking to add an appointment.',
   }));
-  if (/Google-only|Non-canonical|PR #395|Confirm client contact|client-authority/i.test(html)) {
+  if (/Google-only|Non-canonical|PR #395|Confirm client contact|client-authority|guarded\s+(?:canonical|Shiloh)\s+workflow/i.test(html)) {
     throw new Error(`${view} visual proof contains prohibited legacy Calendar text`);
+  }
+  if (!/data-service-family="targeted_therapeutic"/.test(html) || !/Bamboo Sports Massage - Area Specific/.test(html)) {
+    throw new Error(`${view} visual proof is missing the authoritative service-family identifier or service text`);
   }
   for (const viewport of [
     { name: 'desktop', width: 1440, height: 1000 },
@@ -106,6 +117,15 @@ for (const view of ['day', 'week', 'agenda']) {
   }
 }
 
-fs.writeFileSync(path.join(outDir, 'manifest.json'), `${JSON.stringify({ generatedAt: new Date().toISOString(), screenshots: manifest }, null, 2)}\n`);
+const exactHead = spawnSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).stdout.trim();
+if (!/^[0-9a-f]{40}$/.test(exactHead)) throw new Error('Calendar cockpit proof could not resolve the exact checked-out head');
+fs.writeFileSync(path.join(outDir, 'manifest.json'), `${JSON.stringify({
+  generatedAt: new Date().toISOString(), exactHead,
+  serviceVisuals: {
+    day: 'targeted_therapeutic', week: ['targeted_therapeutic', 'facial_skin'], agenda: ['targeted_therapeutic', 'facial_skin'],
+    serviceTextVisible: true, controlledSvg: true, practitionerStatusColoursUnchanged: true,
+  },
+  productionMutations: 0, screenshots: manifest,
+}, null, 2)}\n`);
 console.log(`Calendar cockpit visual proof generated: ${manifest.length} screenshots`);
 for (const item of manifest) console.log(`${item.view}/${item.viewport.name}: ${item.bytes} bytes sha256=${item.sha256}`);

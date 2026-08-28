@@ -96,6 +96,13 @@ function aggregateAppointments(rows, permittedStaffIds) {
         recordSource: row.record_source || null,
         clientName: row.client_name || 'Client',
         serviceName: row.service_name || 'Appointment',
+        serviceContexts: Array.isArray(row.service_contexts) ? row.service_contexts.map((service) => ({
+          serviceId: Number(service.serviceId || service.service_id) || null,
+          serviceName: service.serviceName || service.service_name || null,
+          categoryName: service.categoryName || service.category_name || null,
+          externalSource: service.externalSource || service.external_source || null,
+          externalId: service.externalId || service.external_id || null,
+        })) : [],
         revision: row.updated_at ? new Date(row.updated_at).toISOString() : null,
         staff: [],
         staffIds: [],
@@ -261,6 +268,17 @@ function createSchedulingEngine({
              COALESCE(c.display_name,a.source_client_name,'Client') AS client_name,
              COALESCE((SELECT string_agg(aps.service_name_snapshot,' + ' ORDER BY aps.position)
                          FROM appointment_services aps WHERE aps.appointment_id=a.id),a.title,'Appointment') AS service_name,
+             COALESCE((SELECT jsonb_agg(jsonb_build_object(
+                               'serviceId', aps.service_id,
+                               'serviceName', aps.service_name_snapshot,
+                               'categoryName', sc.name,
+                               'externalSource', s.external_source,
+                               'externalId', s.external_id
+                             ) ORDER BY aps.position)
+                         FROM appointment_services aps
+                         LEFT JOIN services s ON s.id=aps.service_id
+                         LEFT JOIN service_categories sc ON sc.id=s.category_id
+                        WHERE aps.appointment_id=a.id),'[]'::jsonb) AS service_contexts,
              ast.staff_id AS assigned_staff_id, ast.staff_name_snapshot
         FROM appointments a
         LEFT JOIN clients c ON c.id=a.client_id
