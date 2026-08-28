@@ -10,8 +10,17 @@ const {
   resolveClientFacingName,
   promoteClientFacingNameInTransaction,
 } = require("./clientFacingNameAuthority");
+const {
+  IDENTITY_MODELS,
+  createLegacyIdentity,
+  identityFromSession,
+  sessionIdentityColumns,
+  identityAuditMetadata,
+  createWhatsAppCrmV2IdentityCompatService,
+} = require("./whatsappCrmV2IdentityCompat");
 
 const AUTHORITY_VERSION = "verified_client_v2_archive_reclaim";
+const whatsappCrmV2IdentityCompat = createWhatsAppCrmV2IdentityCompatService();
 
 function normalizePhone(value = "") { return String(value).replace(/[^0-9]/g, ""); }
 function normalizeRegistrationMobile(value = "") {
@@ -131,6 +140,8 @@ const REGISTRATION_START_PROMPT = [
 
 const HUMAN_VERIFICATION_REPLY = "I found an existing Shiloh profile linked to this number, but I can’t safely treat the phone, imported details or appointment history as identity proof. Please contact the clinic team so we can verify the correct profile before continuing.";
 const IDENTITY_CONFLICT_REPLY = "I found an identity conflict with this WhatsApp number, so I won’t merge, select or update a client profile automatically. Please contact the clinic team so we can verify the correct profile safely.";
+const CRM_V2_COMPAT_INACTIVE_REPLY = "Your Shiloh CRM V2 profile is present, but WhatsApp CRM V2 registration is not active yet. I won’t create a second client profile. Please contact the clinic team for help.";
+const CRM_V2_STALE_AUTHORITY_REPLY = "Your saved WhatsApp client identity no longer matches the exact current CRM V2 mobile owner. I won’t guess, rebind or create another client profile. Please contact the clinic team so we can verify it safely.";
 
 let onboardingSchemaPromise = null;
 async function ensureOnboardingSchema() {
@@ -151,10 +162,13 @@ async function ensureOnboardingSchema() {
 // orthogonal registration requirement, not identity proof.
 async function resolveClientByWhatsApp(phone) {
   const authority = await resolveVerifiedClientByWhatsApp(phone);
+  const clientIdentity = authority.status === "verified_client" && authority.client?.id
+    ? createLegacyIdentity(authority.client.id, { provenance: "legacy_whatsapp_resolver" })
+    : null;
   if (authority.status === "verified_client") {
-    return { ...authority, status: "unique", authorityStatus: "verified_client" };
+    return { ...authority, status: "unique", authorityStatus: "verified_client", clientIdentity };
   }
-  return { ...authority, authorityStatus: authority.status };
+  return { ...authority, authorityStatus: authority.status, clientIdentity };
 }
 function profileComplete(client) {
   return registrationStatus({ fullName: client?.display_name, mobileNumber: client?.normalized_value, dateOfBirth: client?.date_of_birth }).complete;
@@ -162,7 +176,7 @@ function profileComplete(client) {
 
 async function getSession(phone) {
   await ensureOnboardingSchema();
-  const r = await pool.query(`SELECT phone,client_id,state,pending_name,pending_contact,pending_date_of_birth,pending_gender,booking_requested,authority_version,created_at,updated_at FROM client_onboarding_sessions WHERE phone=$1`, [normalizePhone(phone)]);
+  const r = await pool.query(`SELECT phone,client_id,crm_v2_client_id,identity_model,state,pending_name,pending_contact,pending_date_of_birth,pending_gender,booking_requested,authority_version,created_at,updated_at FROM client_onboarding_sessions WHERE phone=$1`, [normalizePhone(phone)]);
   return r.rows[0] || null;
 }
 function patchValue(patch, key, current, fallback = null) {
@@ -172,8 +186,32 @@ async function saveSession(phone, patch = {}) {
   await ensureOnboardingSchema();
   const key = normalizePhone(phone);
   const c = (await getSession(key)) || {};
+  const hasClientPatch = Object.prototype.hasOwnProperty.call(patch, "clientId");
+  const hasCrmV2Patch = Object.prototype.hasOwnProperty.call(patch, "crmV2ClientId");
+  let candidateClientId = patchValue(patch, "clientId", c.client_id);
+  let candidateCrmV2ClientId = patchValue(patch, "crmV2ClientId", c.crm_v2_client_id);
+  if (hasClientPatch && candidateClientId !== null && candidateClientId !== undefined && String(candidateClientId) !== "") {
+    if (hasCrmV2Patch && candidateCrmV2ClientId !== null && candidateCrmV2ClientId !== undefined && String(candidateCrmV2ClientId) !== "") {
+      identityFromSession({ client_id: candidateClientId, crm_v2_client_id: candidateCrmV2ClientId });
+    }
+    candidateCrmV2ClientId = null;
+  } else if (hasCrmV2Patch && candidateCrmV2ClientId !== null && candidateCrmV2ClientId !== undefined && String(candidateCrmV2ClientId) !== "") {
+    candidateClientId = null;
+  }
+  const identityFieldsChanged = hasClientPatch || hasCrmV2Patch;
+  const candidateModel = Object.prototype.hasOwnProperty.call(patch, "identityModel")
+    ? patch.identityModel
+    : identityFieldsChanged
+      ? (candidateClientId ? IDENTITY_MODELS.LEGACY : candidateCrmV2ClientId ? IDENTITY_MODELS.CRM_V2 : null)
+      : c.identity_model;
+  const durableIdentity = identityFromSession({
+    client_id: candidateClientId,
+    crm_v2_client_id: candidateCrmV2ClientId,
+    identity_model: candidateModel,
+  });
+  const identityColumns = sessionIdentityColumns(durableIdentity);
   const values = {
-    clientId: patchValue(patch, "clientId", c.client_id),
+    ...identityColumns,
     state: patchValue(patch, "state", c.state, "collect_name"),
     pendingName: patchValue(patch, "pendingName", c.pending_name),
     pendingContact: patchValue(patch, "pendingContact", c.pending_contact, key),
@@ -182,7 +220,7 @@ async function saveSession(phone, patch = {}) {
     bookingRequested: patchValue(patch, "bookingRequested", c.booking_requested, false),
     authorityVersion: patchValue(patch, "authorityVersion", c.authority_version, AUTHORITY_VERSION),
   };
-  const r = await pool.query(`INSERT INTO client_onboarding_sessions (phone,client_id,state,pending_name,pending_contact,pending_date_of_birth,pending_gender,booking_requested,authority_version,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NOW()) ON CONFLICT (phone) DO UPDATE SET client_id=EXCLUDED.client_id,state=EXCLUDED.state,pending_name=EXCLUDED.pending_name,pending_contact=EXCLUDED.pending_contact,pending_date_of_birth=EXCLUDED.pending_date_of_birth,pending_gender=EXCLUDED.pending_gender,booking_requested=EXCLUDED.booking_requested,authority_version=EXCLUDED.authority_version,updated_at=NOW() RETURNING *`, [key,values.clientId,values.state,values.pendingName,values.pendingContact,values.pendingDateOfBirth,values.pendingGender,values.bookingRequested,values.authorityVersion]);
+  const r = await pool.query(`INSERT INTO client_onboarding_sessions (phone,client_id,crm_v2_client_id,identity_model,state,pending_name,pending_contact,pending_date_of_birth,pending_gender,booking_requested,authority_version,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,NOW()) ON CONFLICT (phone) DO UPDATE SET client_id=EXCLUDED.client_id,crm_v2_client_id=EXCLUDED.crm_v2_client_id,identity_model=EXCLUDED.identity_model,state=EXCLUDED.state,pending_name=EXCLUDED.pending_name,pending_contact=EXCLUDED.pending_contact,pending_date_of_birth=EXCLUDED.pending_date_of_birth,pending_gender=EXCLUDED.pending_gender,booking_requested=EXCLUDED.booking_requested,authority_version=EXCLUDED.authority_version,updated_at=NOW() RETURNING *`, [key,values.clientId,values.crmV2ClientId,values.identityModel,values.state,values.pendingName,values.pendingContact,values.pendingDateOfBirth,values.pendingGender,values.bookingRequested,values.authorityVersion]);
   return r.rows[0];
 }
 function nextState(session = {}) {
@@ -211,6 +249,12 @@ function ambiguousContactError(message) {
 
 async function completeOnboarding(phone, session) {
   const key = normalizePhone(phone);
+  const durableIdentity = identityFromSession(session);
+  if (durableIdentity?.identityModel === IDENTITY_MODELS.CRM_V2) {
+    const error = new Error("WhatsApp CRM V2 registration is not active");
+    error.code = "CRM_V2_WHATSAPP_REGISTRATION_INACTIVE";
+    throw error;
+  }
   if (!session.pending_gender) {
     const e = new Error("Client registration is incomplete: missing gender");
     e.code = "CLIENT_REGISTRATION_INCOMPLETE";
@@ -304,8 +348,9 @@ async function completeOnboarding(phone, session) {
       actorReference: "whatsapp_registration",
     });
 
-    await db.query(`INSERT INTO crm_audit_events (action,entity_type,entity_id,metadata) VALUES ('client.identity_verified','client',$1,$2::jsonb)`, [clientId, JSON.stringify({ verificationMethod, verificationId, nameAuthorityId: nameAuthority.authorityId, authorityVersion: AUTHORITY_VERSION, reactivatedFromStatus })]);
-    await db.query(`UPDATE client_onboarding_sessions SET client_id=$2,state='complete',authority_version=$3,updated_at=NOW() WHERE phone=$1`, [key, clientId, AUTHORITY_VERSION]);
+    const completedIdentity = createLegacyIdentity(clientId, { provenance: "legacy_whatsapp_registration" });
+    await db.query(`INSERT INTO crm_audit_events (action,entity_type,entity_id,metadata) VALUES ('client.identity_verified','client',$1,$2::jsonb)`, [clientId, JSON.stringify({ verificationMethod, verificationId, nameAuthorityId: nameAuthority.authorityId, authorityVersion: AUTHORITY_VERSION, reactivatedFromStatus, identity: identityAuditMetadata(completedIdentity, { resolution: "legacy_whatsapp_registration" }) })]);
+    await db.query(`UPDATE client_onboarding_sessions SET client_id=$2,state='complete',authority_version=$3,crm_v2_client_id=NULL,identity_model='legacy',updated_at=NOW() WHERE phone=$1`, [key, clientId, AUTHORITY_VERSION]);
     await db.query("COMMIT");
     const client = await pool.query(`SELECT c.id,c.display_name,c.date_of_birth,c.custom_attributes->>'gender' AS gender,cc.normalized_value,cc.verified_at FROM clients c JOIN client_contacts cc ON cc.client_id=c.id AND cc.normalized_value=$2 WHERE c.id=$1 ORDER BY CASE WHEN cc.contact_type='whatsapp' THEN 0 ELSE 1 END LIMIT 1`, [clientId, key]);
     return client.rows[0];
@@ -326,9 +371,10 @@ async function processActiveSession(phone, text, session) {
   if (state !== "complete") return { handled: true, reply: promptForMissing(session) };
   try {
     const client = await completeOnboarding(phone, session);
-    return { handled: true, onboardingComplete: true, resumeBooking: true, identityStatus: "verified_complete", client, reply: `Thank you, ${client.display_name}. 🌿 Your Shiloh client registration is complete.` };
+    return { handled: true, onboardingComplete: true, resumeBooking: true, identityStatus: "verified_complete", clientIdentity: createLegacyIdentity(client.id, { provenance: "legacy_whatsapp_registration" }), client, reply: `Thank you, ${client.display_name}. 🌿 Your Shiloh client registration is complete.` };
   } catch (error) {
     if (error.code === "AMBIGUOUS_CONTACT" || error.code === "23505") return { handled: true, identityStatus: "ambiguous", reply: IDENTITY_CONFLICT_REPLY };
+    if (error.code === "CRM_V2_WHATSAPP_REGISTRATION_INACTIVE") return { handled: true, identityStatus: "crm_v2_compat_inactive", reply: CRM_V2_COMPAT_INACTIVE_REPLY };
     throw error;
   }
 }
@@ -357,6 +403,21 @@ async function resetSessionForCurrentAuthority(phone, identity, existingSession)
 
 async function processClientIdentityMessage(phone, text) {
   let existingSession = await getSession(phone);
+  if (existingSession) {
+    let durableIdentity;
+    try {
+      durableIdentity = identityFromSession(existingSession);
+    } catch (_error) {
+      return { handled: true, identityStatus: "identity_contract_invalid", resumeBooking: false, reply: HUMAN_VERIFICATION_REPLY };
+    }
+    if (durableIdentity?.identityModel === IDENTITY_MODELS.CRM_V2) {
+      const revalidated = await whatsappCrmV2IdentityCompat.revalidateSessionIdentity({ phone, session: existingSession });
+      if (revalidated.status === "crm_v2_current") {
+        return { handled: true, identityStatus: "crm_v2_compat_inactive", resumeBooking: false, clientIdentity: durableIdentity, client: revalidated.client, identityAudit: revalidated.audit, reply: CRM_V2_COMPAT_INACTIVE_REPLY };
+      }
+      return { handled: true, identityStatus: revalidated.status, resumeBooking: false, clientIdentity: durableIdentity, client: null, identityAudit: revalidated.audit, recovery: revalidated.recovery || "manual_rebind_required", reply: CRM_V2_STALE_AUTHORITY_REPLY };
+    }
+  }
   if (existingSession && existingSession.state !== "complete") {
     if (existingSession.authority_version !== AUTHORITY_VERSION) {
       const authority = await resolveVerifiedClientByWhatsApp(phone);
@@ -383,12 +444,13 @@ async function processClientIdentityMessage(phone, text) {
   }
 
   if (isVerifiedRegistration(identity)) {
+    const clientIdentity = createLegacyIdentity(identity.client.id, { provenance: "legacy_verified_whatsapp" });
     if (isGreetingOnly(text) || walkinRequest) {
       const facingName = await resolveClientFacingName(identity.client.id);
       const welcomeBack = facingName.name ? `Welcome back, *${firstName(facingName.name)}* 🌿` : "Welcome back 🌿";
-      return { handled: true, identityStatus: "matched_complete", onboardingComplete: true, resumeBooking: true, client: identity.client, reply: `${PREMIUM_GREETING}\n\n${welcomeBack}` };
+      return { handled: true, identityStatus: "matched_complete", onboardingComplete: true, resumeBooking: true, clientIdentity, client: identity.client, reply: `${PREMIUM_GREETING}\n\n${welcomeBack}` };
     }
-    return { handled: false, identityStatus: "matched_complete", client: identity.client };
+    return { handled: false, identityStatus: "matched_complete", clientIdentity, client: identity.client };
   }
 
   const known = identity.client || null;
@@ -434,4 +496,6 @@ module.exports = {
   REGISTRATION_START_PROMPT,
   HUMAN_VERIFICATION_REPLY,
   IDENTITY_CONFLICT_REPLY,
+  CRM_V2_COMPAT_INACTIVE_REPLY,
+  CRM_V2_STALE_AUTHORITY_REPLY,
 };

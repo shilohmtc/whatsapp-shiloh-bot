@@ -91,7 +91,12 @@ async function repairJeanPierreIdentity() {
 
     await db.query(`
       UPDATE client_onboarding_sessions
-         SET client_id = $2, state = 'complete', pending_name = 'Jean-Pierre', updated_at = NOW()
+         SET client_id = $2,
+             crm_v2_client_id = NULL,
+             identity_model = 'legacy',
+             state = 'complete',
+             pending_name = 'Jean-Pierre',
+             updated_at = NOW()
        WHERE phone = $1
     `, [contact.normalized_value, jeanPierreId]);
 
