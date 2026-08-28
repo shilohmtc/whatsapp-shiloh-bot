@@ -65,13 +65,13 @@ test('086 enforces no dual master and a strict durable discriminator without bac
   assert.match(sql, /client_onboarding_sessions_identity_model_check[\s\S]*NOT VALID/);
 });
 
-test('production startup verifies 086 before it accepts traffic and records inactive activation state', () => {
+test('production startup still verifies 086 before traffic and now reports registration active', () => {
   const app = read('app.js');
   const migration = app.indexOf("applyMigrationFile('086_whatsapp_crm_v2_identity_compat.sql')");
   const listen = app.indexOf('app.listen(PORT');
   assert.ok(migration >= 0 && listen > migration);
   assert.match(app, /identityContractVersion: 'whatsapp_crm_identity_compat_v1'/);
-  assert.match(app, /crmV2RegistrationActive: false/);
+  assert.match(app, /crmV2RegistrationActive: true/);
 });
 
 test('legacy identities are tagged and cannot carry a CRM V2 id', () => {
@@ -273,9 +273,9 @@ test('onboarding persistence reads and writes both identity columns and the disc
   assert.match(onboarding, /identityFromSession\(\{\s*client_id: candidateClientId,\s*crm_v2_client_id: candidateCrmV2ClientId/);
 });
 
-test('normal legacy onboarding still creates and completes the retained legacy client path', () => {
+test('retained legacy onboarding completes only an already-bound legacy client', () => {
   const onboarding = read('src/services/clientIdentityOnboarding.js');
-  assert.match(onboarding, /INSERT INTO clients \(date_of_birth,custom_attributes,source\)/);
+  assert.doesNotMatch(onboarding, /INSERT INTO clients \(date_of_birth,custom_attributes,source\)/);
   assert.match(onboarding, /INSERT INTO client_contacts \(client_id,contact_type,value,normalized_value,is_primary,verified_at\)/);
   assert.match(onboarding, /UPDATE client_onboarding_sessions SET client_id=\$2,state='complete',authority_version=\$3,crm_v2_client_id=NULL,identity_model='legacy'/);
   assert.match(onboarding, /createLegacyIdentity\(client\.id, \{ provenance: "legacy_whatsapp_registration" \}\)/);
@@ -286,22 +286,24 @@ test('legacy repair writes the same exclusive durable discriminator', () => {
   assert.match(repair, /SET client_id = \$2,\s*crm_v2_client_id = NULL,\s*identity_model = 'legacy'/);
 });
 
-test('V2 registration remains inactive and cannot fall through to legacy creation', () => {
+test('V2 registration is active and cannot fall through to legacy creation', () => {
   const onboarding = read('src/services/clientIdentityOnboarding.js');
-  const completion = onboarding.indexOf('async function completeOnboarding');
-  const inactiveGuard = onboarding.indexOf('CRM_V2_WHATSAPP_REGISTRATION_INACTIVE', completion);
-  const legacyInsert = onboarding.indexOf('INSERT INTO clients', completion);
-  assert.ok(completion >= 0 && inactiveGuard > completion && legacyInsert > inactiveGuard);
-  assert.match(onboarding, /identityStatus: "crm_v2_compat_inactive", resumeBooking: false/);
+  const completion = onboarding.indexOf('async function completeCrmV2Onboarding');
+  const registration = onboarding.indexOf('await registrationBoundary', completion);
+  const persistence = onboarding.indexOf('const persisted = await persistSession', completion);
+  assert.ok(completion >= 0 && registration > completion && persistence > registration);
+  assert.doesNotMatch(onboarding, /CRM_V2_WHATSAPP_REGISTRATION_INACTIVE/);
+  assert.doesNotMatch(onboarding, /INSERT INTO clients \(date_of_birth,custom_attributes,source\)/);
   assert.match(onboarding, /identityStatus: revalidated\.status, resumeBooking: false/);
 });
 
-test('production identity compatibility code never calls CRM V2 registration or creates a shadow V2/legacy master', () => {
+test('production onboarding calls the canonical CRM V2 registration boundary without a shadow master', () => {
   const compat = read('src/services/whatsappCrmV2IdentityCompat.js');
   const onboarding = read('src/services/clientIdentityOnboarding.js');
   assert.match(compat, /resolveExactMobile: resolveCanonicalCrmV2ExactMobile/);
   assert.doesNotMatch(compat, /registerWhatsAppClient|createClient|completeRegistration/);
-  assert.doesNotMatch(onboarding, /registerWhatsAppClient|INSERT INTO crm_v2_clients/);
+  assert.match(onboarding, /registerWhatsAppClient/);
+  assert.doesNotMatch(onboarding, /INSERT INTO (?:clients|crm_v2_clients) \(/);
   assert.doesNotMatch(compat, /INSERT INTO (?:clients|crm_v2_clients|client_contacts)/);
 });
 
@@ -320,7 +322,7 @@ test('the identity foundation introduces no provider, booking, approval, appoint
   assert.doesNotMatch(migration, /(?:INSERT INTO|UPDATE|DELETE FROM) (?:appointments|bookings|clients|crm_v2_clients)/i);
 });
 
-test('booking consumers now use the centralized discriminated compatibility seam without activating registration', () => {
+test('booking consumers keep using the centralized discriminated compatibility seam after activation', () => {
   const gate = read('src/services/clientBookingIdentityGate.js');
   const commit = read('src/services/clientBookingCommit.js');
   const bookingIdentity = read('src/services/whatsappBookingIdentity.js');

@@ -179,7 +179,7 @@ test('imported DOB and gender are not seeded into a fresh archive-aware claim se
 
 test('archive-aware completion locks same canonical client and preserves provenance/history while name promotion owns the display-name projection', () => {
   const onboarding = source('src/services/clientIdentityOnboarding.js');
-  assert.match(onboarding, /let clientId = session\.client_id/);
+  assert.match(onboarding, /const clientId = durableIdentity\.legacyClientId/);
   assert.match(onboarding, /SELECT id,source,status FROM clients WHERE id=\$1 FOR UPDATE/);
   assert.match(onboarding, /canonicalClient\.status === "archived"/);
   assert.match(onboarding, /clientSource !== "goldie_import"/);
@@ -191,13 +191,14 @@ test('archive-aware completion locks same canonical client and preserves provena
   assert.doesNotMatch(onboarding, /(?:UPDATE|DELETE FROM) appointments/i);
 });
 
-test('completion revalidates exact-phone ownership before reactivation and blocks duplicate creation', () => {
+test('retained legacy completion revalidates exact-phone ownership and cannot create a new legacy master', () => {
   const onboarding = source('src/services/clientIdentityOnboarding.js');
   const contactLock = onboarding.indexOf("SELECT id,client_id,contact_type FROM client_contacts WHERE normalized_value=$1");
   const reactivate = onboarding.indexOf("UPDATE clients SET status='active'");
   assert.ok(contactLock >= 0 && reactivate >= 0 && contactLock < reactivate);
   assert.match(onboarding, /contacts\.rows\.some\(\(row\) => String\(row\.client_id\) !== String\(clientId\)\)/);
-  assert.match(onboarding, /if \(contacts\.rowCount\)[\s\S]*WhatsApp number already belongs to a canonical client/);
+  assert.match(onboarding, /LEGACY_ONBOARDING_IDENTITY_REQUIRED/);
+  assert.doesNotMatch(onboarding, /INSERT INTO clients \(date_of_birth,custom_attributes,source\)/);
   assert.match(onboarding, /AMBIGUOUS_CONTACT/);
 });
 

@@ -233,11 +233,11 @@ test('notification retry and idempotency mechanisms are retained for both identi
   assert.match(customerChange, /v2\.normalized_mobile/);
 });
 
-test('CRM V2 registration remains inactive and no shadow master write exists', () => {
+test('CRM V2 registration activation remains isolated from reschedule and creates no shadow master', () => {
   const onboarding = read('src/services/clientIdentityOnboarding.js');
   const approval = read('src/services/clientRescheduleApproval.js');
   const bookingIdentity = read('src/services/whatsappBookingIdentity.js');
-  assert.match(onboarding, /CRM_V2_WHATSAPP_REGISTRATION_INACTIVE/);
-  assert.doesNotMatch(`${onboarding}\n${approval}\n${bookingIdentity}`, /registerWhatsAppClient\s*\(/);
+  assert.match(onboarding, /registerWhatsAppClient/);
+  assert.doesNotMatch(`${approval}\n${bookingIdentity}`, /registerWhatsAppClient\s*\(/);
   assert.doesNotMatch(`${approval}\n${bookingIdentity}`, /INSERT INTO (?:clients|client_contacts|crm_v2_clients)/i);
 });
