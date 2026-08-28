@@ -4,7 +4,11 @@ const {
   REGISTRATION_START_PROMPT,
   PREMIUM_GREETING,
 } = require('./clientIdentityOnboarding');
-const { resolveVerifiedClientByWhatsApp } = require('./clientVerifiedIdentity');
+const {
+  resolveWhatsAppBookingIdentity,
+  bookingProfileComplete,
+} = require('./whatsappBookingIdentity');
+const { IDENTITY_MODELS } = require('./whatsappCrmV2IdentityCompat');
 const { sendWhatsAppList } = require('./whatsapp');
 
 const UNIVERSAL_WELCOME_VERSION = 'v2';
@@ -136,9 +140,9 @@ async function ensureWelcomeSchema() {
 }
 
 async function resolveClientState(phone) {
-  const identity = await resolveVerifiedClientByWhatsApp(phone);
-  if (identity.status === 'verified_client') {
-    return { status: 'unique', authorityStatus: identity.status, client: identity.client, clients: identity.clients, registrationComplete: identity.registrationComplete };
+  const identity = await resolveWhatsAppBookingIdentity(phone);
+  if (identity.status === 'unique') {
+    return { status: 'unique', authorityStatus: identity.authorityStatus, clientIdentity: identity.clientIdentity, client: identity.client, clients: identity.clients || [], registrationComplete: bookingProfileComplete(identity.clientIdentity, identity.client) };
   }
   return { status: identity.status, authorityStatus: identity.status, client: identity.client || null, clients: identity.clients || [], registrationComplete: false };
 }
@@ -239,11 +243,12 @@ async function processClientTransitionWelcome(phone, text) {
 
   if (clientState.status === 'unique' && clientState.registrationComplete && clientState.client?.gender) {
     const client = clientState.client;
+    const legacyClientId = clientState.clientIdentity?.identityModel === IDENTITY_MODELS.LEGACY ? clientState.clientIdentity.legacyClientId : null;
     return {
       handled: true,
       reply: PREMIUM_GREETING,
       client,
-      postSend: registeredClientPostSend(phone, client.id),
+      postSend: registeredClientPostSend(phone, legacyClientId),
     };
   }
 

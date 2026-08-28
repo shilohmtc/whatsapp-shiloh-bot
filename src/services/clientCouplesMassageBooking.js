@@ -10,6 +10,11 @@ const {
   profileComplete,
 } = require('./clientIdentityOnboarding');
 const {
+  resolveWhatsAppBookingIdentity,
+  CRM_V2_LEGACY_ONLY_BOUNDARY_REPLY,
+} = require('./whatsappBookingIdentity');
+const { IDENTITY_MODELS } = require('./whatsappCrmV2IdentityCompat');
+const {
   POLICY_TEXT,
   POLICY_VERSION,
   ensurePolicySchema,
@@ -256,6 +261,10 @@ function reviewInteractive(intent, leadClient) {
 }
 
 async function startCouplesMassage(phone) {
+  const bookingIdentity = await resolveWhatsAppBookingIdentity(phone);
+  if (bookingIdentity.clientIdentity?.identityModel === IDENTITY_MODELS.CRM_V2) {
+    return { handled: true, status: 'crm_v2_couples_legacy_boundary', reply: CRM_V2_LEGACY_ONLY_BOUNDARY_REPLY };
+  }
   const identity = await resolveClientByWhatsApp(phone);
   if (identity.status !== 'unique' || !profileComplete(identity.client)) {
     return {

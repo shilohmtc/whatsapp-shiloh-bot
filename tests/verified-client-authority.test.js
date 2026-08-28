@@ -233,14 +233,17 @@ test('premium welcome exact-once delivery state is not mutated by reclaim implem
   assert.match(onboarding, /const PREMIUM_GREETING = \[/);
 });
 
-test('Booking/Admin gate and final commit inherit the same centralized resolver authority', () => {
+test('Booking/Admin gate and final commit inherit the centralized discriminated resolver authority', () => {
   const onboarding = source('src/services/clientIdentityOnboarding.js');
   const gate = source('src/services/clientBookingIdentityGate.js');
   const commit = source('src/services/clientBookingCommit.js');
+  const bookingIdentity = source('src/services/whatsappBookingIdentity.js');
   assert.match(onboarding, /resolveVerifiedClientByWhatsApp/);
   assert.match(onboarding, /status:\s*"unique",\s*authorityStatus:\s*"verified_client"/);
-  assert.match(gate, /resolveClientByWhatsApp/);
-  assert.match(commit, /resolveClientByWhatsApp/);
+  assert.match(gate, /resolveWhatsAppBookingIdentity/);
+  assert.match(commit, /resolveWhatsAppBookingIdentity/);
+  assert.match(bookingIdentity, /resolveVerifiedClientByWhatsApp/);
+  assert.match(bookingIdentity, /revalidateSessionIdentity/);
 });
 
 test('forward migration 074 remains unchanged in role and has no trust backfill after later migrations', () => {

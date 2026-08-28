@@ -1,6 +1,13 @@
 const { pool } = require('../db/pool');
 const { getIntent, verifyService } = require('./bookingIntent');
-const { normalizePhone, resolveClientByWhatsApp, profileComplete } = require('./clientIdentityOnboarding');
+const {
+  normalizePhone,
+  resolveWhatsAppBookingIdentity,
+  bookingProfileComplete,
+  resolveFinalBookingIdentity,
+  appointmentIdentityColumns,
+} = require('./whatsappBookingIdentity');
+const { identityAuditMetadata } = require('./whatsappCrmV2IdentityCompat');
 const { getDefaultActiveLocation, checkClinicHours } = require('./clinicHours');
 const { checkAvailability, checkAuthoritativeSchedule, getConflicts } = require('./adminAvailability');
 const logger = require('../lib/logger');
@@ -64,8 +71,8 @@ function chooseAnotherTimeReply(reason) {
 }
 
 async function resolveCommitContext(phone, intent) {
-  const identity = await resolveClientByWhatsApp(phone);
-  if (identity.status !== 'unique' || !profileComplete(identity.client)) {
+  const identity = await resolveWhatsAppBookingIdentity(phone);
+  if (identity.status !== 'unique' || !bookingProfileComplete(identity.clientIdentity, identity.client)) {
     return {
       status: 'identity_not_ready',
       reply: 'I can’t safely create this appointment because the WhatsApp number no longer resolves to one complete Shiloh client profile. Nothing has been booked.',
@@ -128,6 +135,7 @@ async function resolveCommitContext(phone, intent) {
 
   return {
     status: 'ready',
+    clientIdentity: identity.clientIdentity,
     client: identity.client,
     location,
     availability,
@@ -177,27 +185,44 @@ async function commitAcceptedClientBooking(phone) {
 
     await db.query('SELECT pg_advisory_xact_lock($1::bigint)', [context.availability.staff.id]);
 
+    const finalIdentity = await resolveFinalBookingIdentity({
+      db,
+      phone: normalizedPhone,
+      identity: context.clientIdentity,
+    });
+    if (finalIdentity.status !== 'ready') {
+      await db.query('ROLLBACK');
+      return {
+        handled: true,
+        status: finalIdentity.status,
+        reply: 'The exact canonical client identity changed before final appointment creation, so nothing was booked. Please contact the clinic team so the identity can be verified safely.',
+      };
+    }
+    const appointmentIdentity = appointmentIdentityColumns(finalIdentity.identity, finalIdentity.client);
+
     const canonicalResult = await db.query(`
-      SELECT c.id AS client_id, c.display_name AS client_name, c.status AS client_status,
-             st.id AS staff_id, st.display_name AS staff_name, st.status AS staff_status,
+      SELECT st.id AS staff_id, st.display_name AS staff_name, st.status AS staff_status,
              st.client_bookable,
              s.id AS service_id, s.name AS service_name, s.status AS service_status,
              s.duration_minutes, s.processing_time_minutes, s.extra_time_minutes,
              s.price, s.variable_price,
              l.id AS location_id, l.name AS location_name, l.status AS location_status
-        FROM clients c
-        CROSS JOIN staff st
+        FROM staff st
         CROSS JOIN services s
         CROSS JOIN locations l
-       WHERE c.id = $1
-         AND st.id = $2
-         AND s.id = $3
-         AND l.id = $4
-    `, [context.client.id, context.availability.staff.id, context.availability.service.id, context.location.id]);
-    const canonical = canonicalResult.rows[0] || null;
+       WHERE st.id = $1
+         AND s.id = $2
+         AND l.id = $3
+    `, [context.availability.staff.id, context.availability.service.id, context.location.id]);
+    const canonicalResources = canonicalResult.rows[0] || null;
+    const canonical = canonicalResources ? {
+      ...canonicalResources,
+      client_id: appointmentIdentity.clientId,
+      crm_v2_client_id: appointmentIdentity.crmV2ClientId,
+      client_name: appointmentIdentity.sourceClientName,
+    } : null;
     if (
       !canonical
-      || canonical.client_status !== 'active'
       || canonical.staff_status !== 'active'
       || canonical.service_status !== 'active'
       || canonical.location_status !== 'active'
@@ -253,13 +278,9 @@ async function commitAcceptedClientBooking(phone) {
     }
 
     const totalPrice = canonical.variable_price ? null : canonical.price;
-    const appointmentResult = await db.query(`
-      INSERT INTO appointments
-        (client_id, location_id, starts_at, ends_at, status, title, total_price, currency, source)
-      VALUES ($1, $2, $3, $4, 'scheduled', $5, $6, 'ZAR', $7)
-      RETURNING id, starts_at, ends_at, status
-    `, [canonical.client_id, canonical.location_id, startsAt, endsAt, canonical.service_name, totalPrice, BOOKING_SOURCE]);
-    const appointment = appointmentResult.rows[0];
+    const appointment = await insertOrdinaryClientAppointment(
+      db, appointmentIdentity, canonical.location_id, startsAt, endsAt, canonical.service_name, totalPrice
+    );
 
     await db.query(`
       INSERT INTO appointment_services
@@ -285,6 +306,9 @@ async function commitAcceptedClientBooking(phone) {
       VALUES ('client.booking_created', 'appointment', $1, $2::jsonb)
     `, [appointment.id, JSON.stringify({
       clientId: canonical.client_id,
+      crmV2ClientId: canonical.crm_v2_client_id,
+      clientNameSnapshot: canonical.client_name,
+      identity: identityAuditMetadata(finalIdentity.identity, { resolution: finalIdentity.audit?.identityResolution || 'final_booking_authority' }),
       staffId: canonical.staff_id,
       serviceId: canonical.service_id,
       locationId: canonical.location_id,
@@ -306,6 +330,7 @@ async function commitAcceptedClientBooking(phone) {
       handled: true,
       status: 'created',
       appointmentId: appointment.id,
+      clientIdentity: finalIdentity.identity,
       reply: [
         `Booking created successfully — appointment #${appointment.id}.`,
         `• Service: ${canonical.service_name}`,
@@ -323,6 +348,18 @@ async function commitAcceptedClientBooking(phone) {
   } finally {
     db.release();
   }
+}
+
+async function insertOrdinaryClientAppointment(
+  db, appointmentIdentity, locationId, startsAt, endsAt, serviceName, totalPrice
+) {
+  const result = await db.query(`
+    INSERT INTO appointments
+      (client_id, crm_v2_client_id, source_client_name, location_id, starts_at, ends_at, status, title, total_price, currency, source)
+    VALUES ($1, $2, $3, $4, $5, $6, 'scheduled', $7, $8, 'ZAR', $9)
+    RETURNING id, starts_at, ends_at, status
+  `, [appointmentIdentity.clientId, appointmentIdentity.crmV2ClientId, appointmentIdentity.sourceClientName, locationId, startsAt, endsAt, serviceName, totalPrice, BOOKING_SOURCE]);
+  return result.rows[0];
 }
 
 function isCommitRetry(text = '') {
@@ -367,6 +404,7 @@ module.exports = {
   adminAvailabilityDateTime,
   commitAcceptedClientBooking,
   exactTime,
+  insertOrdinaryClientAppointment,
   processAcceptedClientBookingMessage,
   resetAcceptedIntentForNewSlot,
 };

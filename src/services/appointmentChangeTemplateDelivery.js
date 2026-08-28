@@ -27,7 +27,7 @@ async function appointmentTemplateContext(phone, appointmentId) {
   const normalized = String(phone || '').replace(/[^0-9]/g, '');
   const result = await pool.query(`
     SELECT a.id, a.starts_at,
-           COALESCE(c.display_name, a.source_client_name, 'there') AS client_name,
+           COALESCE(v2.name,c.display_name, a.source_client_name, 'there') AS client_name,
            COALESCE((SELECT string_agg(service_name_snapshot, ' + ' ORDER BY position)
                      FROM appointment_services WHERE appointment_id=a.id), a.title, 'Shiloh appointment') AS service_name,
            COALESCE((SELECT string_agg(staff_name_snapshot, ' + ' ORDER BY position)
@@ -35,8 +35,10 @@ async function appointmentTemplateContext(phone, appointmentId) {
       FROM appointments a
       LEFT JOIN clients c ON c.id=a.client_id
       LEFT JOIN client_contacts cc ON cc.client_id=c.id
+      LEFT JOIN crm_v2_clients v2 ON v2.id=a.crm_v2_client_id AND v2.status='active'
      WHERE a.id=$2
-       AND (cc.normalized_value=$1 OR a.client_id IS NULL)
+       AND ((a.client_id IS NOT NULL AND a.crm_v2_client_id IS NULL AND cc.normalized_value=$1)
+            OR (a.client_id IS NULL AND a.crm_v2_client_id IS NOT NULL AND v2.normalized_mobile=$1))
      ORDER BY cc.is_primary DESC NULLS LAST, cc.id
      LIMIT 1`, [normalized, Number(appointmentId)]);
   return result.rows[0] || null;

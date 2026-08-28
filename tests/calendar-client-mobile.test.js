@@ -23,7 +23,8 @@ test('calendar appointment presentation uses native location and hides internal 
 });
 
 test('client WhatsApp booking resolves one identity without exposing it to an external calendar', () => {
-  assert.match(clientCommitSource, /resolveClientByWhatsApp/);
+  assert.match(clientCommitSource, /resolveWhatsAppBookingIdentity/);
+  assert.match(clientCommitSource, /resolveFinalBookingIdentity/);
   assert.match(clientCommitSource, /identity\.status !== 'unique'/);
   assert.doesNotMatch(clientCommitSource, /clientMobile: normalizedPhone|createBookingEvent|appointment_calendar_events/);
 });

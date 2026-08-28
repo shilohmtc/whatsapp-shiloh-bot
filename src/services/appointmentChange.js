@@ -4,6 +4,7 @@ const { checkClinicHours } = require("./clinicHours");
 const { checkAuthoritativeSchedule } = require("./adminAvailability");
 const logger = require("../lib/logger");
 const { fullLabelDescription } = require('../presentation/whatsappListRowPresentation');
+const { CRM_V2_LEGACY_ONLY_BOUNDARY_REPLY, resolveFinalBookingIdentity, identityFromAppointment } = require('./whatsappBookingIdentity');
 
 let initialized = false;
 const APPOINTMENT_CHOICE_PAGE_SIZE = 8;
@@ -45,16 +46,18 @@ async function saveIntent(phone,patch={}){await ensureTable();const key=normaliz
 async function clearIntent(phone){await ensureTable();await pool.query(`DELETE FROM appointment_change_intents WHERE phone=$1`,[normalizePhone(phone)]);}
 
 async function upcomingForPhone(phone){const key=normalizePhone(phone);const r=await pool.query(`
- SELECT DISTINCT a.id,a.client_id,a.location_id,a.starts_at,a.ends_at,a.status,a.source,
-   COALESCE(c.display_name,a.source_client_name,'Client') client_name,
+ SELECT DISTINCT a.id,a.client_id,a.crm_v2_client_id,a.location_id,a.starts_at,a.ends_at,a.status,a.source,
+   CASE WHEN a.crm_v2_client_id IS NOT NULL THEN 'crm_v2' ELSE 'legacy' END identity_model,
+   COALESCE(v2.name,c.display_name,a.source_client_name,'Client') client_name,
    COALESCE((SELECT string_agg(service_name_snapshot,' + ' ORDER BY position) FROM appointment_services WHERE appointment_id=a.id),a.title,'Appointment') service_name,
    COALESCE((SELECT string_agg(staff_name_snapshot,' + ' ORDER BY position) FROM appointment_staff WHERE appointment_id=a.id),'Shiloh practitioner') staff_name,
    COALESCE((SELECT staff_id FROM appointment_staff WHERE appointment_id=a.id ORDER BY position LIMIT 1),0) staff_id,
    (SELECT COUNT(*) FROM appointment_staff WHERE appointment_id=a.id) staff_count
  FROM appointments a
- JOIN clients c ON c.id=a.client_id
- JOIN client_contacts cc ON cc.client_id=c.id
- WHERE cc.normalized_value=$1 AND cc.contact_type IN ('whatsapp','mobile','phone')
+ LEFT JOIN clients c ON c.id=a.client_id
+ LEFT JOIN crm_v2_clients v2 ON v2.id=a.crm_v2_client_id AND v2.status='active'
+ WHERE ((a.client_id IS NOT NULL AND a.crm_v2_client_id IS NULL AND EXISTS (SELECT 1 FROM client_contacts cc WHERE cc.client_id=a.client_id AND cc.normalized_value=$1 AND cc.contact_type IN ('whatsapp','mobile','phone')))
+    OR (a.client_id IS NULL AND a.crm_v2_client_id IS NOT NULL AND v2.normalized_mobile=$1))
    AND a.status<>'cancelled' AND a.ends_at>NOW()
  ORDER BY a.starts_at`,[key]);return r.rows;}
 async function appointmentForPhone(phone,id){const rows=await upcomingForPhone(phone);return rows.find(x=>Number(x.id)===Number(id))||null;}
@@ -149,7 +152,19 @@ function cancellationSuccessInteractive(a){
   };
 }
 
-async function cancelCanonical(phone,a){const db=await pool.connect();try{await db.query('BEGIN');const locked=await db.query(`SELECT status FROM appointments WHERE id=$1 FOR UPDATE`,[a.id]);if(!locked.rows[0]||locked.rows[0].status==='cancelled'){await db.query('ROLLBACK');return{status:'already_cancelled'};}await db.query(`UPDATE appointments SET status='cancelled',updated_at=NOW() WHERE id=$1`,[a.id]);await db.query(`UPDATE appointment_lifecycle SET status='cancelled',updated_at=NOW() WHERE appointment_id=$1`,[a.id]);await db.query(`INSERT INTO appointment_status_history(appointment_id,from_status,to_status,changed_by,reason) VALUES($1,$2,'cancelled',$3,'Client cancellation confirmed in WhatsApp')`,[a.id,locked.rows[0].status,`client:${normalizePhone(phone)}`]);await db.query(`INSERT INTO crm_audit_events(action,entity_type,entity_id,metadata) VALUES('client.appointment_cancelled','appointment',$1,$2::jsonb)`,[a.id,JSON.stringify({phone:normalizePhone(phone),schedulingAuthority:'shiloh_canonical'})]);await db.query('COMMIT');return{status:'cancelled'};}catch(e){try{await db.query('ROLLBACK');}catch(_){}throw e;}finally{db.release();}}
+async function cancelCanonical(phone,a){const db=await pool.connect();try{
+ await db.query('BEGIN');
+ const identity=identityFromAppointment(a);
+ const authority=await resolveFinalBookingIdentity({db,phone,identity});
+ if(authority.status!=='ready'){await db.query('ROLLBACK');return{status:'identity_changed',reply:'The exact canonical client identity changed before cancellation, so the appointment was not changed.'};}
+ const locked=await db.query(`SELECT status,client_id,crm_v2_client_id FROM appointments WHERE id=$1 AND client_id IS NOT DISTINCT FROM $2::bigint AND crm_v2_client_id IS NOT DISTINCT FROM $3::bigint FOR UPDATE`,[a.id,identity.legacyClientId||null,identity.crmV2ClientId||null]);
+ if(!locked.rows[0]||locked.rows[0].status==='cancelled'){await db.query('ROLLBACK');return{status:'already_cancelled'};}
+ await db.query(`UPDATE appointments SET status='cancelled',updated_at=NOW() WHERE id=$1`,[a.id]);
+ await db.query(`UPDATE appointment_lifecycle SET status='cancelled',updated_at=NOW() WHERE appointment_id=$1`,[a.id]);
+ await db.query(`INSERT INTO appointment_status_history(appointment_id,from_status,to_status,changed_by,reason) VALUES($1,$2,'cancelled',$3,'Client cancellation confirmed in WhatsApp')`,[a.id,locked.rows[0].status,`client:${normalizePhone(phone)}`]);
+ await db.query(`INSERT INTO crm_audit_events(action,entity_type,entity_id,metadata) VALUES('client.appointment_cancelled','appointment',$1,$2::jsonb)`,[a.id,JSON.stringify({phone:normalizePhone(phone),identityModel:identity.identityModel,clientId:identity.legacyClientId,crmV2ClientId:identity.crmV2ClientId,identityResolution:authority.audit?.identityResolution||null,schedulingAuthority:'shiloh_canonical'})]);
+ await db.query('COMMIT');return{status:'cancelled'};
+ }catch(e){try{await db.query('ROLLBACK');}catch(_){}throw e;}finally{db.release();}}
 
 async function rescheduleCanonical(phone,a,date,time){
  const starts=localDateTime(date,time);
@@ -197,15 +212,15 @@ async function rescheduleCanonical(phone,a,date,time){
  }finally{db.release();}
 }
 
-async function processAppointmentChangeMessage(phone,text){try{const action=detectAction(text);let intent=await getIntent(phone);if(intent&&isAbort(text)){await clearIntent(phone);return{handled:true,reply:'No problem — I stopped that request. Your appointment is unchanged.'};}if(action&&intent&&intent.action!==action){await clearIntent(phone);intent=null;}if(!intent&&!action)return{handled:false};if(!intent){intent=await saveIntent(phone,{action,status:'selecting_appointment'});}if(intent.status==='selecting_appointment'){const selected=await selectAppointment(phone,text,intent);if(selected.error==='none'){await clearIntent(phone);return{handled:true,reply:'I can’t find an upcoming Shiloh appointment linked to this WhatsApp number.'};}if(selected.error==='choose'||selected.error==='ambiguous_date'||selected.error==='page'){return{handled:true,interactive:appointmentChoiceInteractive(selected.matches,intent.action,selected.page||1)};}const a=selected.appointment;intent=await saveIntent(phone,{appointmentId:a.id,currentDate:localDateOf(a.starts_at),status:intent.action==='cancel'?'awaiting_confirmation':'collecting'});if(intent.action==='cancel')return{handled:true,reply:[`Please confirm the cancellation:`,summary(a),'',latePolicy(a.starts_at),'','Reply *YES* to cancel this booking, or *STOP* to leave it unchanged.'].join('\n')};const date=extractDate(text);const time=extractTime(text);if(date||time){intent=await saveIntent(phone,{preferredDate:date||null,preferredTime:time||null,status:'collecting'});}if(!intent.preferred_date)return rescheduleDateChoice(a);if(!intent.preferred_time)return{handled:true,reply:'What exact new time would you prefer? For example *14:00* or *2pm*.'};intent=await saveIntent(phone,{status:'awaiting_confirmation'});return{handled:true,reply:[`Please confirm this reschedule:`,summary(a),'',`➡️ New date: ${displayDate(intent.preferred_date)}`,`➡️ New time: ${intent.preferred_time}`,'',latePolicy(a.starts_at),'','Reply *YES* to reschedule, or *STOP* to leave it unchanged.'].join('\n')};}
- const a=await appointmentForPhone(phone,intent.appointment_id);if(!a){await clearIntent(phone);return{handled:true,reply:'That booking is no longer available to change. Please start again.'};}
+async function processAppointmentChangeMessage(phone,text){try{const action=detectAction(text);let intent=await getIntent(phone);if(intent&&isAbort(text)){await clearIntent(phone);return{handled:true,reply:'No problem — I stopped that request. Your appointment is unchanged.'};}if(action&&intent&&intent.action!==action){await clearIntent(phone);intent=null;}if(!intent&&!action)return{handled:false};if(!intent){intent=await saveIntent(phone,{action,status:'selecting_appointment'});}if(intent.status==='selecting_appointment'){const selected=await selectAppointment(phone,text,intent);if(selected.error==='none'){await clearIntent(phone);return{handled:true,reply:'I can’t find an upcoming Shiloh appointment linked to this WhatsApp number.'};}if(selected.error==='choose'||selected.error==='ambiguous_date'||selected.error==='page'){return{handled:true,interactive:appointmentChoiceInteractive(selected.matches,intent.action,selected.page||1)};}const a=selected.appointment;if(intent.action==='reschedule'&&a.identity_model==='crm_v2'){await clearIntent(phone);return{handled:true,status:'crm_v2_reschedule_legacy_boundary',reply:CRM_V2_LEGACY_ONLY_BOUNDARY_REPLY};}intent=await saveIntent(phone,{appointmentId:a.id,currentDate:localDateOf(a.starts_at),status:intent.action==='cancel'?'awaiting_confirmation':'collecting'});if(intent.action==='cancel')return{handled:true,reply:[`Please confirm the cancellation:`,summary(a),'',latePolicy(a.starts_at),'','Reply *YES* to cancel this booking, or *STOP* to leave it unchanged.'].join('\n')};const date=extractDate(text);const time=extractTime(text);if(date||time){intent=await saveIntent(phone,{preferredDate:date||null,preferredTime:time||null,status:'collecting'});}if(!intent.preferred_date)return rescheduleDateChoice(a);if(!intent.preferred_time)return{handled:true,reply:'What exact new time would you prefer? For example *14:00* or *2pm*.'};intent=await saveIntent(phone,{status:'awaiting_confirmation'});return{handled:true,reply:[`Please confirm this reschedule:`,summary(a),'',`➡️ New date: ${displayDate(intent.preferred_date)}`,`➡️ New time: ${intent.preferred_time}`,'',latePolicy(a.starts_at),'','Reply *YES* to reschedule, or *STOP* to leave it unchanged.'].join('\n')};}
+ const a=await appointmentForPhone(phone,intent.appointment_id);if(!a){await clearIntent(phone);return{handled:true,reply:'That booking is no longer available to change. Please start again.'};}if(intent.action==='reschedule'&&a.identity_model==='crm_v2'){await clearIntent(phone);return{handled:true,status:'crm_v2_reschedule_legacy_boundary',reply:CRM_V2_LEGACY_ONLY_BOUNDARY_REPLY};}
  if(intent.status==='collecting'){let patch={};if(String(text || '').trim().toLowerCase()==='reschedule_date_other'){
   return{
     handled:true,
     reply:'Please type another date, for example Friday, next Monday, or 21 August.'
   };
 }if(!intent.preferred_date){const d=extractDate(text);if(d)patch.preferredDate=d;}if(!intent.preferred_time){const t=extractTime(text);if(t)patch.preferredTime=t;}intent=await saveIntent(phone,patch);if(!intent.preferred_date)return rescheduleDateChoice(a);if(!intent.preferred_time)return{handled:true,reply:'What exact new time would you prefer? For example *14:00* or *2pm*.'};if(!parseClock(intent.preferred_time))return{handled:true,reply:'Please send an exact time, for example *14:00* or *2pm*.'};intent=await saveIntent(phone,{status:'awaiting_confirmation'});return{handled:true,reply:[`Please confirm this reschedule:`,summary(a),'',`➡️ New date: ${displayDate(intent.preferred_date)}`,`➡️ New time: ${intent.preferred_time}`,'',latePolicy(a.starts_at),'','Reply *YES* to reschedule, or *STOP* to leave the appointment unchanged.'].join('\n')};}
- if(intent.status==='awaiting_confirmation'){if(!isConfirmation(text))return{handled:true,reply:'Please reply *YES* to confirm this change, or *STOP* to leave the appointment unchanged.'};if(intent.action==='cancel'){const result=await cancelCanonical(phone,a);await clearIntent(phone);if(result.status==='cancelled')return{handled:true,interactive:cancellationSuccessInteractive(a)};return{handled:true,reply:'That appointment was already cancelled or changed. No duplicate cancellation was made.'};}const result=await rescheduleCanonical(phone,a,intent.preferred_date,intent.preferred_time);if(result.status==='rescheduled'){await clearIntent(phone);return{handled:true,reply:[`✅ Your appointment has been rescheduled.`,`✨ ${a.service_name}`,`👤 ${a.staff_name}`,`📅 ${fmtDateTime(result.starts)}`,'','Your Shiloh appointment is updated. 🌿'].join('\n')};}return{handled:true,reply:result.reply||'I couldn’t safely reschedule that booking. Please choose another time.'};}
+ if(intent.status==='awaiting_confirmation'){if(!isConfirmation(text))return{handled:true,reply:'Please reply *YES* to confirm this change, or *STOP* to leave the appointment unchanged.'};if(intent.action==='cancel'){const result=await cancelCanonical(phone,a);await clearIntent(phone);if(result.status==='cancelled')return{handled:true,interactive:cancellationSuccessInteractive(a)};return{handled:true,reply:result.reply||'That appointment was already cancelled or changed. No duplicate cancellation was made.'};}const result=await rescheduleCanonical(phone,a,intent.preferred_date,intent.preferred_time);if(result.status==='rescheduled'){await clearIntent(phone);return{handled:true,reply:[`✅ Your appointment has been rescheduled.`,`✨ ${a.service_name}`,`👤 ${a.staff_name}`,`📅 ${fmtDateTime(result.starts)}`,'','Your Shiloh appointment is updated. 🌿'].join('\n')};}return{handled:true,reply:result.reply||'I couldn’t safely reschedule that booking. Please choose another time.'};}
  return{handled:false};}catch(error){logger.error({err:error},'Canonical client appointment change failed');return{handled:true,reply:'I couldn’t safely complete that appointment change right now. Your current booking has not been intentionally changed. Please try again or contact the clinic team.'};}}
 
 module.exports={processAppointmentChangeMessage,getIntent,clearIntent,ensureTable,detectAction,appointmentChoiceInteractive,cancellationSuccessInteractive};

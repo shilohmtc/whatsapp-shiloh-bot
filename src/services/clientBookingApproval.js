@@ -146,8 +146,12 @@ async function approvalContext(appointmentId, db = pool) {
     SELECT aba.appointment_id,aba.approver_staff_id,aba.approver_admin_id,aba.observer_staff_id,
            aba.status,aba.approval_mode,aba.approver_notified_at,aba.backup_notified_at,aba.observer_notified_at,
            aba.decided_at,aba.decided_by_admin_id,aba.decision_note,
-           a.client_id,a.starts_at,a.ends_at,a.status AS appointment_status,
-           c.display_name AS client_name,
+           a.client_id,a.crm_v2_client_id,a.starts_at,a.ends_at,a.status AS appointment_status,
+           CASE WHEN a.crm_v2_client_id IS NOT NULL THEN 'crm_v2' ELSE 'legacy' END AS identity_model,
+           COALESCE(v2.name,c.display_name,a.source_client_name) AS client_name,
+           CASE WHEN a.crm_v2_client_id IS NOT NULL THEN v2.normalized_mobile
+                ELSE (SELECT normalized_value FROM client_contacts cc WHERE cc.client_id=a.client_id AND contact_type IN ('whatsapp','mobile') AND normalized_value IS NOT NULL ORDER BY is_primary DESC,id LIMIT 1)
+           END AS client_phone,
            COALESCE((SELECT string_agg(aps.service_name_snapshot, ' + ' ORDER BY aps.position) FROM appointment_services aps WHERE aps.appointment_id=a.id),a.title) AS service_name,
            COALESCE((SELECT string_agg(ast.staff_name_snapshot, ' + ' ORDER BY ast.position) FROM appointment_staff ast WHERE ast.appointment_id=a.id),primary_staff.display_name,backup_admin.display_name) AS staff_name,
            primary_staff.display_name AS primary_name,
@@ -155,11 +159,14 @@ async function approvalContext(appointmentId, db = pool) {
            observer.display_name AS observer_name
       FROM appointment_booking_approvals aba
       JOIN appointments a ON a.id=aba.appointment_id
-      JOIN clients c ON c.id=a.client_id
+      LEFT JOIN clients c ON c.id=a.client_id
+      LEFT JOIN crm_v2_clients v2 ON v2.id=a.crm_v2_client_id AND v2.status='active'
       LEFT JOIN staff primary_staff ON primary_staff.id=aba.approver_staff_id
       LEFT JOIN staff_admin_accounts backup_admin ON backup_admin.id=aba.approver_admin_id AND backup_admin.active=TRUE
       LEFT JOIN staff observer ON observer.id=aba.observer_staff_id
-     WHERE aba.appointment_id=$1`, [appointmentId]);
+     WHERE aba.appointment_id=$1
+       AND num_nonnulls(a.client_id,a.crm_v2_client_id)=1
+       AND (a.crm_v2_client_id IS NULL OR v2.id IS NOT NULL)`, [appointmentId]);
   return result.rows[0] || null;
 }
 
@@ -292,14 +299,21 @@ async function lockedDecisionContext(db, appointmentId) {
   const result = await db.query(`
     SELECT aba.appointment_id,aba.approver_staff_id,aba.approver_admin_id,aba.observer_staff_id,
            aba.status,aba.approval_mode,aba.decided_by_admin_id,aba.decision_note,
-           a.client_id,a.starts_at,a.ends_at,a.status AS appointment_status,
-           c.display_name AS client_name,
+           a.client_id,a.crm_v2_client_id,a.starts_at,a.ends_at,a.status AS appointment_status,
+           CASE WHEN a.crm_v2_client_id IS NOT NULL THEN 'crm_v2' ELSE 'legacy' END AS identity_model,
+           COALESCE(v2.name,c.display_name,a.source_client_name) AS client_name,
+           CASE WHEN a.crm_v2_client_id IS NOT NULL THEN v2.normalized_mobile
+                ELSE (SELECT normalized_value FROM client_contacts cc WHERE cc.client_id=a.client_id AND contact_type IN ('whatsapp','mobile') AND normalized_value IS NOT NULL ORDER BY is_primary DESC,id LIMIT 1)
+           END AS client_phone,
            COALESCE((SELECT string_agg(aps.service_name_snapshot,' + ' ORDER BY aps.position) FROM appointment_services aps WHERE aps.appointment_id=a.id),a.title) AS service_name,
            COALESCE((SELECT string_agg(ast.staff_name_snapshot,' + ' ORDER BY ast.position) FROM appointment_staff ast WHERE ast.appointment_id=a.id),'Shiloh practitioner') AS staff_name
       FROM appointment_booking_approvals aba
       JOIN appointments a ON a.id=aba.appointment_id
-      JOIN clients c ON c.id=a.client_id
+      LEFT JOIN clients c ON c.id=a.client_id
+      LEFT JOIN crm_v2_clients v2 ON v2.id=a.crm_v2_client_id AND v2.status='active'
      WHERE aba.appointment_id=$1
+       AND num_nonnulls(a.client_id,a.crm_v2_client_id)=1
+       AND (a.crm_v2_client_id IS NULL OR v2.id IS NOT NULL)
      FOR UPDATE OF aba,a`, [appointmentId]);
   return result.rows[0] || null;
 }
@@ -406,7 +420,7 @@ async function approveBookingRequest(admin, context) {
     const note = controlledValidation ? `first_decision:${controlledValidation.role.toLowerCase()}` : null;
     const updated = await db.query(`UPDATE appointment_booking_approvals SET status='approved',decided_at=NOW(),decided_by_admin_id=$2,decision_note=COALESCE($3,decision_note),updated_at=NOW() WHERE appointment_id=$1 AND status='pending' RETURNING appointment_id`, [locked.appointment_id, admin.id, note]);
     if (updated.rowCount !== 1) { await db.query('ROLLBACK'); return { handled: true, reply: 'This booking request changed before your decision could be recorded. No second decision was written.' }; }
-    await db.query(`INSERT INTO crm_audit_events(action,entity_type,entity_id,metadata) VALUES ('client.booking_approval.approved','appointment',$1,$2::jsonb)`, [locked.appointment_id, JSON.stringify({ decisionMakerStaffId: admin.staff_id || null, decisionMakerAdminId: admin.id, decisionMakerName: admin.display_name, approvalRole: controlledValidation?.role || null, approvalMode: locked.approval_mode, controlledDemoKey: controlledValidation ? DEMO_KEY : null })]);
+    await db.query(`INSERT INTO crm_audit_events(action,entity_type,entity_id,metadata) VALUES ('client.booking_approval.approved','appointment',$1,$2::jsonb)`, [locked.appointment_id, JSON.stringify({ decisionMakerStaffId: admin.staff_id || null, decisionMakerAdminId: admin.id, decisionMakerName: admin.display_name, approvalRole: controlledValidation?.role || null, approvalMode: locked.approval_mode, controlledDemoKey: controlledValidation ? DEMO_KEY : null, identityModel: locked.identity_model, clientId: locked.client_id || null, crmV2ClientId: locked.crm_v2_client_id || null })]);
     await db.query('COMMIT');
   } catch (error) {
     try { await db.query('ROLLBACK'); } catch (_) {}
@@ -460,7 +474,7 @@ async function declineBookingRequest(admin, context) {
       await db.query(`UPDATE appointments SET status='cancelled',updated_at=NOW() WHERE id=$1 AND status<>'cancelled'`, [locked.appointment_id]);
       await db.query(`INSERT INTO appointment_status_history(appointment_id,from_status,to_status,changed_by,reason) VALUES ($1,$2,'cancelled',$3,'Authorized practitioner/supervisor declined client booking request')`, [locked.appointment_id, locked.appointment_status, `admin:${admin.id}`]);
     }
-    await db.query(`INSERT INTO crm_audit_events(action,entity_type,entity_id,metadata) VALUES ('client.booking_approval.declined','appointment',$1,$2::jsonb)`, [locked.appointment_id, JSON.stringify({ decisionMakerStaffId: admin.staff_id || null, decisionMakerAdminId: admin.id, decisionMakerName: admin.display_name, approvalRole: controlledValidation?.role || null, approvalMode: locked.approval_mode, controlledDemoKey: controlledValidation ? DEMO_KEY : null })]);
+    await db.query(`INSERT INTO crm_audit_events(action,entity_type,entity_id,metadata) VALUES ('client.booking_approval.declined','appointment',$1,$2::jsonb)`, [locked.appointment_id, JSON.stringify({ decisionMakerStaffId: admin.staff_id || null, decisionMakerAdminId: admin.id, decisionMakerName: admin.display_name, approvalRole: controlledValidation?.role || null, approvalMode: locked.approval_mode, controlledDemoKey: controlledValidation ? DEMO_KEY : null, identityModel: locked.identity_model, clientId: locked.client_id || null, crmV2ClientId: locked.crm_v2_client_id || null })]);
     await db.query('COMMIT');
   } catch (error) {
     try { await db.query('ROLLBACK'); } catch (_) {}
@@ -469,7 +483,7 @@ async function declineBookingRequest(admin, context) {
     db.release();
   }
 
-  const phone = await clientPhone(locked.client_id);
+  const phone = locked.client_phone || (locked.client_id ? await clientPhone(locked.client_id) : null);
   if (phone) {
     const template = process.env.WHATSAPP_BOOKING_DECLINED_TEMPLATE;
     try {
