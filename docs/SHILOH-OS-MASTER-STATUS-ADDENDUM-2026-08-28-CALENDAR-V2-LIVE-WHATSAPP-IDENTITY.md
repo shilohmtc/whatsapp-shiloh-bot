@@ -4,29 +4,27 @@ Controlled unit: `SHILOH-CALENDAR-V2-LIVE-WHATSAPP-IDENTITY-RECONCILIATION`
 
 Owner: **00 — Control & Reconciliation**
 
-Status: **DURABLE PRODUCTION STATE RECONCILED**
+Status: **DURABLE PRODUCTION STATE RECONCILED — CALENDAR AND NEW WHATSAPP REGISTRATION LIVE ON CLEAN CRM V2**
 
 ## Authoritative production state
 
-Clean CRM V2 is live as the client authority for **new Shiloh Calendar bookings**.
+Clean CRM V2 is live as the client authority for:
 
-The WhatsApp runtime now has both:
+- **new Shiloh Calendar bookings**; and
+- **new/unbound WhatsApp client registration**.
 
-- a production-live dual-model client identity substrate; and
-- a production-live ordinary booking/approval/appointment-management compatibility spine for retained legacy or CRM V2 identity.
-
-**New WhatsApp CRM V2 registration is not yet active.**
+The WhatsApp runtime also has a production-live dual-model compatibility spine so retained legacy clients remain supported while new CRM V2 clients can use the ordinary booking lifecycle without a shadow legacy master.
 
 Authoritative release at reconciliation:
 
-- `main`: `cffa7c662f50e518a9a0fffad3ada08d05e4c412`;
-- tree: `b4a90f5f8e3f9534eee231d0908a87bdf4f30151`;
-- Render deploy: `dep-da8o5mf10e5c73c23ik0`;
-- migration inventory / ledger: **90 / 90**;
+- `main`: `67069fbe0b650e807060d23eda135d9772a79e20`;
+- tree: `45a421937ab929a4dab7ee07ac087074b37d628f`;
+- Render deploy: `dep-da8q5sek1f9s73ce1l10` — **LIVE**;
+- migration inventory / ledger: **91 / 91**;
 - pending migrations: **0**;
 - checksum mismatches: **0**.
 
-Issues #526, #529, #531, #534 and #535 are terminal PASS / CLOSED / DO NOT REDO.
+Issues #526, #529, #531, #534, #535, #538, #541 and #542 are terminal PASS / CLOSED / DO NOT REDO.
 
 ## Calendar CRM V2 authority
 
@@ -44,11 +42,11 @@ For new Calendar bookings:
 
 The physical migration-085 schema remains exact and catalog-attributed to transaction `73856`.
 
-The original execution source of that physical DDL remains materially unexplained. 00 did not waive or rewrite that fact. The exact migration file was reconciled to deployed inventory and ledger without re-running the already-correct DDL, and the final Calendar deployment verified migration 085 as checksum/no-op startup handling.
+The original execution source of that physical DDL remains materially unexplained. 00 did not waive or rewrite that fact. The exact migration file was reconciled to deployed inventory and ledger without re-running the already-correct DDL, and later Calendar/WhatsApp releases continue to checksum-verify the reconciled migration inventory.
 
 The migration ledger `applied_at` for 085 records ledger-reconciliation time and must not be interpreted as the unknown original physical-DDL execution time.
 
-## WhatsApp CRM V2 identity authority
+## WhatsApp CRM V2 identity substrate
 
 Production includes identity contract:
 
@@ -67,92 +65,111 @@ Migration 086 is production-live exactly once with checksum:
 
 It performed no retained-row backfill or conversion.
 
-## Core WhatsApp booking spine authority now live
+## Core WhatsApp ordinary lifecycle — production live
 
-Issue #535 is production-live.
+The ordinary single-client WhatsApp path now carries either retained legacy identity or canonical CRM V2 identity through:
 
-The ordinary single-client WhatsApp booking path now consumes the discriminated identity contract rather than treating every client identifier as a legacy `clients.id`.
+- booking identity handoff;
+- final appointment commit;
+- practitioner approval where required;
+- booking confirmation/lifecycle recipient snapshots;
+- appointment lookup and cancellation;
+- reminder confirmation;
+- customer appointment actions;
+- change notifications; and
+- practitioner-approved rescheduling.
 
 Final appointment identity authority is:
 
 - legacy booking → `appointments.client_id` populated, `appointments.crm_v2_client_id` null;
 - CRM V2 booking → `appointments.client_id` null, canonical `appointments.crm_v2_client_id` populated.
 
-For CRM V2 final booking commit, exact normalized mobile ownership is revalidated/locked through canonical CRM V2 semantics before appointment insertion. Client-facing name/mobile authority is server-derived from the canonical CRM V2 record.
+CRM V2 final booking and reschedule authority is revalidated from exact normalized mobile under the relevant transaction/locking boundary. Client-facing name/mobile authority is server-derived from canonical CRM V2 state rather than trusted carried snapshots.
 
-The compatibility release also preserves identity through ordinary practitioner approval and supports CRM V2 identity for ordinary appointment cancellation, reminder confirmation, customer actions, change notifications and the existing booking-confirmation/lifecycle snapshot seams.
+Migration 087 is production-live exactly once with checksum:
 
-Retained legacy booking behavior remains compatible and no historical appointment/client backfill occurred.
+`604fa879a6ef1afd8851a883afb45e2ebe63c42a11ff23bf27a82825eb11de78`
 
-No shadow `clients` or `client_contacts` record is manufactured for a CRM V2 identity.
+Its production schema makes retained reschedule `client_id` nullable, adds nullable `crm_v2_client_id` with `ON DELETE RESTRICT`, and enforces exactly one request identity master. No retained-row backfill or conversion occurred.
 
-## WhatsApp activation boundary
+## New WhatsApp registration — production live on Clean CRM V2
 
-WhatsApp new-client onboarding remains **legacy CRM**.
+Issue #542 and PR #543 activated the new-registration cutover.
 
-`crmV2ClientService.registerWhatsAppClient()` exists and remains inactive in the production onboarding path.
+For **new/unbound WhatsApp registration**:
 
-The last identified ordinary appointment-lifecycle blocker before registration activation is practitioner-approved rescheduling.
+- `crmV2ClientService.registerWhatsAppClient()` is the sole canonical registration write boundary;
+- inbound WhatsApp sender mobile is normalized through the canonical South African mobile rules;
+- exact-mobile lock/resolve/create/update semantics remain owned by the CRM V2 service;
+- an existing exact-mobile CRM V2 owner is completed/updated in place rather than duplicated;
+- ambiguous, stale, missing or different-owner CRM V2 authority fails closed;
+- durable onboarding ends with `client_id = NULL`, canonical `crm_v2_client_id`, and `identity_model = 'crm_v2'`;
+- booking continuation is exposed only after durable persistence and exact-mobile revalidation succeed;
+- the old unbound `INSERT INTO clients ... source='whatsapp_onboarding'` path is retired;
+- no new legacy `client_contacts` row is created solely to support new WhatsApp onboarding.
 
-Current authoritative reschedule request schema retains:
+Production startup on the activation release reports:
 
-`appointment_reschedule_requests.client_id BIGINT NOT NULL REFERENCES clients(id)`.
+- `crmV2RegistrationActive: true`;
+- `registrationBoundary: crmV2ClientService.registerWhatsAppClient`;
+- migration 086 checksum verification successful;
+- migration 087 checksum/schema verification successful with no rerun;
+- `Shiloh started`.
 
-The request creation/authority path also remains based on legacy `clients` / `client_contacts`. Consequently CRM V2 rescheduling currently fails closed rather than creating compatibility data.
+No synthetic production client, appointment or message was created for release proof. From this activation onward, legitimate real new WhatsApp registrations may create canonical CRM V2 clients through normal product behavior.
 
-This is preferable to a shadow legacy client, but it is not the desired end-state for ordinary client lifecycle operations.
+## Retained legacy compatibility
 
-Couples Massage, packages and enquiries also remain retained legacy-ID-specific/fail-closed for CRM V2 identity. These are special capabilities and can be migrated deliberately after the ordinary new-client spine is complete.
+This cutover is not a historical migration.
 
-## Active transition unit
+Retained verified legacy clients remain legacy. Existing legacy appointments, identity evidence, imported-client repair rules and normal retained relationships remain supported without bulk import, backfill or forced conversion.
 
-Issue #538 (`SHILOH-WHATSAPP-CRM-V2-RESCHEDULE-COMPAT-P0`) is the active P0.
+There is no permanent legacy/V2 dual master for a new CRM V2 client.
 
-Owner: **30 — WhatsApp & Meta Integration**.
+## Explicit special-capability boundaries
 
-Its purpose is to make the existing practitioner-approved reschedule workflow accept exactly one retained legacy identity or canonical CRM V2 identity without changing approval semantics and without activating CRM V2 registration.
+Couples Massage, package entitlement/booking and enquiry/lead paths still contain retained legacy-ID-specific assumptions.
 
-The target contract is:
+For CRM V2 identities those branches remain explicit fail-closed boundaries until a separately justified bounded migration is undertaken.
 
-- legacy reschedule request → retained `client_id`, V2 ID null;
-- CRM V2 reschedule request → `client_id` null, canonical V2 ID populated;
-- no retained-row backfill/conversion;
-- canonical exact-mobile V2 authority revalidated before request creation and relevant mutation boundaries;
-- approval/decline preserves the request and appointment client identity model;
-- approved reschedule never converts between legacy and V2 identity;
-- V2 notification name/mobile authority remains server-derived;
-- pending-hold, conflict, first-decision-wins, retry and idempotency semantics remain intact;
-- no shadow legacy client/contact write.
+Do **not** manufacture a shadow legacy client/contact merely to make those special capabilities work.
 
-## Durable transition sequence
+These special branches are not an active P0 by default. Under the Shiloh OS product test they should only be migrated when operational necessity and business value justify their lifetime complexity.
 
-1. CRM & Identity compatibility foundation (#531/#534) — **COMPLETE / LIVE**.
-2. Core ordinary WhatsApp booking/approval/appointment-management compatibility (#535) — **COMPLETE / LIVE**.
-3. Practitioner-approved reschedule compatibility (#538) — **ACTIVE**.
-4. After #538 is proven/released, route a separate explicit activation unit for new WhatsApp CRM V2 registration.
-5. Handle Couples Massage, packages, enquiries and other retained legacy-ID-specific capabilities deliberately in bounded follow-on units; explicit fail-closed behavior is acceptable until separately migrated.
-6. Evaluate legacy CRM/identity retirement only after Calendar and WhatsApp new operational paths are proven and retained dependencies no longer earn their complexity.
+## Durable transition state
+
+Completed:
+
+1. Calendar Clean CRM V2 cutover (#526/#529) — **COMPLETE / LIVE**.
+2. WhatsApp CRM V2 identity substrate (#531/#534) — **COMPLETE / LIVE**.
+3. Core ordinary WhatsApp booking lifecycle compatibility (#535) — **COMPLETE / LIVE**.
+4. Practitioner-approved reschedule compatibility and migration 087 (#538/#541) — **COMPLETE / LIVE**.
+5. New WhatsApp registration activation (#542) — **COMPLETE / LIVE**.
+
+No additional CRM V2 cutover P0 is required at this terminal state.
+
+The preferred next posture is **stabilize and observe**, not adjacent feature growth. Any later Couples/packages/enquiries conversion or legacy CRM retirement should be opened only as a separately justified controlled unit.
 
 ## Legacy and provider boundaries
 
-Legacy CRM/identity data remains physically present and authoritative for retained legacy relationships until separately retired. Do not bulk-import, backfill, reset or delete retained legacy data as part of this transition.
+Legacy CRM/identity data remains physically present and authoritative for retained legacy relationships until separately retired. Do not bulk-import, reset or delete retained legacy data merely because new Calendar/WhatsApp operational paths now use CRM V2.
 
-Physical Google provider/environment disconnection remains a separate owner-level retirement decision and is not a prerequisite for CRM V2 work.
+Physical Google provider/environment disconnection remains a separate owner-level retirement decision and is not a prerequisite for CRM V2 operation.
 
 ## Current operational spine
 
-Current:
-
 `Shiloh Calendar new bookings → Clean CRM V2`
+
+`New WhatsApp registration → Clean CRM V2`
+
+`WhatsApp retained legacy clients → retained legacy authority`
 
 `WhatsApp identity substrate → legacy / CRM V2 compatible`
 
-`WhatsApp ordinary booking spine → legacy / CRM V2 compatible`
+`WhatsApp ordinary booking/approval/appointment-management/reschedule → legacy / CRM V2 compatible`
 
-`WhatsApp practitioner-approved reschedule → legacy only / CRM V2 fail closed pending #538`
+`Couples Massage / packages / enquiries → explicit CRM V2 fail-closed special-case boundaries pending separate justification`
 
-`WhatsApp new-client onboarding → legacy CRM (transitional)`
+Current priority:
 
-Next active unit:
-
-`#538 — WhatsApp CRM V2 reschedule approval compatibility`
+`Stabilization / production observation — no further CRM V2 cutover P0 active`
