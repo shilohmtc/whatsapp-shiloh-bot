@@ -93,6 +93,12 @@ function createFixture() {
     async prepare(payload) {
       state.prepares.push(structuredClone(payload));
       const isNew = Boolean(payload.newClient);
+      const startsAt = payload.date === '2026-09-01' && payload.time === '09:00'
+        ? '2026-09-01T07:00:00.000Z'
+        : '2026-09-03T08:00:00.000Z';
+      const endsAt = payload.date === '2026-09-01' && payload.time === '09:00'
+        ? '2026-09-01T08:00:00.000Z'
+        : '2026-09-03T09:00:00.000Z';
       return {
         status: 'pending_confirmation',
         review: {
@@ -109,7 +115,7 @@ function createFixture() {
             externalSource: 'goldie', externalId: '409ef0e8-2063-47b2-86db-ca0af30787de',
           },
           practitioner: { id: 9, displayName: 'Christel' },
-          startsAt: '2026-09-03T08:00:00.000Z', endsAt: '2026-09-03T09:00:00.000Z',
+          startsAt, endsAt,
           durationMinutes: 60, price: 'R500.00', mobileAcknowledgementRequired: true,
         },
       };
@@ -263,8 +269,8 @@ async function main() {
       fs.writeFileSync(target, Buffer.from(result.data, 'base64'));
       return { file, bytes: fs.statSync(target).size, sha256: fileSha256(target) };
     }
-    async function chooseSlot() {
-      await evaluate(cdp, `(()=>{document.querySelector('#booking-time').value='10:00';const service=document.querySelector('#service-select');service.value='44';service.dispatchEvent(new Event('change',{bubbles:true}));const staff=document.querySelector('#staff-select');staff.value='9';staff.dispatchEvent(new Event('change',{bubbles:true}));return true;})()`);
+    async function chooseSlot(date = '2026-09-03', time = '10:00') {
+      await evaluate(cdp, `(()=>{const date=document.querySelector('#booking-date');date.value=${JSON.stringify(date)};date.dispatchEvent(new Event('input',{bubbles:true}));const time=document.querySelector('#booking-time');time.value=${JSON.stringify(time)};time.dispatchEvent(new Event('input',{bubbles:true}));const service=document.querySelector('#service-select');service.value='44';service.dispatchEvent(new Event('change',{bubbles:true}));const staff=document.querySelector('#staff-select');staff.value='9';staff.dispatchEvent(new Event('change',{bubbles:true}));return true;})()`);
     }
     async function prepareAndAcknowledge() {
       await evaluate(cdp, `document.querySelector('[data-review-booking]').click();true`);
@@ -295,11 +301,31 @@ async function main() {
     const desktop = await evaluate(cdp, `({width:innerWidth,height:innerHeight,overflow:document.documentElement.scrollWidth-document.documentElement.clientWidth})`);
     assert.ok(desktop.width >= 1200);
     assert.ok(desktop.overflow <= 1);
+    const screenshots = [];
     await evaluate(cdp, `(()=>{const input=document.querySelector('#client-search');input.value='Synthetic';document.querySelector('[data-client-search]').click();return true;})()`);
     await poll(() => evaluate(cdp, `document.querySelectorAll('.client-result').length`), (value) => value === 2);
     assert.equal(state.prepares.length, 0, 'search must never auto-select or prepare');
     await evaluate(cdp, `document.querySelectorAll('.client-result')[0].click();true`);
-    await chooseSlot();
+    await chooseSlot('2026-08-31', '09:00');
+    const augustStart = await evaluate(cdp, `document.querySelector('[data-selected-start]').textContent.trim()`);
+    assert.equal(augustStart, 'Mon 31 Aug • 09:00');
+    await chooseSlot('2026-09-01', '09:00');
+    const septemberStart = await evaluate(cdp, `document.querySelector('[data-selected-start]').textContent.trim()`);
+    assert.equal(septemberStart, 'Tue 1 Sep • 09:00');
+    screenshots.push({ state: 'selected-start-desktop', ...(await screenshot('selected-start-desktop')) });
+
+    const beforeOffStep = state.prepares.length;
+    await chooseSlot('2026-09-01', '00:09');
+    await evaluate(cdp, `document.querySelector('[data-review-booking]').click();true`);
+    const offStep = await evaluate(cdp, `({readback:document.querySelector('[data-selected-start]').textContent.trim(),status:document.querySelector('[data-booking-status]').textContent.trim(),reviewHidden:document.querySelector('[data-review-panel]').hidden})`);
+    const offStepBlockedBeforePrepare = state.prepares.length === beforeOffStep;
+    assert.equal(offStepBlockedBeforePrepare, true, 'off-step browser input must not reach /prepare');
+    assert.equal(offStep.readback, 'Choose a start time in 5-minute increments, for example 09:00.');
+    assert.equal(offStep.status, 'Choose a start time in 5-minute increments, for example 09:00.');
+    assert.equal(offStep.reviewHidden, true);
+    screenshots.push({ state: 'off-step-blocked-desktop', ...(await screenshot('off-step-blocked-desktop')) });
+
+    await chooseSlot('2026-09-01', '09:00');
     await prepareAndAcknowledge();
     const findState = await evaluate(cdp, `({selected:document.querySelector('[data-selected-client]').textContent,ack:document.querySelector('[data-mobile-ack-summary]').textContent,review:document.querySelector('[data-review]').innerText,selectedFamily:document.querySelector('[data-selected-treatment]')?.getAttribute('data-service-family'),reviewFamily:document.querySelector('[data-review] [data-service-family]')?.getAttribute('data-service-family'),createEnabled:!document.querySelector('[data-create-booking]').disabled})`);
     assert.match(findState.selected, /Synthetic Existing Client/);
@@ -310,7 +336,7 @@ async function main() {
     assert.equal(findState.reviewFamily, 'targeted_therapeutic');
     assert.equal(findState.createEnabled, true);
     assert.doesNotMatch(findState.review, /27821234567/);
-    const screenshots = [{ state: 'find-client-acknowledged', ...(await screenshot('find-client-acknowledged')) }];
+    screenshots.push({ state: 'find-client-acknowledged', ...(await screenshot('find-client-acknowledged')) });
 
     const beforeConfirm = state.confirmations.length;
     await evaluate(cdp, `document.querySelector('[data-create-booking]').click();true`);
@@ -324,7 +350,7 @@ async function main() {
     const newVisible = await evaluate(cdp, `({existing:document.querySelector('[data-existing-client-panel]').hidden,newPanel:document.querySelector('[data-new-client-panel]').hidden})`);
     assert.deepEqual(newVisible, { existing: true, newPanel: false });
     await evaluate(cdp, `(()=>{document.querySelector('#new-client-name').value='Synthetic New Client';document.querySelector('#new-client-mobile').value='082 000 4321';document.querySelector('[data-select-new-client]').click();return true;})()`);
-    await chooseSlot();
+    await chooseSlot('2026-09-01', '09:00');
     await prepareAndAcknowledge();
     const newState = await evaluate(cdp, `({selected:document.querySelector('[data-selected-client]').textContent,review:document.querySelector('[data-review]').innerText,ack:document.querySelector('[data-mobile-ack-summary]').textContent})`);
     assert.match(newState.selected, /Synthetic New Client/);
@@ -334,10 +360,11 @@ async function main() {
     screenshots.push({ state: 'new-client-acknowledged', ...(await screenshot('new-client-acknowledged')) });
 
     await cdp.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
-    const mobile = await evaluate(cdp, `(()=>{const controls=[...document.querySelectorAll('button')].filter(e=>e.getClientRects().length>0);return{count:controls.length,minHeight:Math.min(...controls.map(e=>e.getBoundingClientRect().height)),overflow:document.documentElement.scrollWidth-document.documentElement.clientWidth};})()`);
+    const mobile = await evaluate(cdp, `(()=>{const controls=[...document.querySelectorAll('button')].filter(e=>e.getClientRects().length>0);return{count:controls.length,minHeight:Math.min(...controls.map(e=>e.getBoundingClientRect().height)),overflow:document.documentElement.scrollWidth-document.documentElement.clientWidth,selectedStart:document.querySelector('[data-selected-start]').textContent.trim()};})()`);
     assert.ok(mobile.count > 0);
     assert.ok(mobile.minHeight >= 44);
     assert.ok(mobile.overflow <= 1);
+    assert.equal(mobile.selectedStart, 'Tue 1 Sep • 09:00');
     screenshots.push({ state: 'new-client-mobile', ...(await screenshot('new-client-mobile')) });
 
     const acknowledgementRequests = state.requests.filter((item) => item.path === '/calendar/book/mobile-acknowledgement');
@@ -360,6 +387,13 @@ async function main() {
         treatment: 'Cupping Area Specific', family: 'targeted_therapeutic',
         selectedTreatmentFamily: findState.selectedFamily, reviewTreatmentFamily: findState.reviewFamily,
         serviceTextVisible: true, controlledSvg: true,
+      },
+      timeEntry: {
+        nativeDate: true, nativeTime: true, stepSeconds: 300,
+        augustReadback: augustStart, septemberReadback: septemberStart,
+        offStepValue: '00:09', offStepBlockedBeforePrepare,
+        offStepMessage: offStep.status, mobileReadback: mobile.selectedStart,
+        johannesburgLocalWithoutBrowserUtcRoundTrip: true,
       },
       desktop, mobile, externalProviderRequests: 0, googleOperationalRequests: 0, productionMutations: 0, screenshots,
     };
