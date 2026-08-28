@@ -219,12 +219,12 @@ test('Couples, package entitlement and enquiry legacy-only branches fail closed 
   assert.ok(record.indexOf('unsupportedIdentityModel') < record.indexOf('INSERT INTO package_enquiries'));
 });
 
-test('CRM V2 WhatsApp registration remains inactive in production runtime', () => {
+test('CRM V2 WhatsApp registration is active only in onboarding runtime', () => {
   const onboarding = read('src/services/clientIdentityOnboarding.js');
   const bookingIdentity = read('src/services/whatsappBookingIdentity.js');
-  assert.match(onboarding, /CRM_V2_WHATSAPP_REGISTRATION_INACTIVE/);
-  assert.match(onboarding, /INSERT INTO clients/);
-  assert.doesNotMatch(`${onboarding}\n${bookingIdentity}`, /registerWhatsAppClient\s*\(/);
+  assert.match(onboarding, /registerWhatsAppClient/);
+  assert.doesNotMatch(onboarding, /INSERT INTO clients \(date_of_birth,custom_attributes,source\)/);
+  assert.doesNotMatch(bookingIdentity, /registerWhatsAppClient\s*\(/);
   assert.doesNotMatch(bookingIdentity, /INSERT INTO (?:clients|client_contacts|crm_v2_clients)/);
 });
 

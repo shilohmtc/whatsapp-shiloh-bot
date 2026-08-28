@@ -13,11 +13,13 @@ const {
 const {
   IDENTITY_MODELS,
   createLegacyIdentity,
+  createCrmV2Identity,
   identityFromSession,
   sessionIdentityColumns,
   identityAuditMetadata,
   createWhatsAppCrmV2IdentityCompatService,
 } = require("./whatsappCrmV2IdentityCompat");
+const { registerWhatsAppClient } = require("./crmV2ClientService");
 
 const AUTHORITY_VERSION = "verified_client_v2_archive_reclaim";
 const whatsappCrmV2IdentityCompat = createWhatsAppCrmV2IdentityCompatService();
@@ -140,7 +142,6 @@ const REGISTRATION_START_PROMPT = [
 
 const HUMAN_VERIFICATION_REPLY = "I found an existing Shiloh profile linked to this number, but I can’t safely treat the phone, imported details or appointment history as identity proof. Please contact the clinic team so we can verify the correct profile before continuing.";
 const IDENTITY_CONFLICT_REPLY = "I found an identity conflict with this WhatsApp number, so I won’t merge, select or update a client profile automatically. Please contact the clinic team so we can verify the correct profile safely.";
-const CRM_V2_COMPAT_INACTIVE_REPLY = "Your Shiloh CRM V2 profile is present, but WhatsApp CRM V2 registration is not active yet. I won’t create a second client profile. Please contact the clinic team for help.";
 const CRM_V2_STALE_AUTHORITY_REPLY = "Your saved WhatsApp client identity no longer matches the exact current CRM V2 mobile owner. I won’t guess, rebind or create another client profile. Please contact the clinic team so we can verify it safely.";
 
 let onboardingSchemaPromise = null;
@@ -247,12 +248,12 @@ function ambiguousContactError(message) {
   return e;
 }
 
-async function completeOnboarding(phone, session) {
+async function completeLegacyOnboarding(phone, session) {
   const key = normalizePhone(phone);
   const durableIdentity = identityFromSession(session);
-  if (durableIdentity?.identityModel === IDENTITY_MODELS.CRM_V2) {
-    const error = new Error("WhatsApp CRM V2 registration is not active");
-    error.code = "CRM_V2_WHATSAPP_REGISTRATION_INACTIVE";
+  if (durableIdentity?.identityModel !== IDENTITY_MODELS.LEGACY) {
+    const error = new Error("Legacy WhatsApp completion requires a retained legacy identity");
+    error.code = "LEGACY_ONBOARDING_IDENTITY_REQUIRED";
     throw error;
   }
   if (!session.pending_gender) {
@@ -264,7 +265,7 @@ async function completeOnboarding(phone, session) {
   const db = await pool.connect();
   try {
     await db.query("BEGIN");
-    let clientId = session.client_id;
+    const clientId = durableIdentity.legacyClientId;
     let clientSource = "whatsapp_onboarding";
     let reactivatedFromStatus = null;
 
@@ -273,51 +274,36 @@ async function completeOnboarding(phone, session) {
     // on rollback if another client owns the phone.
     const contacts = await db.query(`SELECT id,client_id,contact_type FROM client_contacts WHERE normalized_value=$1 AND contact_type IN ('whatsapp','mobile') ORDER BY CASE WHEN contact_type='whatsapp' THEN 0 ELSE 1 END,id FOR UPDATE`, [key]);
 
-    if (clientId) {
-      const lockedClient = await db.query(`SELECT id,source,status FROM clients WHERE id=$1 FOR UPDATE`, [clientId]);
-      if (lockedClient.rowCount !== 1) {
-        throw ambiguousContactError("Existing onboarding client is not a canonical client");
-      }
-      const canonicalClient = lockedClient.rows[0];
-      clientSource = canonicalClient.source;
+    const lockedClient = await db.query(`SELECT id,source,status FROM clients WHERE id=$1 FOR UPDATE`, [clientId]);
+    if (lockedClient.rowCount !== 1) {
+      throw ambiguousContactError("Existing onboarding client is not a canonical client");
+    }
+    const canonicalClient = lockedClient.rows[0];
+    clientSource = canonicalClient.source;
 
-      if (contacts.rows.some((row) => String(row.client_id) !== String(clientId))) {
-        throw ambiguousContactError("WhatsApp number belongs to another canonical client");
-      }
+    if (contacts.rows.some((row) => String(row.client_id) !== String(clientId))) {
+      throw ambiguousContactError("WhatsApp number belongs to another canonical client");
+    }
 
-      const controlled = await controlledAuthorityForPhone(key, db);
-      if (controlled && !(controlled.status === "bound" && String(controlled.client?.id || "") === String(clientId))) {
-        throw ambiguousContactError("Controlled demo identity is not safely bound to this canonical client");
-      }
+    const controlled = await controlledAuthorityForPhone(key, db);
+    if (controlled && !(controlled.status === "bound" && String(controlled.client?.id || "") === String(clientId))) {
+      throw ambiguousContactError("Controlled demo identity is not safely bound to this canonical client");
+    }
 
-      if (canonicalClient.status === "archived") {
-        if (clientSource !== "goldie_import") {
-          throw ambiguousContactError("Archived canonical client is not eligible for imported-contact reclaim");
-        }
-        const activeVerification = await db.query(`SELECT id FROM client_identity_verifications WHERE client_id=$1 AND status='active' ORDER BY verified_at DESC,id DESC LIMIT 1`, [clientId]);
-        if (activeVerification.rowCount) {
-          throw ambiguousContactError("Archived canonical client already has active durable verification authority");
-        }
-        reactivatedFromStatus = canonicalClient.status;
-        await db.query(`UPDATE clients SET status='active',date_of_birth=$2::date,custom_attributes=COALESCE(custom_attributes,'{}'::jsonb) || jsonb_build_object('gender',$3::text),updated_at=NOW() WHERE id=$1`, [clientId, session.pending_date_of_birth, session.pending_gender]);
-      } else if (canonicalClient.status === "active") {
-        await db.query(`UPDATE clients SET date_of_birth=$2::date,custom_attributes=COALESCE(custom_attributes,'{}'::jsonb) || jsonb_build_object('gender',$3::text),updated_at=NOW() WHERE id=$1`, [clientId, session.pending_date_of_birth, session.pending_gender]);
-      } else {
-        throw ambiguousContactError("Existing onboarding client status is not eligible for automatic identity completion");
+    if (canonicalClient.status === "archived") {
+      if (clientSource !== "goldie_import") {
+        throw ambiguousContactError("Archived canonical client is not eligible for imported-contact reclaim");
       }
+      const activeVerification = await db.query(`SELECT id FROM client_identity_verifications WHERE client_id=$1 AND status='active' ORDER BY verified_at DESC,id DESC LIMIT 1`, [clientId]);
+      if (activeVerification.rowCount) {
+        throw ambiguousContactError("Archived canonical client already has active durable verification authority");
+      }
+      reactivatedFromStatus = canonicalClient.status;
+      await db.query(`UPDATE clients SET status='active',date_of_birth=$2::date,custom_attributes=COALESCE(custom_attributes,'{}'::jsonb) || jsonb_build_object('gender',$3::text),updated_at=NOW() WHERE id=$1`, [clientId, session.pending_date_of_birth, session.pending_gender]);
+    } else if (canonicalClient.status === "active") {
+      await db.query(`UPDATE clients SET date_of_birth=$2::date,custom_attributes=COALESCE(custom_attributes,'{}'::jsonb) || jsonb_build_object('gender',$3::text),updated_at=NOW() WHERE id=$1`, [clientId, session.pending_date_of_birth, session.pending_gender]);
     } else {
-      // Unknown/new registration is still allowed only when no exact-phone owner
-      // exists. Any retained archived/non-active ownership therefore fails closed
-      // instead of creating a duplicate active canonical client.
-      if (contacts.rowCount) {
-        throw ambiguousContactError("WhatsApp number already belongs to a canonical client");
-      }
-      const controlled = await controlledAuthorityForPhone(key, db);
-      if (controlled) {
-        throw ambiguousContactError("Controlled demo phone cannot create a new canonical client");
-      }
-      const created = await db.query(`INSERT INTO clients (date_of_birth,custom_attributes,source) VALUES ($1::date,jsonb_build_object('gender',$2::text),'whatsapp_onboarding') RETURNING id`, [session.pending_date_of_birth, session.pending_gender]);
-      clientId = created.rows[0].id;
+      throw ambiguousContactError("Existing onboarding client status is not eligible for automatic identity completion");
     }
 
     let contactId;
@@ -360,6 +346,82 @@ async function completeOnboarding(phone, session) {
   } finally { db.release(); }
 }
 
+function crmV2AuthorityError(code, message) {
+  const error = new Error(message);
+  error.code = code;
+  return error;
+}
+
+async function completeCrmV2Onboarding(phone, session, {
+  registrationBoundary = registerWhatsAppClient,
+  persistSession = saveSession,
+  revalidateSessionIdentity = whatsappCrmV2IdentityCompat.revalidateSessionIdentity,
+  occurredAt = new Date(),
+} = {}) {
+  const durableIdentity = identityFromSession(session);
+  if (durableIdentity?.identityModel === IDENTITY_MODELS.LEGACY) {
+    throw crmV2AuthorityError("CRM_V2_ONBOARDING_LEGACY_IDENTITY", "A retained legacy identity cannot be converted during CRM V2 registration");
+  }
+  if (!session.pending_gender) {
+    const error = new Error("Client registration is incomplete: missing gender");
+    error.code = "CLIENT_REGISTRATION_INCOMPLETE";
+    throw error;
+  }
+  assertRegistrationComplete({
+    fullName: session.pending_name,
+    mobileNumber: normalizePhone(phone),
+    dateOfBirth: session.pending_date_of_birth,
+  });
+
+  if (durableIdentity) {
+    const before = await revalidateSessionIdentity({ phone, session });
+    if (before.status !== "crm_v2_current") {
+      throw crmV2AuthorityError("CRM_V2_AUTHORITY_STALE", "Durable CRM V2 authority is no longer current before registration");
+    }
+  }
+
+  const registration = await registrationBoundary({
+    senderMobile: phone,
+    name: session.pending_name,
+    dateOfBirth: session.pending_date_of_birth,
+    gender: session.pending_gender,
+    occurredAt,
+  });
+  if (registration.status === "conflict") {
+    throw crmV2AuthorityError("CRM_V2_IDENTITY_CONFLICT", "Exact CRM V2 mobile authority is ambiguous");
+  }
+  if (!registration.client?.id) {
+    throw crmV2AuthorityError("CRM_V2_AUTHORITY_STALE", "CRM V2 registration did not return a canonical client");
+  }
+
+  const canonicalIdentity = createCrmV2Identity(registration.client.id, { provenance: "crm_v2_whatsapp_registration" });
+  if (durableIdentity && durableIdentity.crmV2ClientId !== canonicalIdentity.crmV2ClientId) {
+    throw crmV2AuthorityError("CRM_V2_AUTHORITY_STALE", "CRM V2 registration resolved a different canonical client");
+  }
+  const persisted = await persistSession(phone, {
+    clientId: null,
+    crmV2ClientId: canonicalIdentity.crmV2ClientId,
+    identityModel: IDENTITY_MODELS.CRM_V2,
+    state: "complete",
+    authorityVersion: AUTHORITY_VERSION,
+  });
+  const persistedIdentity = identityFromSession(persisted);
+  if (persistedIdentity?.identityModel !== IDENTITY_MODELS.CRM_V2 || persistedIdentity.crmV2ClientId !== canonicalIdentity.crmV2ClientId) {
+    throw crmV2AuthorityError("CRM_V2_AUTHORITY_STALE", "Durable onboarding identity did not preserve the canonical CRM V2 client");
+  }
+  const after = await revalidateSessionIdentity({ phone, session: persisted });
+  if (after.status !== "crm_v2_current" || after.identity.crmV2ClientId !== canonicalIdentity.crmV2ClientId) {
+    throw crmV2AuthorityError("CRM_V2_AUTHORITY_STALE", "Durable CRM V2 authority changed before booking continuation");
+  }
+  return {
+    status: registration.status,
+    client: after.client || registration.client,
+    clientIdentity: persistedIdentity,
+    identityAudit: after.audit,
+    session: persisted,
+  };
+}
+
 async function processActiveSession(phone, text, session) {
   const parsed = extractWhatsAppRegistration(text);
   const pendingName = mergeName(session.pending_name, parsed.fullName);
@@ -370,11 +432,16 @@ async function processActiveSession(phone, text, session) {
   session = await saveSession(phone, { pendingName, pendingDateOfBirth, pendingGender, state, authorityVersion: AUTHORITY_VERSION });
   if (state !== "complete") return { handled: true, reply: promptForMissing(session) };
   try {
-    const client = await completeOnboarding(phone, session);
-    return { handled: true, onboardingComplete: true, resumeBooking: true, identityStatus: "verified_complete", clientIdentity: createLegacyIdentity(client.id, { provenance: "legacy_whatsapp_registration" }), client, reply: `Thank you, ${client.display_name}. 🌿 Your Shiloh client registration is complete.` };
+    const durableIdentity = identityFromSession(session);
+    if (durableIdentity?.identityModel === IDENTITY_MODELS.LEGACY) {
+      const client = await completeLegacyOnboarding(phone, session);
+      return { handled: true, onboardingComplete: true, resumeBooking: session.booking_requested === true, identityStatus: "verified_complete", clientIdentity: createLegacyIdentity(client.id, { provenance: "legacy_whatsapp_registration" }), client, reply: `Thank you, ${client.display_name}. 🌿 Your Shiloh client registration is complete.` };
+    }
+    const completed = await completeCrmV2Onboarding(phone, session);
+    return { handled: true, onboardingComplete: true, resumeBooking: completed.session.booking_requested === true, identityStatus: "verified_complete", clientIdentity: completed.clientIdentity, identityAudit: completed.identityAudit, client: completed.client, reply: `Thank you, ${completed.client.name}. 🌿 Your Shiloh client registration is complete.` };
   } catch (error) {
-    if (error.code === "AMBIGUOUS_CONTACT" || error.code === "23505") return { handled: true, identityStatus: "ambiguous", reply: IDENTITY_CONFLICT_REPLY };
-    if (error.code === "CRM_V2_WHATSAPP_REGISTRATION_INACTIVE") return { handled: true, identityStatus: "crm_v2_compat_inactive", reply: CRM_V2_COMPAT_INACTIVE_REPLY };
+    if (error.code === "AMBIGUOUS_CONTACT" || error.code === "23505" || error.code === "CRM_V2_IDENTITY_CONFLICT") return { handled: true, identityStatus: "ambiguous", resumeBooking: false, reply: IDENTITY_CONFLICT_REPLY };
+    if (error.code === "CRM_V2_AUTHORITY_STALE") return { handled: true, identityStatus: "crm_v2_stale", resumeBooking: false, reply: CRM_V2_STALE_AUTHORITY_REPLY };
     throw error;
   }
 }
@@ -413,8 +480,26 @@ async function processClientIdentityMessage(phone, text) {
     if (durableIdentity?.identityModel === IDENTITY_MODELS.CRM_V2) {
       const revalidated = await whatsappCrmV2IdentityCompat.revalidateSessionIdentity({ phone, session: existingSession });
       if (revalidated.status === "crm_v2_current") {
+        if (existingSession.state !== "complete") {
+          return processActiveSession(phone, text, existingSession);
+        }
         if (isWalkinRegistrationRequest(text)) {
-          return { handled: true, identityStatus: "crm_v2_compat_inactive", resumeBooking: false, clientIdentity: durableIdentity, client: revalidated.client, identityAudit: revalidated.audit, reply: CRM_V2_COMPAT_INACTIVE_REPLY };
+          if (revalidated.client.profileStatus !== "registered") {
+            const collectionSession = await saveSession(phone, {
+              clientId: null,
+              crmV2ClientId: durableIdentity.crmV2ClientId,
+              identityModel: IDENTITY_MODELS.CRM_V2,
+              state: "collect_name",
+              pendingName: null,
+              pendingContact: normalizePhone(phone),
+              pendingDateOfBirth: null,
+              pendingGender: null,
+              bookingRequested: false,
+              authorityVersion: AUTHORITY_VERSION,
+            });
+            return processActiveSession(phone, text, collectionSession);
+          }
+          return { handled: true, identityStatus: "matched_complete", onboardingComplete: true, resumeBooking: false, clientIdentity: durableIdentity, client: revalidated.client, identityAudit: revalidated.audit, reply: `${PREMIUM_GREETING}\n\nWelcome back, *${firstName(revalidated.client.name)}* 🌿` };
         }
         if (isGreetingOnly(text)) {
           return { handled: true, identityStatus: "matched_complete", onboardingComplete: true, resumeBooking: false, clientIdentity: durableIdentity, client: revalidated.client, identityAudit: revalidated.audit, reply: `${PREMIUM_GREETING}\n\nWelcome back, *${firstName(revalidated.client.name)}* 🌿` };
@@ -440,15 +525,6 @@ async function processClientIdentityMessage(phone, text) {
   const bookingRequest = isBookingRequest(text);
   const walkinRequest = isWalkinRegistrationRequest(text);
 
-  if (manualReviewIdentity(identity)) {
-    return {
-      handled: true,
-      identityStatus: identity.status,
-      client: identity.client || null,
-      reply: identity.status === "ambiguous" ? IDENTITY_CONFLICT_REPLY : HUMAN_VERIFICATION_REPLY,
-    };
-  }
-
   if (isVerifiedRegistration(identity)) {
     const clientIdentity = createLegacyIdentity(identity.client.id, { provenance: "legacy_verified_whatsapp" });
     if (isGreetingOnly(text) || walkinRequest) {
@@ -459,6 +535,55 @@ async function processClientIdentityMessage(phone, text) {
     return { handled: false, identityStatus: "matched_complete", clientIdentity, client: identity.client };
   }
 
+  // A retained verified legacy identity remains legacy even when its profile is
+  // incomplete. For every other unresolved legacy candidate, canonical CRM V2
+  // exact-mobile ownership takes precedence and is never coerced into client_id.
+  if (identity.status !== "verified_client") {
+    const crmV2Authority = await whatsappCrmV2IdentityCompat.resolveCrmV2ByExactMobile(phone);
+    if (crmV2Authority.status === "conflict") {
+      return { handled: true, identityStatus: "crm_v2_conflict", resumeBooking: false, identityAudit: crmV2Authority.audit, reply: IDENTITY_CONFLICT_REPLY };
+    }
+    if (crmV2Authority.status === "resolved") {
+      const registered = crmV2Authority.client.profileStatus === "registered";
+      const session = await saveSession(phone, {
+        clientId: null,
+        crmV2ClientId: crmV2Authority.identity.crmV2ClientId,
+        identityModel: IDENTITY_MODELS.CRM_V2,
+        state: registered ? "complete" : "collect_name",
+        pendingName: null,
+        pendingContact: normalizePhone(phone),
+        pendingDateOfBirth: null,
+        pendingGender: null,
+        bookingRequested: bookingRequest,
+        authorityVersion: AUTHORITY_VERSION,
+      });
+      const revalidated = await whatsappCrmV2IdentityCompat.revalidateSessionIdentity({ phone, session });
+      if (revalidated.status !== "crm_v2_current") {
+        return { handled: true, identityStatus: revalidated.status, resumeBooking: false, clientIdentity: crmV2Authority.identity, identityAudit: revalidated.audit, recovery: revalidated.recovery || "manual_rebind_required", reply: CRM_V2_STALE_AUTHORITY_REPLY };
+      }
+      if (!registered) {
+        const parsed = extractWhatsAppRegistration(text);
+        if (!isGreetingOnly(text) && !bookingRequest && !walkinRequest && (parsed.fullName || parsed.dateOfBirth || parsed.gender)) {
+          return processActiveSession(phone, text, session);
+        }
+        return { handled: true, identityStatus: "registration_required", resumeBooking: false, clientIdentity: crmV2Authority.identity, client: revalidated.client, identityAudit: revalidated.audit, reply: `${PREMIUM_GREETING}\n\nI need to complete your Shiloh client registration before continuing.\n\n${REGISTRATION_START_PROMPT}` };
+      }
+      if (isGreetingOnly(text) || walkinRequest) {
+        return { handled: true, identityStatus: "matched_complete", onboardingComplete: true, resumeBooking: false, clientIdentity: crmV2Authority.identity, client: revalidated.client, identityAudit: revalidated.audit, reply: `${PREMIUM_GREETING}\n\nWelcome back, *${firstName(revalidated.client.name)}* 🌿` };
+      }
+      return { handled: false, identityStatus: "matched_complete", resumeBooking: false, clientIdentity: crmV2Authority.identity, client: revalidated.client, identityAudit: revalidated.audit };
+    }
+  }
+
+  if (manualReviewIdentity(identity)) {
+    return {
+      handled: true,
+      identityStatus: identity.status,
+      client: identity.client || null,
+      reply: identity.status === "ambiguous" ? IDENTITY_CONFLICT_REPLY : HUMAN_VERIFICATION_REPLY,
+    };
+  }
+
   const known = identity.client || null;
   const session = await saveSession(phone, {
     clientId: known?.id || null,
@@ -467,7 +592,7 @@ async function processClientIdentityMessage(phone, text) {
     pendingContact: normalizePhone(phone),
     pendingDateOfBirth: null,
     pendingGender: null,
-    bookingRequested: bookingRequest || walkinRequest || true,
+    bookingRequested: bookingRequest,
     authorityVersion: AUTHORITY_VERSION,
   });
 
@@ -497,11 +622,11 @@ module.exports = {
   resolveClientByWhatsApp,
   resolveVerifiedClientByWhatsApp,
   profileComplete,
+  completeCrmV2Onboarding,
   processClientIdentityMessage,
   PREMIUM_GREETING,
   REGISTRATION_START_PROMPT,
   HUMAN_VERIFICATION_REPLY,
   IDENTITY_CONFLICT_REPLY,
-  CRM_V2_COMPAT_INACTIVE_REPLY,
   CRM_V2_STALE_AUTHORITY_REPLY,
 };
