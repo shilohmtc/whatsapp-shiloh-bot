@@ -315,7 +315,8 @@ async function main() {
     screenshots.push({ state: 'new-client-acknowledged', ...(await screenshot('new-client-acknowledged')) });
 
     await cdp.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
-    const mobile = await evaluate(cdp, `(()=>{const controls=[...document.querySelectorAll('button')].filter(e=>!e.hidden);return{minHeight:Math.min(...controls.map(e=>e.getBoundingClientRect().height)),overflow:document.documentElement.scrollWidth-document.documentElement.clientWidth};})()`);
+    const mobile = await evaluate(cdp, `(()=>{const controls=[...document.querySelectorAll('button')].filter(e=>e.getClientRects().length>0);return{count:controls.length,minHeight:Math.min(...controls.map(e=>e.getBoundingClientRect().height)),overflow:document.documentElement.scrollWidth-document.documentElement.clientWidth};})()`);
+    assert.ok(mobile.count > 0);
     assert.ok(mobile.minHeight >= 44);
     assert.ok(mobile.overflow <= 1);
     screenshots.push({ state: 'new-client-mobile', ...(await screenshot('new-client-mobile')) });
