@@ -51,6 +51,9 @@ async function ensureDeliveryTable(){
       template_name TEXT,
       provider_message_id TEXT,
       client_id BIGINT REFERENCES clients(id) ON DELETE CASCADE,
+      crm_v2_client_id BIGINT REFERENCES crm_v2_clients(id) ON DELETE RESTRICT,
+      recipient_mobile TEXT,
+      client_name_snapshot TEXT,
       contact_id BIGINT REFERENCES client_contacts(id) ON DELETE SET NULL,
       name_authority_id BIGINT REFERENCES client_facing_name_authorities(id) ON DELETE SET NULL,
       attempt_count INTEGER NOT NULL DEFAULT 0 CHECK (attempt_count >= 0),
@@ -65,6 +68,9 @@ async function ensureDeliveryTable(){
       ADD COLUMN IF NOT EXISTS template_name TEXT,
       ADD COLUMN IF NOT EXISTS provider_message_id TEXT,
       ADD COLUMN IF NOT EXISTS client_id BIGINT REFERENCES clients(id) ON DELETE CASCADE,
+      ADD COLUMN IF NOT EXISTS crm_v2_client_id BIGINT REFERENCES crm_v2_clients(id) ON DELETE RESTRICT,
+      ADD COLUMN IF NOT EXISTS recipient_mobile TEXT,
+      ADD COLUMN IF NOT EXISTS client_name_snapshot TEXT,
       ADD COLUMN IF NOT EXISTS contact_id BIGINT REFERENCES client_contacts(id) ON DELETE SET NULL,
       ADD COLUMN IF NOT EXISTS name_authority_id BIGINT REFERENCES client_facing_name_authorities(id) ON DELETE SET NULL,
       ADD COLUMN IF NOT EXISTS attempt_count INTEGER NOT NULL DEFAULT 0,
@@ -113,13 +119,24 @@ async function ensureDeliveryTable(){
 
 async function loadBookingConfirmationAuthority(appointmentId,db=pool){
   const result=await db.query(`
-    SELECT a.id AS appointment_id,a.client_id,c.status AS client_status,
-           contact.id AS contact_id,contact.normalized_value AS client_phone,
+    SELECT a.id AS appointment_id,a.client_id,a.crm_v2_client_id,
+           CASE
+             WHEN a.crm_v2_client_id IS NOT NULL AND a.client_id IS NULL THEN 'crm_v2'
+             WHEN a.client_id IS NOT NULL AND a.crm_v2_client_id IS NULL THEN 'legacy'
+             ELSE 'invalid'
+           END AS identity_model,
+           COALESCE(c.status,v2.status) AS client_status,
+           contact.id AS contact_id,
+           COALESCE(delivery.recipient_mobile,v2.normalized_mobile,contact.normalized_value) AS client_phone,
+           COALESCE(delivery.client_name_snapshot,a.source_client_name,v2.name) AS client_name_snapshot,
            contact.contact_verified,contact.identity_verification_id,
            contact.verification_client_id,contact.verification_contact_id,
            name_authority.id AS name_authority_id
       FROM appointments a
-      JOIN clients c ON c.id=a.client_id
+      LEFT JOIN clients c ON c.id=a.client_id
+      LEFT JOIN crm_v2_clients v2 ON v2.id=a.crm_v2_client_id
+      LEFT JOIN customer_message_deliveries delivery
+        ON delivery.appointment_id=a.id AND delivery.message_kind='booking_confirmation'
       LEFT JOIN LATERAL (
         SELECT cc.id,cc.normalized_value,
                (cc.verified_at IS NOT NULL) AS contact_verified,
@@ -136,7 +153,8 @@ async function loadBookingConfirmationAuthority(appointmentId,db=pool){
              ORDER BY v.verified_at DESC,v.id DESC
              LIMIT 1
           ) verification ON TRUE
-         WHERE cc.client_id=c.id
+         WHERE c.id IS NOT NULL
+           AND cc.client_id=c.id
            AND LOWER(cc.contact_type) IN ('whatsapp','mobile')
            AND cc.normalized_value ~ '^[0-9]{10,15}$'
          ORDER BY CASE WHEN cc.verified_at IS NOT NULL AND verification.id IS NOT NULL THEN 0 ELSE 1 END,
@@ -148,7 +166,8 @@ async function loadBookingConfirmationAuthority(appointmentId,db=pool){
       LEFT JOIN LATERAL (
         SELECT authority.id
           FROM client_facing_name_authorities authority
-         WHERE authority.client_id=c.id AND authority.revoked_at IS NULL
+         WHERE c.id IS NOT NULL
+           AND authority.client_id=c.id AND authority.revoked_at IS NULL
          ORDER BY authority.promoted_at DESC,authority.id DESC
          LIMIT 1
       ) name_authority ON TRUE
@@ -158,6 +177,15 @@ async function loadBookingConfirmationAuthority(appointmentId,db=pool){
 
 function initialDeliveryFailure(authority){
   if(!authority)return 'appointment_not_found';
+  const identityModel=authority.identity_model||(authority.crm_v2_client_id?'crm_v2':'legacy');
+  if(identityModel==='crm_v2'){
+    if(authority.client_id!=null||!authority.crm_v2_client_id)return 'crm_v2_identity_invalid';
+    if(authority.client_status!=='active')return 'crm_v2_client_inactive';
+    if(!/^27[678][0-9]{8}$/.test(String(authority.client_phone||'')))return 'crm_v2_recipient_missing';
+    if(!String(authority.client_name_snapshot||'').trim())return 'crm_v2_name_missing';
+    return null;
+  }
+  if(identityModel!=='legacy')return 'crm_v2_identity_invalid';
   if(authority.client_status!=='active')return 'canonical_client_inactive';
   if(!authority.contact_id||!authority.client_phone)return 'client_contact_not_found';
   if(authority.contact_verified!==true||!authority.identity_verification_id
@@ -168,6 +196,8 @@ function initialDeliveryFailure(authority){
 }
 
 async function contactOwnershipFailure(authority,db=pool){
+  const identityModel=authority?.identity_model||(authority?.crm_v2_client_id?'crm_v2':'legacy');
+  if(identityModel==='crm_v2')return null;
   const candidates=await exactPhoneCandidates(authority.client_phone,db);
   const candidate=candidates[0];
   const contactIds=candidate?.contact_ids||[];
@@ -185,29 +215,45 @@ async function queueCustomerBookingConfirmation(appointmentId,{db=pool}={}){
   if(legacy.rowCount)return {queued:false,status:'sent',reason:'already_sent'};
   const authority=await loadBookingConfirmationAuthority(appointmentId,db);
   if(!authority)return {queued:false,status:'failed',reason:'appointment_not_found'};
+  const identityModel=authority.identity_model||(authority.crm_v2_client_id?'crm_v2':'legacy');
   const initialFailure=initialDeliveryFailure(authority);
   const failure=initialFailure||await contactOwnershipFailure(authority,db);
   const inserted=await db.query(`
     INSERT INTO customer_message_deliveries
-      (appointment_id,message_kind,status,client_id,contact_id,name_authority_id,next_attempt_at,last_error)
-    VALUES ($1,'booking_confirmation',$2,$3,$4,$5,NOW(),$6)
+      (appointment_id,message_kind,status,client_id,contact_id,name_authority_id,next_attempt_at,last_error,
+       crm_v2_client_id,recipient_mobile,client_name_snapshot)
+    VALUES ($1,'booking_confirmation',$2,$3,$4,$5,NOW(),$6,$7,$8,$9)
     ON CONFLICT (appointment_id,message_kind) DO NOTHING
     RETURNING appointment_id,status
-  `,[appointmentId,failure?'failed':'pending',authority.client_id,authority.contact_id,authority.name_authority_id,failure]);
+  `,[
+    appointmentId,
+    failure?'failed':'pending',
+    authority.client_id,
+    authority.contact_id,
+    authority.name_authority_id,
+    failure,
+    identityModel==='crm_v2'?authority.crm_v2_client_id:null,
+    identityModel==='crm_v2'?authority.client_phone:null,
+    identityModel==='crm_v2'?String(authority.client_name_snapshot||'').trim():null,
+  ]);
   if(!inserted.rowCount){
     const existing=await db.query(`SELECT status,last_error FROM customer_message_deliveries WHERE appointment_id=$1 AND message_kind='booking_confirmation'`,[appointmentId]);
     return {queued:false,status:existing.rows[0]?.status||'unknown',reason:existing.rows[0]?.last_error||'already_queued'};
   }
-  const auditMetadata=failure==='client_contact_ambiguous'
-    ? {initialStatus:'failed',reason:failure}
-    : {clientId:Number(authority.client_id),contactId:authority.contact_id?Number(authority.contact_id):null,identityVerificationId:authority.identity_verification_id?Number(authority.identity_verification_id):null,nameAuthorityId:authority.name_authority_id?Number(authority.name_authority_id):null,initialStatus:failure?'failed':'pending',reason:failure};
+  const auditMetadata=identityModel==='crm_v2'
+    ? {crmV2ClientId:Number(authority.crm_v2_client_id),identityModel:'crm_v2_exact_mobile',initialStatus:failure?'failed':'pending',reason:failure}
+    : failure==='client_contact_ambiguous'
+      ? {initialStatus:'failed',reason:failure}
+      : {clientId:Number(authority.client_id),contactId:authority.contact_id?Number(authority.contact_id):null,identityVerificationId:authority.identity_verification_id?Number(authority.identity_verification_id):null,nameAuthorityId:authority.name_authority_id?Number(authority.name_authority_id):null,initialStatus:failure?'failed':'pending',reason:failure};
   await db.query(`
     INSERT INTO crm_audit_events(action,entity_type,entity_id,metadata)
     VALUES('customer.booking_confirmation_queued','appointment',$1,$2::jsonb)`,[
     String(appointmentId),
     JSON.stringify(auditMetadata),
   ]);
-  return {queued:true,status:failure?'failed':'pending',reason:failure,clientId:Number(authority.client_id),contactId:authority.contact_id?Number(authority.contact_id):null,identityVerificationId:authority.identity_verification_id?Number(authority.identity_verification_id):null,nameAuthorityId:authority.name_authority_id?Number(authority.name_authority_id):null};
+  return identityModel==='crm_v2'
+    ? {queued:true,status:failure?'failed':'pending',reason:failure,crmV2ClientId:Number(authority.crm_v2_client_id),identityModel}
+    : {queued:true,status:failure?'failed':'pending',reason:failure,clientId:Number(authority.client_id),contactId:authority.contact_id?Number(authority.contact_id):null,identityVerificationId:authority.identity_verification_id?Number(authority.identity_verification_id):null,nameAuthorityId:authority.name_authority_id?Number(authority.name_authority_id):null,identityModel};
 }
 
 async function claimBookingConfirmation(appointmentId,{clientId=null,contactId=null,nameAuthorityId=null,db=pool}={}){
@@ -300,13 +346,16 @@ async function sendCustomerBookingConfirmation(data,{
   try{
     await queueCustomerBookingConfirmation(appointmentId,{db});
     const authority=await loadBookingConfirmationAuthority(appointmentId,db);
+    const identityModel=authority?.identity_model||(authority?.crm_v2_client_id?'crm_v2':'legacy');
     const authorityFailure=initialDeliveryFailure(authority);
     if(authorityFailure){
       await markBookingConfirmationFailure(appointmentId,authorityFailure,{clientId:authority?.client_id||clientId,contactId:authority?.contact_id||null,nameAuthorityId:authority?.name_authority_id||null,db});
       return {sent:false,reason:authorityFailure,deliveryStatus:'manual_action_required',retryable:true};
     }
-    const nameResolution=await resolveName(authority.client_id,db);
-    if(!nameResolution?.name||!nameResolution?.authorityId){
+    const nameResolution=identityModel==='crm_v2'
+      ? {name:String(authority.client_name_snapshot||'').trim(),authorityId:null}
+      : await resolveName(authority.client_id,db);
+    if(!nameResolution?.name||(identityModel==='legacy'&&!nameResolution?.authorityId)){
       await markBookingConfirmationFailure(appointmentId,'client_name_authority_not_found',{clientId:authority.client_id,contactId:authority.contact_id,nameAuthorityId:null,db});
       return {sent:false,reason:'client_name_authority_not_found',deliveryStatus:'manual_action_required',retryable:true};
     }
@@ -329,7 +378,18 @@ async function sendCustomerBookingConfirmation(data,{
     const date=fmtDate(startsAt),time=`${fmtTime(startsAt)}–${fmtTime(endsAt)}`;
     const template=env.WHATSAPP_BOOKING_CONFIRMATION_TEMPLATE;
 
-    await enrollLifecycle({appointmentId,clientId:authority.client_id,phone,service:serviceName,appointmentAt:startsAt,appointmentEndsAt:endsAt,therapist:staffName,source});
+    await enrollLifecycle({
+      appointmentId,
+      clientId:authority.client_id,
+      crmV2ClientId:authority.crm_v2_client_id,
+      clientName,
+      phone,
+      service:serviceName,
+      appointmentAt:startsAt,
+      appointmentEndsAt:endsAt,
+      therapist:staffName,
+      source,
+    });
 
     let confirmationActions={googleCalendar:false,appleOutlook:false,changeButtons:false,postConfirmationMenu:false};
     if(template){
@@ -353,7 +413,9 @@ async function sendCustomerBookingConfirmation(data,{
 
     const supplementalActionsSuppressed=!shouldSendLegacyConfirmationSupplements(template);
     if(!supplementalActionsSuppressed){
-      const actionContext={appointmentId,clientId:Number(authority.client_id)};
+      const actionContext=identityModel==='crm_v2'
+        ? {appointmentId,crmV2ClientId:Number(authority.crm_v2_client_id)}
+        : {appointmentId,clientId:Number(authority.client_id)};
       confirmationActions.googleCalendar=await sendOptionalConfirmationAction('google_calendar',()=>sendCta(phone,'Add to Google Calendar','Google Calendar',google),actionContext);
       if(ics){
         confirmationActions.appleOutlook=await sendOptionalConfirmationAction('apple_outlook_calendar',()=>sendCta(phone,'Add to Apple / Outlook','Apple / Outlook',ics),actionContext);
@@ -365,7 +427,10 @@ async function sendCustomerBookingConfirmation(data,{
       confirmationActions.postConfirmationMenu=await sendOptionalConfirmationAction('post_confirmation_menu',()=>sendButtons(phone,'*What would you like to do next?*\nYou can also type *BOOK ANOTHER TREATMENT*, *MY APPOINTMENTS*, or *MAIN MENU*.',postConfirmationButtons()),actionContext);
     }
 
-    await db.query(`INSERT INTO crm_audit_events (action,entity_type,entity_id,metadata) VALUES ('customer.booking_confirmation_sent','appointment',$1,$2::jsonb)`,[appointmentId,JSON.stringify({clientId:Number(authority.client_id),contactId:Number(authority.contact_id),identityVerificationId:Number(authority.identity_verification_id),calendarLinks:true,template:Boolean(template),templateName:template||null,providerMessageId:acceptedProviderMessageId,lifecycleEnrolled:true,idempotentDelivery:true,supplementalActionsSuppressed,confirmationActions,nameAuthorityId:Number(nameResolution.authorityId)})]);
+    const sentAuditMetadata=identityModel==='crm_v2'
+      ? {crmV2ClientId:Number(authority.crm_v2_client_id),identityModel:'crm_v2_exact_mobile',calendarLinks:true,template:Boolean(template),templateName:template||null,providerMessageId:acceptedProviderMessageId,lifecycleEnrolled:true,idempotentDelivery:true,supplementalActionsSuppressed,confirmationActions}
+      : {clientId:Number(authority.client_id),contactId:Number(authority.contact_id),identityVerificationId:Number(authority.identity_verification_id),calendarLinks:true,template:Boolean(template),templateName:template||null,providerMessageId:acceptedProviderMessageId,lifecycleEnrolled:true,idempotentDelivery:true,supplementalActionsSuppressed,confirmationActions,nameAuthorityId:Number(nameResolution.authorityId)};
+    await db.query(`INSERT INTO crm_audit_events (action,entity_type,entity_id,metadata) VALUES ('customer.booking_confirmation_sent','appointment',$1,$2::jsonb)`,[appointmentId,JSON.stringify(sentAuditMetadata)]);
     return {sent:true,deliveryStatus:'sent',templateName:template||null,providerMessageId:acceptedProviderMessageId,supplementalActionsSuppressed,confirmationActions};
   }catch(error){
     if(claimed&&!providerAccepted){

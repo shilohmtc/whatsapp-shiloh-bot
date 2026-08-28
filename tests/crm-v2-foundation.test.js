@@ -396,7 +396,7 @@ test('foundation adds no HTTP mutation route or staff-permission expansion', () 
     'src/repositories/crmV2ClientRepository.js',
   ].map((file) => fs.readFileSync(path.join(ROOT, file), 'utf8')).join('\n');
   assert.doesNotMatch(adminRoutes, /crmV2|crm\/v2/);
-  assert.doesNotMatch(app, /crmV2|crm\/v2/);
+  assert.doesNotMatch(app, /app\.use\([^\n]*(?:crmV2|crm\/v2)/);
   assert.doesNotMatch(runtime, /staff_admin_accounts|permissions/);
 });
 

@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const {
-  createCalendarCreateBookingService,
+  createCalendarCreateBookingService: createRawCalendarCreateBookingService,
   localDateTimeFromInputs,
 } = require('../src/services/calendarCreateBooking');
 const {
@@ -74,10 +74,42 @@ function eligibleRow(overrides = {}) {
   };
 }
 
+function crmV2Client(overrides = {}) {
+  return {
+    id: '123',
+    name: 'Jane Doe',
+    normalizedMobile: '27821234567',
+    profileStatus: 'minimal',
+    status: 'active',
+    ...overrides,
+  };
+}
+
+function defaultCrmV2Service() {
+  return {
+    async searchClients() { return []; },
+    async getClientById() { return crmV2Client(); },
+    async createClient() { return { status: 'created', client: crmV2Client() }; },
+  };
+}
+
+function createCalendarCreateBookingService(options = {}) {
+  return createRawCalendarCreateBookingService({
+    ...options,
+    crmV2Service: options.crmV2Service || defaultCrmV2Service(),
+  });
+}
+
 function pendingRow(overrides = {}) {
   return {
-    id: 123,
-    source: 'goldie_import',
+    crm_v2_client_id: 123,
+    source_client_name: 'Jane Doe',
+    client_mobile_snapshot: '27821234567',
+    acknowledged_mobile: '27821234567',
+    mobile_acknowledged_at: '2026-08-28T07:00:00.000Z',
+    current_client_name: 'Jane Doe',
+    current_client_mobile: '27821234567',
+    current_client_status: 'active',
     staff_id: 9,
     service_id: 44,
     location_id: 1,
@@ -147,7 +179,6 @@ test('14 current canonical Christel authority is revalidated on every booking op
   const service = createCalendarCreateBookingService({
     db,
     env: enabledEnv,
-    clientFinder: async () => ({ clients: [] }),
   });
   await service.searchClients(EMERGENCY_ADMIN_ID, 'Cl');
   await assert.rejects(
@@ -182,19 +213,22 @@ test('15 bookable options remain active/client-bookable and are bounded by Chris
   assert.deepEqual(optionsParams, [[9]]);
 });
 
-test('16 client search delegates to the canonical CRM finder with a bounded normalized query', async () => {
+test('16 client search delegates to CRM V2 with a bounded normalized query', async () => {
   const db = authorityDb();
   const finderCalls = [];
   const service = createCalendarCreateBookingService({
     db,
     env: enabledEnv,
-    clientFinder: async (...args) => {
+    crmV2Service: {
+      ...defaultCrmV2Service(),
+      async searchClients(...args) {
       finderCalls.push(args);
-      return { clients: [] };
+        return [];
+      },
     },
   });
   await service.searchClients(EMERGENCY_ADMIN_ID, '  Jane   Doe  ');
-  assert.deepEqual(finderCalls, [['Jane Doe', 10]]);
+  assert.deepEqual(finderCalls, [[{ query: 'Jane Doe', status: 'active', limit: 10 }]]);
 });
 
 test('17 one-character CRM searches do not execute lookup and all search results require explicit selection', async () => {
@@ -202,7 +236,10 @@ test('17 one-character CRM searches do not execute lookup and all search results
   const service = createCalendarCreateBookingService({
     db: authorityDb(),
     env: enabledEnv,
-    clientFinder: async () => { finderCalls += 1; return { clients: [] }; },
+    crmV2Service: {
+      ...defaultCrmV2Service(),
+      async searchClients() { finderCalls += 1; return []; },
+    },
   });
   const result = await service.searchClients(EMERGENCY_ADMIN_ID, 'J');
   assert.equal(finderCalls, 0);
@@ -214,15 +251,10 @@ test('18 CRM search serialization exposes only a masked contact hint and never t
   const service = createCalendarCreateBookingService({
     db: authorityDb(),
     env: enabledEnv,
-    clientFinder: async () => ({
-      clients: [{
-        id: 123,
-        display_name: 'Jane Doe',
-        status: 'active',
-        date_of_birth: '1990-01-02',
-        contacts: [{ isPrimary: true, value: rawNumber, normalizedValue: rawNumber }],
-      }],
-    }),
+    crmV2Service: {
+      ...defaultCrmV2Service(),
+      async searchClients() { return [crmV2Client()]; },
+    },
   });
   const result = await service.searchClients(EMERGENCY_ADMIN_ID, 'Jane');
   assert.equal(result.requiresExplicitSelection, true);
@@ -287,7 +319,7 @@ test('22 Calendar prepare delegates exact client, provider, service and local sl
       prepareCalls.push(payload);
       return {
         status: 'pending_confirmation',
-        client: { id: 123, display_name: 'Jane Doe' },
+        client: payload.crmV2Client,
         staff: { id: 9, display_name: 'Abigail' },
         service: { id: 44, name: 'Deep Tissue Massage', price: '650.00', variable_price: false },
         startsAt: '2026-08-28T08:15:00.000Z',
@@ -298,7 +330,7 @@ test('22 Calendar prepare delegates exact client, provider, service and local sl
   const result = await service.prepare({ adminId: EMERGENCY_ADMIN_ID, clientId: '123', staffId: 9, serviceId: 44, date: '2026-08-28', time: '10:15' });
   assert.deepEqual(prepareCalls, [{
     adminId: EMERGENCY_ADMIN_ID,
-    clientId: 123,
+    crmV2Client: crmV2Client(),
     staffName: 'Abigail',
     serviceName: 'Deep Tissue Massage',
     localDateTime: '28/08/2026 10:15',
@@ -316,6 +348,7 @@ test('23 canonical prepare denials pass through unchanged and Calendar code cann
   const service = createCalendarCreateBookingService({
     db,
     env: enabledEnv,
+    crmV2Service: defaultCrmV2Service(),
     prepareBooking: async () => canonicalDenial,
   });
   const result = await service.prepare({ adminId: EMERGENCY_ADMIN_ID, clientId: '123', staffId: 9, serviceId: 44, date: '2026-08-28', time: '10:15' });
@@ -331,21 +364,9 @@ test('24 Calendar confirm requires confirmation-safe authority then delegates wi
     if (call.sql.includes('JOIN staff_services ss')) return { rows: [eligibleRow()], rowCount: 1 };
     return { rows: [], rowCount: 0 };
   });
-  const contactAuthorityService = {
-    async issueBookingAuthorityContext() {
-      const error = new Error('Christel uses direct operator authority');
-      error.code = 'OPERATOR_AUTHORITY_FORBIDDEN';
-      throw error;
-    },
-    async loadClientAuthorityState(input) {
-      assert.deepEqual(input, { actorAdminId: EMERGENCY_ADMIN_ID, clientId: 123 });
-      return { confirmationSafe: true, stage: 'confirmation_safe' };
-    },
-  };
   const service = createCalendarCreateBookingService({
     db,
     env: enabledEnv,
-    contactAuthorityService,
     confirmBooking: async (...args) => {
       confirmCalls.push(args);
       return { status: 'created', appointmentId: 777 };
