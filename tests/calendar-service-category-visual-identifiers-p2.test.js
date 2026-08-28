@@ -187,7 +187,8 @@ test('Create Booking preserves native Treatment select and carries one family th
   assert.doesNotMatch(html, /role="combobox"|listbox/);
   assert.match(html, /Choose the client, treatment, practitioner and time\./);
   assert.match(html, /Name or mobile number/);
-  assert.doesNotMatch(html, /CRM V2|canonical client|guarded Shiloh write/);
+  assert.match(html, /<h2>Review booking<\/h2>/);
+  assert.doesNotMatch(html, /CRM V2|canonical client|guarded Shiloh write|Review before write/);
   assert.match(html, /"serviceFamily":\{"key":"targeted_therapeutic"/);
   assert.match(script, /data-selected-treatment/);
   assert.match(script, /reviewRows/);

@@ -281,12 +281,16 @@ async function main() {
       hasRegistration:/register client/i.test(document.body.innerText),
       hasGoogle:/google/i.test(document.body.innerText),
       heading:document.querySelector('header p').textContent,
+      reviewHeading:document.querySelector('[data-review-panel] h2').textContent,
+      hasInternalJargon:/CRM V2|canonical client|guarded canonical write|review before write/i.test(document.body.innerText),
       cookieVisible:document.cookie
     })`);
     assert.deepEqual(surface.choices, ['Find client', 'New client']);
     assert.equal(surface.hasRegistration, false);
     assert.equal(surface.hasGoogle, false);
     assert.equal(surface.heading, 'Choose the client, treatment, practitioner and time.');
+    assert.equal(surface.reviewHeading, 'Review booking');
+    assert.equal(surface.hasInternalJargon, false);
     assert.equal(surface.cookieVisible, '');
     const desktop = await evaluate(cdp, `({width:innerWidth,height:innerHeight,overflow:document.documentElement.scrollWidth-document.documentElement.clientWidth})`);
     assert.ok(desktop.width >= 1200);

@@ -86,9 +86,9 @@ const manifest = [];
 for (const view of ['day', 'week', 'agenda']) {
   const html = applyCalendarResponsivePolish(renderCalendarPage(buildModel(view), {
     operationalActions: [{ label: 'Create booking', href: '/calendar/book?date=2026-08-27', tone: 'primary' }],
-    timelineReadOnlyMessage: 'Timeline remains read-only. New booking creation uses the guarded Shiloh workflow.',
+    timelineReadOnlyMessage: 'Timeline remains read-only. Use Create booking to add an appointment.',
   }));
-  if (/Google-only|Non-canonical|PR #395|Confirm client contact|client-authority/i.test(html)) {
+  if (/Google-only|Non-canonical|PR #395|Confirm client contact|client-authority|guarded\s+(?:canonical|Shiloh)\s+workflow/i.test(html)) {
     throw new Error(`${view} visual proof contains prohibited legacy Calendar text`);
   }
   if (!/data-service-family="targeted_therapeutic"/.test(html) || !/Bamboo Sports Massage - Area Specific/.test(html)) {
