@@ -20,6 +20,8 @@ async function ensureTable() {
       id BIGSERIAL PRIMARY KEY,
       appointment_id BIGINT,
       client_id BIGINT,
+      crm_v2_client_id BIGINT,
+      client_name_snapshot TEXT,
       phone VARCHAR(32) NOT NULL,
       service_text TEXT NOT NULL,
       appointment_at TIMESTAMPTZ NOT NULL,
@@ -35,6 +37,8 @@ async function ensureTable() {
   `);
   await pool.query(`ALTER TABLE appointment_lifecycle ADD COLUMN IF NOT EXISTS appointment_id BIGINT`);
   await pool.query(`ALTER TABLE appointment_lifecycle ADD COLUMN IF NOT EXISTS client_id BIGINT`);
+  await pool.query(`ALTER TABLE appointment_lifecycle ADD COLUMN IF NOT EXISTS crm_v2_client_id BIGINT REFERENCES crm_v2_clients(id) ON DELETE RESTRICT`);
+  await pool.query(`ALTER TABLE appointment_lifecycle ADD COLUMN IF NOT EXISTS client_name_snapshot TEXT`);
   await pool.query(`ALTER TABLE appointment_lifecycle ADD COLUMN IF NOT EXISTS appointment_ends_at TIMESTAMPTZ`);
   await pool.query(`ALTER TABLE appointment_lifecycle ADD COLUMN IF NOT EXISTS followup_template_name TEXT`);
   await pool.query(`ALTER TABLE appointment_lifecycle ADD COLUMN IF NOT EXISTS followup_provider_message_id TEXT`);
@@ -51,7 +55,7 @@ function formatAppointmentDate(value) {
   }).format(new Date(value));
 }
 
-async function createAppointment({ appointmentId = null, clientId = null, phone, service, appointmentAt, appointmentEndsAt = null, therapist, source = "admin" }) {
+async function createAppointment({ appointmentId = null, clientId = null, crmV2ClientId = null, clientName = null, phone, service, appointmentAt, appointmentEndsAt = null, therapist, source = "admin" }) {
   await ensureTable();
   const cleanPhone = normalizePhone(phone);
   const when = new Date(appointmentAt);
@@ -61,14 +65,17 @@ async function createAppointment({ appointmentId = null, clientId = null, phone,
   if (appointmentId) {
     const result = await pool.query(
       `INSERT INTO appointment_lifecycle
-         (appointment_id, client_id, phone, service_text, appointment_at, appointment_ends_at, therapist_text, source)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+         (appointment_id, client_id, crm_v2_client_id, client_name_snapshot,
+          phone, service_text, appointment_at, appointment_ends_at, therapist_text, source)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
        ON CONFLICT (appointment_id) WHERE appointment_id IS NOT NULL DO UPDATE SET
-         client_id=EXCLUDED.client_id, phone=EXCLUDED.phone, service_text=EXCLUDED.service_text,
+         client_id=EXCLUDED.client_id, crm_v2_client_id=EXCLUDED.crm_v2_client_id,
+         client_name_snapshot=EXCLUDED.client_name_snapshot,
+         phone=EXCLUDED.phone, service_text=EXCLUDED.service_text,
          appointment_at=EXCLUDED.appointment_at, appointment_ends_at=EXCLUDED.appointment_ends_at,
          therapist_text=EXCLUDED.therapist_text, source=EXCLUDED.source, updated_at=NOW()
        RETURNING *`,
-      [appointmentId, clientId, cleanPhone, String(service).trim(), when.toISOString(), ends?.toISOString() || null, therapist || null, source]
+      [appointmentId, clientId, crmV2ClientId, clientName ? String(clientName).trim() : null, cleanPhone, String(service).trim(), when.toISOString(), ends?.toISOString() || null, therapist || null, source]
     );
     return result.rows[0];
   }
@@ -151,7 +158,7 @@ async function deliverClaimedFollowup(appointment, followupTemplate, followupAct
   let providerAccepted = false;
   let providerMessageId = null;
   try {
-    const name = deps.name || await customerName(appointment.phone);
+    const name = deps.name || appointment.client_name_snapshot || await customerName(appointment.phone);
     const quickReplyPayloads = followupActionsTemplate ? ['1','2','3','4','5'] : [];
     const accepted = await send(appointment.phone, followupTemplate, [name, appointment.service_text], LANGUAGE_CODE, quickReplyPayloads);
     providerAccepted = true;
@@ -175,7 +182,7 @@ async function processReminders() {
   if(!reminderTemplate&&!followupTemplate)return;
 
   if(reminderTemplate){
-    for(let i=0;i<20;i+=1){const appointment=await claimDueReminder();if(!appointment)break;try{const name=await customerName(appointment.phone);const formatted=formatAppointmentDate(appointment.appointment_at);const parts=formatted.split(", ");const time=parts[parts.length-1]||formatted;const date=parts.slice(0,-1).join(", ")||formatted;const quickReplyPayloads=reminderActionsTemplate?['client_reschedule_booking','client_cancel_booking']:[];await sendWhatsAppTemplate(appointment.phone,reminderTemplate,[name,appointment.service_text,date,time],LANGUAGE_CODE,quickReplyPayloads);logger.info({appointmentId:appointment.appointment_id||appointment.id,actionTemplate:Boolean(reminderActionsTemplate)},"Customer appointment reminder sent");}catch(error){await undoClaim(appointment.id,"reminder_sent_at");logger.error({err:error,appointmentId:appointment.appointment_id||appointment.id},"Appointment reminder failed");break;}}
+    for(let i=0;i<20;i+=1){const appointment=await claimDueReminder();if(!appointment)break;try{const name=appointment.client_name_snapshot||await customerName(appointment.phone);const formatted=formatAppointmentDate(appointment.appointment_at);const parts=formatted.split(", ");const time=parts[parts.length-1]||formatted;const date=parts.slice(0,-1).join(", ")||formatted;const quickReplyPayloads=reminderActionsTemplate?['client_reschedule_booking','client_cancel_booking']:[];await sendWhatsAppTemplate(appointment.phone,reminderTemplate,[name,appointment.service_text,date,time],LANGUAGE_CODE,quickReplyPayloads);logger.info({appointmentId:appointment.appointment_id||appointment.id,actionTemplate:Boolean(reminderActionsTemplate)},"Customer appointment reminder sent");}catch(error){await undoClaim(appointment.id,"reminder_sent_at");logger.error({err:error,appointmentId:appointment.appointment_id||appointment.id},"Appointment reminder failed");break;}}
   }
 
   if(followupTemplate){

@@ -484,8 +484,8 @@ test('missing contact, missing name authority and inactive canonical authority f
   }
 
   const authoritySql = fs.readFileSync(path.join(ROOT, 'src/services/customerBookingConfirmation.js'), 'utf8');
-  assert.match(authoritySql, /JOIN clients c ON c\.id=a\.client_id/);
-  assert.match(authoritySql, /WHERE cc\.client_id=c\.id/);
+  assert.match(authoritySql, /LEFT JOIN clients c ON c\.id=a\.client_id/);
+  assert.match(authoritySql, /AND cc\.client_id=c\.id/);
   assert.doesNotMatch(authoritySql, /WHERE[^`]*(?:display_name|current_name)\s*=\s*\$1/i);
   const ux = fs.readFileSync(path.join(ROOT, 'src/presentation/calendarCreateBookingUx.js'), 'utf8');
   assert.match(ux, /BOOKED — CLIENT CONFIRMATION NOT SENT/);

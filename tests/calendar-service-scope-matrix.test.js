@@ -94,17 +94,34 @@ function matrixDb() {
   };
 }
 
+const matrixClient = Object.freeze({
+  id: '700',
+  name: 'Matrix Client',
+  normalizedMobile: '27821234567',
+  profileStatus: 'minimal',
+  status: 'active',
+});
+
+function crmV2() {
+  return {
+    async searchClients() { return []; },
+    async getClientById() { return matrixClient; },
+    async createClient() { return { status: 'existing', client: matrixClient }; },
+  };
+}
+
 async function exercise(admin, serviceId, targetStaffId = 20) {
   const db = matrixDb();
   const prepareCalls = [];
   const service = createCalendarCreateBookingService({
     db,
     env,
+    crmV2Service: crmV2(),
     prepareBooking: async (payload) => {
       prepareCalls.push(payload);
       return {
         status: 'pending_confirmation',
-        client: { id: 700, display_name: 'Matrix Client' },
+        client: payload.crmV2Client,
         staff: { id: targetStaffId, display_name: `Target ${targetStaffId}` },
         service: { id: serviceId, name: serviceNames.get(serviceId), price: '500.00', variable_price: false },
         startsAt: '2026-08-28T08:00:00.000Z',

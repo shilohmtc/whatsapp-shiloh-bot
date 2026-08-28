@@ -28,9 +28,10 @@ function statusForError(error) {
   const code = String(error?.code || '');
   if (code === 'CALENDAR_BOOKING_DISABLED') return 404;
   if (code === 'CALENDAR_BOOKING_FORBIDDEN' || code === 'CALENDAR_BOOKING_SCOPE_UNRESOLVED') return 403;
-  if (code === 'CALENDAR_BOOKING_NEW_CLIENT_AMBIGUOUS') return 409;
+  if (code === 'CALENDAR_BOOKING_CRM_V2_CONFLICT' || code === 'CALENDAR_BOOKING_CLIENT_MOBILE_CHANGED' || code === 'CALENDAR_BOOKING_CRM_V2_CLIENT_INACTIVE') return 409;
   if (code === 'CALENDAR_BOOKING_INELIGIBLE_SELECTION' || code === 'CALENDAR_BOOKING_CONFIRMATION_UNSAFE' || code === 'CALENDAR_BOOKING_NO_PENDING') return 409;
-  if (code.startsWith('CALENDAR_BOOKING_NEW_CLIENT_INVALID_')) return 400;
+  if (code === 'CRM_V2_CLIENT_NOT_FOUND') return 404;
+  if (code === 'CRM_V2_INVALID_MOBILE' || code === 'CRM_V2_INVALID_NAME' || code === 'CRM_V2_SEARCH_TOO_SHORT' || code === 'CRM_V2_INVALID_CLIENT_ID') return 400;
   if (code.startsWith('CALENDAR_BOOKING_INVALID_') || code === 'CALENDAR_BOOKING_CLIENT_REQUIRED') return 400;
   if (code === 'OPERATOR_AUTHORITY_UNAUTHORIZED') return 401;
   if (code === 'OPERATOR_AUTHORITY_FORBIDDEN' || code === 'OPERATOR_AUTHORITY_BOOKING_SCOPE_DENIED') return 403;
@@ -48,7 +49,17 @@ function customerConfirmationState(result) {
   if (delivery.deliveryStatus === 'uncertain' || reason === 'delivery_state_uncertain') {
     return { status: 'delivery_status_uncertain', sent: false, retryable: false, reason: 'delivery_state_uncertain' };
   }
-  const manualAction = ['client_contact_not_found', 'client_contact_unverified', 'client_contact_ambiguous', 'client_name_authority_not_found', 'canonical_client_inactive'].includes(reason);
+  const manualAction = [
+    'client_contact_not_found',
+    'client_contact_unverified',
+    'client_contact_ambiguous',
+    'client_name_authority_not_found',
+    'canonical_client_inactive',
+    'crm_v2_client_inactive',
+    'crm_v2_recipient_missing',
+    'crm_v2_name_missing',
+    'crm_v2_identity_invalid',
+  ].includes(reason);
   return {
     status: manualAction ? 'manual_action_required' : 'retry_pending',
     sent: false,
@@ -136,12 +147,12 @@ function createCalendarCreateBookingRouter({
     }
   });
 
-  // Read-only bridge from the authenticated pending booking to the frozen WS-20
-  // authority contract. Client/staff/service/location/slot are server-derived from
-  // admin_booking_sessions; no browser-submitted booking context grants authority.
-  router.post('/authority', sameOrigin, requireSession, async (req, res, next) => {
+  // The request is the deliberate operator acknowledgement. The client id and
+  // exact mobile are read from the authenticated server-side pending session;
+  // no browser-submitted identity/mobile value is accepted.
+  router.post('/mobile-acknowledgement', sameOrigin, requireSession, requireCsrf, async (req, res, next) => {
     try {
-      const result = await bookingService.preparedAuthority({ adminId: req.staffBrowserSession.adminId });
+      const result = await bookingService.acknowledgeMobile({ adminId: req.staffBrowserSession.adminId });
       return res.status(200).json(result);
     } catch (error) {
       const status = statusForError(error);

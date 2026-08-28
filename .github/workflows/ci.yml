@@ -69,6 +69,8 @@ jobs:
         run: node --test tests/emergency-christel-calendar-booking-acceptance.test.js
       - name: Run focused Calendar new-client booking acceptance tests
         run: node --test tests/calendar-new-client-booking-acceptance.test.js
+      - name: Run focused Calendar Clean CRM V2 cutover tests
+        run: node --test tests/calendar-clean-crm-v2-cutover-p0.test.js
       - name: Run non-mutating regression tests
         env:
           SHILOH_STAFF_BROWSER_AUTH_WHATSAPP_DELIVERY_ENABLED: 'false'
@@ -84,6 +86,15 @@ jobs:
         with:
           name: calendar-operational-mutations-browser-proof
           path: artifacts/calendar-operational-mutations-browser-proof
+          if-no-files-found: error
+          retention-days: 14
+      - name: Run Calendar Clean CRM V2 browser proof
+        run: node scripts/calendar-clean-crm-v2-browser-proof.js
+      - name: Upload Calendar Clean CRM V2 browser proof
+        uses: actions/upload-artifact@v4
+        with:
+          name: calendar-clean-crm-v2-browser-proof
+          path: artifacts/calendar-clean-crm-v2-browser-proof
           if-no-files-found: error
           retention-days: 14
       - name: Generate Calendar cockpit visual proof

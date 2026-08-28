@@ -9,11 +9,7 @@ const {
 } = require('../src/services/calendarCreateBooking');
 const { EMERGENCY_ADMIN_ID } = require('../src/services/emergencyCalendarBootstrap');
 
-const enabledEnv = {
-  SHILOH_EMERGENCY_CHRISTEL_CALENDAR_BOOKING_ENABLED: 'true',
-  SHILOH_CALENDAR_PUBLIC_ORIGIN: 'https://shiloh.example.test',
-  SHILOH_STAFF_BROWSER_PILOT_MODE_ENABLED: 'false',
-};
+const enabledEnv = { SHILOH_EMERGENCY_CHRISTEL_CALENDAR_BOOKING_ENABLED: 'true' };
 
 function authorityRow(overrides = {}) {
   return {
@@ -32,7 +28,7 @@ function authorityRow(overrides = {}) {
   };
 }
 
-function eligibleRow(overrides = {}) {
+function eligibleRow() {
   return {
     staff_id: 9,
     staff_name: 'Abigail',
@@ -43,6 +39,16 @@ function eligibleRow(overrides = {}) {
     extra_time_minutes: 0,
     price: '650.00',
     variable_price: false,
+  };
+}
+
+function v2Client(overrides = {}) {
+  return {
+    id: '701',
+    name: 'Jane Doe',
+    normalizedMobile: '27821234567',
+    profileStatus: 'minimal',
+    status: 'active',
     ...overrides,
   };
 }
@@ -59,49 +65,32 @@ function scriptedDb(handler = async () => ({ rows: [], rowCount: 0 })) {
   };
 }
 
-function authorityDb(extraHandler) {
-  return scriptedDb(async (call, calls) => {
-    if (call.sql.includes('FROM staff_admin_accounts a')) {
-      return { rows: [authorityRow()], rowCount: 1 };
+function bookingDb({ pending = null, eligible = true } = {}) {
+  return scriptedDb(async (call) => {
+    if (call.sql.includes('FROM staff_admin_accounts a')) return { rows: [authorityRow()], rowCount: 1 };
+    if (call.sql.includes('JOIN staff_services ss') && call.sql.includes('st.id = $1')) {
+      return eligible ? { rows: [eligibleRow()], rowCount: 1 } : { rows: [], rowCount: 0 };
     }
-    if (extraHandler) return extraHandler(call, calls);
+    if (call.sql.includes('FROM admin_booking_sessions abs')) {
+      return pending ? { rows: [pending], rowCount: 1 } : { rows: [], rowCount: 0 };
+    }
     return { rows: [], rowCount: 0 };
   });
 }
 
-function pendingResult(clientId, source = 'admin_provisional_booking') {
+function crmV2(overrides = {}) {
   return {
-    rows: [{
-      id: clientId,
-      source,
-      staff_id: 9,
-      service_id: 44,
-      location_id: 1,
-      starts_at: '2026-08-28T08:15:00.000Z',
-      ends_at: '2026-08-28T09:15:00.000Z',
-      state: 'confirm',
-    }],
-    rowCount: 1,
+    async searchClients() { return []; },
+    async getClientById(id) { return v2Client({ id: String(id) }); },
+    async createClient() { return { status: 'created', client: v2Client() }; },
+    ...overrides,
   };
 }
 
-function safeDirectAuthorityService() {
-  return {
-    async issueBookingAuthorityContext() {
-      const error = new Error('Christel uses direct operator authority');
-      error.code = 'OPERATOR_AUTHORITY_FORBIDDEN';
-      throw error;
-    },
-    async loadClientAuthorityState() {
-      return { confirmationSafe: true, stage: 'confirmation_safe' };
-    },
-  };
-}
-
-function preparedResult(clientId, displayName = 'Jane Doe') {
+function preparedResult(client = v2Client()) {
   return {
     status: 'pending_confirmation',
-    client: { id: clientId, display_name: displayName },
+    client,
     staff: { id: 9, display_name: 'Abigail' },
     service: { id: 44, name: 'Deep Tissue Massage', price: '650.00', variable_price: false },
     startsAt: '2026-08-28T08:15:00.000Z',
@@ -109,317 +98,216 @@ function preparedResult(clientId, displayName = 'Jane Doe') {
   };
 }
 
-const routeSource = fs.readFileSync(path.join(__dirname, '../src/routes/calendarCreateBooking.js'), 'utf8');
-const serviceSource = fs.readFileSync(path.join(__dirname, '../src/services/calendarCreateBooking.js'), 'utf8');
-const uxSource = fs.readFileSync(path.join(__dirname, '../src/presentation/calendarCreateBookingUx.js'), 'utf8');
+function pending(overrides = {}) {
+  return {
+    crm_v2_client_id: 701,
+    source_client_name: 'Jane Doe',
+    client_mobile_snapshot: '27821234567',
+    acknowledged_mobile: null,
+    mobile_acknowledged_at: null,
+    staff_id: 9,
+    service_id: 44,
+    location_id: 1,
+    starts_at: '2026-08-28T08:15:00.000Z',
+    ends_at: '2026-08-28T09:15:00.000Z',
+    state: 'confirm',
+    current_client_name: 'Jane Doe',
+    current_client_mobile: '27821234567',
+    current_client_status: 'active',
+    ...overrides,
+  };
+}
 
-test('Calendar new-client UX stays draft-only until the existing guarded prepare action', () => {
-  assert.match(uxSource, /data-new-client-panel/);
-  assert.match(uxSource, /Nothing is written to CRM when search returns no results/);
-  assert.match(uxSource, /payload\.newClient=/);
-  assert.doesNotMatch(routeSource, /router\.post\('\/new-client'/);
-  assert.match(routeSource, /router\.post\('\/prepare'\s*,\s*sameOrigin\s*,\s*requireSession\s*,\s*requireCsrf/);
-  assert.match(routeSource, /router\.post\('\/discard'\s*,\s*sameOrigin\s*,\s*requireSession\s*,\s*requireCsrf/);
-  assert.match(routeSource, /newClient:\s*req\.body\?\.newClient/);
+const ROOT = path.join(__dirname, '..');
+const routeSource = fs.readFileSync(path.join(ROOT, 'src/routes/calendarCreateBooking.js'), 'utf8');
+const serviceSource = fs.readFileSync(path.join(ROOT, 'src/services/calendarCreateBooking.js'), 'utf8');
+const uxSource = fs.readFileSync(path.join(ROOT, 'src/presentation/calendarCreateBookingUx.js'), 'utf8');
+const choiceSource = fs.readFileSync(path.join(ROOT, 'src/presentation/calendarCreateBookingClientChoiceUx.js'), 'utf8');
+
+test('Create Booking exposes exactly Find client and New client with no registration action', () => {
+  assert.match(choiceSource, /existingButton\.textContent='Find client'/);
+  assert.match(choiceSource, /newButton\.textContent='New client'/);
+  assert.doesNotMatch(`${uxSource}\n${choiceSource}`, /Find existing client|\+ New client|Client registration/);
+  assert.match(uxSource, /Search CRM V2/);
 });
 
-test('new-client draft normalization is bounded and does not invent a client', () => {
-  assert.deepEqual(normalizeNewClientInput({ fullName: '  Jane   Doe ', mobileNumber: ' 082 123 4567 ' }), {
-    fullName: 'Jane Doe',
-    mobileNumber: '082 123 4567',
+test('new-client input normalization is bounded and does not invent identity', () => {
+  assert.deepEqual(normalizeNewClientInput({ name: '  Jane   Doe ', mobile: ' 082 123 4567 ' }), {
+    name: 'Jane Doe',
+    mobile: '082 123 4567',
+  });
+  assert.deepEqual(normalizeNewClientInput({ fullName: 'Jane Doe', mobileNumber: '0821234567' }), {
+    name: 'Jane Doe',
+    mobile: '0821234567',
   });
   assert.equal(normalizeNewClientInput(null), null);
   assert.equal(normalizeNewClientInput({}), null);
 });
 
-test('Calendar fails closed if canonical client id and new-client draft are supplied together', async () => {
-  let creatorCalls = 0;
+test('client choice is exclusive and invalid identity fails before service selection or CRM mutation', async () => {
+  const db = bookingDb();
+  let creates = 0;
   const service = createCalendarCreateBookingService({
-    db: authorityDb(),
+    db,
     env: enabledEnv,
-    provisionalClientCreator: async () => { creatorCalls += 1; },
+    crmV2Service: crmV2({ async createClient() { creates += 1; } }),
   });
   await assert.rejects(
-    service.prepare({
-      adminId: EMERGENCY_ADMIN_ID,
-      clientId: 123,
-      newClient: { fullName: 'Jane Doe', mobileNumber: '0821234567' },
-      staffId: 9,
-      serviceId: 44,
-      date: '2026-08-28',
-      time: '10:15',
-    }),
+    service.prepare({ adminId: EMERGENCY_ADMIN_ID, clientId: 701, newClient: { name: 'Jane Doe', mobile: '0821234567' }, staffId: 9, serviceId: 44, date: '2026-08-28', time: '10:15' }),
     (error) => error?.code === 'CALENDAR_BOOKING_INVALID_CLIENT_SELECTION'
   );
-  assert.equal(creatorCalls, 0);
+  assert.equal(creates, 0);
+  assert.equal(db.calls.some((call) => call.sql.includes('st.id = $1')), false);
 });
 
-test('provider eligibility is validated before any provisional CRM mutation', async () => {
-  let creatorCalls = 0;
-  const db = authorityDb(async (call) => {
-    if (call.sql.includes('JOIN staff_services ss')) return { rows: [], rowCount: 0 };
-    return { rows: [], rowCount: 0 };
-  });
+test('out-of-scope service is rejected before createClient can mutate CRM V2', async () => {
+  const db = bookingDb({ eligible: false });
+  let creates = 0;
   const service = createCalendarCreateBookingService({
     db,
     env: enabledEnv,
-    provisionalClientCreator: async () => { creatorCalls += 1; },
+    crmV2Service: crmV2({ async createClient() { creates += 1; } }),
   });
   await assert.rejects(
-    service.prepare({
-      adminId: EMERGENCY_ADMIN_ID,
-      newClient: { fullName: 'Jane Doe', mobileNumber: '0821234567' },
-      staffId: 9,
-      serviceId: 44,
-      date: '2026-08-28',
-      time: '10:15',
-    }),
+    service.prepare({ adminId: EMERGENCY_ADMIN_ID, newClient: { name: 'Jane Doe', mobile: '0821234567' }, staffId: 9, serviceId: 44, date: '2026-08-28', time: '10:15' }),
     (error) => error?.code === 'CALENDAR_BOOKING_INELIGIBLE_SELECTION'
   );
-  assert.equal(creatorCalls, 0);
+  assert.equal(creates, 0);
 });
 
-test('new client is resolved through existing provisional authority and delegates its canonical id to Admin booking', async () => {
-  const creatorCalls = [];
+test('New client uses createClient, exact actor provenance, server reread and the V2 pending owner', async () => {
+  const createCalls = [];
+  const getCalls = [];
   const prepareCalls = [];
-  const cleanupCalls = [];
-  const db = authorityDb(async (call) => {
-    if (call.sql.includes('JOIN staff_services ss')) return { rows: [eligibleRow()], rowCount: 1 };
-    return { rows: [], rowCount: 0 };
-  });
   const service = createCalendarCreateBookingService({
-    db,
+    db: bookingDb(),
     env: enabledEnv,
-    provisionalClientCreator: async (payload) => {
-      creatorCalls.push(payload);
-      return { status: 'created', client: { id: 701, display_name: 'Jane Doe', status: 'active' } };
-    },
-    provisionalClientCleanup: async (payload) => { cleanupCalls.push(payload); return { status: 'removed' }; },
-    prepareBooking: async (payload) => { prepareCalls.push(payload); return preparedResult(701); },
+    crmV2Service: crmV2({
+      async createClient(input) { createCalls.push(input); return { status: 'created', client: v2Client() }; },
+      async getClientById(id) { getCalls.push(id); return v2Client({ id: String(id) }); },
+    }),
+    prepareBooking: async (input) => { prepareCalls.push(input); return preparedResult(input.crmV2Client); },
   });
-
-  const result = await service.prepare({
-    adminId: EMERGENCY_ADMIN_ID,
-    newClient: { fullName: 'Jane Doe', mobileNumber: '082 123 4567' },
-    staffId: 9,
-    serviceId: 44,
-    date: '2026-08-28',
-    time: '10:15',
-  });
-
-  assert.deepEqual(creatorCalls, [{ fullName: 'Jane Doe', mobileNumber: '082 123 4567', adminId: EMERGENCY_ADMIN_ID }]);
-  assert.deepEqual(prepareCalls, [{
-    adminId: EMERGENCY_ADMIN_ID,
-    clientId: 701,
-    staffName: 'Abigail',
-    serviceName: 'Deep Tissue Massage',
-    localDateTime: '28/08/2026 10:15',
-  }]);
-  assert.equal(cleanupCalls.length, 0);
-  assert.equal(result.review.client.id, 701);
-  assert.equal(result.review.client.provisional, true);
-  assert.equal(result.review.client.profileIncomplete, true);
+  const result = await service.prepare({ adminId: EMERGENCY_ADMIN_ID, newClient: { name: 'Jane Doe', mobile: '082 123 4567' }, staffId: 9, serviceId: 44, date: '2026-08-28', time: '10:15' });
+  assert.deepEqual(createCalls, [{ name: 'Jane Doe', mobile: '082 123 4567', actorReference: `calendar_admin:${EMERGENCY_ADMIN_ID}` }]);
+  assert.deepEqual(getCalls, ['701']);
+  assert.equal(prepareCalls[0].crmV2Client.id, '701');
+  assert.equal(prepareCalls[0].adminId, EMERGENCY_ADMIN_ID);
+  assert.equal(result.review.client.created, true);
   assert.equal(result.review.client.contactHint, 'ending in 4567');
+  assert.equal(result.review.mobileAcknowledgementRequired, true);
 });
 
-test('mobile match reuses the existing canonical client and never marks it provisional', async () => {
-  const prepareCalls = [];
-  const db = authorityDb(async (call) => {
-    if (call.sql.includes('JOIN staff_services ss')) return { rows: [eligibleRow()], rowCount: 1 };
-    return { rows: [], rowCount: 0 };
-  });
+test('exact-mobile existing result resolves the same canonical CRM V2 client', async () => {
   const service = createCalendarCreateBookingService({
-    db,
+    db: bookingDb(),
     env: enabledEnv,
-    provisionalClientCreator: async () => ({ status: 'existing', client: { id: 333, display_name: 'Existing Jane', status: 'active' } }),
-    provisionalClientCleanup: async () => { throw new Error('existing canonical client must never be cleaned up'); },
-    prepareBooking: async (payload) => { prepareCalls.push(payload); return preparedResult(333, 'Existing Jane'); },
+    crmV2Service: crmV2({
+      async createClient() { return { status: 'existing', client: v2Client({ id: '333' }) }; },
+      async getClientById(id) { return v2Client({ id: String(id), name: 'Existing Jane' }); },
+    }),
+    prepareBooking: async (input) => preparedResult(input.crmV2Client),
   });
-
-  const result = await service.prepare({
-    adminId: EMERGENCY_ADMIN_ID,
-    newClient: { fullName: 'Jane Doe', mobileNumber: '0821234567' },
-    staffId: 9,
-    serviceId: 44,
-    date: '2026-08-28',
-    time: '10:15',
-  });
-
-  assert.equal(prepareCalls[0].clientId, 333);
-  assert.equal(result.review.client.provisional, false);
+  const result = await service.prepare({ adminId: EMERGENCY_ADMIN_ID, newClient: { name: 'Jane Doe', mobile: '0821234567' }, staffId: 9, serviceId: 44, date: '2026-08-28', time: '10:15' });
+  assert.equal(result.review.client.id, '333');
   assert.equal(result.review.client.matchedExisting, true);
+  assert.equal(result.review.client.created, false);
 });
 
-test('ambiguous mobile identity fails closed before canonical booking preparation', async () => {
-  let prepareCalls = 0;
-  let cleanupCalls = 0;
-  const db = authorityDb(async (call) => {
-    if (call.sql.includes('JOIN staff_services ss')) return { rows: [eligibleRow()], rowCount: 1 };
-    return { rows: [], rowCount: 0 };
-  });
+test('CRM V2 exact-mobile conflict fails closed before pending booking preparation', async () => {
+  let prepares = 0;
   const service = createCalendarCreateBookingService({
-    db,
+    db: bookingDb(),
     env: enabledEnv,
-    provisionalClientCreator: async () => ({ status: 'ambiguous', clients: [{ id: 1 }, { id: 2 }] }),
-    provisionalClientCleanup: async () => { cleanupCalls += 1; },
-    prepareBooking: async () => { prepareCalls += 1; },
+    crmV2Service: crmV2({ async createClient() { return { status: 'conflict', clientIds: ['1', '2'] }; } }),
+    prepareBooking: async () => { prepares += 1; },
   });
-
   await assert.rejects(
-    service.prepare({
-      adminId: EMERGENCY_ADMIN_ID,
-      newClient: { fullName: 'Jane Doe', mobileNumber: '0821234567' },
-      staffId: 9,
-      serviceId: 44,
-      date: '2026-08-28',
-      time: '10:15',
-    }),
-    (error) => error?.code === 'CALENDAR_BOOKING_NEW_CLIENT_AMBIGUOUS'
+    service.prepare({ adminId: EMERGENCY_ADMIN_ID, newClient: { name: 'Jane Doe', mobile: '0821234567' }, staffId: 9, serviceId: 44, date: '2026-08-28', time: '10:15' }),
+    (error) => error?.code === 'CALENDAR_BOOKING_CRM_V2_CONFLICT'
   );
-  assert.equal(prepareCalls, 0);
-  assert.equal(cleanupCalls, 0);
+  assert.equal(prepares, 0);
 });
 
-test('new provisional client is removed immediately when canonical preparation denies the slot', async () => {
-  const cleanupCalls = [];
-  const db = authorityDb(async (call) => {
-    if (call.sql.includes('JOIN staff_services ss')) return { rows: [eligibleRow()], rowCount: 1 };
-    return { rows: [], rowCount: 0 };
-  });
-  const denial = { status: 'schedule_exception', reply: 'Not available.' };
+test('Find client searches CRM V2 only and always requires explicit selection', async () => {
+  const searches = [];
   const service = createCalendarCreateBookingService({
-    db,
+    db: bookingDb(),
     env: enabledEnv,
-    provisionalClientCreator: async () => ({ status: 'created', client: { id: 702, display_name: 'Jane Doe' } }),
-    provisionalClientCleanup: async (payload) => { cleanupCalls.push(payload); return { status: 'removed' }; },
-    prepareBooking: async () => denial,
+    crmV2Service: crmV2({ async searchClients(input) { searches.push(input); return [v2Client()]; } }),
   });
-
-  const result = await service.prepare({
-    adminId: EMERGENCY_ADMIN_ID,
-    newClient: { fullName: 'Jane Doe', mobileNumber: '0821234567' },
-    staffId: 9,
-    serviceId: 44,
-    date: '2026-08-28',
-    time: '10:15',
+  const result = await service.searchClients(EMERGENCY_ADMIN_ID, '  Jane   Doe  ');
+  assert.deepEqual(searches, [{ query: 'Jane Doe', status: 'active', limit: 10 }]);
+  assert.equal(result.requiresExplicitSelection, true);
+  assert.equal(result.identityModel, 'crm_v2_operator_search_only');
+  assert.deepEqual(result.clients[0], {
+    id: '701', displayName: 'Jane Doe', status: 'active', profileStatus: 'minimal', contactHint: 'ending in 4567',
   });
-
-  assert.strictEqual(result, denial);
-  assert.deepEqual(cleanupCalls, [{ clientId: 702, adminId: EMERGENCY_ADMIN_ID, reason: 'calendar_booking_prepare_failed' }]);
 });
 
-test('new provisional client is also removed when canonical preparation throws', async () => {
-  const cleanupCalls = [];
-  const db = authorityDb(async (call) => {
-    if (call.sql.includes('JOIN staff_services ss')) return { rows: [eligibleRow()], rowCount: 1 };
-    return { rows: [], rowCount: 0 };
-  });
+test('discard removes only the server pending session and never deletes a CRM V2 client', async () => {
+  const cancellations = [];
   const service = createCalendarCreateBookingService({
-    db,
+    db: bookingDb(),
     env: enabledEnv,
-    provisionalClientCreator: async () => ({ status: 'created', client: { id: 703, display_name: 'Jane Doe' } }),
-    provisionalClientCleanup: async (payload) => { cleanupCalls.push(payload); return { status: 'removed' }; },
-    prepareBooking: async () => { throw new Error('provider unavailable'); },
+    crmV2Service: crmV2(),
+    cancelBooking: async (adminId) => { cancellations.push(adminId); return true; },
   });
-
-  await assert.rejects(
-    service.prepare({
-      adminId: EMERGENCY_ADMIN_ID,
-      newClient: { fullName: 'Jane Doe', mobileNumber: '0821234567' },
-      staffId: 9,
-      serviceId: 44,
-      date: '2026-08-28',
-      time: '10:15',
-    }),
-    /provider unavailable/
-  );
-  assert.deepEqual(cleanupCalls, [{ clientId: 703, adminId: EMERGENCY_ADMIN_ID, reason: 'calendar_booking_prepare_error' }]);
-});
-
-test('Edit/discard cancels the pending session and removes an unused provisional client', async () => {
-  const cancelCalls = [];
-  const cleanupCalls = [];
-  const db = authorityDb(async (call) => {
-    if (call.sql.includes('FROM admin_booking_sessions abs')) return pendingResult(704);
-    return { rows: [], rowCount: 0 };
-  });
-  const service = createCalendarCreateBookingService({
-    db,
-    env: enabledEnv,
-    cancelBooking: async (adminId) => { cancelCalls.push(adminId); return true; },
-    provisionalClientCleanup: async (payload) => { cleanupCalls.push(payload); return { status: 'removed' }; },
-  });
-
   const result = await service.discard({ adminId: EMERGENCY_ADMIN_ID });
-  assert.deepEqual(cancelCalls, [EMERGENCY_ADMIN_ID]);
-  assert.deepEqual(cleanupCalls, [{ clientId: 704, adminId: EMERGENCY_ADMIN_ID, reason: 'calendar_booking_cancelled' }]);
-  assert.deepEqual(result, { status: 'discarded', provisionalClientRemoved: true, cleanupStatus: 'removed' });
+  assert.deepEqual(cancellations, [EMERGENCY_ADMIN_ID]);
+  assert.deepEqual(result, { status: 'discarded', crmV2ClientRemoved: false });
 });
 
-test('Edit/discard never deletes an existing canonical client', async () => {
-  let cleanupCalls = 0;
-  const db = authorityDb(async (call) => {
-    if (call.sql.includes('FROM admin_booking_sessions abs')) return pendingResult(333, 'goldie_import');
-    return { rows: [], rowCount: 0 };
-  });
+test('final mobile acknowledgement is derived from pending server state and accepts no browser identity', async () => {
+  const acknowledgementCalls = [];
   const service = createCalendarCreateBookingService({
-    db,
+    db: bookingDb({ pending: pending() }),
     env: enabledEnv,
-    cancelBooking: async () => true,
-    provisionalClientCleanup: async () => { cleanupCalls += 1; },
+    crmV2Service: crmV2(),
+    acknowledgeBooking: async (adminId) => {
+      acknowledgementCalls.push(adminId);
+      return { status: 'acknowledged', client: v2Client() };
+    },
   });
-
-  const result = await service.discard({ adminId: EMERGENCY_ADMIN_ID });
-  assert.equal(cleanupCalls, 0);
-  assert.deepEqual(result, { status: 'discarded', provisionalClientRemoved: false, cleanupStatus: null });
+  const result = await service.acknowledgeMobile({ adminId: EMERGENCY_ADMIN_ID, clientId: 999, mobile: '27829999999' });
+  assert.deepEqual(acknowledgementCalls, [EMERGENCY_ADMIN_ID]);
+  assert.equal(result.clientId, '701');
+  assert.equal(result.mobileHint, 'ending in 4567');
+  const routeSegment = routeSource.slice(routeSource.indexOf("router.post('/mobile-acknowledgement'"), routeSource.indexOf("router.post('/discard'"));
+  assert.doesNotMatch(routeSegment, /req\.body/);
 });
 
-test('failed final confirmation cleans a provisional client only after canonical pending session is gone', async () => {
-  const cleanupCalls = [];
-  const db = authorityDb(async (call) => {
-    if (call.sql.includes('FROM admin_booking_sessions abs')) return pendingResult(705);
-    if (call.sql.includes('JOIN staff_services ss')) return { rows: [eligibleRow()], rowCount: 1 };
-    if (call.sql.includes('FROM admin_booking_sessions') && call.sql.includes('client_id = $2')) return { rows: [], rowCount: 0 };
-    return { rows: [], rowCount: 0 };
-  });
+test('final confirmation fails closed until server-side acknowledgement is present', async () => {
+  let confirmations = 0;
   const service = createCalendarCreateBookingService({
-    db,
+    db: bookingDb({ pending: pending() }),
     env: enabledEnv,
-    contactAuthorityService: safeDirectAuthorityService(),
-    confirmBooking: async () => ({ status: 'conflict', reply: 'Slot changed.' }),
-    provisionalClientCleanup: async (payload) => { cleanupCalls.push(payload); return { status: 'removed' }; },
+    crmV2Service: crmV2(),
+    confirmBooking: async () => { confirmations += 1; },
   });
-
-  const result = await service.confirm({ adminId: EMERGENCY_ADMIN_ID });
-  assert.equal(result.status, 'conflict');
-  assert.deepEqual(cleanupCalls, [{ clientId: 705, adminId: EMERGENCY_ADMIN_ID, reason: 'calendar_booking_confirm_conflict' }]);
+  await assert.rejects(service.confirm({ adminId: EMERGENCY_ADMIN_ID }), (error) => error?.code === 'CALENDAR_BOOKING_CONFIRMATION_UNSAFE');
+  assert.equal(confirmations, 0);
 });
 
-test('successful final confirmation retains the provisional client as the booked canonical client', async () => {
-  let cleanupCalls = 0;
-  const db = authorityDb(async (call) => {
-    if (call.sql.includes('FROM admin_booking_sessions abs')) return pendingResult(706);
-    if (call.sql.includes('JOIN staff_services ss')) return { rows: [eligibleRow()], rowCount: 1 };
-    return { rows: [], rowCount: 0 };
-  });
+test('acknowledged confirmation delegates once with authenticated operator and bounded source', async () => {
+  const calls = [];
   const service = createCalendarCreateBookingService({
-    db,
+    db: bookingDb({ pending: pending({ acknowledged_mobile: '27821234567', mobile_acknowledged_at: '2026-08-28T07:00:00.000Z' }) }),
     env: enabledEnv,
-    contactAuthorityService: safeDirectAuthorityService(),
-    confirmBooking: async () => ({ status: 'created', appointmentId: 9001 }),
-    provisionalClientCleanup: async () => { cleanupCalls += 1; },
+    crmV2Service: crmV2(),
+    confirmBooking: async (...args) => { calls.push(args); return { status: 'created', appointmentId: 9001 }; },
   });
-
-  const result = await service.confirm({ adminId: EMERGENCY_ADMIN_ID });
+  const result = await service.confirm({ adminId: EMERGENCY_ADMIN_ID, clientId: 999 });
   assert.equal(result.appointmentId, 9001);
-  assert.equal(cleanupCalls, 0);
+  assert.equal(calls[0][0].id, EMERGENCY_ADMIN_ID);
+  assert.deepEqual(calls[0][1], { source: 'shiloh_calendar' });
 });
 
-test('new-client enhancement preserves exclusive canonical booking writes and the shiloh_calendar confirmation source', () => {
-  assert.doesNotMatch(serviceSource, /INSERT INTO appointments/);
-  assert.doesNotMatch(routeSource, /INSERT INTO appointments/);
-  assert.match(serviceSource, /confirmBooking\(admin, \{ source: 'shiloh_calendar' \}\)/);
-  assert.match(serviceSource, /prepareBooking\(\{/);
-  assert.match(serviceSource, /createProvisionalClient/);
-  assert.match(serviceSource, /cleanupUnusedProvisionalClient/);
+test('Calendar V2 path has no legacy lookup, shadow client/contact write or identity-evidence dependency', () => {
+  assert.doesNotMatch(serviceSource, /adminClientLookup|adminProvisionalClient|operatorContactAuthority|client_identity_verifications|client_facing_name_authorities|client_contacts/);
+  assert.doesNotMatch(serviceSource, /INSERT INTO\s+(?:clients|client_contacts)/i);
+  assert.match(serviceSource, /crmV2Service\.searchClients/);
+  assert.match(serviceSource, /crmV2Service\.createClient/);
+  assert.match(serviceSource, /crmV2Service\.getClientById/);
+  assert.doesNotMatch(routeSource, /bookingContext|\/client-authority/);
 });
