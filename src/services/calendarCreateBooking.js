@@ -183,11 +183,13 @@ function createCalendarCreateBookingService({
     const result = await db.query(
       `SELECT st.id AS staff_id, st.display_name AS staff_name,
               sv.id AS service_id, sv.name AS service_name,
+              sv.external_source, sv.external_id, sc.name AS category_name,
               sv.duration_minutes, sv.processing_time_minutes, sv.extra_time_minutes,
               sv.price, sv.variable_price
          FROM staff st
          JOIN staff_services ss ON ss.staff_id = st.id
          JOIN services sv ON sv.id = ss.service_id
+         LEFT JOIN service_categories sc ON sc.id = sv.category_id
         WHERE st.status = 'active'
           AND st.client_bookable = TRUE
           AND sv.status = 'active'
@@ -211,6 +213,9 @@ function createCalendarCreateBookingService({
         servicesById.set(serviceId, {
           id: serviceId,
           name: row.service_name,
+          categoryName: row.category_name || null,
+          externalSource: row.external_source || null,
+          externalId: row.external_id || null,
           durationMinutes: Number(row.duration_minutes || 0) + Number(row.processing_time_minutes || 0) + Number(row.extra_time_minutes || 0),
           price: row.price == null ? null : Number(row.price),
           variablePrice: row.variable_price === true,
@@ -246,11 +251,13 @@ function createCalendarCreateBookingService({
     const result = await db.query(
       `SELECT st.id AS staff_id, st.display_name AS staff_name,
               sv.id AS service_id, sv.name AS service_name,
+              sv.external_source, sv.external_id, sc.name AS category_name,
               sv.duration_minutes, sv.processing_time_minutes, sv.extra_time_minutes,
               sv.price, sv.variable_price
          FROM staff st
          JOIN staff_services ss ON ss.staff_id = st.id
          JOIN services sv ON sv.id = ss.service_id
+         LEFT JOIN service_categories sc ON sc.id = sv.category_id
         WHERE st.id = $1
           AND sv.id = $2
           AND st.status = 'active'
@@ -362,7 +369,13 @@ function createCalendarCreateBookingService({
           profileStatus: result.client.profileStatus,
           contactHint: maskContact(result.client.normalizedMobile),
         },
-        service: { id: Number(result.service.id), name: result.service.name },
+        service: {
+          id: Number(result.service.id),
+          name: result.service.name,
+          categoryName: selected.category_name || null,
+          externalSource: selected.external_source || null,
+          externalId: selected.external_id || null,
+        },
         practitioner: { id: Number(result.staff.id), displayName: result.staff.display_name },
         startsAt: result.startsAt,
         endsAt: result.endsAt,

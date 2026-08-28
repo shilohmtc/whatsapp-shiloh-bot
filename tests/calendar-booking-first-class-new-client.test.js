@@ -15,7 +15,8 @@ test('Calendar booking exposes the frozen Find client and New client choices', (
   assert.match(script, /data-client-mode-existing/);
   assert.match(script, /data-client-mode-new/);
   assert.match(script, /Choose client type/);
-  assert.match(script, /Search CRM V2/);
+  assert.match(script, /Name or mobile number/);
+  assert.doesNotMatch(script, /CRM V2/);
 });
 
 test('New-client choice opens directly without requiring a failed CRM search', () => {
@@ -24,7 +25,8 @@ test('New-client choice opens directly without requiring a failed CRM search', (
   assert.match(script, /newButton\.addEventListener\('click'/);
   assert.match(script, /setMode\('new'\)/);
   assert.match(script, /newPanel\.hidden=!isNew/);
-  assert.match(script, /Exact mobile is the only automatic CRM V2 identity key/);
+  assert.match(script, /Enter the new client’s name and South African mobile number/);
+  assert.doesNotMatch(script, /identity key|CRM V2/);
   assert.match(script, /if\(newName\)newName\.focus\(\)/);
 });
 
@@ -50,5 +52,6 @@ test('Switching modes blocks stale client selection until the visible choice is 
   assert.match(script, /setMode\('new',true\)/);
   assert.match(script, /setMode\('existing',true\)/);
   assert.match(script, /if\(review\)review\.disabled=false/);
-  assert.match(script, /CRM V2 #/);
+  assert.match(script, /data-client-selection/);
+  assert.match(script, /getAttribute\('data-client-selection'\)==='existing'/);
 });

@@ -73,7 +73,11 @@ function createFixture() {
       assert.equal(Number(adminId), 71);
       return {
         staff: [{ id: 9, displayName: 'Christel', serviceIds: [44] }],
-        services: [{ id: 44, name: 'Synthetic Treatment', durationMinutes: 60, price: 500, variablePrice: false, staffIds: [9] }],
+        services: [{
+          id: 44, name: 'Cupping Area Specific', categoryName: 'Massage',
+          externalSource: 'goldie', externalId: '409ef0e8-2063-47b2-86db-ca0af30787de',
+          durationMinutes: 60, price: 500, variablePrice: false, staffIds: [9],
+        }],
         authority: { operatorAdminId: 71, serviceScope: 'christel_own_services' },
       };
     },
@@ -100,7 +104,10 @@ function createFixture() {
             profileStatus: 'minimal',
             contactHint: isNew ? 'ending in 4321' : 'ending in 4567',
           },
-          service: { id: 44, name: 'Synthetic Treatment' },
+          service: {
+            id: 44, name: 'Cupping Area Specific', categoryName: 'Massage',
+            externalSource: 'goldie', externalId: '409ef0e8-2063-47b2-86db-ca0af30787de',
+          },
           practitioner: { id: 9, displayName: 'Christel' },
           startsAt: '2026-09-03T08:00:00.000Z', endsAt: '2026-09-03T09:00:00.000Z',
           durationMinutes: 60, price: 'R500.00', mobileAcknowledgementRequired: true,
@@ -237,7 +244,7 @@ async function main() {
     await once(server, 'listening');
     const origin = `https://127.0.0.1:${server.address().port}`;
     const debugPort = await reservePort();
-    chrome = spawn(executable, ['--headless=new', '--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage', '--ignore-certificate-errors', '--allow-insecure-localhost', '--remote-allow-origins=*', `--remote-debugging-port=${debugPort}`, `--user-data-dir=${path.join(temporary, 'profile')}`, 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'] });
+    chrome = spawn(executable, ['--headless=new', '--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage', '--ignore-certificate-errors', '--allow-insecure-localhost', '--remote-allow-origins=*', '--window-size=1440,1000', `--remote-debugging-port=${debugPort}`, `--user-data-dir=${path.join(temporary, 'profile')}`, 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'] });
     const targets = await poll(async () => (await fetch(`http://127.0.0.1:${debugPort}/json/list`)).json(), (items) => items?.some((item) => item.type === 'page' && item.webSocketDebuggerUrl));
     cdp = await connectCdp(targets.find((item) => item.type === 'page').webSocketDebuggerUrl);
     const network = []; const exceptions = [];
@@ -279,17 +286,24 @@ async function main() {
     assert.deepEqual(surface.choices, ['Find client', 'New client']);
     assert.equal(surface.hasRegistration, false);
     assert.equal(surface.hasGoogle, false);
-    assert.match(surface.heading, /Clean CRM V2/);
+    assert.equal(surface.heading, 'Choose the client, treatment, practitioner and time.');
     assert.equal(surface.cookieVisible, '');
+    const desktop = await evaluate(cdp, `({width:innerWidth,height:innerHeight,overflow:document.documentElement.scrollWidth-document.documentElement.clientWidth})`);
+    assert.ok(desktop.width >= 1200);
+    assert.ok(desktop.overflow <= 1);
     await evaluate(cdp, `(()=>{const input=document.querySelector('#client-search');input.value='Synthetic';document.querySelector('[data-client-search]').click();return true;})()`);
     await poll(() => evaluate(cdp, `document.querySelectorAll('.client-result').length`), (value) => value === 2);
     assert.equal(state.prepares.length, 0, 'search must never auto-select or prepare');
     await evaluate(cdp, `document.querySelectorAll('.client-result')[0].click();true`);
     await chooseSlot();
     await prepareAndAcknowledge();
-    const findState = await evaluate(cdp, `({selected:document.querySelector('[data-selected-client]').textContent,ack:document.querySelector('[data-mobile-ack-summary]').textContent,review:document.querySelector('[data-review]').innerText,createEnabled:!document.querySelector('[data-create-booking]').disabled})`);
-    assert.match(findState.selected, /CRM V2 #912/);
-    assert.match(findState.ack, /server-owned CRM V2 state/);
+    const findState = await evaluate(cdp, `({selected:document.querySelector('[data-selected-client]').textContent,ack:document.querySelector('[data-mobile-ack-summary]').textContent,review:document.querySelector('[data-review]').innerText,selectedFamily:document.querySelector('[data-selected-treatment]')?.getAttribute('data-service-family'),reviewFamily:document.querySelector('[data-review] [data-service-family]')?.getAttribute('data-service-family'),createEnabled:!document.querySelector('[data-create-booking]').disabled})`);
+    assert.match(findState.selected, /Synthetic Existing Client/);
+    assert.doesNotMatch(findState.selected, /CRM V2|#912/);
+    assert.match(findState.ack, /current client record/);
+    assert.match(findState.review, /Cupping Area Specific/);
+    assert.equal(findState.selectedFamily, 'targeted_therapeutic');
+    assert.equal(findState.reviewFamily, 'targeted_therapeutic');
     assert.equal(findState.createEnabled, true);
     assert.doesNotMatch(findState.review, /27821234567/);
     const screenshots = [{ state: 'find-client-acknowledged', ...(await screenshot('find-client-acknowledged')) }];
@@ -309,8 +323,9 @@ async function main() {
     await chooseSlot();
     await prepareAndAcknowledge();
     const newState = await evaluate(cdp, `({selected:document.querySelector('[data-selected-client]').textContent,review:document.querySelector('[data-review]').innerText,ack:document.querySelector('[data-mobile-ack-summary]').textContent})`);
-    assert.match(newState.selected, /CRM V2 #914/);
-    assert.match(newState.review, /Minimal client created/);
+    assert.match(newState.selected, /Synthetic New Client/);
+    assert.doesNotMatch(newState.selected, /CRM V2|#914/);
+    assert.match(newState.review, /New client created/);
     assert.match(newState.ack, /ending in 4321/);
     screenshots.push({ state: 'new-client-acknowledged', ...(await screenshot('new-client-acknowledged')) });
 
@@ -337,7 +352,12 @@ async function main() {
       newClient: { canonicalCrmV2ClientId: 914, legacyShadowWrites: 0 },
       finalMobileAcknowledgement: { serverAuthoritative: true, browserIdentityFieldsSubmitted: 0, requests: acknowledgementRequests.length },
       finalConfirmation: { authenticatedActorAdminId: 71, canonicalCalendarReloads: state.canonicalReloads },
-      mobile, externalProviderRequests: 0, googleOperationalRequests: 0, productionMutations: 0, screenshots,
+      serviceVisual: {
+        treatment: 'Cupping Area Specific', family: 'targeted_therapeutic',
+        selectedTreatmentFamily: findState.selectedFamily, reviewTreatmentFamily: findState.reviewFamily,
+        serviceTextVisible: true, controlledSvg: true,
+      },
+      desktop, mobile, externalProviderRequests: 0, googleOperationalRequests: 0, productionMutations: 0, screenshots,
     };
     fs.writeFileSync(path.join(OUT_DIR, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
     console.log(`Calendar Clean CRM V2 browser proof PASS: ${screenshots.length} screenshots; exact head ${checkedOutHead}`);

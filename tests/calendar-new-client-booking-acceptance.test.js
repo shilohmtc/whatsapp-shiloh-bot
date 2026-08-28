@@ -128,7 +128,8 @@ test('Create Booking exposes exactly Find client and New client with no registra
   assert.match(choiceSource, /existingButton\.textContent='Find client'/);
   assert.match(choiceSource, /newButton\.textContent='New client'/);
   assert.doesNotMatch(`${uxSource}\n${choiceSource}`, /Find existing client|\+ New client|Client registration/);
-  assert.match(uxSource, /Search CRM V2/);
+  assert.match(uxSource, /Name or mobile number/);
+  assert.doesNotMatch(`${uxSource}\n${choiceSource}`, /Search CRM V2|Clean CRM V2|guarded Shiloh write/);
 });
 
 test('new-client input normalization is bounded and does not invent identity', () => {
