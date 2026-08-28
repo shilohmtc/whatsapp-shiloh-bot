@@ -1,37 +1,35 @@
-# Shiloh OS Project Tracker Addendum — 2026-08-28 — Calendar V2 Live / WhatsApp Identity Foundation
+# Shiloh OS Project Tracker Addendum — 2026-08-28 — Calendar V2 Live / WhatsApp CRM V2 Transition
 
 Controlled unit: `SHILOH-CALENDAR-V2-LIVE-WHATSAPP-IDENTITY-RECONCILIATION`
 
 Owner: **00 — Control & Reconciliation**
 
-Status: **RECONCILED — NEXT P0 ROUTED**
+Status: **RECONCILED — CORE WHATSAPP SPINE P0 ROUTED**
 
-## Terminal Calendar / migration sequence
-
-The Clean CRM V2 Calendar cutover is production-live and terminal.
+## Terminal CRM V2 production sequence
 
 | Issue | Controlled unit | Owner | Terminal state | Do not redo |
 |---|---|---|---|---|
 | #526 | `SHILOH-CALENDAR-CLEAN-CRM-V2-CUTOVER-P0` | 10 — Calendar & Booking Assurance | PASS / CLOSED / PRODUCTION LIVE | Yes |
 | #529 | `SHILOH-CALENDAR-CRM-V2-MIGRATION-085-P0` | 40 — Production & DevOps | PASS / CLOSED / 89 OF 89 | Yes |
+| #531 | `SHILOH-WHATSAPP-CRM-V2-IDENTITY-COMPAT-FOUNDATION-P0` | 20 — CRM & Identity | PASS / CLOSED / PRODUCTION LIVE | Yes |
+| #534 | `SHILOH-WHATSAPP-CRM-V2-IDENTITY-MIGRATION-086-P0` | 40 — Production & DevOps | PASS / CLOSED / 90 OF 90 | Yes |
 
-PR #528 is merged and deployed.
+PR #528 and PR #533 are merged and deployed.
 
-Authoritative production release at reconciliation:
+Authoritative production release at this reconciliation:
 
-- `main`: `c0acdc42b6603e40f082dfe61aceec38d2fe7972`;
-- tree: `5b3d02b9ff036d08641d07ffda3b0f6d607354b3`;
-- Render deploy: `dep-da8lf33tqb8s73d2sikg`;
-- migration files: **89**;
-- `schema_migrations`: **89**;
+- `main`: `692b836e9b5c486e18458dc70a4880de031dc556`;
+- tree: `f455b158fbd6a568573bbfce01e5199230f5b94a`;
+- Render deploy: `dep-da8n6ibrjlhs73d70fbg`;
+- migration files: **90**;
+- `schema_migrations`: **90**;
 - pending migrations: **0**;
 - checksum mismatches: **0**.
 
-Migration 085 physical state is exact. Its original physical-DDL transaction was catalog transaction `73856`; the execution source remains materially unexplained and must not be rewritten as known history. The reconciled ledger `applied_at` is ledger-reconciliation time, not the original DDL execution time.
-
 ## Calendar CRM V2 production contract
 
-For the new Calendar booking path:
+For new Calendar bookings:
 
 - CRM V2 is the canonical client-resolution boundary;
 - exact normalized South African mobile is the sole automatic identity key;
@@ -41,45 +39,73 @@ For the new Calendar booking path:
 - retained legacy appointments remain legacy-readable and were not backfilled;
 - server-authoritative mobile acknowledgement, final CRM V2 reread and confirmation guarantees are preserved.
 
-## WhatsApp discovery — registration-only cutover blocked by architecture
+Migration 085 physical state remains exact. Its original physical-DDL transaction is catalog transaction `73856`; its execution source remains materially unexplained and must not be rewritten as known history. The reconciled ledger `applied_at` is ledger-reconciliation time, not the original DDL execution time.
 
-WS-30 completed the bounded discovery package and safely stopped before implementation.
+## WhatsApp CRM V2 identity foundation — terminal
 
-Current WhatsApp new-client onboarding still creates a legacy client through `clientIdentityOnboarding.completeOnboarding()` and downstream runtime remains keyed to legacy `client_id` across returning-client resolution, ordinary booking, practitioner approval, appointment management, Couples Massage, packages/enquiries, transition welcome and operational provenance.
+Issue #531 and release gate #534 are complete.
 
-`crmV2ClientService.registerWhatsAppClient()` already exists and is tested, but production WhatsApp runtime does not call it.
+Production now includes contract `whatsapp_crm_identity_compat_v1` and can durably represent exactly one of:
 
-A registration-only switch would therefore strand a newly registered V2 client after onboarding. Creating a shadow legacy client is prohibited because it would recreate a permanent dual master.
+- retained legacy client identity; or
+- canonical CRM V2 client identity.
+
+Migration 086 is deployed exactly once with checksum:
+
+`393e6ee02f911b01cd4f96c167c1c324e1c7ae02154e6b4d8009e0ebdd5a9899`
+
+Durable onboarding now has nullable `crm_v2_client_id`, `identity_model`, mutually exclusive identity constraints, a CRM V2 FK with `ON DELETE RESTRICT`, and the partial V2 index. No retained-row backfill or conversion was performed.
+
+The single pre-release onboarding row was removed by the pre-existing two-hour temporary-registration expiry mechanism during normal startup maintenance. It was not migration 086 DML/backfill/conversion.
+
+The identity layer now provides:
+
+- explicit `legacy` / `crm_v2` discrimination;
+- canonical exact-mobile CRM V2 resolution through `crmV2ClientService`;
+- deterministic restart/resume/stale-authority handling;
+- model-aware provenance;
+- fail-closed dual-master protection.
+
+## Activation remains intentionally frozen
+
+New WhatsApp client onboarding still creates retained legacy clients.
+
+`crmV2ClientService.registerWhatsAppClient()` remains inactive in production onboarding.
+
+Ordinary WhatsApp booking, practitioner approval and appointment management have not yet been cut over to CRM V2 identity. Couples Massage, package and enquiry paths also remain outside the CRM V2 activation boundary.
+
+A shadow legacy client is not an acceptable compatibility strategy.
 
 ## Current active P0
 
-Issue #531 — `SHILOH-WHATSAPP-CRM-V2-IDENTITY-COMPAT-FOUNDATION-P0`
+Issue #535 — `SHILOH-WHATSAPP-CRM-V2-CORE-BOOKING-SPINE-COMPAT-P0`
 
-Owner: **20 — CRM & Identity**
+Owner: **30 — WhatsApp & Meta Integration**
 
-State: **ACTIVE / PHASE A ROUTED**
+State: **ACTIVE / ENGINEERING ROUTED**
 
 Objective:
 
-Add the smallest backward-compatible discriminated identity foundation so WhatsApp durable onboarding/resolution can carry exactly one legacy or CRM V2 identity without activating V2 registration yet.
+Make the ordinary single-client WhatsApp booking spine carry either retained legacy identity or canonical CRM V2 identity end-to-end without activating new CRM V2 registration.
 
-Required foundation:
+Required core proof includes:
 
-- legacy compatibility preserved;
-- nullable V2 identity persistence where required;
-- mutually exclusive legacy/V2 identity model;
-- V2 exact-mobile resolution through the canonical CRM V2 service;
-- deterministic restart/resume/stale-authority handling;
-- model-aware audit/provenance;
-- no registration activation;
-- no shadow legacy client.
+- discriminated identity continuity through booking state;
+- final legacy/V2 appointment commit using exactly one client master;
+- canonical server-derived CRM V2 name/mobile snapshots;
+- stale/missing/ambiguous CRM V2 authority failing closed before commit;
+- practitioner-approval continuity where required;
+- ordinary appointment-management identity continuity;
+- booking-confirmation/lifecycle compatibility;
+- no shadow legacy client/contact creation;
+- legacy behavior preserved;
+- Couples/packages/enquiries kept explicitly outside scope or fail closed for CRM V2 identity.
 
 ## Sequencing
 
-1. **#531 — 20 / CRM & Identity:** discriminated WhatsApp identity compatibility foundation, no activation.
-2. **30 / WhatsApp & Meta Integration:** make the core WhatsApp booking/approval/appointment-management spine V2-aware.
-3. **30:** activate CRM V2 registration for new WhatsApp clients only after the core spine is V2-safe.
-4. Handle Couples Massage, packages and other legacy-ID-specific capabilities deliberately in bounded follow-on units or explicit fail-closed compatibility; no silent shadow-client creation.
-5. Only after Calendar and WhatsApp new operational paths are proven should 00 evaluate retirement of superseded legacy CRM/identity dependencies.
+1. **#535 — 30 / WhatsApp & Meta Integration:** make the ordinary booking/approval/appointment-management spine CRM V2 identity-compatible, without registration activation.
+2. **30 / 00:** only after #535 is proven and released, evaluate activation of CRM V2 registration for new WhatsApp clients.
+3. Handle Couples Massage, packages, enquiries and other retained legacy-ID-specific capabilities deliberately in bounded units or explicit fail-closed compatibility; no silent shadow-client creation.
+4. Only after Calendar and WhatsApp new operational paths are proven should 00 evaluate retirement of superseded legacy CRM/identity dependencies.
 
 No unrelated P0/P1 work should interrupt this spine unless it removes a blocker, reduces a real dependency, or remediates a genuine production/security risk.
