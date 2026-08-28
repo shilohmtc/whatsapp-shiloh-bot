@@ -228,7 +228,7 @@ test('CRM V2 WhatsApp registration remains inactive in production runtime', () =
   assert.doesNotMatch(bookingIdentity, /INSERT INTO (?:clients|client_contacts|crm_v2_clients)/);
 });
 
-test('no new schema migration is introduced for the compatibility cutover', () => {
+test('the later reschedule compatibility unit owns the next bounded migration', () => {
   const migrations = fs.readdirSync(path.join(root, 'migrations')).filter((name) => /^\d+_/.test(name)).sort();
-  assert.equal(migrations.at(-1), '086_whatsapp_crm_v2_identity_compat.sql');
+  assert.equal(migrations.at(-1), '087_whatsapp_crm_v2_reschedule_compat.sql');
 });

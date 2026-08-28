@@ -16,12 +16,18 @@ test('migration service supports one exact checksum-guarded migration without ap
   assert.match(migrations, /applyMigrationFile,/);
 });
 
-test('reschedule schema bootstrap applies only migration 064 and verifies required table and indexes', () => {
+test('reschedule schema bootstrap preserves migration 064 and verifies the bounded 087 identity expansion', () => {
   assert.match(schema, /064_client_reschedule_practitioner_approval\.sql/);
+  assert.match(schema, /087_whatsapp_crm_v2_reschedule_compat\.sql/);
+  assert.match(schema, /applyMigrationFile\(BASE_MIGRATION\)/);
   assert.match(schema, /applyMigrationFile\(MIGRATION\)/);
   assert.match(schema, /to_regclass\('public\.appointment_reschedule_requests'\)/);
   assert.match(schema, /uq_appointment_reschedule_requests_pending_appointment/);
   assert.match(schema, /idx_appointment_reschedule_requests_pending_staff/);
+  assert.match(schema, /legacy_identity_nullable/);
+  assert.match(schema, /crm_v2_identity_column/);
+  assert.match(schema, /crm_v2_restrict_fk/);
+  assert.match(schema, /client_identity_xor/);
   assert.match(schema, /Client reschedule approval schema verification failed/);
 });
 

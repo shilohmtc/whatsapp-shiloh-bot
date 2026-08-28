@@ -16,6 +16,11 @@ function futureContext(overrides = {}) {
   const end = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
   return {
     request_status: 'approved',
+    request_client_id: 41,
+    request_crm_v2_client_id: null,
+    appointment_client_id: 41,
+    appointment_crm_v2_client_id: null,
+    requested_by_phone: '27820000000',
     client_notified_at: null,
     client_notification_suppressed_at: null,
     appointment_status: 'confirmed',

@@ -4,6 +4,20 @@ const logger = require('../lib/logger');
 const LIVE_PENDING_WHERE = `
   request.status='pending'
   AND appointment.status<>'cancelled'
+  AND num_nonnulls(request.client_id,request.crm_v2_client_id)=1
+  AND num_nonnulls(appointment.client_id,appointment.crm_v2_client_id)=1
+  AND appointment.client_id IS NOT DISTINCT FROM request.client_id
+  AND appointment.crm_v2_client_id IS NOT DISTINCT FROM request.crm_v2_client_id
+  AND (
+    request.crm_v2_client_id IS NULL
+    OR EXISTS (
+      SELECT 1
+        FROM crm_v2_clients client
+       WHERE client.id=request.crm_v2_client_id
+         AND client.status='active'
+         AND client.normalized_mobile=request.requested_by_phone
+    )
+  )
   AND appointment.starts_at > NOW()
   AND appointment.starts_at IS NOT DISTINCT FROM request.original_starts_at
   AND appointment.ends_at IS NOT DISTINCT FROM request.original_ends_at

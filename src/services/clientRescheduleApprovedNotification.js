@@ -1,5 +1,6 @@
 const { pool } = require('../db/pool');
 const { applyMigrationFile } = require('./migrations');
+const { ensureClientRescheduleApprovalSchema } = require('./clientRescheduleApprovalSchema');
 const { sendWhatsAppTemplate } = require('./whatsapp');
 const { resolveClientFacingName } = require('./clientFacingNameAuthority');
 const logger = require('../lib/logger');
@@ -33,6 +34,7 @@ function fmtTime(value) {
 async function ensureApprovedRescheduleNotificationSchema() {
   if (schemaReady) return schemaReady;
   schemaReady = (async () => {
+    await ensureClientRescheduleApprovalSchema();
     const migration = await applyMigrationFile(MIGRATION);
     const verification = await pool.query(`
       SELECT
@@ -109,10 +111,14 @@ async function latestApprovedRescheduleAudit(appointmentId) {
 async function loadApprovedRequestContext(requestId) {
   const result = await pool.query(`
     SELECT request.id,request.appointment_id,request.status AS request_status,
+           request.client_id AS request_client_id,request.crm_v2_client_id AS request_crm_v2_client_id,
+           request.requested_by_phone,
            request.proposed_starts_at,request.proposed_ends_at,
            request.client_notified_at,request.client_notification_claimed_at,
            request.client_notification_suppressed_at,
-           appointment.client_id,
+           appointment.client_id AS appointment_client_id,
+           appointment.crm_v2_client_id AS appointment_crm_v2_client_id,
+           appointment.source_client_name,
            appointment.starts_at AS current_starts_at,
            appointment.ends_at AS current_ends_at,
            appointment.status AS appointment_status,
@@ -124,26 +130,53 @@ async function loadApprovedRequestContext(requestId) {
                        FROM appointment_staff item
                        LEFT JOIN staff ON staff.id=item.staff_id
                       WHERE item.appointment_id=appointment.id),'Shiloh practitioner') AS staff_name,
-           (SELECT normalized_value
-              FROM client_contacts contact
-             WHERE contact.client_id=appointment.client_id
-               AND LOWER(contact.contact_type) IN ('whatsapp','mobile','phone','telephone')
-               AND contact.normalized_value IS NOT NULL
-             ORDER BY contact.is_primary DESC,contact.verified_at DESC NULLS LAST,contact.id
-             LIMIT 1) AS client_phone
+           CASE WHEN appointment.crm_v2_client_id IS NOT NULL THEN v2.normalized_mobile ELSE
+             (SELECT normalized_value
+                FROM client_contacts contact
+               WHERE contact.client_id=appointment.client_id
+                 AND LOWER(contact.contact_type) IN ('whatsapp','mobile','phone','telephone')
+                 AND contact.normalized_value IS NOT NULL
+               ORDER BY contact.is_primary DESC,contact.verified_at DESC NULLS LAST,contact.id
+               LIMIT 1)
+           END AS client_phone,
+           v2.id AS crm_v2_authority_id,
+           v2.name AS crm_v2_client_name
       FROM appointment_reschedule_requests request
       JOIN appointments appointment ON appointment.id=request.appointment_id
+      LEFT JOIN crm_v2_clients v2 ON v2.id=appointment.crm_v2_client_id AND v2.status='active'
      WHERE request.id=$1
      LIMIT 1
   `, [Number(requestId)]);
   const context = result.rows[0] || null;
   if (!context) return null;
-  const nameResolution = context.client_id ? await resolveClientFacingName(context.client_id) : null;
+  const nameResolution = context.appointment_client_id ? await resolveClientFacingName(context.appointment_client_id) : null;
   return {
     ...context,
-    client_name: nameResolution?.name || null,
+    client_name: context.appointment_crm_v2_client_id
+      ? (context.crm_v2_client_name || context.source_client_name || null)
+      : (nameResolution?.name || null),
     name_authority_id: nameResolution?.authorityId || null,
   };
+}
+
+function sameCanonicalId(left, right) {
+  return left == null && right == null
+    ? true
+    : left != null && right != null && String(left) === String(right);
+}
+
+function canonicalIdentityContinuity(context) {
+  if (!context) return false;
+  const requestXor = Number(context.request_client_id != null) + Number(context.request_crm_v2_client_id != null) === 1;
+  const appointmentXor = Number(context.appointment_client_id != null) + Number(context.appointment_crm_v2_client_id != null) === 1;
+  if (!requestXor || !appointmentXor) return false;
+  if (!sameCanonicalId(context.request_client_id, context.appointment_client_id)) return false;
+  if (!sameCanonicalId(context.request_crm_v2_client_id, context.appointment_crm_v2_client_id)) return false;
+  if (context.request_crm_v2_client_id != null) {
+    return String(context.crm_v2_authority_id) === String(context.request_crm_v2_client_id)
+      && context.requested_by_phone === context.client_phone;
+  }
+  return true;
 }
 
 function canonicalOutcomeState(context) {
@@ -151,6 +184,7 @@ function canonicalOutcomeState(context) {
   if (context.request_status !== 'approved') return { deliverable: false, suppress: false, reason: `request_${context.request_status}` };
   if (context.client_notified_at) return { deliverable: false, suppress: false, reason: 'already_sent' };
   if (context.client_notification_suppressed_at) return { deliverable: false, suppress: false, reason: 'already_suppressed' };
+  if (!canonicalIdentityContinuity(context)) return { deliverable: false, suppress: true, reason: 'canonical_client_identity_changed_after_approval' };
   if (context.appointment_status === 'cancelled') return { deliverable: false, suppress: true, reason: 'appointment_cancelled_after_approval' };
   if (new Date(context.current_ends_at).getTime() <= Date.now()) return { deliverable: false, suppress: true, reason: 'appointment_already_ended' };
   if (
@@ -280,6 +314,9 @@ async function attemptApprovedRescheduleConfirmation(requestId, auditEventId = n
       providerMessageId: provider?.messages?.[0]?.id || null,
       idempotentDelivery: true,
       nameAuthorityId: context.name_authority_id || null,
+      identityModel: context.request_crm_v2_client_id != null ? 'crm_v2' : 'legacy',
+      clientId: context.request_client_id,
+      crmV2ClientId: context.request_crm_v2_client_id,
     })]);
     logger.info({ appointmentId: Number(context.appointment_id), requestId: Number(requestId), templateName: TEMPLATE_NAME }, 'Approved reschedule customer confirmation sent');
     return { sent: true, templateName: TEMPLATE_NAME };
@@ -357,6 +394,7 @@ module.exports = {
   ensureApprovedRescheduleNotificationSchema,
   latestApprovedRescheduleAudit,
   loadApprovedRequestContext,
+  canonicalIdentityContinuity,
   canonicalOutcomeState,
   markApprovedRescheduleNotificationRetryableError,
   suppressApprovedRescheduleNotification,
