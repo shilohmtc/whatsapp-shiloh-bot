@@ -2,6 +2,15 @@ const { pool } = require('../db/pool');
 const { checkClinicHours } = require('./clinicHours');
 const { checkAuthoritativeSchedule } = require('./adminAvailability');
 const { sendWhatsAppTemplate } = require('./whatsapp');
+const {
+  IDENTITY_MODELS,
+  identityAuditMetadata,
+} = require('./whatsappCrmV2IdentityCompat');
+const {
+  resolveFinalBookingIdentity,
+  identityFromAppointment,
+} = require('./whatsappBookingIdentity');
+const { normalizeMobile } = require('./crmV2ClientService');
 const logger = require('../lib/logger');
 
 const TIME_ZONE = 'Africa/Johannesburg';
@@ -16,6 +25,10 @@ function featureEnabled() {
 
 function normalizePhone(value = '') {
   return String(value || '').replace(/\D/g, '');
+}
+
+function canonicalRequestPhone(value = '') {
+  return normalizeMobile(value) || normalizePhone(value);
 }
 
 function fmtDateTime(value) {
@@ -102,31 +115,40 @@ async function pendingRescheduleConflicts({ db = pool, staffId, startsAt, endsAt
 
 function appointmentContextQuery({ lock = false } = {}) {
   return `
-    SELECT a.id,a.client_id,a.location_id,a.starts_at,a.ends_at,a.status,a.source,
-           c.display_name AS client_name,
+    SELECT a.id,a.client_id,a.crm_v2_client_id,a.location_id,a.starts_at,a.ends_at,a.status,a.source,
+           CASE WHEN a.crm_v2_client_id IS NOT NULL THEN 'crm_v2' ELSE 'legacy' END AS identity_model,
+           COALESCE(v2.name,c.display_name,a.source_client_name,'Client') AS client_name,
            ast.staff_id,COALESCE(st.display_name,ast.staff_name_snapshot,'Shiloh practitioner') AS staff_name,
            aps.service_id,COALESCE(s.name,aps.service_name_snapshot,a.title,'Shiloh appointment') AS service_name,
            (SELECT COUNT(*)::int FROM appointment_staff x WHERE x.appointment_id=a.id) AS staff_count,
            (SELECT COUNT(*)::int FROM appointment_services x WHERE x.appointment_id=a.id) AS service_count
       FROM appointments a
-      JOIN clients c ON c.id=a.client_id
-      JOIN client_contacts cc ON cc.client_id=c.id
+      LEFT JOIN clients c ON c.id=a.client_id
+      LEFT JOIN crm_v2_clients v2 ON v2.id=a.crm_v2_client_id AND v2.status='active'
       JOIN appointment_staff ast ON ast.appointment_id=a.id AND ast.position=1
       LEFT JOIN staff st ON st.id=ast.staff_id
       JOIN appointment_services aps ON aps.appointment_id=a.id AND aps.position=1
       LEFT JOIN services s ON s.id=aps.service_id
      WHERE a.id=$2
        AND a.status<>'cancelled'
-       AND cc.normalized_value=$1
-       AND LOWER(cc.contact_type) IN ('whatsapp','mobile','phone','telephone')
-     ORDER BY cc.is_primary DESC,cc.id
+       AND num_nonnulls(a.client_id,a.crm_v2_client_id)=1
+       AND (
+         (a.client_id IS NOT NULL AND a.crm_v2_client_id IS NULL AND EXISTS (
+           SELECT 1
+             FROM client_contacts cc
+            WHERE cc.client_id=a.client_id
+              AND cc.normalized_value=$1
+              AND LOWER(cc.contact_type) IN ('whatsapp','mobile','phone','telephone')
+         ))
+         OR (a.client_id IS NULL AND a.crm_v2_client_id IS NOT NULL AND v2.normalized_mobile=$1)
+       )
      LIMIT 1
      ${lock ? 'FOR UPDATE OF a,ast,aps' : ''}
   `;
 }
 
 async function loadAppointmentForRequest(phone, appointmentId, db = pool, lock = false) {
-  const result = await db.query(appointmentContextQuery({ lock }), [normalizePhone(phone), Number(appointmentId)]);
+  const result = await db.query(appointmentContextQuery({ lock }), [canonicalRequestPhone(phone), Number(appointmentId)]);
   return result.rows[0] || null;
 }
 
@@ -258,6 +280,62 @@ async function markNotificationFailed(requestId, appointmentId, error) {
   `, [appointmentId, JSON.stringify({ requestId: Number(requestId), error: String(error.message || error).slice(0, 500) })]);
 }
 
+async function resolveRescheduleRequestIdentity({ db, phone, appointment }) {
+  const identity = identityFromAppointment(appointment);
+  if (!identity) return { status: 'identity_contract_invalid', identity: null, client: null };
+
+  if (identity.identityModel === IDENTITY_MODELS.LEGACY) {
+    return {
+      status: 'ready',
+      identity,
+      client: { display_name: appointment.client_name },
+      clientId: identity.legacyClientId,
+      crmV2ClientId: null,
+      clientName: appointment.client_name,
+      clientPhone: canonicalRequestPhone(phone),
+      audit: identityAuditMetadata(identity, { resolution: 'legacy_reschedule_exact_mobile' }),
+    };
+  }
+
+  const authority = await resolveFinalBookingIdentity({ db, phone, identity });
+  if (authority.status !== 'ready') return authority;
+  return {
+    ...authority,
+    clientId: null,
+    crmV2ClientId: identity.crmV2ClientId,
+    clientName: authority.client.name || authority.client.display_name,
+    clientPhone: authority.client.normalizedMobile || authority.client.normalized_value,
+  };
+}
+
+async function insertPendingRescheduleRequest(db, {
+  appointment,
+  authority,
+  requestedByPhone,
+  proposedStartsAt,
+  proposedEndsAt,
+}) {
+  return db.query(`
+    INSERT INTO appointment_reschedule_requests
+      (appointment_id,client_id,crm_v2_client_id,service_id,approver_staff_id,requested_by_phone,
+       original_starts_at,original_ends_at,proposed_starts_at,proposed_ends_at,status)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'pending')
+    ON CONFLICT (appointment_id) WHERE status='pending' DO NOTHING
+    RETURNING *
+  `, [
+    appointment.id,
+    authority.clientId,
+    authority.crmV2ClientId,
+    appointment.service_id,
+    appointment.staff_id,
+    requestedByPhone,
+    appointment.starts_at,
+    appointment.ends_at,
+    proposedStartsAt,
+    proposedEndsAt,
+  ]);
+}
+
 async function createPendingRescheduleRequest(phone, intent) {
   if (!featureEnabled()) return { status: 'feature_disabled' };
   const appointment = await loadAppointmentForRequest(phone, intent?.appointment_id);
@@ -278,6 +356,7 @@ async function createPendingRescheduleRequest(phone, intent) {
   if (!initial.ok) return { status: initial.reason, reply: requestFailureReply(initial.reason, appointment.staff_name) };
   const db = await pool.connect();
   let request;
+  let notificationAppointment = appointment;
   try {
     await db.query('BEGIN');
     await db.query('SELECT pg_advisory_xact_lock($1::bigint)', [Number(appointment.staff_id)]);
@@ -301,24 +380,22 @@ async function createPendingRescheduleRequest(phone, intent) {
       await db.query('ROLLBACK');
       return { status: final.reason, reply: requestFailureReply(final.reason, locked.staff_name) };
     }
-    const inserted = await db.query(`
-      INSERT INTO appointment_reschedule_requests
-        (appointment_id,client_id,service_id,approver_staff_id,requested_by_phone,
-         original_starts_at,original_ends_at,proposed_starts_at,proposed_ends_at,status)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'pending')
-      ON CONFLICT (appointment_id) WHERE status='pending' DO NOTHING
-      RETURNING *
-    `, [
-      locked.id,
-      locked.client_id,
-      locked.service_id,
-      locked.staff_id,
-      normalizePhone(phone),
-      locked.starts_at,
-      locked.ends_at,
+    const authority = await resolveRescheduleRequestIdentity({ db, phone, appointment: locked });
+    if (authority.status !== 'ready') {
+      await db.query('ROLLBACK');
+      return {
+        status: 'client_identity_changed',
+        reply: 'The exact canonical client identity changed while I was checking this request. Your current appointment is unchanged; please contact the clinic team.',
+      };
+    }
+    notificationAppointment = { ...locked, client_name: authority.clientName };
+    const inserted = await insertPendingRescheduleRequest(db, {
+      appointment: locked,
+      authority,
+      requestedByPhone: authority.clientPhone || canonicalRequestPhone(phone),
       proposedStartsAt,
       proposedEndsAt,
-    ]);
+    });
     if (!inserted.rowCount) {
       await db.query('ROLLBACK');
       return { status: 'already_pending', reply: 'A reschedule request is already awaiting approval for this appointment. Your current appointment remains confirmed until that request is decided.' };
@@ -327,7 +404,12 @@ async function createPendingRescheduleRequest(phone, intent) {
     await db.query(`
       INSERT INTO crm_audit_events(action,entity_type,entity_id,metadata)
       VALUES ('client.reschedule_approval.requested','appointment',$1,$2::jsonb)
-    `, [locked.id, JSON.stringify({ requestId: Number(request.id), proposedStartsAt: proposedStartsAt.toISOString(), approverStaffId: Number(locked.staff_id) })]);
+    `, [locked.id, JSON.stringify({
+      requestId: Number(request.id),
+      proposedStartsAt: proposedStartsAt.toISOString(),
+      approverStaffId: Number(locked.staff_id),
+      ...authority.audit,
+    })]);
     await db.query('COMMIT');
   } catch (error) {
     try { await db.query('ROLLBACK'); } catch (_) {}
@@ -337,7 +419,7 @@ async function createPendingRescheduleRequest(phone, intent) {
   }
 
   try {
-    await sendApprovalRequest(request, appointment, approver.admin);
+    await sendApprovalRequest(request, notificationAppointment, approver.admin);
     await pool.query(`UPDATE appointment_reschedule_requests SET approver_notified_at=NOW(),updated_at=NOW() WHERE id=$1 AND status='pending'`, [request.id]);
     await pool.query(`
       INSERT INTO crm_audit_events(action,entity_type,entity_id,metadata)
@@ -367,21 +449,27 @@ async function createPendingRescheduleRequest(phone, intent) {
 
 async function loadRequestContext(requestId, db = pool, lock = false) {
   const result = await db.query(`
-    SELECT request.id,request.appointment_id,request.client_id,
+    SELECT request.id,request.appointment_id,request.client_id,request.crm_v2_client_id,
            request.service_id AS requested_service_id,request.approver_staff_id,request.requested_by_phone,
            request.original_starts_at,request.original_ends_at,request.proposed_starts_at,request.proposed_ends_at,
            request.status AS request_status,request.requested_at,request.approver_notified_at,
+           a.client_id AS appointment_client_id,a.crm_v2_client_id AS appointment_crm_v2_client_id,
            a.location_id,a.starts_at AS current_starts_at,a.ends_at AS current_ends_at,a.status AS appointment_status,
-           c.display_name AS client_name,
+           CASE WHEN a.crm_v2_client_id IS NOT NULL THEN 'crm_v2' ELSE 'legacy' END AS identity_model,
+           COALESCE(v2.name,c.display_name,a.source_client_name,'Client') AS client_name,
            COALESCE(s.name,aps.service_name_snapshot,a.title,'Shiloh appointment') AS service_name,
            COALESCE(st.display_name,ast.staff_name_snapshot,'Shiloh practitioner') AS staff_name,
            ast.staff_id AS current_staff_id,aps.service_id AS current_service_id,
            (SELECT COUNT(*)::int FROM appointment_staff x WHERE x.appointment_id=a.id) AS staff_count,
            (SELECT COUNT(*)::int FROM appointment_services x WHERE x.appointment_id=a.id) AS service_count,
-           (SELECT normalized_value FROM client_contacts cc WHERE cc.client_id=a.client_id AND LOWER(cc.contact_type) IN ('whatsapp','mobile','phone','telephone') AND cc.normalized_value IS NOT NULL ORDER BY cc.is_primary DESC,cc.id LIMIT 1) AS client_phone
+           CASE WHEN a.crm_v2_client_id IS NOT NULL THEN v2.normalized_mobile ELSE
+             (SELECT normalized_value FROM client_contacts cc WHERE cc.client_id=a.client_id AND LOWER(cc.contact_type) IN ('whatsapp','mobile','phone','telephone') AND cc.normalized_value IS NOT NULL ORDER BY cc.is_primary DESC,cc.id LIMIT 1)
+           END AS client_phone,
+           v2.id AS crm_v2_authority_id
       FROM appointment_reschedule_requests request
       JOIN appointments a ON a.id=request.appointment_id
-      JOIN clients c ON c.id=a.client_id
+      LEFT JOIN clients c ON c.id=a.client_id
+      LEFT JOIN crm_v2_clients v2 ON v2.id=a.crm_v2_client_id AND v2.status='active'
       JOIN appointment_staff ast ON ast.appointment_id=a.id AND ast.position=1
       LEFT JOIN staff st ON st.id=ast.staff_id
       JOIN appointment_services aps ON aps.appointment_id=a.id AND aps.position=1
@@ -398,6 +486,12 @@ function canonicalStillMatchesRequest(context) {
     context
     && context.appointment_status !== 'cancelled'
     && context.request_status === 'pending'
+    && Number(context.client_id != null) + Number(context.crm_v2_client_id != null) === 1
+    && Number(context.appointment_client_id != null) + Number(context.appointment_crm_v2_client_id != null) === 1
+    && (context.client_id == null || String(context.client_id) === String(context.appointment_client_id))
+    && (context.crm_v2_client_id == null || String(context.crm_v2_client_id) === String(context.appointment_crm_v2_client_id))
+    && (context.crm_v2_client_id == null || String(context.crm_v2_authority_id) === String(context.crm_v2_client_id))
+    && (context.crm_v2_client_id == null || canonicalRequestPhone(context.requested_by_phone) === context.client_phone)
     && Number(context.staff_count) === 1
     && Number(context.service_count) === 1
     && Number(context.current_staff_id) === Number(context.approver_staff_id)
@@ -405,6 +499,32 @@ function canonicalStillMatchesRequest(context) {
     && new Date(context.current_starts_at).getTime() === new Date(context.original_starts_at).getTime()
     && new Date(context.current_ends_at).getTime() === new Date(context.original_ends_at).getTime()
   );
+}
+
+async function revalidateDecisionIdentity(db, context) {
+  if (context?.crm_v2_client_id == null) {
+    return {
+      status: 'ready',
+      clientName: context?.client_name || null,
+      clientPhone: context?.client_phone || null,
+      audit: identityAuditMetadata(
+        identityFromAppointment({ client_id: context?.appointment_client_id, crm_v2_client_id: null }),
+        { resolution: 'legacy_reschedule_decision_identity' }
+      ),
+    };
+  }
+  const identity = identityFromAppointment({
+    client_id: context.appointment_client_id,
+    crm_v2_client_id: context.appointment_crm_v2_client_id,
+  });
+  if (!identity || identity.identityModel !== IDENTITY_MODELS.CRM_V2) return { status: 'identity_contract_invalid' };
+  const authority = await resolveFinalBookingIdentity({ db, phone: context.requested_by_phone, identity });
+  if (authority.status !== 'ready') return authority;
+  return {
+    ...authority,
+    clientName: authority.client.name || authority.client.display_name,
+    clientPhone: authority.client.normalizedMobile || authority.client.normalized_value,
+  };
 }
 
 async function supersedeRequest(db, context, adminId, note) {
@@ -479,9 +599,18 @@ async function approveRequest(admin, requestId) {
     }
 
     await db.query('SELECT pg_advisory_xact_lock($1::bigint)', [Number(context.current_staff_id)]);
+    const decisionAuthority = await revalidateDecisionIdentity(db, context);
+    if (decisionAuthority.status !== 'ready') {
+      await supersedeRequest(db, context, admin.id, 'canonical client identity changed before approval');
+      await db.query('COMMIT');
+      return { handled: true, status: 'superseded', reply: 'The canonical client identity changed after this request was made, so the approval request was closed without moving the appointment.' };
+    }
+    context.client_name = decisionAuthority.clientName;
+    context.client_phone = decisionAuthority.clientPhone;
     const appointment = {
       id: context.appointment_id,
-      client_id: context.client_id,
+      client_id: context.appointment_client_id,
+      crm_v2_client_id: context.appointment_crm_v2_client_id,
       location_id: context.location_id,
       starts_at: context.current_starts_at,
       ends_at: context.current_ends_at,
@@ -502,7 +631,18 @@ async function approveRequest(admin, requestId) {
       await db.query('COMMIT');
       return { handled: true, status: 'superseded', reply: `That requested time is no longer safely available (${candidate.reason}). The original appointment remains unchanged.` };
     }
-    await db.query(`UPDATE appointments SET starts_at=$1,ends_at=$2,updated_at=NOW() WHERE id=$3`, [proposedStartsAt, proposedEndsAt, context.appointment_id]);
+    const moved = await db.query(`
+      UPDATE appointments SET starts_at=$1,ends_at=$2,updated_at=NOW()
+       WHERE id=$3
+         AND client_id IS NOT DISTINCT FROM $4::bigint
+         AND crm_v2_client_id IS NOT DISTINCT FROM $5::bigint
+       RETURNING client_id,crm_v2_client_id
+    `, [proposedStartsAt, proposedEndsAt, context.appointment_id, context.client_id, context.crm_v2_client_id]);
+    if (!moved.rowCount) {
+      await supersedeRequest(db, context, admin.id, 'canonical appointment identity changed before approval mutation');
+      await db.query('COMMIT');
+      return { handled: true, status: 'superseded', reply: 'The appointment identity changed before approval could be applied, so the request was closed without moving the appointment.' };
+    }
     await db.query(`UPDATE appointment_lifecycle SET appointment_at=$1,appointment_ends_at=$2,reminder_sent_at=NULL,updated_at=NOW() WHERE appointment_id=$3`, [proposedStartsAt, proposedEndsAt, context.appointment_id]);
 
     await db.query(`UPDATE appointment_reschedule_requests SET status='approved',decided_at=NOW(),decided_by_admin_id=$2,updated_at=NOW() WHERE id=$1 AND status='pending'`, [context.id, admin.id]);
@@ -511,7 +651,18 @@ async function approveRequest(admin, requestId) {
       INSERT INTO crm_audit_events(action,entity_type,entity_id,metadata)
       VALUES ('appointment.time_updated','appointment',$1,$2::jsonb)
       RETURNING id
-    `, [context.appointment_id, JSON.stringify({ source: 'client_reschedule_approval', requestId: Number(context.id), requestedByPhone: context.requested_by_phone, approvedByAdminId: Number(admin.id), fromStart: context.original_starts_at, toStart: proposedStartsAt.toISOString() })]);
+    `, [context.appointment_id, JSON.stringify({
+      source: 'client_reschedule_approval',
+      requestId: Number(context.id),
+      requestedByPhone: context.requested_by_phone,
+      approvedByAdminId: Number(admin.id),
+      fromStart: context.original_starts_at,
+      toStart: proposedStartsAt.toISOString(),
+      identityModel: context.identity_model,
+      clientId: moved.rows[0].client_id,
+      crmV2ClientId: moved.rows[0].crm_v2_client_id,
+      identityResolution: decisionAuthority.audit?.identityResolution || null,
+    })]);
     await db.query(`
       INSERT INTO crm_audit_events(action,entity_type,entity_id,metadata)
       VALUES ('client.reschedule_approval.approved','appointment',$1,$2::jsonb)
@@ -546,11 +697,27 @@ async function declineRequest(admin, requestId) {
       await db.query('COMMIT');
       return { handled: true, status: 'superseded', reply: 'The original appointment changed after this request was made, so this stale reschedule request was closed without sending an outdated client message.' };
     }
+    const decisionAuthority = await revalidateDecisionIdentity(db, context);
+    if (decisionAuthority.status !== 'ready') {
+      await supersedeRequest(db, context, admin.id, 'canonical client identity changed before decline');
+      await db.query('COMMIT');
+      return { handled: true, status: 'superseded', reply: 'The canonical client identity changed after this request was made, so this stale reschedule request was closed without sending an outdated client message.' };
+    }
+    context.client_name = decisionAuthority.clientName;
+    context.client_phone = decisionAuthority.clientPhone;
     await db.query(`UPDATE appointment_reschedule_requests SET status='declined',decided_at=NOW(),decided_by_admin_id=$2,updated_at=NOW() WHERE id=$1 AND status='pending'`, [context.id, admin.id]);
     await db.query(`
       INSERT INTO crm_audit_events(action,entity_type,entity_id,metadata)
       VALUES ('client.reschedule_approval.declined','appointment',$1,$2::jsonb)
-    `, [context.appointment_id, JSON.stringify({ requestId: Number(context.id), declinedByAdminId: Number(admin.id), declinedByName: admin.display_name })]);
+    `, [context.appointment_id, JSON.stringify({
+      requestId: Number(context.id),
+      declinedByAdminId: Number(admin.id),
+      declinedByName: admin.display_name,
+      identityModel: context.identity_model,
+      clientId: context.client_id,
+      crmV2ClientId: context.crm_v2_client_id,
+      identityResolution: decisionAuthority.audit?.identityResolution || null,
+    })]);
     await db.query('COMMIT');
   } catch (error) {
     try { await db.query('ROLLBACK'); } catch (_) {}
@@ -597,9 +764,14 @@ module.exports = {
   decisionFromText,
   localDateTime,
   pendingRescheduleConflicts,
+  appointmentContextQuery,
+  loadAppointmentForRequest,
+  resolveRescheduleRequestIdentity,
+  insertPendingRescheduleRequest,
   createPendingRescheduleRequest,
   processRescheduleApprovalDecision,
   loadRequestContext,
   canonicalStillMatchesRequest,
+  revalidateDecisionIdentity,
   supersedePendingRescheduleForAppointment,
 };

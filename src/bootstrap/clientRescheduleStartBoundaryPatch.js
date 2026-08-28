@@ -1,6 +1,7 @@
 const { pool } = require('../db/pool');
 const appointmentChange = require('../services/appointmentChange');
 const clientRescheduleApproval = require('../services/clientRescheduleApproval');
+const { normalizeMobile } = require('../services/crmV2ClientService');
 
 const START_GUARD_SECONDS = 60;
 
@@ -17,22 +18,29 @@ function blockedReply(state = 'started') {
 async function ownedAppointmentStartState(phone, appointmentId, db = pool) {
   if (!appointmentId) return null;
   const result = await db.query(`
-    SELECT a.id,a.starts_at,a.ends_at,a.status,
+    SELECT a.id,a.client_id,a.crm_v2_client_id,a.starts_at,a.ends_at,a.status,
            CASE
              WHEN a.starts_at <= NOW() THEN 'started'
              WHEN a.starts_at <= NOW() + INTERVAL '1 minute' THEN 'starting'
              ELSE 'future'
            END AS start_state
       FROM appointments a
-      JOIN clients c ON c.id=a.client_id
-      JOIN client_contacts cc ON cc.client_id=c.id
+      LEFT JOIN crm_v2_clients v2 ON v2.id=a.crm_v2_client_id AND v2.status='active'
      WHERE a.id=$2
-       AND cc.normalized_value=$1
-       AND LOWER(cc.contact_type) IN ('whatsapp','mobile','phone','telephone')
+       AND num_nonnulls(a.client_id,a.crm_v2_client_id)=1
+       AND (
+         (a.client_id IS NOT NULL AND a.crm_v2_client_id IS NULL AND EXISTS (
+           SELECT 1
+             FROM client_contacts cc
+            WHERE cc.client_id=a.client_id
+              AND cc.normalized_value=$1
+              AND LOWER(cc.contact_type) IN ('whatsapp','mobile','phone','telephone')
+         ))
+         OR (a.client_id IS NULL AND a.crm_v2_client_id IS NOT NULL AND v2.normalized_mobile=$1)
+       )
        AND a.status<>'cancelled'
-     ORDER BY cc.is_primary DESC,cc.id
      LIMIT 1
-  `, [normalizePhone(phone), Number(appointmentId)]);
+  `, [normalizeMobile(phone) || normalizePhone(phone), Number(appointmentId)]);
   return result.rows[0] || null;
 }
 
