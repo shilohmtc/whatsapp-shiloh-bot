@@ -50,11 +50,11 @@ existingPanel.appendChild(results);
 searchLabel.textContent='Search CRM V2';
 function setStatus(message){if(!status)return;status.textContent=message;status.classList.remove('error','ready','warn');}
 function clearVisibleSelection(){if(!selected)return;selected.hidden=true;selected.textContent='';}
-function setMode(mode){var isNew=mode==='new';existingPanel.hidden=isNew;newPanel.hidden=!isNew;existingButton.className=isNew?'button secondary':'button';newButton.className=isNew?'button':'button secondary';existingButton.setAttribute('aria-pressed',isNew?'false':'true');newButton.setAttribute('aria-pressed',isNew?'true':'false');window.dispatchEvent(new CustomEvent('calendar-client-mode',{detail:{mode:mode}}));}
+function setMode(mode,preserveSelection){var isNew=mode==='new';existingPanel.hidden=isNew;newPanel.hidden=!isNew;existingButton.className=isNew?'button secondary':'button';newButton.className=isNew?'button':'button secondary';existingButton.setAttribute('aria-pressed',isNew?'false':'true');newButton.setAttribute('aria-pressed',isNew?'true':'false');if(!preserveSelection)window.dispatchEvent(new CustomEvent('calendar-client-mode',{detail:{mode:mode}}));}
 existingButton.addEventListener('click',function(){clearVisibleSelection();if(review)review.disabled=true;setMode('existing');setStatus('Search CRM V2 by client name or mobile number, then explicitly select one result.');search.focus();});
 newButton.addEventListener('click',function(){clearVisibleSelection();if(review)review.disabled=true;setMode('new');setStatus('Enter the new client’s name and South African mobile number. Exact mobile is the only automatic CRM V2 identity key.');if(newName)newName.focus();});
-if(useNew)useNew.addEventListener('click',function(){window.setTimeout(function(){if(selected&&!selected.hidden&&selected.textContent.indexOf('New client')===0){setMode('new');if(review)review.disabled=false;}},0);});
-results.addEventListener('click',function(event){var target=event.target.closest?event.target.closest('.client-result'):null;if(!target)return;window.setTimeout(function(){if(selected&&!selected.hidden&&selected.textContent.indexOf('CRM V2 #')!==-1){setMode('existing');if(review)review.disabled=false;}},0);});
+if(useNew)useNew.addEventListener('click',function(){window.setTimeout(function(){if(selected&&!selected.hidden&&selected.textContent.indexOf('New client')===0){setMode('new',true);if(review)review.disabled=false;}},0);});
+results.addEventListener('click',function(event){var target=event.target.closest?event.target.closest('.client-result'):null;if(!target)return;window.setTimeout(function(){if(selected&&!selected.hidden&&selected.textContent.indexOf('CRM V2 #')!==-1){setMode('existing',true);if(review)review.disabled=false;}},0);});
 setMode('existing');
 })();`;
 }

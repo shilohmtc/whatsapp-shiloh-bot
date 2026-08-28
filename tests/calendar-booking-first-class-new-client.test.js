@@ -46,6 +46,9 @@ test('Switching modes blocks stale client selection until the visible choice is 
   assert.match(script, /clearVisibleSelection\(\);if\(review\)review\.disabled=true;setMode\('existing'\)/);
   assert.match(script, /clearVisibleSelection\(\);if\(review\)review\.disabled=true;setMode\('new'\)/);
   assert.match(script, /calendar-client-mode/);
+  assert.match(script, /if\(!preserveSelection\)window\.dispatchEvent/);
+  assert.match(script, /setMode\('new',true\)/);
+  assert.match(script, /setMode\('existing',true\)/);
   assert.match(script, /if\(review\)review\.disabled=false/);
   assert.match(script, /CRM V2 #/);
 });
