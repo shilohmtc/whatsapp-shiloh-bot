@@ -106,7 +106,7 @@ async function latestAuditEvent(appointmentId, changeKind) {
 
 async function loadAppointmentSnapshot(appointmentId) {
   const result = await pool.query(`
-    SELECT a.id,a.client_id,a.starts_at,a.ends_at,a.status,a.total_price,
+    SELECT a.id,a.client_id,a.crm_v2_client_id,a.source_client_name,a.starts_at,a.ends_at,a.status,a.total_price,
            COALESCE((SELECT string_agg(COALESCE(s.name,aps.service_name_snapshot), ' + ' ORDER BY aps.position)
                        FROM appointment_services aps
                        LEFT JOIN services s ON s.id=aps.service_id
@@ -115,21 +115,27 @@ async function loadAppointmentSnapshot(appointmentId) {
                        FROM appointment_staff ast
                        LEFT JOIN staff st ON st.id=ast.staff_id
                       WHERE ast.appointment_id=a.id),'Shiloh practitioner') AS staff_name,
-           (SELECT normalized_value
-              FROM client_contacts cc
-             WHERE cc.client_id=a.client_id
-               AND LOWER(cc.contact_type) IN ('whatsapp','mobile','phone','telephone')
-               AND cc.normalized_value IS NOT NULL
-             ORDER BY cc.is_primary DESC,cc.verified_at DESC NULLS LAST,cc.id
-             LIMIT 1) AS client_phone
+           CASE WHEN a.crm_v2_client_id IS NOT NULL THEN v2.normalized_mobile ELSE
+             (SELECT normalized_value
+                FROM client_contacts cc
+               WHERE cc.client_id=a.client_id
+                 AND LOWER(cc.contact_type) IN ('whatsapp','mobile','phone','telephone')
+                 AND cc.normalized_value IS NOT NULL
+               ORDER BY cc.is_primary DESC,cc.verified_at DESC NULLS LAST,cc.id
+               LIMIT 1)
+           END AS client_phone,
+           v2.name AS crm_v2_client_name
       FROM appointments a
+      LEFT JOIN crm_v2_clients v2 ON v2.id=a.crm_v2_client_id AND v2.status='active'
      WHERE a.id=$1`, [appointmentId]);
   const appointment = result.rows[0] || null;
   if (!appointment) return null;
   const nameResolution = appointment.client_id ? await resolveClientFacingName(appointment.client_id) : null;
   return {
     ...appointment,
-    client_name: nameResolution?.name || null,
+    client_name: appointment.crm_v2_client_id
+      ? (appointment.crm_v2_client_name || appointment.source_client_name || null)
+      : (nameResolution?.name || null),
     name_authority_id: nameResolution?.authorityId || null,
   };
 }

@@ -23,14 +23,18 @@ async function sendOptional(label, sendAction, context) {
 
 async function appointmentActionContext(appointmentId, phoneOverride = null) {
   const result = await pool.query(`
-    SELECT a.id,a.client_id,a.starts_at,a.ends_at,c.display_name AS client_name,l.name AS location_name,
+    SELECT a.id,a.client_id,a.crm_v2_client_id,a.starts_at,a.ends_at,
+           COALESCE(v2.name,c.display_name,a.source_client_name) AS client_name,l.name AS location_name,
            COALESCE((SELECT string_agg(service_name_snapshot,' + ' ORDER BY position) FROM appointment_services WHERE appointment_id=a.id),a.title,'Shiloh appointment') AS service_name,
            COALESCE((SELECT string_agg(staff_name_snapshot,' + ' ORDER BY position) FROM appointment_staff WHERE appointment_id=a.id),'Shiloh practitioner') AS staff_name,
-           COALESCE($2,(SELECT normalized_value FROM client_contacts WHERE client_id=a.client_id AND contact_type IN ('whatsapp','phone','mobile') AND normalized_value IS NOT NULL ORDER BY is_primary DESC,id LIMIT 1)) AS phone
+           COALESCE($2,CASE WHEN a.crm_v2_client_id IS NOT NULL THEN v2.normalized_mobile ELSE (SELECT normalized_value FROM client_contacts WHERE client_id=a.client_id AND contact_type IN ('whatsapp','phone','mobile') AND normalized_value IS NOT NULL ORDER BY is_primary DESC,id LIMIT 1) END) AS phone
       FROM appointments a
-      JOIN clients c ON c.id=a.client_id
+      LEFT JOIN clients c ON c.id=a.client_id
+      LEFT JOIN crm_v2_clients v2 ON v2.id=a.crm_v2_client_id AND v2.status='active'
       LEFT JOIN locations l ON l.id=a.location_id
      WHERE a.id=$1 AND a.status<>'cancelled'
+       AND num_nonnulls(a.client_id,a.crm_v2_client_id)=1
+       AND (a.crm_v2_client_id IS NULL OR v2.id IS NOT NULL)
      LIMIT 1`, [Number(appointmentId), phoneOverride]);
   return result.rows[0] || null;
 }
@@ -39,22 +43,20 @@ async function appointmentActionContextForPhone(appointmentId, phone) {
   const normalizedPhone = normalizePhone(phone);
   if (!normalizedPhone) return null;
   const result = await pool.query(`
-    SELECT a.id,a.client_id,a.starts_at,a.ends_at,c.display_name AS client_name,l.name AS location_name,
+    SELECT a.id,a.client_id,a.crm_v2_client_id,a.starts_at,a.ends_at,
+           COALESCE(v2.name,c.display_name,a.source_client_name) AS client_name,l.name AS location_name,
            COALESCE((SELECT string_agg(service_name_snapshot,' + ' ORDER BY position) FROM appointment_services WHERE appointment_id=a.id),a.title,'Shiloh appointment') AS service_name,
            COALESCE((SELECT string_agg(staff_name_snapshot,' + ' ORDER BY position) FROM appointment_staff WHERE appointment_id=a.id),'Shiloh practitioner') AS staff_name,
            $2::text AS phone
       FROM appointments a
-      JOIN clients c ON c.id=a.client_id
+      LEFT JOIN clients c ON c.id=a.client_id
+      LEFT JOIN crm_v2_clients v2 ON v2.id=a.crm_v2_client_id AND v2.status='active'
       LEFT JOIN locations l ON l.id=a.location_id
      WHERE a.id=$1
        AND a.status<>'cancelled'
-       AND EXISTS (
-         SELECT 1
-           FROM client_contacts cc
-          WHERE cc.client_id=a.client_id
-            AND cc.contact_type IN ('whatsapp','phone','mobile')
-            AND cc.normalized_value=$2
-       )
+       AND ((a.client_id IS NOT NULL AND a.crm_v2_client_id IS NULL AND EXISTS (
+              SELECT 1 FROM client_contacts cc WHERE cc.client_id=a.client_id AND cc.contact_type IN ('whatsapp','phone','mobile') AND cc.normalized_value=$2
+            )) OR (a.client_id IS NULL AND a.crm_v2_client_id IS NOT NULL AND v2.normalized_mobile=$2))
      LIMIT 1`, [Number(appointmentId), normalizedPhone]);
   return result.rows[0] || null;
 }

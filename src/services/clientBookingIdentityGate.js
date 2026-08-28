@@ -1,9 +1,11 @@
 const { getIntent } = require('./bookingIntent');
 const {
-  resolveClientByWhatsApp,
-  profileComplete,
   processClientIdentityMessage,
 } = require('./clientIdentityOnboarding');
+const {
+  resolveWhatsAppBookingIdentity,
+  bookingProfileComplete,
+} = require('./whatsappBookingIdentity');
 
 function isSummaryConfirmation(text = '') {
   return /^(yes|y|confirm|confirmed|correct|looks good|that works|proceed|continue|ok|okay)$/i.test(
@@ -12,14 +14,16 @@ function isSummaryConfirmation(text = '') {
 }
 
 async function bookingIdentityStatus(phone) {
-  const identity = await resolveClientByWhatsApp(phone);
-  if (identity.status === 'unique' && profileComplete(identity.client)) {
-    return { ready: true, identityStatus: 'matched_complete', client: identity.client };
+  const identity = await resolveWhatsAppBookingIdentity(phone);
+  if (identity.status === 'unique' && bookingProfileComplete(identity.clientIdentity, identity.client)) {
+    return { ready: true, identityStatus: 'matched_complete', clientIdentity: identity.clientIdentity, client: identity.client, identityAudit: identity.identityAudit };
   }
   return {
     ready: false,
     identityStatus: identity.status === 'unique' ? 'matched_incomplete' : identity.status,
+    clientIdentity: identity.clientIdentity || null,
     client: identity.client || null,
+    identityAudit: identity.identityAudit || null,
   };
 }
 

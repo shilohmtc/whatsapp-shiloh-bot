@@ -17,8 +17,8 @@ test('booking identity gate recognizes only deliberate summary confirmations', (
 });
 
 test('complete canonical client identity is required before policy confirmation', () => {
-  assert.match(gate, /resolveClientByWhatsApp\(phone\)/);
-  assert.match(gate, /identity\.status === 'unique' && profileComplete\(identity\.client\)/);
+  assert.match(gate, /resolveWhatsAppBookingIdentity\(phone\)/);
+  assert.match(gate, /identity\.status === 'unique' && bookingProfileComplete\(identity\.clientIdentity, identity\.client\)/);
   assert.match(gate, /intent\.status !== 'awaiting_confirmation'/);
   assert.match(gate, /processClientIdentityMessage\(phone, 'booking'\)/);
 });

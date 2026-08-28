@@ -2,7 +2,12 @@ const { pool } = require('../db/pool');
 const baseDiscovery = require('./clientDiscoveryMenu');
 const { processBookingMessage, clearIntent } = require('./bookingIntent');
 const { decorateClientBookingResult } = require('./clientBookingInteractive');
-const { normalizePhone, resolveClientByWhatsApp } = require('./clientIdentityOnboarding');
+const { normalizePhone } = require('./clientIdentityOnboarding');
+const {
+  resolveWhatsAppBookingIdentity,
+  CRM_V2_LEGACY_ONLY_BOUNDARY_REPLY,
+} = require('./whatsappBookingIdentity');
+const { IDENTITY_MODELS } = require('./whatsappCrmV2IdentityCompat');
 const { compactListTitle, fullLabelDescription } = require('../presentation/whatsappListRowPresentation');
 
 const MASSAGE_PACKAGE_PAGE_SIZE = 9;
@@ -41,7 +46,10 @@ async function packageBySlug(slug) {
 }
 
 async function activeEntitlementForPhone(phone, packageId) {
-  const identity = await resolveClientByWhatsApp(phone);
+  const identity = await resolveWhatsAppBookingIdentity(phone);
+  if (identity.clientIdentity?.identityModel === IDENTITY_MODELS.CRM_V2) {
+    return { identity, entitlement: null, unsupportedIdentityModel: IDENTITY_MODELS.CRM_V2 };
+  }
   if (identity.status !== 'unique' || !identity.client?.id) return { identity, entitlement: null };
   const r = await pool.query(`
     SELECT e.id, e.client_id, e.package_id, e.purchase_price, e.purchased_at, e.starts_at, e.expires_at,
@@ -142,12 +150,15 @@ async function massageTreatmentsInteractive(page = 1) {
 }
 
 async function recordEnquiry(phone, pkg) {
-  const identity = await resolveClientByWhatsApp(phone);
+  const identity = await resolveWhatsAppBookingIdentity(phone);
+  if (identity.clientIdentity?.identityModel === IDENTITY_MODELS.CRM_V2) {
+    return { identity, recorded: false, unsupportedIdentityModel: IDENTITY_MODELS.CRM_V2 };
+  }
   await pool.query(`
     INSERT INTO package_enquiries (client_id, package_id, normalized_whatsapp, status)
     VALUES ($1,$2,$3,'open')
   `, [identity.status === 'unique' ? identity.client.id : null, pkg.id, normalizePhone(phone)]);
-  return identity;
+  return { identity, recorded: true };
 }
 
 async function businessAdmin(sender) {
@@ -228,21 +239,24 @@ async function processPackageCommand(sender, text) {
   if (packageMatch) {
     const pkg = await packageBySlug(packageMatch[1]);
     if (!pkg) return { handled: true, reply: 'That package is not currently active.' };
-    const { entitlement } = await activeEntitlementForPhone(sender, pkg.id);
+    const { entitlement, unsupportedIdentityModel } = await activeEntitlementForPhone(sender, pkg.id);
+    if (unsupportedIdentityModel) return { handled: true, status: 'crm_v2_package_legacy_boundary', reply: CRM_V2_LEGACY_ONLY_BOUNDARY_REPLY };
     return { handled: true, interactive: packageDetailInteractive(pkg, entitlement) };
   }
   const enquiryMatch = raw.match(/^client_package_enquire_(sports-massage-monthly)$/i);
   if (enquiryMatch) {
     const pkg = await packageBySlug(enquiryMatch[1]);
     if (!pkg) return { handled: true, reply: 'That package is not currently active.' };
-    await recordEnquiry(sender, pkg);
+    const enquiry = await recordEnquiry(sender, pkg);
+    if (!enquiry.recorded) return { handled: true, status: 'crm_v2_enquiry_legacy_boundary', reply: CRM_V2_LEGACY_ONLY_BOUNDARY_REPLY };
     return { handled: true, reply: `Thanks — I’ve recorded your interest in the *${pkg.name}*.\n\nThe package is ${money(pkg.package_price)} paid in advance for ${pkg.sessions_included} × ${pkg.duration_minutes}-minute sessions and is valid for ${pkg.validity_days} days from activation. The Shiloh team can confirm payment and activate it for you.\n\nClinic: 066 239 9138` };
   }
   const statusMatch = raw.match(/^client_package_status_(sports-massage-monthly)$/i);
   if (statusMatch) {
     const pkg = await packageBySlug(statusMatch[1]);
     if (!pkg) return { handled: true, reply: 'That package is not currently active.' };
-    const { identity, entitlement } = await activeEntitlementForPhone(sender, pkg.id);
+    const { identity, entitlement, unsupportedIdentityModel } = await activeEntitlementForPhone(sender, pkg.id);
+    if (unsupportedIdentityModel) return { handled: true, status: 'crm_v2_package_legacy_boundary', reply: CRM_V2_LEGACY_ONLY_BOUNDARY_REPLY };
     if (identity.status !== 'unique') return { handled: true, reply: 'I need your Shiloh client profile to resolve uniquely before I can show package credits.' };
     if (!entitlement) return { handled: true, interactive: packageDetailInteractive(pkg, null) };
     return { handled: true, interactive: packageDetailInteractive(pkg, entitlement) };
@@ -251,7 +265,8 @@ async function processPackageCommand(sender, text) {
   if (bookMatch) {
     const pkg = await packageBySlug(bookMatch[1]);
     if (!pkg) return { handled: true, reply: 'That package is not currently active.' };
-    const { entitlement } = await activeEntitlementForPhone(sender, pkg.id);
+    const { entitlement, unsupportedIdentityModel } = await activeEntitlementForPhone(sender, pkg.id);
+    if (unsupportedIdentityModel) return { handled: true, status: 'crm_v2_package_legacy_boundary', reply: CRM_V2_LEGACY_ONLY_BOUNDARY_REPLY };
     if (!entitlement || entitlement.sessions_remaining < 1) {
       await clearIntent(normalizePhone(sender));
       return { handled: true, reply: 'There is no active paid Sports Massage package credit available on this client profile. Nothing has been booked.' };

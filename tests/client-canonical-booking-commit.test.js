@@ -25,8 +25,9 @@ test('canonical client booking can only consume an explicitly policy-accepted in
 
 test('client booking commit revalidates identity, service eligibility and canonical Shiloh conflicts', () => {
   const commit = source('src/services/clientBookingCommit.js');
-  assert.match(commit, /resolveClientByWhatsApp/);
-  assert.match(commit, /profileComplete/);
+  assert.match(commit, /resolveWhatsAppBookingIdentity/);
+  assert.match(commit, /bookingProfileComplete/);
+  assert.match(commit, /resolveFinalBookingIdentity/);
   assert.match(commit, /verifyService/);
   assert.match(commit, /staff_services/);
   assert.match(commit, /checkClinicHours/);

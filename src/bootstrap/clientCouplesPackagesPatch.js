@@ -1,6 +1,7 @@
 require('./clientMultiStaffAppointmentChangePatch');
 const discovery = require('../services/clientDiscoveryPackages');
 const couplesBooking = require('../services/clientCouplesMassageBooking');
+const { CRM_V2_LEGACY_ONLY_BOUNDARY_REPLY } = require('../services/whatsappBookingIdentity');
 
 const COUPLES_AND_PACKAGES_ACTION_ID = 'client_massage_couples_packages';
 const COUPLES_MASSAGE_ACTION_ID = 'client_couples_massage';
@@ -116,7 +117,8 @@ discovery.processClientDiscoveryMessage = async function processClientDiscoveryM
   if (raw === SPORTS_PACKAGE_ACTION_ID) {
     const pkg = sportsPackage(await discovery.activePackages());
     if (!pkg) return { handled: true, reply: 'The Sports Massage Package is not currently active. Nothing has been booked.' };
-    const { entitlement } = await discovery.activeEntitlementForPhone(sender, pkg.id);
+    const { entitlement, unsupportedIdentityModel } = await discovery.activeEntitlementForPhone(sender, pkg.id);
+    if (unsupportedIdentityModel) return { handled: true, status: 'crm_v2_package_legacy_boundary', reply: CRM_V2_LEGACY_ONLY_BOUNDARY_REPLY };
     return { handled: true, interactive: decorateSportsPackageDetail(discovery.packageDetailInteractive(pkg, entitlement)) };
   }
 

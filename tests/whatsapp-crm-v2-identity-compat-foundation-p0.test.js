@@ -320,11 +320,13 @@ test('the identity foundation introduces no provider, booking, approval, appoint
   assert.doesNotMatch(migration, /(?:INSERT INTO|UPDATE|DELETE FROM) (?:appointments|bookings|clients|crm_v2_clients)/i);
 });
 
-test('existing booking consumers remain on the centralized retained-legacy authority seam', () => {
+test('booking consumers now use the centralized discriminated compatibility seam without activating registration', () => {
   const gate = read('src/services/clientBookingIdentityGate.js');
   const commit = read('src/services/clientBookingCommit.js');
-  assert.match(gate, /resolveClientByWhatsApp/);
-  assert.match(commit, /resolveClientByWhatsApp/);
-  assert.match(commit, /context\.client\.id/);
-  assert.doesNotMatch(`${gate}\n${commit}`, /crm_v2_client_id|registerWhatsAppClient/);
+  const bookingIdentity = read('src/services/whatsappBookingIdentity.js');
+  assert.match(gate, /resolveWhatsAppBookingIdentity/);
+  assert.match(commit, /resolveFinalBookingIdentity/);
+  assert.match(commit, /crm_v2_client_id/);
+  assert.match(bookingIdentity, /identityFromSession/);
+  assert.doesNotMatch(`${gate}\n${commit}\n${bookingIdentity}`, /registerWhatsAppClient/);
 });

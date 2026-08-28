@@ -413,7 +413,13 @@ async function processClientIdentityMessage(phone, text) {
     if (durableIdentity?.identityModel === IDENTITY_MODELS.CRM_V2) {
       const revalidated = await whatsappCrmV2IdentityCompat.revalidateSessionIdentity({ phone, session: existingSession });
       if (revalidated.status === "crm_v2_current") {
-        return { handled: true, identityStatus: "crm_v2_compat_inactive", resumeBooking: false, clientIdentity: durableIdentity, client: revalidated.client, identityAudit: revalidated.audit, reply: CRM_V2_COMPAT_INACTIVE_REPLY };
+        if (isWalkinRegistrationRequest(text)) {
+          return { handled: true, identityStatus: "crm_v2_compat_inactive", resumeBooking: false, clientIdentity: durableIdentity, client: revalidated.client, identityAudit: revalidated.audit, reply: CRM_V2_COMPAT_INACTIVE_REPLY };
+        }
+        if (isGreetingOnly(text)) {
+          return { handled: true, identityStatus: "matched_complete", onboardingComplete: true, resumeBooking: false, clientIdentity: durableIdentity, client: revalidated.client, identityAudit: revalidated.audit, reply: `${PREMIUM_GREETING}\n\nWelcome back, *${firstName(revalidated.client.name)}* 🌿` };
+        }
+        return { handled: false, identityStatus: "matched_complete", resumeBooking: false, clientIdentity: durableIdentity, client: revalidated.client, identityAudit: revalidated.audit };
       }
       return { handled: true, identityStatus: revalidated.status, resumeBooking: false, clientIdentity: durableIdentity, client: null, identityAudit: revalidated.audit, recovery: revalidated.recovery || "manual_rebind_required", reply: CRM_V2_STALE_AUTHORITY_REPLY };
     }

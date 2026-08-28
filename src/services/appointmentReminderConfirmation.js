@@ -1,4 +1,5 @@
 const { pool } = require('../db/pool');
+const { resolveFinalBookingIdentity, identityFromAppointment } = require('./whatsappBookingIdentity');
 
 function normalizePhone(value = '') {
   return String(value || '').replace(/[^0-9]/g, '');
@@ -42,18 +43,21 @@ const uniqueClientCte = `
 async function reminderAppointmentsForPhone(phone) {
   const result = await pool.query(
     `WITH ${uniqueClientCte}
-     SELECT a.id,a.starts_at,a.ends_at,a.status,
+     SELECT a.id,a.client_id,a.crm_v2_client_id,a.starts_at,a.ends_at,a.status,
             al.status AS lifecycle_status,
-            COALESCE(c.display_name,a.source_client_name,'Client') AS client_name,
+            COALESCE(v2.name,c.display_name,a.source_client_name,al.client_name_snapshot,'Client') AS client_name,
             COALESCE((SELECT string_agg(service_name_snapshot,' + ' ORDER BY position)
                         FROM appointment_services WHERE appointment_id=a.id),a.title,'Appointment') AS service_name,
             COALESCE((SELECT string_agg(staff_name_snapshot,' + ' ORDER BY position)
                         FROM appointment_staff WHERE appointment_id=a.id),'Shiloh practitioner') AS staff_name
-       FROM unique_client uc
-       JOIN clients c ON c.id=uc.id
-       JOIN appointments a ON a.client_id=c.id
+       FROM appointments a
+       LEFT JOIN unique_client uc ON uc.id=a.client_id
+       LEFT JOIN clients c ON c.id=a.client_id
+       LEFT JOIN crm_v2_clients v2 ON v2.id=a.crm_v2_client_id AND v2.status='active'
        JOIN appointment_lifecycle al ON al.appointment_id=a.id
-      WHERE al.reminder_sent_at IS NOT NULL
+      WHERE ((a.client_id IS NOT NULL AND a.crm_v2_client_id IS NULL AND uc.id IS NOT NULL)
+             OR (a.client_id IS NULL AND a.crm_v2_client_id IS NOT NULL AND v2.normalized_mobile=$1))
+        AND al.reminder_sent_at IS NOT NULL
         AND al.appointment_at>NOW()
         AND a.ends_at>NOW()
         AND a.status IN ('scheduled','confirmed')
@@ -82,12 +86,14 @@ async function confirmReminderAppointment(phone, appointmentId) {
     await db.query('BEGIN');
     const locked = await db.query(
       `WITH ${uniqueClientCte}
-       SELECT a.id,a.status,a.starts_at,a.ends_at,al.status AS lifecycle_status
-         FROM unique_client uc
-         JOIN clients c ON c.id=uc.id
-         JOIN appointments a ON a.client_id=c.id
+       SELECT a.id,a.client_id,a.crm_v2_client_id,a.status,a.starts_at,a.ends_at,al.status AS lifecycle_status
+         FROM appointments a
+         LEFT JOIN unique_client uc ON uc.id=a.client_id
+         LEFT JOIN crm_v2_clients v2 ON v2.id=a.crm_v2_client_id AND v2.status='active'
          JOIN appointment_lifecycle al ON al.appointment_id=a.id
         WHERE a.id=$2
+          AND ((a.client_id IS NOT NULL AND a.crm_v2_client_id IS NULL AND uc.id IS NOT NULL)
+               OR (a.client_id IS NULL AND a.crm_v2_client_id IS NOT NULL AND v2.normalized_mobile=$1))
           AND al.reminder_sent_at IS NOT NULL
           AND al.appointment_at>NOW()
           AND a.ends_at>NOW()
@@ -98,6 +104,11 @@ async function confirmReminderAppointment(phone, appointmentId) {
     );
     const row = locked.rows[0];
     if (!row) {
+      await db.query('ROLLBACK');
+      return { status: 'stale_or_unmatched' };
+    }
+    const identityAuthority = await resolveFinalBookingIdentity({ db, phone: cleanPhone, identity: identityFromAppointment(row) });
+    if (identityAuthority.status !== 'ready') {
       await db.query('ROLLBACK');
       return { status: 'stale_or_unmatched' };
     }
