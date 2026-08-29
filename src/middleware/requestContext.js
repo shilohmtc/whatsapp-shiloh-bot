@@ -1,5 +1,6 @@
 const { randomUUID } = require("crypto");
 const logger = require("../lib/logger");
+const { runWithRequestLog } = require("../lib/requestLogContext");
 
 function requestContext(req, res, next) {
   const requestId = req.get("x-request-id") || randomUUID();
@@ -21,7 +22,7 @@ function requestContext(req, res, next) {
     );
   });
 
-  next();
+  return runWithRequestLog(req.log, next);
 }
 
 module.exports = requestContext;

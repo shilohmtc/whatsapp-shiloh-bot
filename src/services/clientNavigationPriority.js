@@ -1,3 +1,6 @@
+const { currentRequestLog } = require('../lib/requestLogContext');
+const { whatsappIdentityDecisionObservability } = require('./whatsappIdentityDecisionObservability');
+
 function clean(value = '') {
   return String(value || '').trim().replace(/\s+/g, ' ');
 }
@@ -28,7 +31,20 @@ function discoveryCommandForNavigation(text = '') {
   return null;
 }
 
-function installClientNavigationPriority({ identityService, discoveryService }) {
+async function safelyObserveDecision(observer, input) {
+  if (!input.logger || !observer) return;
+  try {
+    await observer.observeAndLog(input);
+  } catch (_error) {
+    // Observability must never alter identity routing or the client response.
+  }
+}
+
+function installClientNavigationPriority({
+  identityService,
+  discoveryService,
+  identityDecisionObservability = whatsappIdentityDecisionObservability,
+}) {
   if (!identityService || !discoveryService) throw new Error('client navigation services are required');
   if (identityService.__clientNavigationPriorityInstalled && discoveryService.__clientNavigationPriorityInstalled) return;
 
@@ -37,20 +53,56 @@ function installClientNavigationPriority({ identityService, discoveryService }) 
   if (typeof originalIdentity !== 'function' || typeof originalDiscovery !== 'function') {
     throw new Error('client navigation service functions are unavailable');
   }
+  const currentAuthorityVersion = identityService.AUTHORITY_VERSION || null;
 
   identityService.processClientIdentityMessage = async (sender, text, ...rest) => {
-    if (isGreetingNavigation(text)) {
-      const identity = await originalIdentity(sender, text, ...rest);
-      if (identity?.identityStatus !== 'matched_complete') return identity;
-      return {
+    const requestLog = currentRequestLog();
+    let sessionBefore = null;
+    if (requestLog && identityDecisionObservability?.captureSession) {
+      try {
+        sessionBefore = await identityDecisionObservability.captureSession(sender, currentAuthorityVersion);
+      } catch (_error) {
+        sessionBefore = null;
+      }
+    }
+
+    if (isBookAnotherNavigation(text)) {
+      const result = { handled: false, navigationPriority: true };
+      await safelyObserveDecision(identityDecisionObservability, {
+        logger: requestLog,
+        phone: sender,
+        currentAuthorityVersion,
+        sessionBefore,
+        originalResult: result,
+        finalResult: result,
+        navigationKind: 'book_another',
+      });
+      return result;
+    }
+
+    const identity = await originalIdentity(sender, text, ...rest);
+    let result = identity;
+    let navigationKind = null;
+    if (isGreetingNavigation(text) && identity?.identityStatus === 'matched_complete') {
+      result = {
         handled: false,
         navigationPriority: true,
         identityStatus: identity.identityStatus,
         client: identity.client || null,
       };
+      navigationKind = 'matched_greeting';
     }
-    if (isBookAnotherNavigation(text)) return { handled: false, navigationPriority: true };
-    return originalIdentity(sender, text, ...rest);
+
+    await safelyObserveDecision(identityDecisionObservability, {
+      logger: requestLog,
+      phone: sender,
+      currentAuthorityVersion,
+      sessionBefore,
+      originalResult: identity,
+      finalResult: result,
+      navigationKind,
+    });
+    return result;
   };
 
   discoveryService.processClientDiscoveryMessage = async (sender, text, ...rest) => {
