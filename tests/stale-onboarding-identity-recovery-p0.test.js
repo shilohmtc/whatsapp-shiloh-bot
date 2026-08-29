@@ -7,6 +7,9 @@ const {
 const {
   installClientNavigationPriority,
 } = require('../src/services/clientNavigationPriority');
+const {
+  runWithRequestLog,
+} = require('../src/lib/requestLogContext');
 
 const CURRENT_AUTHORITY = 'verified_client_v3_crm_v2_fresh_registration';
 const STALE_AUTHORITY = 'verified_client_v2_pre_crm_v2_registration';
@@ -247,11 +250,13 @@ test('navigation wrapper replaces only a recovered identity_contract_invalid res
     identityDecisionObservability: observer,
     identityRecovery: recovery,
   });
-  const result = await identityService.processClientIdentityMessage('27820000000', 'booking');
+  const logger = { info() {} };
+  const result = await runWithRequestLog(logger, () => identityService.processClientIdentityMessage('27820000000', 'booking'));
 
   assert.equal(identityCalls, 2);
   assert.equal(result.identityStatus, 'registration_required');
   assert.equal(observed.length, 1);
+  assert.equal(observed[0].logger, logger);
   assert.equal(observed[0].originalResult.identityStatus, 'identity_contract_invalid');
   assert.equal(observed[0].finalResult.identityStatus, 'registration_required');
 });
