@@ -27,7 +27,7 @@ function calendarHandoffPublicOrigin(env = process.env) {
 function buildCalendarHandoffUrl(token, env = process.env) {
   const origin = calendarHandoffPublicOrigin(env);
   if (!origin || !/^[A-Za-z0-9_-]{43}$/.test(String(token || ''))) return null;
-  return `${origin}/calendar/staff#handoff=${encodeURIComponent(token)}`;
+  return `${origin}/calendar/staff/handoff#handoff=${encodeURIComponent(token)}`;
 }
 
 function isCalendarHandoffAuthority(admin) {

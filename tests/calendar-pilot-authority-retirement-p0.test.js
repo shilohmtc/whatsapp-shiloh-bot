@@ -203,7 +203,7 @@ test('Open Calendar uses one-time handoff while canonical capability remains sol
   const token = Buffer.alloc(32, 7).toString('base64url');
   assert.equal(
     buildCalendarHandoffUrl(token, { SHILOH_CALENDAR_PUBLIC_ORIGIN: 'https://calendar.example.test/path' }),
-    `https://calendar.example.test/calendar/staff#handoff=${token}`,
+    `https://calendar.example.test/calendar/staff/handoff#handoff=${token}`,
   );
   assert.equal(buildCalendarHandoffUrl(token, { SHILOH_CALENDAR_PUBLIC_ORIGIN: 'http://calendar.example.test' }), null);
   assert.equal(buildCalendarHandoffUrl(token, { SHILOH_CALENDAR_PUBLIC_ORIGIN: 'https://user:pass@calendar.example.test' }), null);

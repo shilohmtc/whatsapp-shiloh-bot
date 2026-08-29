@@ -13,7 +13,10 @@ const {
   isWorkspaceLauncherTerm,
   workspaceLauncherInteractive,
 } = require('../src/services/adminInteractiveMenu');
-const { staffCalendarHandoffClientScript } = require('../src/presentation/staffCalendarHandoffUx');
+const {
+  renderStaffCalendarHandoffPage,
+  staffCalendarHandoffClientScript,
+} = require('../src/presentation/staffCalendarHandoffUx');
 
 function principal(overrides = {}) {
   return {
@@ -231,17 +234,57 @@ test('handoff fails closed for duplicate sender identity and authority drift bef
   assert.equal(driftDb.state.sessions.length, 0);
 });
 
-test('handoff URL keeps credential in fragment and browser strips it before exchange', () => {
+test('handoff rejects inactive staff and expires without minting a session', async () => {
+  const inactiveDb = fakeDb([principal({ staff_id: 7, staff_status: 'inactive' })]);
+  const inactiveService = createStaffCalendarHandoffService({
+    db: inactiveDb,
+    now: () => new Date('2026-08-29T14:30:00.000Z'),
+    randomBytes: deterministicRandomBytes(),
+  });
+  assert.deepEqual(
+    await inactiveService.issueForWhatsapp({ whatsapp: '27720000000' }),
+    { ok: false, code: 'STAFF_CALENDAR_HANDOFF_FORBIDDEN' },
+  );
+  assert.equal(inactiveDb.state.handoffs.length, 0);
+
+  const expiryDb = fakeDb();
+  let current = new Date('2026-08-29T14:30:00.000Z');
+  const expiryService = createStaffCalendarHandoffService({
+    db: expiryDb,
+    now: () => new Date(current),
+    randomBytes: deterministicRandomBytes(),
+  });
+  const issued = await expiryService.issueForWhatsapp({ whatsapp: '27720000000' });
+  assert.equal(issued.ok, true);
+  current = new Date('2026-08-29T14:32:00.001Z');
+  assert.deepEqual(
+    await expiryService.exchange({ token: issued.token }),
+    { ok: false, code: 'STAFF_CALENDAR_HANDOFF_INVALID' },
+  );
+  assert.equal(expiryDb.state.handoffs[0].revoked_at instanceof Date, true);
+  assert.equal(expiryDb.state.sessions.length, 0);
+});
+
+test('handoff URL keeps credential in fragment on an isolated landing page and browser strips it before exchange', () => {
   const token = Buffer.alloc(32, 9).toString('base64url');
   const url = buildCalendarHandoffUrl(token, { SHILOH_CALENDAR_PUBLIC_ORIGIN: 'https://calendar.example.test/path' });
-  assert.equal(url, `https://calendar.example.test/calendar/staff#handoff=${token}`);
+  assert.equal(url, `https://calendar.example.test/calendar/staff/handoff#handoff=${token}`);
+
+  const page = renderStaffCalendarHandoffPage();
+  assert.match(page, /\/calendar\/staff\/handoff\.js/);
+  assert.doesNotMatch(page, /\/calendar\/staff\/client\.js/);
+  assert.doesNotMatch(page, new RegExp(token));
 
   const script = staffCalendarHandoffClientScript();
   assert.match(script, /\^#handoff=\(\[A-Za-z0-9_-\]\{43\}\)\$/);
   assert.match(script, /calendar-handoff\/exchange/);
   assert.match(script, /window\.location\.replace\(CALENDAR_PATH\)/);
   assert.ok(script.indexOf('window.history.replaceState') < script.indexOf("postJson(AUTH_BASE+'/calendar-handoff/exchange'"), 'fragment must be removed before network exchange');
-  assert.doesNotMatch(url.split('#')[0], /handoff|token/);
+  assert.doesNotMatch(url.split('#')[0], /handoff=/);
+
+  const route = read('src/routes/staffCalendarAccessUx.js');
+  assert.match(route, /router\.get\('\/handoff', createStaffCalendarHandoffPageHandler\(options\)\)/);
+  assert.doesNotMatch(route, /decorateHandoffAccessPage/);
 });
 
 test('handoff remains canonical session transport only and cannot write scheduling business state', () => {
