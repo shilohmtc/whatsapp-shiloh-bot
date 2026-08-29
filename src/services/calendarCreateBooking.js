@@ -6,7 +6,6 @@ const {
   confirmCalendarV2Booking,
   cancelPendingBooking,
 } = require('./adminBooking');
-const { isEmergencyCalendarBookingEnabled } = require('./emergencyCalendarBootstrap');
 const {
   CALENDAR_CAPABILITIES,
   resolveCalendarAuthority,
@@ -102,9 +101,6 @@ function createCalendarCreateBookingService({
   }
 
   async function resolveOperator(adminId) {
-    if (!isEmergencyCalendarBookingEnabled(env)) {
-      throw bookingError('CALENDAR_BOOKING_DISABLED', 'Calendar booking is not enabled.');
-    }
     const id = positiveId(adminId);
     if (!id) throw bookingError('CALENDAR_BOOKING_FORBIDDEN', 'This browser session cannot create Calendar bookings.');
     const admin = await resolveCalendarAuthority(db, id);

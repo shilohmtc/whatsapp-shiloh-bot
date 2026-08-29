@@ -7,22 +7,18 @@ const {
   createCalendarCreateBookingService: createRawCalendarCreateBookingService,
   localDateTimeFromInputs,
 } = require('../src/services/calendarCreateBooking');
-const {
-  EMERGENCY_ADMIN_ID,
-} = require('../src/services/emergencyCalendarBootstrap');
+const TEST_ADMIN_ID = 2;
 const {
   checkAuthoritativeSchedule,
 } = require('../src/services/adminAvailability');
 
 const enabledEnv = {
-  SHILOH_EMERGENCY_CHRISTEL_CALENDAR_BOOKING_ENABLED: 'true',
   SHILOH_CALENDAR_PUBLIC_ORIGIN: 'https://shiloh.example.test',
-  SHILOH_STAFF_BROWSER_PILOT_MODE_ENABLED: 'false',
 };
 
 function authorityRow(overrides = {}) {
   return {
-    id: EMERGENCY_ADMIN_ID,
+    id: TEST_ADMIN_ID,
     staff_id: 9,
     display_name: 'Christel',
     role: 'admin',
@@ -126,14 +122,18 @@ const adminBookingSource = fs.readFileSync(path.join(__dirname, '../src/services
 const adminAvailabilitySource = fs.readFileSync(path.join(__dirname, '../src/services/adminAvailability.js'), 'utf8');
 const adminScheduleUxSource = fs.readFileSync(path.join(__dirname, '../src/services/adminScheduleUx.js'), 'utf8');
 
-test('11 emergency Calendar Create Booking stays dark when its dedicated flag is off', async () => {
-  const db = scriptedDb(async () => { throw new Error('database must not be touched while disabled'); });
-  const service = createCalendarCreateBookingService({ db, env: {} });
-  await assert.rejects(
-    service.listBookableOptions(EMERGENCY_ADMIN_ID),
-    (error) => error?.code === 'CALENDAR_BOOKING_DISABLED'
-  );
-  assert.equal(db.calls.length, 0);
+test('11 retired emergency feature value cannot disable canonical Create Booking authority', async () => {
+  const db = scriptedDb(async (call) => {
+    if (call.sql.includes('FROM staff_admin_accounts a')) return { rows: [authorityRow()], rowCount: 1 };
+    throw new Error('unexpected query');
+  });
+  const service = createCalendarCreateBookingService({
+    db,
+    env: { SHILOH_EMERGENCY_CHRISTEL_CALENDAR_BOOKING_ENABLED: 'false' },
+  });
+  const operator = await service.resolveOperator(TEST_ADMIN_ID);
+  assert.equal(operator.id, TEST_ADMIN_ID);
+  assert.equal(operator.bookingScope.key, 'all_business:all_services');
 });
 
 test('12 booking routes stay private and mutating operations retain same-origin, staff-session and CSRF guards', () => {
@@ -180,9 +180,9 @@ test('14 current canonical Christel authority is revalidated on every booking op
     db,
     env: enabledEnv,
   });
-  await service.searchClients(EMERGENCY_ADMIN_ID, 'Cl');
+  await service.searchClients(TEST_ADMIN_ID, 'Cl');
   await assert.rejects(
-    service.listBookableOptions(EMERGENCY_ADMIN_ID),
+    service.listBookableOptions(TEST_ADMIN_ID),
     (error) => error?.code === 'CALENDAR_BOOKING_FORBIDDEN'
   );
   assert.equal(authorityChecks, 2);
@@ -200,7 +200,7 @@ test('15 internal bookable options require active staff/service mappings and do 
     return { rows: [], rowCount: 0 };
   });
   const service = createCalendarCreateBookingService({ db, env: enabledEnv });
-  const result = await service.listBookableOptions(EMERGENCY_ADMIN_ID);
+  const result = await service.listBookableOptions(TEST_ADMIN_ID);
   assert.deepEqual(result.staff.map((row) => row.displayName).sort(), ['Abigail', 'Christel']);
   assert.match(optionsSql, /JOIN staff_services ss/);
   assert.match(optionsSql, /st\.status = 'active'/);
@@ -225,7 +225,7 @@ test('16 client search delegates to CRM V2 with a bounded normalized query', asy
       },
     },
   });
-  await service.searchClients(EMERGENCY_ADMIN_ID, '  Jane   Doe  ');
+  await service.searchClients(TEST_ADMIN_ID, '  Jane   Doe  ');
   assert.deepEqual(finderCalls, [[{ query: 'Jane Doe', status: 'active', limit: 10 }]]);
 });
 
@@ -239,7 +239,7 @@ test('17 one-character CRM searches do not execute lookup and all search results
       async searchClients() { finderCalls += 1; return []; },
     },
   });
-  const result = await service.searchClients(EMERGENCY_ADMIN_ID, 'J');
+  const result = await service.searchClients(TEST_ADMIN_ID, 'J');
   assert.equal(finderCalls, 0);
   assert.deepEqual(result, { clients: [], requiresExplicitSelection: true });
 });
@@ -254,7 +254,7 @@ test('18 CRM search serialization exposes only a masked contact hint and never t
       async searchClients() { return [crmV2Client()]; },
     },
   });
-  const result = await service.searchClients(EMERGENCY_ADMIN_ID, 'Jane');
+  const result = await service.searchClients(TEST_ADMIN_ID, 'Jane');
   assert.equal(result.requiresExplicitSelection, true);
   assert.equal(result.clients[0].contactHint, 'ending in 4567');
   assert.equal(JSON.stringify(result).includes(rawNumber), false);
@@ -264,7 +264,7 @@ test('19 prepare rejects a missing or non-positive canonical CRM client id befor
   const db = authorityDb(async () => { throw new Error('provider selection must not run for invalid client id'); });
   const service = createCalendarCreateBookingService({ db, env: enabledEnv });
   await assert.rejects(
-    service.prepare({ adminId: EMERGENCY_ADMIN_ID, clientId: '0', staffId: 9, serviceId: 44, date: '2026-08-28', time: '10:15' }),
+    service.prepare({ adminId: TEST_ADMIN_ID, clientId: '0', staffId: 9, serviceId: 44, date: '2026-08-28', time: '10:15' }),
     (error) => error?.code === 'CALENDAR_BOOKING_CLIENT_REQUIRED'
   );
   assert.equal(db.calls.length, 1);
@@ -289,7 +289,7 @@ test('21 exact active staff-service eligibility and operator service authority a
   });
   const service = createCalendarCreateBookingService({ db, env: enabledEnv });
   await assert.rejects(
-    service.prepare({ adminId: EMERGENCY_ADMIN_ID, clientId: '123', staffId: 9, serviceId: 44, date: '2026-08-28', time: '10:15' }),
+    service.prepare({ adminId: TEST_ADMIN_ID, clientId: '123', staffId: 9, serviceId: 44, date: '2026-08-28', time: '10:15' }),
     (error) => error?.code === 'CALENDAR_BOOKING_INELIGIBLE_SELECTION'
   );
   assert.match(selectionSql, /st\.id = \$1/);
@@ -323,9 +323,9 @@ test('22 Calendar prepare delegates exact client, provider, service and local sl
       };
     },
   });
-  const result = await service.prepare({ adminId: EMERGENCY_ADMIN_ID, clientId: '123', staffId: 9, serviceId: 44, date: '2026-08-28', time: '10:15' });
+  const result = await service.prepare({ adminId: TEST_ADMIN_ID, clientId: '123', staffId: 9, serviceId: 44, date: '2026-08-28', time: '10:15' });
   assert.deepEqual(prepareCalls, [{
-    adminId: EMERGENCY_ADMIN_ID,
+    adminId: TEST_ADMIN_ID,
     crmV2Client: crmV2Client(),
     staffName: 'Abigail',
     serviceName: 'Deep Tissue Massage',
@@ -347,7 +347,7 @@ test('23 canonical prepare denials pass through unchanged and Calendar code cann
     crmV2Service: defaultCrmV2Service(),
     prepareBooking: async () => canonicalDenial,
   });
-  const result = await service.prepare({ adminId: EMERGENCY_ADMIN_ID, clientId: '123', staffId: 9, serviceId: 44, date: '2026-08-28', time: '10:15' });
+  const result = await service.prepare({ adminId: TEST_ADMIN_ID, clientId: '123', staffId: 9, serviceId: 44, date: '2026-08-28', time: '10:15' });
   assert.strictEqual(result, canonicalDenial);
   assert.doesNotMatch(calendarServiceSource, /INSERT INTO appointments/);
   assert.doesNotMatch(calendarRouteSource, /INSERT INTO appointments/);
@@ -368,10 +368,10 @@ test('24 Calendar confirm requires confirmation-safe authority then delegates wi
       return { status: 'created', appointmentId: 777 };
     },
   });
-  const result = await service.confirm({ adminId: EMERGENCY_ADMIN_ID });
+  const result = await service.confirm({ adminId: TEST_ADMIN_ID });
   assert.equal(result.appointmentId, 777);
   assert.equal(confirmCalls.length, 1);
-  assert.equal(confirmCalls[0][0].id, EMERGENCY_ADMIN_ID);
+  assert.equal(confirmCalls[0][0].id, TEST_ADMIN_ID);
   assert.deepEqual(confirmCalls[0][1], { source: 'shiloh_calendar' });
 });
 

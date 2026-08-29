@@ -10,7 +10,7 @@ const {
   allowsBookingTarget,
 } = require('../src/services/calendarAuthorization');
 
-const enabledEnv = { SHILOH_EMERGENCY_CHRISTEL_CALENDAR_BOOKING_ENABLED: 'true' };
+const enabledEnv = {};
 const principals = {
   christel: { id: 2, staff_id: 9, display_name: 'Christel', role: 'owner', business_role: 'owner', calendar_scope: 'all_business', service_scope: 'all_services', permissions: { 'appointment:create': true, 'client:lookup': true }, admin_active: true, staff_status: 'active', client_bookable: true },
   abigail: { id: 3, staff_id: 10, display_name: 'Abigail', role: 'practitioner', business_role: 'employee_practitioner', calendar_scope: 'own_appointments', service_scope: 'own_services', permissions: { 'appointment:view': true, 'client:lookup': true }, admin_active: true, staff_status: 'active', client_bookable: true },

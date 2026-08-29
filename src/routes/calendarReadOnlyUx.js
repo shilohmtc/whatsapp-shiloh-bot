@@ -3,7 +3,6 @@ const { pool } = require('../db/pool');
 const calendarReadOnlyUx = require('../services/calendarReadOnlyUx');
 const { renderCalendarPage, renderUnavailablePage } = require('../presentation/calendarReadOnlyUx');
 const { isCalendarBridgeEnabled } = require('../middleware/staffBrowserSession');
-const { isEmergencyCalendarBookingEnabled } = require('../services/emergencyCalendarBootstrap');
 const { createCalendarCreateBookingService } = require('../services/calendarCreateBooking');
 const { createCalendarOperationalMutationService } = require('../services/calendarOperationalMutations');
 
@@ -57,7 +56,7 @@ function applyCalendarResponsivePolish(html) {
 
 // Compatibility fallback for renderers that do not yet consume operationalActions.
 // Authority is resolved server-side before this decoration is ever used.
-function decorateEmergencyBookingEntry(html, dateKey, bookingPath = '/calendar/book') {
+function decorateBookingEntry(html, dateKey, bookingPath = '/calendar/book') {
   const href = `${bookingPath}?date=${encodeURIComponent(String(dateKey || ''))}`;
   return String(html)
     .replace('<div class="access-controls">', `<div class="access-controls"><a class="nav-button" href="${href}">Create booking</a>`)
@@ -101,14 +100,12 @@ function createCalendarReadOnlyHandler({
       });
 
       let bookingAllowed = false;
-      if (isEmergencyCalendarBookingEnabled(env)) {
-        try {
-          await bookingService.resolveOperator(req.staffBrowserSession?.adminId);
-          bookingAllowed = true;
-        } catch (_bookingAuthorityError) {
-          // Timeline remains safe. Booking entry fails closed while /calendar/book
-          // independently revalidates current operator authority.
-        }
+      try {
+        await bookingService.resolveOperator(req.staffBrowserSession?.adminId);
+        bookingAllowed = true;
+      } catch (_bookingAuthorityError) {
+        // Timeline remains safe. Booking entry fails closed while /calendar/book
+        // independently revalidates current operator capability and scope.
       }
 
       let mutationCapability = null;
@@ -142,7 +139,7 @@ function createCalendarReadOnlyHandler({
       html = applyCalendarResponsivePolish(html);
 
       if (bookingAllowed && !String(html).includes('aria-label="Calendar actions"')) {
-        html = decorateEmergencyBookingEntry(html, model.dateKey, bookingPath);
+        html = decorateBookingEntry(html, model.dateKey, bookingPath);
       }
       return res.status(200).type('html').send(html);
     } catch (error) {
@@ -169,6 +166,6 @@ module.exports.createCalendarReadOnlyRouter = createCalendarReadOnlyRouter;
 module.exports.isFeatureEnabled = isFeatureEnabled;
 module.exports.resolveServerViewer = resolveServerViewer;
 module.exports.setCalendarSecurityHeaders = setCalendarSecurityHeaders;
-module.exports.decorateEmergencyBookingEntry = decorateEmergencyBookingEntry;
+module.exports.decorateBookingEntry = decorateBookingEntry;
 module.exports.bookingOperationalActions = bookingOperationalActions;
 module.exports.applyCalendarResponsivePolish = applyCalendarResponsivePolish;

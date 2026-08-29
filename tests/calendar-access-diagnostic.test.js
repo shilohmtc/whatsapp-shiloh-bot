@@ -69,13 +69,10 @@ function productionRows() {
   ];
 }
 
-function enabledEnv(pilotIds = '2,20,11,12') {
+function enabledEnv() {
   return {
     SHILOH_CALENDAR_READONLY_UX_ENABLED: 'true',
     SHILOH_STAFF_BROWSER_SESSION_CALENDAR_BRIDGE_ENABLED: 'true',
-    SHILOH_EMERGENCY_CHRISTEL_CALENDAR_BOOKING_ENABLED: 'true',
-    SHILOH_STAFF_BROWSER_PILOT_MODE_ENABLED: 'true',
-    SHILOH_STAFF_BROWSER_PILOT_ADMIN_IDS: pilotIds,
   };
 }
 
@@ -100,9 +97,6 @@ test('Calendar access diagnostic is read-only, sanitized, and reports production
 
   assert.equal(report.calendarReadOnlyUxEnabled, true);
   assert.equal(report.staffBrowserCalendarBridgeEnabled, true);
-  assert.equal(report.calendarHandoffEnabled, true);
-  assert.equal(report.pilotModeEnabled, true);
-  assert.equal(report.pilotConfigValid, true);
   assert.equal(report.expectedPrincipalCount, 4);
   assert.equal(report.matchedPrincipalCount, 4);
   assert.deepEqual(report.authorities.map((item) => item.principal), ['Christel', 'Jean-Pierre', 'Abigail', 'Marietjie']);
@@ -117,7 +111,7 @@ test('Calendar access diagnostic is read-only, sanitized, and reports production
   assert.equal(byName.Marietjie.calendarScope, 'own_services');
   assert.equal(byName.Marietjie.serviceScope, 'own_services');
   assert.equal(byName.Marietjie.viewerScope, 'business_all_staff');
-  assert.equal(report.authorities.every((item) => item.pilotAllowed === true), true);
+  assert.equal(report.authorities.every((item) => !Object.hasOwn(item, 'pilotAllowed')), true);
 
   const serialized = JSON.stringify(report);
   for (const forbidden of [
@@ -130,12 +124,19 @@ test('Calendar access diagnostic is read-only, sanitized, and reports production
   }
 });
 
-test('Calendar access diagnostic exposes malformed pilot policy only as fail-closed booleans', async () => {
+test('retired pilot environment is not reported or evaluated as Calendar authority', async () => {
   const db = fakeDb();
-  const report = await runCalendarAccessDiagnostic({ db, env: enabledEnv('2,20,bad') });
-  assert.equal(report.pilotModeEnabled, true);
-  assert.equal(report.pilotConfigValid, false);
-  assert.equal(report.authorities.every((item) => item.pilotAllowed === false), true);
+  const report = await runCalendarAccessDiagnostic({
+    db,
+    env: {
+      ...enabledEnv(),
+      SHILOH_STAFF_BROWSER_PILOT_MODE_ENABLED: 'true',
+      SHILOH_STAFF_BROWSER_PILOT_ADMIN_IDS: '2,20,bad',
+    },
+  });
+  assert.equal(Object.hasOwn(report, 'pilotModeEnabled'), false);
+  assert.equal(Object.hasOwn(report, 'pilotConfigValid'), false);
+  assert.equal(report.authorities.every((item) => !Object.hasOwn(item, 'pilotAllowed')), true);
 });
 
 test('diagnostic source and startup integration contain no mutation or secret logging contract', () => {

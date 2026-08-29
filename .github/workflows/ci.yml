@@ -40,35 +40,27 @@ jobs:
           SHILOH_STAFF_BROWSER_AUTH_WHATSAPP_DELIVERY_ENABLED: 'false'
           SHILOH_STAFF_BROWSER_SESSION_CALENDAR_BRIDGE_ENABLED: 'false'
           SHILOH_CALENDAR_READONLY_UX_ENABLED: 'false'
-          SHILOH_STAFF_BROWSER_PILOT_MODE_ENABLED: 'false'
-          SHILOH_STAFF_BROWSER_PILOT_ADMIN_IDS: ''
         run: node --test tests/staff-browser-session-boundary.test.js
       - name: Run focused staff Calendar access UX tests
         env:
           SHILOH_STAFF_BROWSER_AUTH_WHATSAPP_DELIVERY_ENABLED: 'false'
           SHILOH_STAFF_BROWSER_SESSION_CALENDAR_BRIDGE_ENABLED: 'false'
           SHILOH_CALENDAR_READONLY_UX_ENABLED: 'false'
-          SHILOH_STAFF_BROWSER_PILOT_MODE_ENABLED: 'false'
-          SHILOH_STAFF_BROWSER_PILOT_ADMIN_IDS: ''
         run: node --test tests/staff-calendar-access-ux.test.js
-      - name: Run focused staff Calendar pilot gate tests
+      - name: Run focused Calendar pilot authority retirement tests
         env:
           SHILOH_STAFF_BROWSER_AUTH_WHATSAPP_DELIVERY_ENABLED: 'false'
           SHILOH_STAFF_BROWSER_SESSION_CALENDAR_BRIDGE_ENABLED: 'false'
           SHILOH_CALENDAR_READONLY_UX_ENABLED: 'false'
-          SHILOH_STAFF_BROWSER_PILOT_MODE_ENABLED: 'false'
-          SHILOH_STAFF_BROWSER_PILOT_ADMIN_IDS: ''
-        run: node --test tests/staff-calendar-pilot-gate.test.js
+        run: node --test tests/calendar-pilot-authority-retirement-p0.test.js
       - name: Run provider-independent auth and real browser-cookie tests
         run: node --test tests/provider-independent-staff-auth.test.js
-      - name: Run focused emergency Christel Calendar bootstrap security tests
-        run: node --test tests/emergency-christel-calendar-bootstrap.test.js
       - name: Run focused WS-10 service-scoped Calendar authority tests
         run: node --test tests/calendar-service-scoped-booking-authority.test.js tests/calendar-service-scope-matrix.test.js
       - name: Run focused capability-driven Calendar roster authority tests
         run: node --test tests/calendar-staff-roster-booking-authority-p1.test.js tests/calendar-operational-mutations-p0.test.js
-      - name: Run focused emergency Christel Calendar booking acceptance tests
-        run: node --test tests/emergency-christel-calendar-booking-acceptance.test.js
+      - name: Run focused Calendar booking acceptance tests
+        run: node --test tests/calendar-create-booking-acceptance.test.js
       - name: Run focused Calendar new-client booking acceptance tests
         run: node --test tests/calendar-new-client-booking-acceptance.test.js
       - name: Run focused Calendar Clean CRM V2 cutover tests
@@ -82,8 +74,6 @@ jobs:
           SHILOH_STAFF_BROWSER_AUTH_WHATSAPP_DELIVERY_ENABLED: 'false'
           SHILOH_STAFF_BROWSER_SESSION_CALENDAR_BRIDGE_ENABLED: 'false'
           SHILOH_CALENDAR_READONLY_UX_ENABLED: 'false'
-          SHILOH_STAFF_BROWSER_PILOT_MODE_ENABLED: 'false'
-          SHILOH_STAFF_BROWSER_PILOT_ADMIN_IDS: ''
         run: npm test
       - name: Run authenticated Calendar mutation browser proof
         run: node scripts/calendar-operational-mutations-browser-proof.js

@@ -2,7 +2,6 @@ const crypto = require('crypto');
 const OTPAuth = require('otpauth');
 const QRCode = require('qrcode');
 const { normalizeWhatsapp, sha256, issueStaffBrowserSession } = require('./staffBrowserSession');
-const { isAdminAllowedByPilot } = require('./staffBrowserPilotGate');
 
 const FEATURE_FLAG = 'SHILOH_STAFF_TOTP_AUTH_ENABLED';
 const PILOT_IDS_FLAG = 'SHILOH_STAFF_TOTP_PILOT_ADMIN_IDS';
@@ -294,26 +293,6 @@ function createProviderIndependentStaffAuthService({
     return currentPolicy.operational && admin && currentPolicy.pilotIds.has(Number(admin.id));
   }
 
-  async function browserPilotCompatible(client, {
-    admin,
-    authMethod,
-    requestFingerprintHash = null,
-  } = {}) {
-    if (admin && isAdminAllowedByPilot(admin.id, env)) return true;
-    await audit(client, {
-      eventType: 'pilot_authority_mismatch',
-      subjectAdminId: admin?.id || null,
-      authMethod,
-      reason: 'staff_browser_pilot_rejected',
-      requestFingerprintHash,
-      metadata: {
-        oneTimeCredentialConsumed: false,
-        staffBrowserSessionIssued: false,
-      },
-    });
-    return false;
-  }
-
   async function loadSourceRate(client, fingerprint) {
     const result = await client.query(
       `SELECT window_started_at, failed_attempt_count, locked_until
@@ -469,10 +448,6 @@ function createProviderIndependentStaffAuthService({
         await client.query('COMMIT');
         return { ok: false, code: failed.rateLimited ? 'STAFF_AUTH_RATE_LIMITED' : 'STAFF_AUTH_INVALID' };
       }
-      if (!await browserPilotCompatible(client, { admin, authMethod: 'totp', requestFingerprintHash: fingerprint })) {
-        await client.query('COMMIT');
-        return { ok: false, code: 'STAFF_AUTH_INVALID' };
-      }
       await client.query(`SELECT pg_advisory_xact_lock(hashtextextended('staff-totp-auth:' || $1::text, 0))`, [admin.id]);
       const credentialResult = await client.query(
         `SELECT * FROM staff_totp_credentials WHERE admin_id = $1 FOR UPDATE`,
@@ -560,10 +535,6 @@ function createProviderIndependentStaffAuthService({
         await audit(client, { eventType: 'recovery_verification_failed', authMethod: 'recovery_code', requestFingerprintHash: fingerprint });
         await client.query('COMMIT');
         return { ok: false, code: failed.rateLimited ? 'STAFF_AUTH_RATE_LIMITED' : 'STAFF_AUTH_INVALID' };
-      }
-      if (!await browserPilotCompatible(client, { admin, authMethod: 'recovery_code', requestFingerprintHash: fingerprint })) {
-        await client.query('COMMIT');
-        return { ok: false, code: 'STAFF_AUTH_INVALID' };
       }
       await client.query(`SELECT pg_advisory_xact_lock(hashtextextended('staff-totp-auth:' || $1::text, 0))`, [admin.id]);
       const credentialResult = await client.query(`SELECT * FROM staff_totp_credentials WHERE admin_id = $1 FOR UPDATE`, [admin.id]);
@@ -928,10 +899,6 @@ function createProviderIndependentStaffAuthService({
       await client.query('BEGIN');
       const admin = await resolveAdmin(client, { adminId, forUpdate: true });
       if (!allowed(admin, currentPolicy)) { await client.query('ROLLBACK'); return { ok: false, code: 'STAFF_BREAK_GLASS_FORBIDDEN' }; }
-      if (!await browserPilotCompatible(client, { admin, authMethod: 'break_glass' })) {
-        await client.query('COMMIT');
-        return { ok: false, code: 'STAFF_BREAK_GLASS_FORBIDDEN' };
-      }
       const expiresAt = new Date(current.getTime() + BREAK_GLASS_TTL_MS);
       const token = randomBytes(32).toString('base64url');
       await client.query(`SELECT pg_advisory_xact_lock(hashtextextended('staff-break-glass:' || $1::text, 0))`, [admin.id]);
@@ -994,10 +961,6 @@ function createProviderIndependentStaffAuthService({
       const admin = await resolveAdmin(client, { adminId: bootstrap.admin_id, forUpdate: true });
       if (!allowed(admin, currentPolicy)) {
         await client.query(`UPDATE staff_auth_break_glass_bootstraps SET revoked_at = $2 WHERE id = $1`, [bootstrap.id, current]);
-        await client.query('COMMIT');
-        return { ok: false, code: 'STAFF_BREAK_GLASS_INVALID' };
-      }
-      if (!await browserPilotCompatible(client, { admin, authMethod: 'break_glass', requestFingerprintHash: fingerprint })) {
         await client.query('COMMIT');
         return { ok: false, code: 'STAFF_BREAK_GLASS_INVALID' };
       }

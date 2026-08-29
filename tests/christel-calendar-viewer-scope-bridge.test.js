@@ -3,9 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const {
-  createEmergencyCalendarBootstrapService,
-} = require('../src/services/emergencyCalendarBootstrap');
+const { deriveCalendarViewer } = require('../src/services/staffBrowserSession');
 const {
   createCalendarReadOnlyUxService,
   normalizeViewerForTimeline,
@@ -14,19 +12,13 @@ const {
   resolveViewerFilter,
 } = require('../src/services/schedulingEngine');
 const {
-  isAdminAllowedByPilot,
-} = require('../src/services/staffBrowserPilotGate');
-const {
   CALENDAR_VIEWER_CONTEXT,
   createCalendarReadOnlyHandler,
 } = require('../src/routes/calendarReadOnlyUx');
 
 const productionShapeEnv = {
-  SHILOH_EMERGENCY_CHRISTEL_CALENDAR_BOOKING_ENABLED: 'true',
   SHILOH_CALENDAR_READONLY_UX_ENABLED: 'true',
   SHILOH_STAFF_BROWSER_SESSION_CALENDAR_BRIDGE_ENABLED: 'true',
-  SHILOH_STAFF_BROWSER_PILOT_MODE_ENABLED: 'true',
-  SHILOH_STAFF_BROWSER_PILOT_ADMIN_IDS: '2',
   SHILOH_CALENDAR_PUBLIC_ORIGIN: 'https://shiloh.example.test',
 };
 
@@ -44,38 +36,6 @@ function authorityRow(overrides = {}) {
     staff_status: 'active',
     client_bookable: true,
     ...overrides,
-  };
-}
-
-function deterministicRandom() {
-  let n = 1;
-  return (size) => {
-    const value = Buffer.alloc(size, n);
-    n += 1;
-    return value;
-  };
-}
-
-function scriptedClient(responses = []) {
-  const calls = [];
-  return {
-    calls,
-    async query(sql, params = []) {
-      calls.push({ sql: String(sql), params });
-      const next = responses.shift();
-      if (next instanceof Error) throw next;
-      return next || { rows: [], rowCount: 0 };
-    },
-    release() {},
-  };
-}
-
-function scriptedDb(transaction = []) {
-  const client = scriptedClient(transaction);
-  return {
-    txCalls: client.calls,
-    async query() { throw new Error('unexpected direct query'); },
-    async connect() { return client; },
   };
 }
 
@@ -141,28 +101,9 @@ test('1 Christel all-business browser-session scope translates explicitly to Sch
   );
 });
 
-test('2 emergency bootstrap exchange viewer crosses the adapter and Calendar read-only returns 200', async () => {
-  const rawBootstrap = Buffer.alloc(32, 9).toString('base64url');
-  const db = scriptedDb([
-    { rows: [] },
-    { rows: [{ id: 71, admin_id: 2, expires_at: '2026-08-25T04:32:00Z', consumed_at: null, revoked_at: null }], rowCount: 1 },
-    { rows: [] },
-    { rows: [authorityRow()], rowCount: 1 },
-    { rows: [], rowCount: 1 },
-    { rows: [], rowCount: 0 },
-    { rows: [], rowCount: 1 },
-    { rows: [{ id: 19 }], rowCount: 1 },
-    { rows: [] },
-  ]);
-  const bootstrapService = createEmergencyCalendarBootstrapService({
-    db,
-    env: productionShapeEnv,
-    now: () => new Date('2026-08-25T04:31:00Z'),
-    randomBytes: deterministicRandom(),
-  });
-  const exchanged = await bootstrapService.exchange({ token: rawBootstrap, requestFingerprintHash: 'a'.repeat(64) });
-  assert.equal(exchanged.ok, true);
-  assert.deepEqual(exchanged.viewer, { calendarScope: 'business_all_staff' });
+test('2 canonical authenticated viewer crosses the adapter and Calendar read-only returns 200', async () => {
+  const viewer = deriveCalendarViewer(authorityRow());
+  assert.deepEqual(viewer, { calendarScope: 'business_all_staff' });
 
   const timelineCalls = [];
   const calendarUx = createCalendarReadOnlyUxService({
@@ -177,13 +118,13 @@ test('2 emergency bootstrap exchange viewer crosses the adapter and Calendar rea
     renderPage: () => '<main><div class="access-controls"></div><p>Calendar</p></main>',
     bookingService: {
       async resolveOperator(adminId) {
-        assert.equal(adminId, exchanged.adminId);
+        assert.equal(adminId, 2);
         return { id: adminId };
       },
     },
   });
   const res = fakeResponse();
-  await handler(authenticatedRequest(exchanged.viewer, exchanged.adminId), res, () => {});
+  await handler(authenticatedRequest(viewer, 2), res, () => {});
 
   assert.equal(res.statusCode, 200);
   assert.equal(timelineCalls.length, 1);
@@ -229,13 +170,7 @@ test('5 SchedulingTimeline itself still rejects raw browser-only scopes; the ada
   );
 });
 
-test('6 production-shaped pilot remains unchanged by WS-10 booking write authority', () => {
-  assert.equal(isAdminAllowedByPilot(2, productionShapeEnv), true);
-  assert.equal(isAdminAllowedByPilot(3, productionShapeEnv), false);
-  assert.equal(isAdminAllowedByPilot(99, productionShapeEnv), false);
-});
-
-test('7 Create Booking presentation follows canonical booking authority, not whole-Calendar visibility or a hard-coded Admin ID', async () => {
+test('6 Create Booking presentation follows canonical booking authority, not whole-Calendar visibility or a hard-coded Admin ID', async () => {
   const buildModel = async () => ({ dateKey: '2026-08-25' });
   const renderPage = () => '<main><div class="access-controls"></div><p>Calendar</p></main>';
   const authorityCalls = [];
@@ -272,7 +207,7 @@ test('7 Create Booking presentation follows canonical booking authority, not who
   assert.deepEqual(authorityCalls, [2, 3, 99]);
 });
 
-test('8 repair does not broaden SchedulingTimeline or create a second appointment-write path', () => {
+test('7 repair does not broaden SchedulingTimeline or create a second appointment-write path', () => {
   const schedulingSource = fs.readFileSync(path.join(__dirname, '../src/services/schedulingEngine.js'), 'utf8');
   const calendarBookingSource = fs.readFileSync(path.join(__dirname, '../src/services/calendarCreateBooking.js'), 'utf8');
   const calendarRouteSource = fs.readFileSync(path.join(__dirname, '../src/routes/calendarReadOnlyUx.js'), 'utf8');
