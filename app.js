@@ -59,7 +59,6 @@ const { startAppointmentLifecycleScheduler } = require("./src/services/appointme
 const { startCustomerCareScheduler } = require("./src/services/customerCare");
 const { startBookingIntegrityScheduler } = require("./src/services/bookingIntegrityMonitor");
 const { ensureDemoClientPermissions } = require("./src/services/demoClientAccessBootstrap");
-const { ensureJeanPierreAdminCapabilities } = require("./src/services/jeanPierreAdminAccessBootstrap");
 const { ensureJuvanBookingApprovalPolicy } = require("./src/services/juvanBookingApprovalPolicy");
 const { ensureChristelMediHeelOwnership } = require("./src/services/pedicureOwnershipBootstrap");
 const { ensureMassagePackageSchema } = require("./src/services/massagePackageBootstrap");
@@ -142,7 +141,6 @@ const PORT = process.env.PORT || 3000; let server;
 async function start() {
   const packageSchema = await ensureMassagePackageSchema(); logger.info(packageSchema, "Massage package schema verified");
   const demoAccess = await ensureDemoClientPermissions(); logger.info(demoAccess, "Controlled demo client production UI disabled");
-  const jeanPierreAccess = await ensureJeanPierreAdminCapabilities(); if (!jeanPierreAccess) throw new Error('Jean-Pierre business admin capability clone could not be initialized'); logger.info({ configured: true, businessRole: jeanPierreAccess.business_role }, "Jean-Pierre business admin access verified");
   try { const calendarAccess = await runCalendarAccessDiagnostic(); logger.info(calendarAccess, "Sanitized Calendar staff access diagnostic"); } catch (error) { logger.warn({ err: error }, "Sanitized Calendar staff access diagnostic failed"); }
   const juvanApprovalPolicy = await ensureJuvanBookingApprovalPolicy(); logger.info(juvanApprovalPolicy, "Juvan Botha JP booking approval policy verified");
   const mediHeelOwnership = await ensureChristelMediHeelOwnership(); logger.info(mediHeelOwnership, "Christel MediHeel ownership verified");

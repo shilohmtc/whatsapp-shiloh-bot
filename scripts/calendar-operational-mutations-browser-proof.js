@@ -19,6 +19,11 @@ const {
 const { createCalendarReadOnlyRouter } = require('../src/routes/calendarReadOnlyUx');
 const { createCalendarOperationalMutationRouter } = require('../src/routes/calendarOperationalMutations');
 const { staticMutationCapability, OPERATIONS } = require('../src/services/calendarOperationalMutations');
+const {
+  CALENDAR_CAPABILITIES,
+  evaluateCalendarAuthority,
+  hasCapability,
+} = require('../src/services/calendarAuthorization');
 const { sha256 } = require('../src/services/staffBrowserSession');
 
 const DATE = '2026-09-03';
@@ -51,7 +56,17 @@ function admin(overrides = {}) {
     display_name: 'Christel',
     business_role: 'owner',
     calendar_scope: 'all_business',
-    service_scope: 'own_services',
+    service_scope: 'all_services',
+    permissions: {
+      [CALENDAR_CAPABILITIES.VIEW]: true,
+      [CALENDAR_CAPABILITIES.BOOKING_CREATE]: true,
+      [CALENDAR_CAPABILITIES.CLIENT_LOOKUP]: true,
+      [CALENDAR_CAPABILITIES.BOOKING_RESCHEDULE]: true,
+      [CALENDAR_CAPABILITIES.BOOKING_CANCEL]: true,
+      [CALENDAR_CAPABILITIES.BOOKING_REASSIGN]: true,
+      [CALENDAR_CAPABILITIES.SCHEDULE_MANAGE]: true,
+    },
+    allowedServiceIds: null,
     admin_active: true,
     staff_status: 'active',
     ...overrides,
@@ -60,10 +75,31 @@ function admin(overrides = {}) {
 
 const ADMINS = Object.freeze({
   christel: admin(),
-  abigail: admin({ id: 72, staff_id: 2, display_name: 'Abigail', business_role: 'employee_practitioner' }),
-  marietjie: admin({ id: 73, staff_id: 3, display_name: 'Marietjie', business_role: 'tenant_practitioner' }),
-  jp: admin({ id: 74, staff_id: null, staff_status: null, display_name: 'Jean-Pierre', business_role: 'business_admin', service_scope: 'all_services' }),
-  ineligible: admin({ id: 75, staff_id: 4, display_name: 'Unrelated Operator', business_role: 'employee_practitioner' }),
+  abigail: admin({
+    id: 72, staff_id: 2, display_name: 'Abigail', business_role: 'employee_practitioner',
+    calendar_scope: 'own_appointments', service_scope: 'own_services', allowedServiceIds: [901],
+    permissions: { [CALENDAR_CAPABILITIES.VIEW]: true, [CALENDAR_CAPABILITIES.CLIENT_LOOKUP]: true },
+  }),
+  marietjie: admin({
+    id: 73, staff_id: 3, display_name: 'Marietjie', business_role: 'tenant_practitioner',
+    calendar_scope: 'own_services', service_scope: 'own_services', allowedServiceIds: [901],
+  }),
+  jp: admin({ id: 74, staff_id: null, staff_status: null, display_name: 'Jean-Pierre', business_role: 'business_admin' }),
+  naomi: admin({
+    id: 75, staff_id: null, staff_status: null, display_name: 'Naomi', business_role: 'booking_operator',
+    permissions: {
+      [CALENDAR_CAPABILITIES.VIEW]: true,
+      [CALENDAR_CAPABILITIES.BOOKING_CREATE]: true,
+      [CALENDAR_CAPABILITIES.CLIENT_LOOKUP]: true,
+      [CALENDAR_CAPABILITIES.BOOKING_RESCHEDULE]: true,
+      [CALENDAR_CAPABILITIES.BOOKING_CANCEL]: true,
+      [CALENDAR_CAPABILITIES.BOOKING_REASSIGN]: true,
+    },
+  }),
+  ineligible: admin({
+    id: 76, staff_id: 4, display_name: 'Unrelated Operator', business_role: 'employee_practitioner',
+    calendar_scope: 'own_appointments', service_scope: 'own_services', allowedServiceIds: [901], permissions: {},
+  }),
 });
 
 function dayModel() {
@@ -71,6 +107,7 @@ function dayModel() {
     kind: 'appointment', canonical: true, id: 7001, revision: REVISION,
     startsAt: '2026-09-03T06:00:00.000Z', endsAt: '2026-09-03T06:45:00.000Z', status: 'scheduled',
     clientName: 'Synthetic Client', serviceName: 'Synthetic Treatment', staffIds: [1],
+    serviceContexts: [{ serviceId: 901, serviceName: 'Synthetic Treatment' }],
   };
   const block = {
     kind: 'calendar_block', canonical: true, id: 7101, revision: REVISION,
@@ -152,7 +189,7 @@ function createFixture() {
   }
   function resolvedOperator(adminId) {
     const row = operatorFor(adminId);
-    const capability = staticMutationCapability(row || {});
+    const capability = staticMutationCapability(row || {}, { allowedServiceIds: row?.allowedServiceIds || [] });
     if (!row || !capability) {
       const error = new Error('Current canonical staff authority does not permit Calendar operations.');
       error.code = 'CALENDAR_OPERATION_FORBIDDEN';
@@ -160,28 +197,51 @@ function createFixture() {
     }
     return { ...row, mutationCapability: capability };
   }
+  function resolvedBookingOperator(adminId) {
+    const row = operatorFor(adminId);
+    const authority = evaluateCalendarAuthority(row || {}, { allowedServiceIds: row?.allowedServiceIds || [] });
+    if (
+      !row
+      || !authority
+      || !hasCapability(authority, CALENDAR_CAPABILITIES.BOOKING_CREATE)
+      || !hasCapability(authority, CALENDAR_CAPABILITIES.CLIENT_LOOKUP)
+    ) {
+      const error = new Error('Current canonical staff authority does not permit Calendar booking.');
+      error.code = 'CALENDAR_BOOKING_FORBIDDEN';
+      throw error;
+    }
+    return { ...row, calendarAuthority: authority };
+  }
   function record(type, payload) {
     const entry = { type, ...payload };
     state.operations.push(entry);
     return entry;
   }
+  function authorizedRecord(type, operation, payload) {
+    const operator = resolvedOperator(payload.adminId);
+    if (!operator.mutationCapability.operations.includes(operation)) {
+      const error = new Error('Current canonical staff authority does not permit this Calendar operation.');
+      error.code = 'CALENDAR_OPERATION_FORBIDDEN';
+      throw error;
+    }
+    return record(type, payload);
+  }
   const mutationService = {
     async resolveOperator(adminId) { return resolvedOperator(adminId); },
     async getScheduleState(adminId, payload) {
-      resolvedOperator(adminId);
-      record('schedule-read', { adminId, ...payload });
+      authorizedRecord('schedule-read', 'working_schedule:manage', { adminId, ...payload });
       return { mode: 'window', revision: opaque('schedule-revision'), windows: [{ startsLocal: '08:00', endsLocal: '17:00' }] };
     },
-    async reschedule(payload) { record('reschedule', payload); return { status: 'rescheduled', appointmentId: Number(payload.appointmentId) }; },
-    async reassign(payload) { record('reassign', payload); return { status: 'reassigned', appointmentId: Number(payload.appointmentId) }; },
-    async cancel(payload) { record('cancel', payload); return { status: 'cancelled', appointmentId: Number(payload.appointmentId) }; },
-    async createBlock(payload) { record('block-create', payload); return { status: 'created', blockId: 7301 }; },
-    async editBlock(payload) { record('block-edit', payload); return { status: 'updated', blockId: Number(payload.blockId) }; },
-    async removeBlock(payload) { record('block-remove', payload); return { status: 'removed', blockId: Number(payload.blockId) }; },
-    async createLeave(payload) { record('leave-create', payload); return { status: 'created', leaveId: 7401 }; },
-    async editLeave(payload) { record('leave-edit', payload); return { status: 'updated', leaveId: Number(payload.leaveId) }; },
-    async removeLeave(payload) { record('leave-remove', payload); return { status: 'removed', leaveId: Number(payload.leaveId) }; },
-    async setWorkingSchedule(payload) { record('schedule-write', payload); return { status: 'updated', mode: payload.mode }; },
+    async reschedule(payload) { authorizedRecord('reschedule', 'appointment:reschedule', payload); return { status: 'rescheduled', appointmentId: Number(payload.appointmentId) }; },
+    async reassign(payload) { authorizedRecord('reassign', 'appointment:reassign', payload); return { status: 'reassigned', appointmentId: Number(payload.appointmentId) }; },
+    async cancel(payload) { authorizedRecord('cancel', 'appointment:cancel', payload); return { status: 'cancelled', appointmentId: Number(payload.appointmentId) }; },
+    async createBlock(payload) { authorizedRecord('block-create', 'calendar_block:manage', payload); return { status: 'created', blockId: 7301 }; },
+    async editBlock(payload) { authorizedRecord('block-edit', 'calendar_block:manage', payload); return { status: 'updated', blockId: Number(payload.blockId) }; },
+    async removeBlock(payload) { authorizedRecord('block-remove', 'calendar_block:manage', payload); return { status: 'removed', blockId: Number(payload.blockId) }; },
+    async createLeave(payload) { authorizedRecord('leave-create', 'operational_leave:manage', payload); return { status: 'created', leaveId: 7401 }; },
+    async editLeave(payload) { authorizedRecord('leave-edit', 'operational_leave:manage', payload); return { status: 'updated', leaveId: Number(payload.leaveId) }; },
+    async removeLeave(payload) { authorizedRecord('leave-remove', 'operational_leave:manage', payload); return { status: 'removed', leaveId: Number(payload.leaveId) }; },
+    async setWorkingSchedule(payload) { authorizedRecord('schedule-write', 'working_schedule:manage', payload); return { status: 'updated', mode: payload.mode }; },
   };
 
   const app = express();
@@ -213,7 +273,7 @@ function createFixture() {
       env,
       mutationService,
       bookingService: {
-        async resolveOperator(adminId) { return resolvedOperator(adminId); },
+        async resolveOperator(adminId) { return resolvedBookingOperator(adminId); },
       },
       async buildModel({ viewer }) {
         const adminId = Number(viewer.operatorAdminId);
@@ -398,8 +458,11 @@ async function main() {
 
     const screenshots = [];
     const operatorProof = [];
-    for (const [identity, expectedName] of [
-      ['christel', 'Christel'], ['abigail', 'Abigail'], ['marietjie', 'Marietjie'], ['jp', 'Jean-Pierre'],
+    for (const [identity, expectedName, expectedOperations, minimumControls] of [
+      ['christel', 'Christel', OPERATIONS, 8],
+      ['marietjie', 'Marietjie', OPERATIONS, 4],
+      ['naomi', 'Naomi', OPERATIONS.slice(0, 3), 1],
+      ['jp', 'Jean-Pierre', OPERATIONS, 8],
     ]) {
       await navigate(identity);
       const page = await evaluate(cdp, `({
@@ -411,14 +474,14 @@ async function main() {
         hasApprovedLeaveControl:document.querySelector('[data-leave-id="7202"]')!==null
       })`);
       assert.equal(page.readOnly, 'false');
-      assert.ok(page.controls >= 8, `${expectedName} must see the full canonical operation set`);
+      assert.ok(page.controls >= minimumControls, `${expectedName} must see the intended scoped operation set`);
       assert.equal(page.draggable, 1);
       assert.equal(page.hasGoogle, false);
       assert.equal(page.hasCreateBooking, true);
       assert.equal(page.hasApprovedLeaveControl, false);
       const capability = await evaluate(cdp, `(async()=>{const r=await fetch('/calendar/operations/capability',{cache:'no-store'});return{status:r.status,body:await r.json()};})()`);
       assert.equal(capability.status, 200);
-      assert.deepEqual(capability.body.capability.operations, OPERATIONS);
+      assert.deepEqual(capability.body.capability.operations, expectedOperations);
       const cookies = (await cdp.send('Network.getAllCookies')).cookies;
       const sessionCookie = cookies.find((cookie) => cookie.name === '__Host-shiloh_staff_session');
       assert.ok(sessionCookie);
@@ -435,7 +498,7 @@ async function main() {
         sessionCookie: { httpOnly: true, secure: true, sameSite: 'Strict', path: '/' },
       });
     }
-    assert.equal(new Set(operatorProof.map((item) => item.controls)).size, 1, 'eligible identities must receive the same bounded control surface');
+    assert.ok(operatorProof.find((item) => item.identity === 'Naomi').controls < operatorProof.find((item) => item.identity === 'Christel').controls);
 
     await navigate('christel');
     await operation('[data-calendar-operation="manage-appointment"]', [
@@ -525,7 +588,7 @@ async function main() {
     screenshots.push({ identity: 'jp-mobile', ...(await snapshot('jp-mobile')) });
     await cdp.send('Emulation.clearDeviceMetricsOverride');
 
-    await navigate('ineligible');
+    await navigate('abigail');
     const closed = await evaluate(cdp, `({
       controls:document.querySelectorAll('[data-calendar-operation]').length,
       draggable:document.querySelectorAll('[draggable="true"]').length,
@@ -536,7 +599,27 @@ async function main() {
     assert.deepEqual(closed, { controls: 0, draggable: 0, readOnly: 'true', operationsScript: false, hasCreateBooking: false });
     const denied = await evaluate(cdp, `(async()=>{const r=await fetch('/calendar/operations/capability',{cache:'no-store'});return{status:r.status,body:await r.json()};})()`);
     assert.equal(denied.status, 403);
-    screenshots.push({ identity: 'ineligible', ...(await snapshot('ineligible')) });
+    const beforeCraftedDenial = state.operations.length;
+    const craftedDenial = await evaluate(cdp, `(async()=>{
+      const tokenResponse=await fetch('/calendar/staff-auth/csrf',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:'{}'});
+      const token=(await tokenResponse.json()).csrfToken;
+      const response=await fetch('/calendar/operations/appointments/7001/reschedule',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','x-shiloh-csrf-token':token},body:JSON.stringify({expectedRevision:${js(REVISION)},startsAt:'2026-09-04T08:00:00.000Z',requestId:'abigail_crafted_denial_1'})});
+      return{status:response.status,body:await response.json()};
+    })()`);
+    assert.equal(craftedDenial.status, 403);
+    assert.equal(state.operations.length, beforeCraftedDenial);
+    screenshots.push({ identity: 'abigail-denied', ...(await snapshot('abigail-denied')) });
+
+    await navigate('ineligible');
+    const unrelatedClosed = await evaluate(cdp, `({
+      controls:document.querySelectorAll('[data-calendar-operation]').length,
+      draggable:document.querySelectorAll('[draggable="true"]').length,
+      readOnly:document.body.dataset.calendarReadonly,
+      operationsScript:[...document.scripts].some(s=>s.src.includes('/calendar/operations/client.js')),
+      hasCreateBooking:[...document.querySelectorAll('a')].some(a=>a.textContent.trim()==='Create booking')
+    })`);
+    assert.deepEqual(unrelatedClosed, closed);
+    screenshots.push({ identity: 'unrelated-denied', ...(await snapshot('unrelated-denied')) });
 
     assert.deepEqual(dialogErrors, []);
     assert.deepEqual(exceptions, []);
@@ -565,7 +648,10 @@ async function main() {
       exactHead: checkedOutHead,
       environment: 'ephemeral HTTPS + synthetic fixtures + system Chromium',
       operators: operatorProof,
-      ineligible: { adminId: 75, result: 'fail-closed', ...closed },
+      denied: [
+        { identity: 'Abigail', adminId: 72, result: 'fail-closed', craftedEndpointStatus: craftedDenial.status, ...closed },
+        { identity: 'Unrelated Operator', adminId: 76, result: 'fail-closed', ...unrelatedClosed },
+      ],
       cancellation: { deliberateConfirmationObserved: dialogs.some((item) => item.type === 'confirm' && item.message.includes('exact current revision')), declinedSubmissionCount: 0 },
       actorAuthority: { suppliedAdminId: 75, effectiveAdminId: effectiveImpersonationActor, source: 'authenticated HttpOnly session' },
       reschedule: { manualAndDragDropPath: 'POST /calendar/operations/appointments/7001/reschedule', sharedPathCount: reschedulePaths.length },
@@ -577,7 +663,7 @@ async function main() {
       screenshots,
     };
     fs.writeFileSync(path.join(OUT_DIR, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
-    console.log(`Authenticated Calendar mutation browser proof PASS: ${operatorProof.length} eligible + 1 ineligible; ${screenshots.length} screenshots`);
+    console.log(`Authenticated Calendar mutation browser proof PASS: ${operatorProof.length} eligible + 2 fail-closed; ${screenshots.length} screenshots`);
     console.log(`Covered endpoints: ${endpointProof.join(', ')}`);
   } finally {
     if (cdp) cdp.close();

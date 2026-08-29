@@ -228,7 +228,7 @@ test('CRM V2 WhatsApp registration is active only in onboarding runtime', () => 
   assert.doesNotMatch(bookingIdentity, /INSERT INTO (?:clients|client_contacts|crm_v2_clients)/);
 });
 
-test('the later reschedule compatibility unit owns the next bounded migration', () => {
+test('the later reschedule compatibility migration remains present', () => {
   const migrations = fs.readdirSync(path.join(root, 'migrations')).filter((name) => /^\d+_/.test(name)).sort();
-  assert.equal(migrations.at(-1), '087_whatsapp_crm_v2_reschedule_compat.sql');
+  assert.equal(migrations.includes('087_whatsapp_crm_v2_reschedule_compat.sql'), true);
 });

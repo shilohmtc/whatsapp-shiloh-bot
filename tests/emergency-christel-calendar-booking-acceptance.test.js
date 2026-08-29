@@ -29,7 +29,7 @@ function authorityRow(overrides = {}) {
     business_role: 'owner',
     calendar_scope: 'all_business',
     service_scope: 'all_services',
-    permissions: { 'appointment:create': true, 'client:lookup': true },
+    permissions: { 'appointment:view': true, 'appointment:create': true, 'client:lookup': true },
     admin_active: true,
     staff_status: 'active',
     client_bookable: true,
@@ -146,7 +146,7 @@ test('12 booking routes stay private and mutating operations retain same-origin,
   assert.doesNotMatch(calendarRouteSource, /ADMIN_API_KEY|publicBooking|allowAnonymous/);
 });
 
-test('13 Calendar Create Booking rejects authenticated admins outside the frozen #505 principal matrix', async () => {
+test('13 Calendar Create Booking accepts any canonically configured principal without a source-name matrix', async () => {
   const db = scriptedDb(async (call) => {
     if (call.sql.includes('FROM staff_admin_accounts a')) {
       return { rows: [authorityRow({ id: 99, display_name: 'Other Admin' })], rowCount: 1 };
@@ -154,11 +154,11 @@ test('13 Calendar Create Booking rejects authenticated admins outside the frozen
     return { rows: [], rowCount: 0 };
   });
   const service = createCalendarCreateBookingService({ db, env: enabledEnv });
-  await assert.rejects(
-    service.listBookableOptions(99),
-    (error) => error?.code === 'CALENDAR_BOOKING_FORBIDDEN'
-  );
-  assert.equal(db.calls.length, 1);
+  const result = await service.listBookableOptions(99);
+  assert.deepEqual(result.staff, []);
+  assert.deepEqual(result.services, []);
+  assert.equal(result.authority.operatorAdminId, 99);
+  assert.equal(db.calls.length, 2);
   assert.match(db.calls[0].sql, /FROM staff_admin_accounts a/);
 });
 
@@ -188,7 +188,7 @@ test('14 current canonical Christel authority is revalidated on every booking op
   assert.equal(authorityChecks, 2);
 });
 
-test('15 bookable options remain active/client-bookable and are bounded by Christel canonical service relationships', async () => {
+test('15 internal bookable options require active staff/service mappings and do not reuse client self-service policy', async () => {
   let optionsSql = '';
   let optionsParams = null;
   const db = authorityDb(async (call) => {
@@ -204,13 +204,11 @@ test('15 bookable options remain active/client-bookable and are bounded by Chris
   assert.deepEqual(result.staff.map((row) => row.displayName).sort(), ['Abigail', 'Christel']);
   assert.match(optionsSql, /JOIN staff_services ss/);
   assert.match(optionsSql, /st\.status = 'active'/);
-  assert.match(optionsSql, /st\.client_bookable = TRUE/);
+  assert.doesNotMatch(optionsSql, /client_bookable/);
   assert.match(optionsSql, /sv\.status = 'active'/);
-  assert.match(optionsSql, /FROM staff_services authority_ss/);
-  assert.match(optionsSql, /authority_ss\.service_id = sv\.id/);
-  assert.match(optionsSql, /authority_ss\.staff_id = ANY\(\$1::bigint\[\]\)/);
+  assert.doesNotMatch(optionsSql, /authority_ss/);
   assert.doesNotMatch(optionsSql, /LOWER\(st\.display_name\) IN/);
-  assert.deepEqual(optionsParams, [[9]]);
+  assert.deepEqual(optionsParams, []);
 });
 
 test('16 client search delegates to CRM V2 with a bounded normalized query', async () => {
@@ -297,13 +295,11 @@ test('21 exact active staff-service eligibility and operator service authority a
   assert.match(selectionSql, /st\.id = \$1/);
   assert.match(selectionSql, /sv\.id = \$2/);
   assert.match(selectionSql, /st\.status = 'active'/);
-  assert.match(selectionSql, /st\.client_bookable = TRUE/);
+  assert.doesNotMatch(selectionSql, /client_bookable/);
   assert.match(selectionSql, /sv\.status = 'active'/);
-  assert.match(selectionSql, /FROM staff_services authority_ss/);
-  assert.match(selectionSql, /authority_ss\.service_id = sv\.id/);
-  assert.match(selectionSql, /authority_ss\.staff_id = ANY\(\$3::bigint\[\]\)/);
+  assert.doesNotMatch(selectionSql, /authority_ss/);
   assert.doesNotMatch(selectionSql, /LOWER\(st\.display_name\) IN/);
-  assert.deepEqual(selectionParams, [9, 44, [9]]);
+  assert.deepEqual(selectionParams, [9, 44]);
 });
 
 test('22 Calendar prepare delegates exact client, provider, service and local slot to the canonical Admin booking engine', async () => {

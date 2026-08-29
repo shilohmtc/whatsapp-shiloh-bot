@@ -79,31 +79,42 @@ test('session token and challenge helpers are high-entropy-shaped and hashed', (
 
 test('calendar viewer authority is derived only from current canonical server authority', () => {
   assert.deepEqual(sessionModule.deriveCalendarViewer({
+    id: 41,
     admin_active: true,
     business_role: 'manager',
     calendar_scope: 'all_business',
     service_scope: 'all_services',
+    permissions: { 'appointment:view': true },
   }), { calendarScope: 'business_all_staff' });
 
   assert.deepEqual(sessionModule.deriveCalendarViewer({
+    id: 42,
     admin_active: true,
     business_role: 'manager',
     calendar_scope: 'own',
+    service_scope: 'own_services',
+    permissions: { 'appointment:view': true },
     staff_id: 44,
     staff_status: 'active',
   }), { calendarScope: 'own_staff', staffId: 44 });
 
   assert.equal(sessionModule.deriveCalendarViewer({
+    id: 43,
     admin_active: true,
     business_role: 'manager',
     calendar_scope: 'own',
+    service_scope: 'own_services',
+    permissions: { 'appointment:view': true },
     staff_id: null,
     staff_status: null,
   }), null);
   assert.equal(sessionModule.deriveCalendarViewer({
+    id: 44,
     admin_active: true,
     business_role: 'manager',
     calendar_scope: 'own',
+    service_scope: 'own_services',
+    permissions: { 'appointment:view': true },
     staff_id: 44,
     staff_status: 'inactive',
   }), null);
@@ -207,7 +218,7 @@ test('successful challenge verification consumes challenge, revokes prior sessio
       business_role: 'manager',
       calendar_scope: 'all_business',
       service_scope: 'all_services',
-      permissions: {},
+      permissions: { 'appointment:view': true },
       admin_active: true,
       staff_status: 'active',
     }], rowCount: 1 },
