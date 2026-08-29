@@ -11,6 +11,7 @@ const { isEmergencyCalendarBookingEnabled } = require('./emergencyCalendarBootst
 const GOVERNED_PRACTITIONERS = new Set(['christel', 'abigail', 'marietjie']);
 const JP_UNION_PRINCIPALS = Object.freeze(['christel', 'abigail']);
 const BOOKING_BOUND_BUSINESS_ROLES = new Set(['employee_practitioner', 'tenant_practitioner']);
+const BOOKING_TIME_INCREMENT_MINUTES = 5;
 
 function bookingError(code, message) {
   const error = new Error(message);
@@ -45,6 +46,12 @@ function localDateTimeFromInputs(date, time) {
   const probe = new Date(Date.UTC(year, month - 1, day, 12));
   if (probe.getUTCFullYear() !== year || probe.getUTCMonth() + 1 !== month || probe.getUTCDate() !== day) {
     throw bookingError('CALENDAR_BOOKING_INVALID_SLOT', 'Choose a valid date and start time.');
+  }
+  if (Number(timeMatch[2]) % BOOKING_TIME_INCREMENT_MINUTES !== 0) {
+    throw bookingError(
+      'CALENDAR_BOOKING_INVALID_TIME_INCREMENT',
+      'Choose a start time in 5-minute increments, for example 09:00.'
+    );
   }
   return `${String(day).padStart(2, '0')}/${String(month).padStart(2, '0')}/${year} ${timeMatch[1]}:${timeMatch[2]}`;
 }
@@ -448,6 +455,7 @@ module.exports = {
   GOVERNED_PRACTITIONERS,
   JP_UNION_PRINCIPALS,
   BOOKING_BOUND_BUSINESS_ROLES,
+  BOOKING_TIME_INCREMENT_MINUTES,
   createCalendarCreateBookingService,
   localDateTimeFromInputs,
   serializeClient,

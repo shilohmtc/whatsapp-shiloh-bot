@@ -73,6 +73,8 @@ jobs:
         run: node --test tests/calendar-clean-crm-v2-cutover-p0.test.js
       - name: Run focused Calendar service-family visual tests
         run: node --test tests/calendar-service-category-visual-identifiers-p2.test.js
+      - name: Run focused Calendar mobile time-entry tests
+        run: node --test tests/calendar-mobile-booking-time-entry-p1.test.js
       - name: Run non-mutating regression tests
         env:
           SHILOH_STAFF_BROWSER_AUTH_WHATSAPP_DELIVERY_ENABLED: 'false'
