@@ -21,7 +21,7 @@ const {
 } = require("./whatsappCrmV2IdentityCompat");
 const { registerWhatsAppClient } = require("./crmV2ClientService");
 
-const AUTHORITY_VERSION = "verified_client_v2_archive_reclaim";
+const AUTHORITY_VERSION = "verified_client_v3_crm_v2_fresh_registration";
 const whatsappCrmV2IdentityCompat = createWhatsAppCrmV2IdentityCompatService();
 
 function normalizePhone(value = "") { return String(value).replace(/[^0-9]/g, ""); }
@@ -270,8 +270,8 @@ async function completeLegacyOnboarding(phone, session) {
     let reactivatedFromStatus = null;
 
     // Lock exact-phone ownership before writing any canonical identity data. This
-    // makes the archived reclaim path fail closed and leaves status/data unchanged
-    // on rollback if another client owns the phone.
+    // keeps the retained verified legacy path fail closed if another client owns
+    // the phone before the registration completion commits.
     const contacts = await db.query(`SELECT id,client_id,contact_type FROM client_contacts WHERE normalized_value=$1 AND contact_type IN ('whatsapp','mobile') ORDER BY CASE WHEN contact_type='whatsapp' THEN 0 ELSE 1 END,id FOR UPDATE`, [key]);
 
     const lockedClient = await db.query(`SELECT id,source,status FROM clients WHERE id=$1 FOR UPDATE`, [clientId]);
@@ -447,17 +447,29 @@ async function processActiveSession(phone, text, session) {
 }
 
 function manualReviewIdentity(identity) {
-  return ["ambiguous", "manual_review", "historical_unverified"].includes(identity?.status);
+  return ["ambiguous", "manual_review"].includes(identity?.status);
+}
+
+function verifiedLegacyClient(identity) {
+  return identity?.status === "verified_client" && identity.client?.id ? identity.client : null;
 }
 
 async function resetSessionForCurrentAuthority(phone, identity, existingSession) {
   if (manualReviewIdentity(identity)) return null;
-  if (existingSession.client_id && (!identity.client || String(identity.client.id) !== String(existingSession.client_id))) return null;
-  if (identity.status === "verified_client") {
-    return saveSession(phone, { authorityVersion: AUTHORITY_VERSION });
+  const verifiedClient = verifiedLegacyClient(identity);
+  if (verifiedClient) {
+    if (existingSession.client_id && String(verifiedClient.id) !== String(existingSession.client_id)) return null;
+    return saveSession(phone, {
+      clientId: verifiedClient.id,
+      crmV2ClientId: null,
+      identityModel: IDENTITY_MODELS.LEGACY,
+      authorityVersion: AUTHORITY_VERSION,
+    });
   }
   return saveSession(phone, {
-    clientId: identity.client?.id || existingSession.client_id || null,
+    clientId: null,
+    crmV2ClientId: null,
+    identityModel: null,
     state: "collect_name",
     pendingName: null,
     pendingContact: normalizePhone(phone),
@@ -536,8 +548,9 @@ async function processClientIdentityMessage(phone, text) {
   }
 
   // A retained verified legacy identity remains legacy even when its profile is
-  // incomplete. For every other unresolved legacy candidate, canonical CRM V2
-  // exact-mobile ownership takes precedence and is never coerced into client_id.
+  // incomplete. Every unverified historical/imported/provisional match is only
+  // discovery evidence: canonical CRM V2 exact-mobile ownership takes precedence,
+  // otherwise the sender starts a fresh CRM V2 registration with no legacy bind.
   if (identity.status !== "verified_client") {
     const crmV2Authority = await whatsappCrmV2IdentityCompat.resolveCrmV2ByExactMobile(phone);
     if (crmV2Authority.status === "conflict") {
@@ -584,9 +597,11 @@ async function processClientIdentityMessage(phone, text) {
     };
   }
 
-  const known = identity.client || null;
+  const known = verifiedLegacyClient(identity);
   const session = await saveSession(phone, {
     clientId: known?.id || null,
+    crmV2ClientId: null,
+    identityModel: known ? IDENTITY_MODELS.LEGACY : null,
     state: "collect_name",
     pendingName: null,
     pendingContact: normalizePhone(phone),
@@ -601,11 +616,11 @@ async function processClientIdentityMessage(phone, text) {
     return processActiveSession(phone, text, session);
   }
 
-  if (identity.status === "claim_required") {
-    return { handled: true, identityStatus: "claim_required", client: known, reply: `${PREMIUM_GREETING}\n\nThis number matches one imported Shiloh contact, but imported contact details are not identity proof. Please complete registration afresh so I can safely link this WhatsApp number.\n\n${REGISTRATION_START_PROMPT}` };
+  if (["claim_required", "provisional", "unverified_client", "historical_unverified"].includes(identity.status)) {
+    return { handled: true, identityStatus: "registration_required", client: null, reply: `${PREMIUM_GREETING}\n\n${REGISTRATION_START_PROMPT}` };
   }
-  if (identity.status === "provisional" || identity.status === "unverified_client" || identity.status === "verified_client") {
-    return { handled: true, identityStatus: identity.status === "verified_client" ? "verified_incomplete" : "registration_required", client: known, reply: `${PREMIUM_GREETING}\n\nI need to complete your Shiloh client registration before I can treat this number as booking-ready.\n\n${REGISTRATION_START_PROMPT}` };
+  if (identity.status === "verified_client") {
+    return { handled: true, identityStatus: "verified_incomplete", client: known, reply: `${PREMIUM_GREETING}\n\nI need to complete your Shiloh client registration before I can treat this number as booking-ready.\n\n${REGISTRATION_START_PROMPT}` };
   }
   return { handled: true, identityStatus: "unknown", reply: `${PREMIUM_GREETING}\n\n${REGISTRATION_START_PROMPT}` };
 }
@@ -624,6 +639,8 @@ module.exports = {
   profileComplete,
   completeCrmV2Onboarding,
   processClientIdentityMessage,
+  manualReviewIdentity,
+  verifiedLegacyClient,
   PREMIUM_GREETING,
   REGISTRATION_START_PROMPT,
   HUMAN_VERIFICATION_REPLY,
