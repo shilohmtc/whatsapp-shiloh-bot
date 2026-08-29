@@ -1,5 +1,5 @@
 const { pool } = require('../db/pool');
-const { applyMigrationFile } = require('./migrations');
+const { verifyMigrationFiles } = require('./migrations');
 const {
   DEMO_KEY,
   POLICY_KEY,
@@ -15,11 +15,19 @@ const REBIND_AMBIGUITY_FIX_MIGRATION = '072_client_onboarding_controlled_demo_ph
 const EXPECTED_APPROVER_NAME = 'Jean-Pierre';
 
 async function ensureJuvanBookingApprovalPolicy() {
-  const baseMigration = await applyMigrationFile(BASE_MIGRATION);
-  const identityMigration = await applyMigrationFile(IDENTITY_MIGRATION);
-  const rebindMigration = await applyMigrationFile(REBIND_MIGRATION);
-  const primaryBackupMigration = await applyMigrationFile(PRIMARY_BACKUP_MIGRATION);
-  const rebindAmbiguityFixMigration = await applyMigrationFile(REBIND_AMBIGUITY_FIX_MIGRATION);
+  const [
+    baseMigration,
+    identityMigration,
+    rebindMigration,
+    primaryBackupMigration,
+    rebindAmbiguityFixMigration,
+  ] = await verifyMigrationFiles([
+    BASE_MIGRATION,
+    IDENTITY_MIGRATION,
+    REBIND_MIGRATION,
+    PRIMARY_BACKUP_MIGRATION,
+    REBIND_AMBIGUITY_FIX_MIGRATION,
+  ]);
 
   const result = await pool.query(`
     SELECT d.demo_key,
@@ -79,11 +87,11 @@ async function ensureJuvanBookingApprovalPolicy() {
   return {
     initialized: true,
     migrations: [
-      { filename: BASE_MIGRATION, applied: baseMigration.applied === true, checksumVerified: baseMigration.checksumVerified === true },
-      { filename: IDENTITY_MIGRATION, applied: identityMigration.applied === true, checksumVerified: identityMigration.checksumVerified === true },
-      { filename: REBIND_MIGRATION, applied: rebindMigration.applied === true, checksumVerified: rebindMigration.checksumVerified === true },
-      { filename: PRIMARY_BACKUP_MIGRATION, applied: primaryBackupMigration.applied === true, checksumVerified: primaryBackupMigration.checksumVerified === true },
-      { filename: REBIND_AMBIGUITY_FIX_MIGRATION, applied: rebindAmbiguityFixMigration.applied === true, checksumVerified: rebindAmbiguityFixMigration.checksumVerified === true },
+      { filename: BASE_MIGRATION, applied: false, checksumVerified: baseMigration.checksumMatches === true },
+      { filename: IDENTITY_MIGRATION, applied: false, checksumVerified: identityMigration.checksumMatches === true },
+      { filename: REBIND_MIGRATION, applied: false, checksumVerified: rebindMigration.checksumMatches === true },
+      { filename: PRIMARY_BACKUP_MIGRATION, applied: false, checksumVerified: primaryBackupMigration.checksumMatches === true },
+      { filename: REBIND_AMBIGUITY_FIX_MIGRATION, applied: false, checksumVerified: rebindAmbiguityFixMigration.checksumMatches === true },
     ],
     demoKey: DEMO_KEY,
     bindingState: state.status,

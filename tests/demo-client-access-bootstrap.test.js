@@ -17,11 +17,11 @@ test('production bootstrap revokes Demo Client permission from all active admin 
   assert.doesNotMatch(sql[0],/\|\| '\{"demo:client":true\}'/);
 });
 
-test('new production instance disables Demo Client UI before opening the HTTP listener',()=>{
-  const bootstrap=appSource.indexOf('await ensureDemoClientPermissions()');
+test('ordinary production startup does not repair Demo Client permissions',()=>{
+  const authority=appSource.indexOf('await verifyMigrationState()');
   const listen=appSource.indexOf('server = app.listen');
-  assert.ok(bootstrap>=0 && listen>=0 && bootstrap<listen);
-  assert.match(appSource,/Controlled demo client production UI disabled/);
+  assert.ok(authority>=0 && listen>authority);
+  assert.doesNotMatch(appSource,/ensureDemoClientPermissions/);
   assert.match(appSource,/startMandatoryDemoCleanupScheduler\(\)/);
   assert.match(appSource,/Shiloh failed during startup/);
 });

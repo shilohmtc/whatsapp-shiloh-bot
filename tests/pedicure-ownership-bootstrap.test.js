@@ -30,9 +30,9 @@ test('ownership repair fails closed instead of guessing Christel identity', () =
   assert.match(bootstrap, /throw new Error/);
 });
 
-test('production startup applies idempotent Christel MediHeel ownership repair before listening', () => {
-  assert.match(app, /ensureChristelMediHeelOwnership/);
-  const ensure = app.indexOf('await ensureChristelMediHeelOwnership()');
+test('ordinary startup does not apply the historical Christel ownership repair', () => {
+  assert.doesNotMatch(app, /ensureChristelMediHeelOwnership/);
+  const ensure = app.indexOf('await verifyMigrationState()');
   const listen = app.indexOf('app.listen');
   assert.ok(ensure >= 0 && listen >= 0 && ensure < listen);
 });

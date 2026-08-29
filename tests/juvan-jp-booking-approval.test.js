@@ -142,15 +142,17 @@ test('existing Dummy Test historical compatibility and ordinary practitioner obs
   assert.match(approval, /controlledJuvan \? specialPolicy\.approverStaffId : \(specialPolicy \? null : Number\(staffId\)\)/);
 });
 
-test('startup applies Primary Backup migration after controlled identity rebind and before listening', () => {
+test('Juvan compatibility path verifies ordered migrations without becoming startup authority', () => {
   assert.match(bootstrap, /065_juvan_botha_jp_booking_approval\.sql/);
   assert.match(bootstrap, /066_controlled_juvan_demo_identity\.sql/);
   assert.match(bootstrap, /067_controlled_juvan_registration_rebind\.sql/);
   assert.match(bootstrap, /068_juvan_primary_backup_booking_approval\.sql/);
   assert.match(bootstrap, /resolveCurrentControlledDemoClient/);
   assert.match(bootstrap, /approvalContract: 'assigned_practitioner_primary_jean_pierre_backup_first_decision_wins'/);
-  const verifyCall = app.indexOf('await ensureJuvanBookingApprovalPolicy()');
+  assert.match(bootstrap, /verifyMigrationFiles\(\[/);
+  assert.doesNotMatch(bootstrap, /applyMigrationFile/);
+  const verifyCall = app.indexOf('await verifyMigrationState()');
   const listenCall = app.indexOf('server = app.listen');
-  assert.ok(verifyCall >= 0, 'startup must verify controlled Juvan identity');
-  assert.ok(listenCall > verifyCall, 'verification must complete before the HTTP listener opens');
+  assert.ok(verifyCall >= 0 && listenCall > verifyCall, 'global migration verification must complete before the HTTP listener opens');
+  assert.doesNotMatch(app, /ensureJuvanBookingApprovalPolicy/);
 });

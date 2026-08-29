@@ -160,9 +160,11 @@ test('migration leaves clinic envelope, appointments, CRM V2, providers and exis
 
 test('migration runner applies the roster unit atomically and rolls the entire file back on failure', () => {
   const runner = read('scripts/migrate.js');
-  assert.match(runner, /await client\.query\("BEGIN"\)/);
-  assert.match(runner, /if \(sql\.trim\(\)\) await client\.query\(sql\)/);
-  assert.match(runner, /await client\.query\("COMMIT"\)/);
-  assert.match(runner, /await client\.query\("ROLLBACK"\)/);
-  assert.ok(runner.indexOf('await client.query("ROLLBACK")') > runner.indexOf('if (sql.trim()) await client.query(sql)'));
+  const authority = read('src/services/migrations.js');
+  assert.match(runner, /applyPendingMigrations/);
+  assert.match(authority, /await client\.query\('BEGIN'\)/);
+  assert.match(authority, /if \(sql\.trim\(\)\) await client\.query\(sql\)/);
+  assert.match(authority, /await client\.query\('COMMIT'\)/);
+  assert.match(authority, /await client\.query\('ROLLBACK'\)/);
+  assert.ok(authority.lastIndexOf("await client.query('ROLLBACK')") > authority.indexOf('if (sql.trim()) await client.query(sql)'));
 });

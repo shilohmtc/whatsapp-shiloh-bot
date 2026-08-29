@@ -259,14 +259,15 @@ test('forward migration 074 remains unchanged in role and has no trust backfill 
   assert.doesNotMatch(migration, /UPDATE\s+clients\s+SET/i);
 });
 
-test('production start verifies migration 074 before later Wave A publication and app startup', () => {
+test('production start uses one global read-only migration verifier before app startup', () => {
   const pkg = JSON.parse(source('package.json'));
   const start = pkg.scripts.start;
-  const identity = start.indexOf('node scripts/ensure-client-identity-verification.js');
-  const waveA = start.indexOf('node scripts/ensure-goldie-wave-a-publication.js');
+  const identity = start.indexOf('node scripts/verify-migrations.js');
   const app = start.lastIndexOf(' app.js');
-  assert.ok(identity === 0 && waveA > identity && app > waveA);
+  assert.ok(identity === 0 && app > identity);
+  assert.doesNotMatch(start, /ensure-client-identity-verification|ensure-goldie-wave-a-publication/);
   const bootstrap = source('scripts/ensure-client-identity-verification.js');
   assert.match(bootstrap, /074_client_identity_verification_authority\.sql/);
   assert.match(bootstrap, /checksumVerified/);
+  assert.match(bootstrap, /verifyMigrationFile/);
 });

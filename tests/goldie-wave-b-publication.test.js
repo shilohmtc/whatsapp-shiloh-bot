@@ -159,14 +159,14 @@ test('generic migration execution cannot bypass PR #447 guarded bootstrap', () =
   assert.match(bootstrap, /SET LOCAL shiloh\.goldie_wave_b_authority = 'PR447'/);
 });
 
-test('production start verifies Wave A then Wave B before app startup', () => {
+test('Wave B guard is verification-only and global authority gates app startup', () => {
   assert.match(ensureScript, /goldie_wave_b_publication_verified/);
   assert.match(ensureScript, /goldie_wave_b_publication_failed/);
-  assert.match(ensureScript, /retainedInactiveUnmappedTargetCount/);
+  assert.match(ensureScript, /verifyMigrationFile/);
+  assert.doesNotMatch(ensureScript, /ensureGoldieWaveBPublication/);
   const start = packageJson.scripts.start;
-  const identity = start.indexOf('node scripts/ensure-client-identity-verification.js');
-  const waveA = start.indexOf('node scripts/ensure-goldie-wave-a-publication.js');
-  const waveB = start.indexOf('node scripts/ensure-goldie-wave-b-publication.js');
+  const authority = start.indexOf('node scripts/verify-migrations.js');
   const app = start.lastIndexOf(' app.js');
-  assert.ok(identity >= 0 && waveA > identity && waveB > waveA && app > waveB);
+  assert.ok(authority === 0 && app > authority);
+  assert.doesNotMatch(start, /ensure-goldie-wave-[ab]-publication/);
 });

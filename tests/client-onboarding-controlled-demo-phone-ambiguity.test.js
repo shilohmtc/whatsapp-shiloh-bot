@@ -37,14 +37,15 @@ test('ordinary onboarding still owns canonical contact creation and duplicate co
   assert.doesNotMatch(onboarding, /controlled_demo_identities/);
 });
 
-test('startup applies the forward repair after the historical controlled identity migrations', () => {
+test('compatibility verifier checks the forward repair after the historical controlled identity migrations', () => {
   assert.match(bootstrap, /REBIND_AMBIGUITY_FIX_MIGRATION = '072_client_onboarding_controlled_demo_phone_ambiguity\.sql'/);
-  assert.match(bootstrap, /applyMigrationFile\(REBIND_AMBIGUITY_FIX_MIGRATION\)/);
+  assert.match(bootstrap, /verifyMigrationFiles\(\[/);
   assert.match(bootstrap, /filename: REBIND_AMBIGUITY_FIX_MIGRATION/);
 
-  const oldRebind = bootstrap.indexOf('applyMigrationFile(REBIND_MIGRATION)');
-  const primaryBackup = bootstrap.indexOf('applyMigrationFile(PRIMARY_BACKUP_MIGRATION)');
-  const repair = bootstrap.indexOf('applyMigrationFile(REBIND_AMBIGUITY_FIX_MIGRATION)');
+  const oldRebind = bootstrap.indexOf('REBIND_MIGRATION,', bootstrap.indexOf('verifyMigrationFiles(['));
+  const primaryBackup = bootstrap.indexOf('PRIMARY_BACKUP_MIGRATION,', oldRebind);
+  const repair = bootstrap.indexOf('REBIND_AMBIGUITY_FIX_MIGRATION,', primaryBackup);
   assert.ok(oldRebind >= 0 && primaryBackup > oldRebind && repair > primaryBackup,
-    'repair must be applied after the already-authoritative controlled identity migrations');
+    'repair must be verified after the already-authoritative controlled identity migrations');
+  assert.doesNotMatch(bootstrap, /applyMigrationFile/);
 });

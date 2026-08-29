@@ -46,10 +46,10 @@ test('application payload order and deterministic quick-reply payload contract m
   assert.deepEqual(declinedDefinition.components[1].buttons.map((button) => button.text), ['Choose another time']);
 });
 
-test('targeted startup provisioning is explicit-only and wired without enabling rescheduling', () => {
+test('targeted provider provisioning remains explicit and is detached from ordinary startup', () => {
   assert.match(bootstrap, /META_RESCHEDULE_APPROVAL_TEMPLATES_PROVISION_ON_START/);
   assert.match(bootstrap, /toLowerCase\(\) === 'true'/);
-  assert.match(pkg, /clientRescheduleApprovalTemplateProvisioningBootstrap\.js/);
+  assert.doesNotMatch(pkg, /clientRescheduleApprovalTemplateProvisioningBootstrap\.js/);
   assert.doesNotMatch(bootstrap, /WHATSAPP_RESCHEDULE_APPROVAL_ENABLED\s*=/);
 });
 

@@ -598,6 +598,7 @@ test('migration 083 is expand-only for old-artifact compatibility and preserves 
   assert.doesNotMatch(migration, /ALTER COLUMN client_id SET NOT NULL/);
   assert.doesNotMatch(service, /ALTER COLUMN client_id SET NOT NULL/);
   assert.doesNotMatch(service, /client_id BIGINT NOT NULL REFERENCES clients\(id\)/);
-  assert.match(service, /client_id BIGINT REFERENCES clients\(id\)/);
+  assert.match(service, /verifyMigrationFiles/);
+  assert.doesNotMatch(service.slice(service.indexOf('async function ensureDeliveryTable'), service.indexOf('async function loadBookingConfirmationAuthority')), /\b(?:CREATE|ALTER|UPDATE|INSERT|DELETE)\b/);
   assert.doesNotMatch(migration, /staff_totp|staff_auth|emergency_calendar_bootstrap/i);
 });

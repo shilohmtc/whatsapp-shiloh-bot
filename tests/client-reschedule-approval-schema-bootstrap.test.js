@@ -9,7 +9,7 @@ const schema = fs.readFileSync(path.join(root, 'src', 'services', 'clientResched
 const patch = fs.readFileSync(path.join(root, 'src', 'bootstrap', 'clientRescheduleApprovalPatch.js'), 'utf8');
 
 test('migration service supports one exact checksum-guarded migration without applying unrelated pending files', () => {
-  assert.match(migrations, /async function applyMigrationFile\(filename\)/);
+  assert.match(migrations, /async function applyMigrationFile\(filename, \{ db = pool \} = \{\}\)/);
   assert.match(migrations, /Unknown migration file/);
   assert.match(migrations, /Migration \$\{safeFilename\} has changed after being applied/);
   assert.match(migrations, /INSERT INTO schema_migrations/);
@@ -19,8 +19,8 @@ test('migration service supports one exact checksum-guarded migration without ap
 test('reschedule schema bootstrap preserves migration 064 and verifies the bounded 087 identity expansion', () => {
   assert.match(schema, /064_client_reschedule_practitioner_approval\.sql/);
   assert.match(schema, /087_whatsapp_crm_v2_reschedule_compat\.sql/);
-  assert.match(schema, /applyMigrationFile\(BASE_MIGRATION\)/);
-  assert.match(schema, /applyMigrationFile\(MIGRATION\)/);
+  assert.match(schema, /verifyMigrationFiles\(\[BASE_MIGRATION, MIGRATION\]\)/);
+  assert.doesNotMatch(schema, /applyMigrationFile/);
   assert.match(schema, /to_regclass\('public\.appointment_reschedule_requests'\)/);
   assert.match(schema, /uq_appointment_reschedule_requests_pending_appointment/);
   assert.match(schema, /idx_appointment_reschedule_requests_pending_staff/);

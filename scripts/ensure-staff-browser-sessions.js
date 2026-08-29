@@ -1,21 +1,17 @@
 require('dotenv').config();
 const { pool } = require('../src/db/pool');
-const { applyMigrationFile, getMigrationStatus } = require('../src/services/migrations');
+const { verifyMigrationFile } = require('../src/services/migrations');
 
 const FILENAME = '078_staff_browser_sessions.sql';
 
 async function main() {
-  const applied = await applyMigrationFile(FILENAME);
-  const status = (await getMigrationStatus()).find((item) => item.filename === FILENAME);
-  if (!status?.applied || status.checksumMatches !== true) {
-    throw new Error(`Staff browser session migration failed verification: ${FILENAME}`);
-  }
+  const status = await verifyMigrationFile(FILENAME);
   console.log(JSON.stringify({
     event: 'staff_browser_session_schema_verified',
     filename: FILENAME,
-    appliedNow: applied.applied,
-    checksumVerified: applied.checksumVerified === true && status.checksumMatches === true,
-    appliedAt: status.appliedAt || applied.appliedAt || null,
+    appliedNow: false,
+    checksumVerified: status.checksumMatches === true,
+    appliedAt: status.appliedAt || null,
   }));
 }
 

@@ -75,7 +75,7 @@ test('public and Admin booking surfaces remain canonical active-and-eligible vie
   assert.match(bootstrap, /Distinct 120-minute Sports Massage service #34 is not publicly bookable/);
 });
 
-test('production startup applies and verifies the checksum-tracked correction before accepting traffic', () => {
+test('checksum-tracked correction remains available but is not an ordinary startup authority', () => {
   assert.match(bootstrap, /MIGRATION_FILENAME = '062_christel_service_catalogue_correction\.sql'/);
   assert.match(bootstrap, /CREATE TABLE IF NOT EXISTS schema_migrations/);
   assert.match(bootstrap, /SELECT checksum, applied_at FROM schema_migrations WHERE filename = \$1 FOR UPDATE/);
@@ -84,11 +84,8 @@ test('production startup applies and verifies the checksum-tracked correction be
   assert.match(bootstrap, /await client\.query\('COMMIT'\)/);
   assert.match(bootstrap, /await client\.query\('ROLLBACK'\)/);
 
-  const packageBootstrap = app.indexOf('await ensureMassagePackageSchema()');
-  const ownershipBootstrap = app.indexOf('await ensureChristelMediHeelOwnership()');
-  const correctionBootstrap = app.indexOf('await ensureChristelServiceCatalogueCorrection()');
+  const authority = app.indexOf('await verifyMigrationState()');
   const listener = app.indexOf('server = app.listen');
-  assert.ok(packageBootstrap >= 0 && ownershipBootstrap > packageBootstrap);
-  assert.ok(correctionBootstrap > ownershipBootstrap && listener > correctionBootstrap);
-  assert.match(app, /Christel service catalogue correction verified/);
+  assert.ok(authority >= 0 && listener > authority);
+  assert.doesNotMatch(app, /ensureChristelServiceCatalogueCorrection|ensureChristelMediHeelOwnership|ensureMassagePackageSchema/);
 });

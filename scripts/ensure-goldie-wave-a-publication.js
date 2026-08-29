@@ -1,25 +1,19 @@
 require('dotenv').config();
 const { pool } = require('../src/db/pool');
+const { verifyMigrationFile } = require('../src/services/migrations');
 const {
   MIGRATION_FILENAME,
   SOURCE_EXPORT_SHA256,
-  ensureGoldieWaveAPublication,
 } = require('../src/services/goldieWaveAPublicationBootstrap');
 
 async function main() {
-  const result = await ensureGoldieWaveAPublication();
+  const result = await verifyMigrationFile(MIGRATION_FILENAME);
   console.log(JSON.stringify({
     event: 'goldie_wave_a_publication_verified',
     filename: MIGRATION_FILENAME,
     sourceExportSha256: SOURCE_EXPORT_SHA256,
-    appliedNow: result.applied === true,
-    checksumVerified: result.checksumVerified === true,
-    targetCount: result.targetCount,
-    exactDescriptionCount: result.exactDescriptionCount,
-    activePublicCatalogueTargetCount: result.activePublicCatalogueTargetCount,
-    retainedInactiveTargetCount: result.retainedInactiveTargetCount,
-    mappingsPreserved: result.mappingsPreserved === true,
-    nonTargetDescriptionsPreserved: result.nonTargetDescriptionsPreserved === true,
+    appliedNow: false,
+    checksumVerified: result.checksumMatches === true,
     appliedAt: result.appliedAt || null,
   }));
 }

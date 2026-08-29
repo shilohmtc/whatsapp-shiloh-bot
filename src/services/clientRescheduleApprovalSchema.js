@@ -1,5 +1,5 @@
 const { pool } = require('../db/pool');
-const { applyMigrationFile } = require('./migrations');
+const { verifyMigrationFiles } = require('./migrations');
 
 const BASE_MIGRATION = '064_client_reschedule_practitioner_approval.sql';
 const MIGRATION = '087_whatsapp_crm_v2_reschedule_compat.sql';
@@ -8,8 +8,7 @@ const DECLINED_TEMPLATE = 'shiloh_reschedule_declined_v1';
 let schemaReady = null;
 
 async function initializeClientRescheduleApprovalSchema() {
-  await applyMigrationFile(BASE_MIGRATION);
-  const migration = await applyMigrationFile(MIGRATION);
+  const [, migration] = await verifyMigrationFiles([BASE_MIGRATION, MIGRATION]);
   const verification = await pool.query(`
     SELECT to_regclass('public.appointment_reschedule_requests') AS request_table,
            EXISTS (
@@ -74,8 +73,8 @@ async function initializeClientRescheduleApprovalSchema() {
   return {
     initialized: true,
     migration: MIGRATION,
-    applied: migration.applied === true,
-    checksumVerified: migration.checksumVerified === true,
+    applied: false,
+    checksumVerified: migration.checksumMatches === true,
     appliedAt: migration.appliedAt || null,
     requestTable: String(row.request_table),
     pendingUniqueIndex: row.pending_unique_index === true,

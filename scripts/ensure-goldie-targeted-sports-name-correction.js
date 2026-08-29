@@ -1,22 +1,17 @@
 require('dotenv').config();
 const { pool } = require('../src/db/pool');
+const { verifyMigrationFile } = require('../src/services/migrations');
 const {
   MIGRATION_FILENAME,
-  ensureGoldieTargetedSportsNameCorrection,
 } = require('../src/services/goldieTargetedSportsNameCorrectionBootstrap');
 
 async function main() {
-  const result = await ensureGoldieTargetedSportsNameCorrection();
+  const result = await verifyMigrationFile(MIGRATION_FILENAME);
   console.log(JSON.stringify({
     event: 'goldie_targeted_sports_name_correction_verified',
     filename: MIGRATION_FILENAME,
-    appliedNow: result.applied === true,
-    checksumVerified: result.checksumVerified === true,
-    externalId: result.externalId,
-    targetName: result.targetName,
-    descriptionPreserved: result.descriptionPreserved === true,
-    mappingsPreserved: result.mappingsPreserved === true,
-    nonTargetNamesPreserved: result.nonTargetNamesPreserved === true,
+    appliedNow: false,
+    checksumVerified: result.checksumMatches === true,
     appliedAt: result.appliedAt || null,
   }));
 }

@@ -33,12 +33,12 @@ test('startup patch runs the Abigail correction after the established Christel c
   assert.match(patch, /Abigail Jaw Release mapping verified/);
 });
 
-test('production and dev preload the Jaw Release verification patch', () => {
+test('production and dev do not attach the mutating Jaw Release patch to ordinary startup', () => {
   for (const scriptName of ['start', 'dev']) {
     const script = pkg.scripts[scriptName];
     const adminUxIndex = script.indexOf('./src/bootstrap/adminUxStandardizationPatch.js');
-    const jawIndex = script.indexOf('./src/bootstrap/abigailJawReleaseMappingPatch.js');
     assert.ok(adminUxIndex >= 0, `${scriptName} must retain Admin UX standardization preload`);
-    assert.ok(jawIndex > adminUxIndex, `${scriptName} must preload Jaw Release verification after Admin UX standardization`);
+    assert.doesNotMatch(script, /abigailJawReleaseMappingPatch/);
+    assert.match(script, /scripts\/verify-migrations\.js/);
   }
 });

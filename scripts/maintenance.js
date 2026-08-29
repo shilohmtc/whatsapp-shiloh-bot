@@ -7,11 +7,6 @@ const logger = require('../src/lib/logger');
 const startupTestRequest = require('../config/shiloh-test-request.json');
 
 const COMMANDS = {
-  'db-migrate': {
-    mutates: true,
-    description: 'Apply pending database migrations.',
-    run: async () => require('../src/services/migrations').applyPendingMigrations(),
-  },
   'jean-pierre-identity-repair': {
     mutates: true,
     description: 'Run the guarded Jean-Pierre identity repair.',

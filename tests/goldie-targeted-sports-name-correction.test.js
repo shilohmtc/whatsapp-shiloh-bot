@@ -51,11 +51,13 @@ test('bootstrap is transactional and fails closed on identity or name drift', ()
   assert.match(bootstrap, /await client\.query\('ROLLBACK'\)/);
 });
 
-test('production startup verifies Wave B description publication then name correction before app startup', () => {
+test('targeted correction guard is verification-only and detached from ordinary startup', () => {
   assert.match(ensureScript, /goldie_targeted_sports_name_correction_verified/);
+  assert.match(ensureScript, /verifyMigrationFile/);
+  assert.doesNotMatch(ensureScript, /ensureGoldieTargetedSportsNameCorrection/);
   const start = pkg.scripts.start;
-  const waveB = start.indexOf('node scripts/ensure-goldie-wave-b-publication.js');
-  const correction = start.indexOf('node scripts/ensure-goldie-targeted-sports-name-correction.js');
+  const authority = start.indexOf('node scripts/verify-migrations.js');
   const app = start.lastIndexOf(' app.js');
-  assert.ok(waveB >= 0 && correction > waveB && app > correction);
+  assert.ok(authority === 0 && app > authority);
+  assert.doesNotMatch(start, /ensure-goldie-targeted-sports-name-correction/);
 });

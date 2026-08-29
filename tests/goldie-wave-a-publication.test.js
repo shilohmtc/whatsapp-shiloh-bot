@@ -131,17 +131,15 @@ test('bootstrap fails closed on target drift and preserves all non-description c
   assert.match(bootstrap, /await client\.query\('ROLLBACK'\)/);
 });
 
-test('production start is gated on the exact Wave A ensure before app.js accepts traffic', () => {
+test('Wave A guard is verification-only and global authority gates app startup', () => {
   assert.match(ensureScript, /goldie_wave_a_publication_verified/);
   assert.match(ensureScript, /goldie_wave_a_publication_failed/);
-  assert.match(ensureScript, /targetCount/);
-  assert.match(ensureScript, /exactDescriptionCount/);
-  assert.match(ensureScript, /activePublicCatalogueTargetCount/);
-  assert.match(ensureScript, /retainedInactiveTargetCount/);
+  assert.match(ensureScript, /verifyMigrationFile/);
+  assert.doesNotMatch(ensureScript, /ensureGoldieWaveAPublication/);
 
   const start = packageJson.scripts.start;
-  const identity = start.indexOf('node scripts/ensure-client-identity-verification.js');
-  const waveA = start.indexOf('node scripts/ensure-goldie-wave-a-publication.js');
+  const authority = start.indexOf('node scripts/verify-migrations.js');
   const app = start.lastIndexOf(' app.js');
-  assert.ok(identity >= 0 && waveA > identity && app > waveA);
+  assert.ok(authority === 0 && app > authority);
+  assert.doesNotMatch(start, /ensure-goldie-wave-a-publication/);
 });

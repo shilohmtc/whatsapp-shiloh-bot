@@ -93,11 +93,12 @@ test('cleanup source terminalizes operational state without queuing or sending c
   assert.match(source, /noClientMessage: true/);
 });
 
-test('production startup awaits cleanup before listening and the switch remains default-off', () => {
+test('production startup leaves cleanup to its genuine runtime scheduler', () => {
   const app = fs.readFileSync(path.join(root, 'app.js'), 'utf8');
-  const cleanup = app.indexOf('await runDummyTestAppointmentCleanup()');
+  const authority = app.indexOf('await verifyMigrationState()');
   const listen = app.indexOf('app.listen(PORT');
-  assert.ok(cleanup > 0);
-  assert.ok(listen > cleanup);
+  assert.ok(authority >= 0 && listen > authority);
+  assert.doesNotMatch(app, /await runDummyTestAppointmentCleanup\(\)/);
+  assert.match(app, /startMandatoryDemoCleanupScheduler\(\)/);
   assert.doesNotMatch(app, /CRM_DUMMY_APPOINTMENT_CLEANUP_ON_START\s*=\s*['"]true/);
 });
