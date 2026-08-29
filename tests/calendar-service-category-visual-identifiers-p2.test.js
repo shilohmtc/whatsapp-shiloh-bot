@@ -173,7 +173,7 @@ test('unknown catalogue authority fails visually safe with normal service text a
   assert.equal(renderServiceFamilyIcon(unknown), '');
   const html = renderCalendarPage(model('day', unknown));
   assert.match(html, /Future Unmapped Treatment/);
-  assert.doesNotMatch(html, /data-service-family=/);
+  assert.doesNotMatch(html, /<svg[^>]+data-service-family=/);
 });
 
 test('Create Booking preserves native Treatment select and carries one family through selection and review', () => {

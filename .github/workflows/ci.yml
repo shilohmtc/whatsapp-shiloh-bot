@@ -72,7 +72,7 @@ jobs:
       - name: Run focused Calendar Clean CRM V2 cutover tests
         run: node --test tests/calendar-clean-crm-v2-cutover-p0.test.js
       - name: Run focused Calendar service-family visual tests
-        run: node --test tests/calendar-service-category-visual-identifiers-p2.test.js
+        run: node --test tests/calendar-service-category-visual-identifiers-p2.test.js tests/calendar-service-family-icon-accents-p2.test.js
       - name: Run focused Calendar mobile time-entry tests
         run: node --test tests/calendar-mobile-booking-time-entry-p1.test.js
       - name: Run non-mutating regression tests

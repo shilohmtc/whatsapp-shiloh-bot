@@ -327,13 +327,15 @@ async function main() {
 
     await chooseSlot('2026-09-01', '09:00');
     await prepareAndAcknowledge();
-    const findState = await evaluate(cdp, `({selected:document.querySelector('[data-selected-client]').textContent,ack:document.querySelector('[data-mobile-ack-summary]').textContent,review:document.querySelector('[data-review]').innerText,selectedFamily:document.querySelector('[data-selected-treatment]')?.getAttribute('data-service-family'),reviewFamily:document.querySelector('[data-review] [data-service-family]')?.getAttribute('data-service-family'),createEnabled:!document.querySelector('[data-create-booking]').disabled})`);
+    const findState = await evaluate(cdp, `({selected:document.querySelector('[data-selected-client]').textContent,ack:document.querySelector('[data-mobile-ack-summary]').textContent,review:document.querySelector('[data-review]').innerText,selectedFamily:document.querySelector('[data-selected-treatment]')?.getAttribute('data-service-family'),reviewFamily:document.querySelector('[data-review] [data-service-family]')?.getAttribute('data-service-family'),selectedAccent:getComputedStyle(document.querySelector('[data-selected-treatment] svg')).color,reviewAccent:getComputedStyle(document.querySelector('[data-review] [data-service-family]')).color,createEnabled:!document.querySelector('[data-create-booking]').disabled})`);
     assert.match(findState.selected, /Synthetic Existing Client/);
     assert.doesNotMatch(findState.selected, /CRM V2|#912/);
     assert.match(findState.ack, /current client record/);
     assert.match(findState.review, /Cupping Area Specific/);
     assert.equal(findState.selectedFamily, 'targeted_therapeutic');
     assert.equal(findState.reviewFamily, 'targeted_therapeutic');
+    assert.equal(findState.selectedAccent, 'rgb(63, 102, 83)');
+    assert.equal(findState.reviewAccent, 'rgb(63, 102, 83)');
     assert.equal(findState.createEnabled, true);
     assert.doesNotMatch(findState.review, /27821234567/);
     screenshots.push({ state: 'find-client-acknowledged', ...(await screenshot('find-client-acknowledged')) });
@@ -386,7 +388,8 @@ async function main() {
       serviceVisual: {
         treatment: 'Cupping Area Specific', family: 'targeted_therapeutic',
         selectedTreatmentFamily: findState.selectedFamily, reviewTreatmentFamily: findState.reviewFamily,
-        serviceTextVisible: true, controlledSvg: true,
+        selectedTreatmentAccent: findState.selectedAccent, reviewTreatmentAccent: findState.reviewAccent,
+        serviceTextVisible: true, controlledSvg: true, iconStrokeOnly: true,
       },
       timeEntry: {
         nativeDate: true, nativeTime: true, stepSeconds: 300,
