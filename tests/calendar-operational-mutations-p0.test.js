@@ -28,6 +28,13 @@ function adminRow(overrides = {}) {
     business_role: 'owner',
     calendar_scope: 'all_business',
     service_scope: 'own_services',
+    permissions: {
+      'appointment:view': true,
+      'calendar:booking:reschedule': true,
+      'calendar:booking:cancel': true,
+      'calendar:booking:reassign': true,
+      'schedule:manage': true,
+    },
     admin_active: true,
     staff_status: 'active',
     ...overrides,
@@ -38,13 +45,14 @@ function result(rows = []) {
   return { rows, rowCount: rows.length };
 }
 
-function fakeDatabase(handler, { replay = null } = {}) {
+function fakeDatabase(handler, { replay = null, admin = adminRow(), allowedServiceIds = [25] } = {}) {
   const calls = [];
   const query = async (text, params = []) => {
     const sql = String(text).replace(/\s+/g, ' ').trim();
     calls.push({ sql, params });
     if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') return result();
-    if (sql.includes('calendarOperational:operator')) return result([adminRow()]);
+    if (sql.includes('calendarAuthorization:principal')) return result(admin ? [admin] : []);
+    if (sql.includes('calendarAuthorization:services')) return result(allowedServiceIds.map((service_id) => ({ service_id })));
     if (sql.includes('pg_advisory_xact_lock')) return result([{}]);
     if (sql.includes('calendarOperational:idempotency')) return result(replay ? [replay] : []);
     if (sql.startsWith('INSERT INTO crm_audit_events')) return result([{ id: 900 }]);
@@ -95,6 +103,7 @@ function dayModel(capable) {
     kind: 'appointment', canonical: true, id: 592, revision: REVISION,
     startsAt: FUTURE_START, endsAt: FUTURE_END, status: 'scheduled',
     clientName: 'Client', serviceName: 'Service', staffIds: [1],
+    serviceContexts: [{ serviceId: 25, serviceName: 'Service' }],
   };
   const block = {
     kind: 'calendar_block', canonical: true, id: 31, revision: REVISION,
@@ -111,7 +120,14 @@ function dayModel(capable) {
   };
   return {
     view: 'day', dateKey: '2026-09-03', selectedStaffId: null, readOnly: true,
-    mutationCapability: capable ? { enabled: true, operations: OPERATIONS } : { enabled: false },
+    mutationCapability: capable && typeof capable === 'object' ? capable : capable ? {
+      enabled: true,
+      operations: OPERATIONS,
+      calendarScope: 'all_business',
+      serviceScope: 'all_services',
+      linkedStaffId: 1,
+      allowedServiceIds: null,
+    } : { enabled: false },
     period: { dateKeys: ['2026-09-03'], startKey: '2026-09-03', previousAnchor: '2026-09-02', nextAnchor: '2026-09-04' },
     permittedStaff: [{ id: 1, displayName: 'Christel' }],
     timeline: {
@@ -123,20 +139,68 @@ function dayModel(capable) {
   };
 }
 
-test('separate mutation capability is exact for Christel, Abigail, Marietjie and governed JP only', () => {
-  const principals = [
-    adminRow(),
-    adminRow({ id: 72, staff_id: 2, display_name: 'Abigail', business_role: 'employee_practitioner' }),
-    adminRow({ id: 73, staff_id: 3, display_name: 'Marietjie', business_role: 'tenant_practitioner' }),
-    adminRow({ id: 74, staff_id: null, staff_status: null, display_name: 'Jean-Pierre', business_role: 'business_admin', service_scope: 'all_services' }),
-  ];
-  for (const principal of principals) {
-    assert.deepEqual(staticMutationCapability(principal).operations, OPERATIONS);
-  }
-  assert.equal(staticMutationCapability(adminRow({ display_name: 'Unrelated Admin' })), null);
+test('mutation capability is data-configured, granular and fail-closed without person-name policy', () => {
+  assert.deepEqual(staticMutationCapability(adminRow({ display_name: 'Any assigned operator' }), { allowedServiceIds: [25] }).operations, OPERATIONS);
+  const bookingOnly = staticMutationCapability(adminRow({
+    display_name: 'New operator without source changes',
+    calendar_scope: 'all_business',
+    service_scope: 'all_services',
+    permissions: {
+      'calendar:booking:reschedule': true,
+      'calendar:booking:cancel': true,
+      'calendar:booking:reassign': true,
+    },
+  }));
+  assert.deepEqual(bookingOnly.operations, ['appointment:reschedule', 'appointment:cancel', 'appointment:reassign']);
+  assert.equal(staticMutationCapability(adminRow({ permissions: { 'appointment:view': true } }), { allowedServiceIds: [25] }), null);
   assert.equal(staticMutationCapability(adminRow({ admin_active: false })), null);
   assert.equal(staticMutationCapability(adminRow({ staff_status: 'inactive' })), null);
-  assert.equal(staticMutationCapability(adminRow({ display_name: 'Jean-Pierre', staff_id: null, staff_status: null, business_role: 'business_admin', calendar_scope: 'own_services', service_scope: 'all_services' })), null);
+  assert.equal(staticMutationCapability(adminRow({ staff_id: null, staff_status: null, calendar_scope: 'own_services', service_scope: 'all_services' })), null);
+});
+
+test('least-privilege booking operator cannot cross into schedule mutations', async () => {
+  const bookingOperator = adminRow({
+    staff_id: null,
+    staff_status: null,
+    business_role: 'booking_operator',
+    calendar_scope: 'all_business',
+    service_scope: 'all_services',
+    permissions: {
+      'appointment:view': true,
+      'appointment:create': true,
+      'client:lookup': true,
+      'calendar:booking:reschedule': true,
+      'calendar:booking:cancel': true,
+      'calendar:booking:reassign': true,
+    },
+  });
+  const fake = fakeDatabase(async (sql) => { throw new Error(`Unexpected SQL after denied capability: ${sql}`); }, { admin: bookingOperator });
+  const service = createCalendarOperationalMutationService({ db: fake.db, now: () => new Date('2026-08-27T00:00:00Z') });
+  await assert.rejects(service.createBlock({
+    adminId: bookingOperator.id,
+    staffId: 1,
+    startsAt: FUTURE_START,
+    endsAt: FUTURE_END,
+    title: 'Must not write',
+    requestId: 'least_privilege_block_1',
+  }), (error) => error.code === 'CALENDAR_OPERATION_FORBIDDEN');
+  assert.ok(fake.calls.some((call) => call.sql === 'ROLLBACK'));
+  assert.ok(!fake.calls.some((call) => call.sql.startsWith('INSERT INTO calendar_blocks')));
+});
+
+test('endpoint transaction rejects an appointment outside current service scope before mutation', async () => {
+  const scopedOperator = adminRow({ calendar_scope: 'own_services', service_scope: 'own_services' });
+  const fake = fakeDatabase(appointmentHandler(), { admin: scopedOperator, allowedServiceIds: [999] });
+  const service = createCalendarOperationalMutationService({ db: fake.db, now: () => new Date('2026-08-27T00:00:00Z') });
+  await assert.rejects(service.reschedule({
+    adminId: scopedOperator.id,
+    appointmentId: 592,
+    expectedRevision: REVISION,
+    startsAt: '2026-09-10T06:00:00.000Z',
+    requestId: 'scoped_reschedule_1',
+  }), (error) => error.code === 'CALENDAR_OPERATION_FORBIDDEN');
+  assert.ok(fake.calls.some((call) => call.sql === 'ROLLBACK'));
+  assert.ok(!fake.calls.some((call) => call.sql.startsWith('UPDATE appointments')));
 });
 
 test('cockpit exposes bounded canonical controls only with mutation capability', () => {
@@ -155,6 +219,22 @@ test('cockpit exposes bounded canonical controls only with mutation capability',
   assert.match(capable, /data-calendar-operation="add-leave"/);
   assert.match(capable, /data-calendar-operation="manage-schedule"/);
   assert.match(capable, /@media\(max-width:700px\)[\s\S]*min-height:44px/);
+});
+
+test('cockpit renders only data-granted operation families for a booking operator', () => {
+  const capability = {
+    enabled: true,
+    operations: ['appointment:reschedule', 'appointment:cancel', 'appointment:reassign'],
+    calendarScope: 'all_business',
+    serviceScope: 'all_services',
+    linkedStaffId: null,
+    allowedServiceIds: null,
+  };
+  const html = renderCalendarPage(dayModel(capability));
+  assert.match(html, /data-allowed-operations="appointment:reschedule,appointment:cancel,appointment:reassign"/);
+  assert.match(html, /data-calendar-operation="manage-appointment"/);
+  assert.doesNotMatch(html, /data-calendar-operation="(?:add-block|add-leave|manage-schedule|manage-block|manage-leave)"/);
+  assert.doesNotMatch(html, /data-block-id=|data-leave-id=/);
 });
 
 test('manual and drag/drop rescheduling share one client function and one endpoint', () => {
@@ -449,7 +529,7 @@ test('operator authority is re-read inside the transaction and changed/inactive 
       const sql = String(text).replace(/\s+/g, ' ').trim();
       calls.push(sql);
       if (sql === 'BEGIN' || sql === 'ROLLBACK') return result();
-      if (sql.includes('calendarOperational:operator')) return result();
+      if (sql.includes('calendarAuthorization:principal')) return result();
       throw new Error(`Unexpected SQL: ${sql}`);
     },
     release() {},
@@ -478,12 +558,12 @@ test('operational leave is distinct and implementation introduces no Google or c
   assert.match(implementation, /ROLLBACK/);
 });
 
-test('booking entitlement owner and frozen service-scope matrix remain isolated from mutation capability', () => {
+test('Create Booking and mutations share capability/scope policy without named-person authorization', () => {
   const booking = fs.readFileSync(path.join(ROOT, 'src/services/calendarCreateBooking.js'), 'utf8');
   const mutations = fs.readFileSync(path.join(ROOT, 'src/services/calendarOperationalMutations.js'), 'utf8');
-  assert.doesNotMatch(mutations, /calendarCreateBooking|GOVERNED_PRACTITIONERS|resolveBookableServices|service_scope\s*=/);
-  assert.match(booking, /function staticScopeForAdmin/);
-  assert.match(booking, /key: 'jp_christel_abigail_union'/);
-  assert.match(booking, /key: 'christel_own_services'/);
-  assert.match(booking, /key: `\$\{name\}_own_services`/);
+  const policy = fs.readFileSync(path.join(ROOT, 'src/services/calendarAuthorization.js'), 'utf8');
+  assert.match(booking, /resolveCalendarAuthority/);
+  assert.match(mutations, /resolveCalendarAuthority/);
+  assert.match(policy, /CALENDAR_CAPABILITIES/);
+  assert.doesNotMatch(`${booking}\n${mutations}\n${policy}`, /GOVERNED_PRACTITIONERS|OPERATIONAL_PRINCIPALS|JP_UNION_PRINCIPALS|jean-pierre|christel|abigail|marietjie|naomi/i);
 });

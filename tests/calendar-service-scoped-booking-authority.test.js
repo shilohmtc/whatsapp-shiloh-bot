@@ -3,13 +3,19 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const { createCalendarCreateBookingService, staticScopeForAdmin } = require('../src/services/calendarCreateBooking');
+const { createCalendarCreateBookingService } = require('../src/services/calendarCreateBooking');
+const {
+  CALENDAR_CAPABILITIES,
+  evaluateCalendarAuthority,
+  allowsBookingTarget,
+} = require('../src/services/calendarAuthorization');
 
 const enabledEnv = { SHILOH_EMERGENCY_CHRISTEL_CALENDAR_BOOKING_ENABLED: 'true' };
 const principals = {
   christel: { id: 2, staff_id: 9, display_name: 'Christel', role: 'owner', business_role: 'owner', calendar_scope: 'all_business', service_scope: 'all_services', permissions: { 'appointment:create': true, 'client:lookup': true }, admin_active: true, staff_status: 'active', client_bookable: true },
-  abigail: { id: 3, staff_id: 10, display_name: 'Abigail', role: 'practitioner', business_role: 'employee_practitioner', calendar_scope: 'all_business', service_scope: 'own_services', permissions: { 'appointment:create': true, 'client:lookup': true }, admin_active: true, staff_status: 'active', client_bookable: true },
-  marietjie: { id: 4, staff_id: 11, display_name: 'Marietjie', role: 'practitioner', business_role: 'tenant_practitioner', calendar_scope: 'all_business', service_scope: 'own_services', permissions: { 'appointment:create': true, 'client:lookup': true }, admin_active: true, staff_status: 'active', client_bookable: true },
+  abigail: { id: 3, staff_id: 10, display_name: 'Abigail', role: 'practitioner', business_role: 'employee_practitioner', calendar_scope: 'own_appointments', service_scope: 'own_services', permissions: { 'appointment:view': true, 'client:lookup': true }, admin_active: true, staff_status: 'active', client_bookable: true },
+  marietjie: { id: 4, staff_id: 11, display_name: 'Marietjie', role: 'practitioner', business_role: 'tenant_practitioner', calendar_scope: 'own_services', service_scope: 'own_services', permissions: { 'appointment:view': true, 'appointment:create': true, 'client:lookup': true }, admin_active: true, staff_status: 'active', client_bookable: true },
+  naomi: { id: 6, staff_id: null, display_name: 'Naomi', role: 'receptionist', business_role: 'booking_operator', calendar_scope: 'all_business', service_scope: 'all_services', permissions: { 'appointment:view': true, 'appointment:create': true, 'client:lookup': true }, admin_active: true, staff_status: null, client_bookable: null },
   jp: { id: 5, staff_id: null, display_name: 'Jean-Pierre', role: 'admin', business_role: 'business_admin', calendar_scope: 'all_business', service_scope: 'all_services', permissions: { 'appointment:create': true, 'client:lookup': true }, admin_active: true, staff_status: null, client_bookable: null },
 };
 
@@ -22,13 +28,10 @@ function scriptedDb(handler) {
   return { calls, async query(sql, params = []) { const call = { sql: String(sql), params }; calls.push(call); return (await handler(call)) || { rows: [], rowCount: 0 }; } };
 }
 
-function bookingDb({ admin, pending = null, selection = eligibleRow(), optionRows = null, unionRows = null } = {}) {
+function bookingDb({ admin, pending = null, selection = eligibleRow(), optionRows = null, allowedServiceIds = [44] } = {}) {
   return scriptedDb(async (call) => {
     if (call.sql.includes('FROM staff_admin_accounts a')) return Number(call.params[0]) === Number(admin?.id) ? { rows: [admin], rowCount: 1 } : { rows: [], rowCount: 0 };
-    if (call.sql.includes('LOWER(st.display_name) = ANY')) {
-      const rows = unionRows || [{ id: 9, principal: 'christel' }, { id: 10, principal: 'abigail' }];
-      return { rows, rowCount: rows.length };
-    }
+    if (call.sql.includes('calendarAuthorization:services')) return { rows: allowedServiceIds.map((service_id) => ({ service_id })), rowCount: allowedServiceIds.length };
     if (call.sql.includes('FROM admin_booking_sessions abs')) return pending ? { rows: [pending], rowCount: 1 } : { rows: [], rowCount: 0 };
     if (call.sql.includes('JOIN staff_services ss')) {
       if (call.sql.includes('st.id = $1')) return selection ? { rows: [selection], rowCount: 1 } : { rows: [], rowCount: 0 };
@@ -50,31 +53,28 @@ function pending(overrides = {}) {
   return { crm_v2_client_id: 123, source_client_name: 'Jane Doe', client_mobile_snapshot: '27821234567', acknowledged_mobile: '27821234567', mobile_acknowledged_at: '2026-08-28T07:00:00.000Z', staff_id: 20, service_id: 44, location_id: 1, starts_at: '2026-08-28T08:15:00.000Z', ends_at: '2026-08-28T09:15:00.000Z', state: 'confirm', current_client_name: 'Jane Doe', current_client_mobile: '27821234567', current_client_status: 'active', ...overrides };
 }
 
-test('frozen service-scope principal matrix remains explicit and fail-closed', () => {
-  assert.deepEqual(staticScopeForAdmin(principals.christel), { key: 'christel_own_services', sourceStaffIds: [9] });
-  assert.deepEqual(staticScopeForAdmin(principals.abigail), { key: 'abigail_own_services', sourceStaffIds: [10] });
-  assert.deepEqual(staticScopeForAdmin(principals.marietjie), { key: 'marietjie_own_services', sourceStaffIds: [11] });
-  assert.deepEqual(staticScopeForAdmin(principals.jp), { key: 'jp_christel_abigail_union', sourceStaffIds: null });
-  assert.equal(staticScopeForAdmin({ ...principals.abigail, service_scope: 'all_services' }), null);
-  assert.equal(staticScopeForAdmin({ ...principals.jp, business_role: 'owner' }), null);
+test('Calendar booking authority is capability/scope data, not a named-person policy', () => {
+  const marietjie = evaluateCalendarAuthority(principals.marietjie, { allowedServiceIds: [44] });
+  const renamed = evaluateCalendarAuthority({ ...principals.marietjie, display_name: 'Replacement operator' }, { allowedServiceIds: [44] });
+  assert.deepEqual(renamed, marietjie);
+  assert.equal(allowsBookingTarget(marietjie, { staffId: 20, serviceId: 44 }), true);
+  assert.equal(allowsBookingTarget(marietjie, { staffId: 20, serviceId: 45 }), false);
+  const abigail = evaluateCalendarAuthority(principals.abigail, { allowedServiceIds: [44] });
+  assert.equal(abigail.capabilities.includes(CALENDAR_CAPABILITIES.BOOKING_CREATE), false);
+  assert.equal(allowsBookingTarget(abigail, { staffId: 10, serviceId: 44 }), false);
+  assert.equal(evaluateCalendarAuthority({ ...principals.marietjie, admin_active: false }, { allowedServiceIds: [44] }), null);
 });
 
-test('JP union resolves exactly one active Christel and Abigail and rejects ambiguity', async () => {
+test('all-business/all-services booking scope is canonical data and has no named union', async () => {
   const db = bookingDb({ admin: principals.jp });
   const service = createCalendarCreateBookingService({ db, env: enabledEnv, crmV2Service: crmV2() });
   const admin = await service.resolveOperator(principals.jp.id);
-  assert.deepEqual(admin.bookingScope.sourceStaffIds, [9, 10]);
-
-  const ambiguous = createCalendarCreateBookingService({
-    db: bookingDb({ admin: principals.jp, unionRows: [{ id: 9, principal: 'christel' }, { id: 12, principal: 'christel' }, { id: 10, principal: 'abigail' }] }),
-    env: enabledEnv,
-    crmV2Service: crmV2(),
-  });
-  await assert.rejects(ambiguous.resolveOperator(principals.jp.id), (error) => error?.code === 'CALENDAR_BOOKING_SCOPE_UNRESOLVED');
+  assert.deepEqual(admin.bookingScope, { key: 'all_business:all_services', calendarScope: 'all_business', serviceScope: 'all_services' });
+  assert.equal(db.calls.some((call) => /Christel|Abigail|Jean-Pierre/.test(call.sql)), false);
 });
 
 test('bookable catalogue and prepare remain bounded by authenticated service relationships', async () => {
-  const db = bookingDb({ admin: principals.abigail, optionRows: [eligibleRow(), eligibleRow({ staff_id: 21 })] });
+  const db = bookingDb({ admin: principals.marietjie, optionRows: [eligibleRow(), eligibleRow({ staff_id: 21 })] });
   const prepareCalls = [];
   const service = createCalendarCreateBookingService({
     db,
@@ -85,20 +85,20 @@ test('bookable catalogue and prepare remain bounded by authenticated service rel
       return { status: 'pending_confirmation', client: input.crmV2Client, staff: { id: 20, display_name: 'Target Practitioner' }, service: { id: 44, name: 'Deep Tissue Massage', price: '650.00', variable_price: false }, startsAt: '2026-08-28T08:15:00.000Z', endsAt: '2026-08-28T09:15:00.000Z' };
     },
   });
-  const options = await service.listBookableOptions(principals.abigail.id);
-  assert.equal(options.authority.serviceScope, 'abigail_own_services');
-  const result = await service.prepare({ adminId: principals.abigail.id, clientId: 123, staffId: 20, serviceId: 44, date: '2026-08-28', time: '10:15' });
+  const options = await service.listBookableOptions(principals.marietjie.id);
+  assert.equal(options.authority.serviceScope, 'own_services:own_services');
+  const result = await service.prepare({ adminId: principals.marietjie.id, clientId: 123, staffId: 20, serviceId: 44, date: '2026-08-28', time: '10:15' });
   assert.equal(result.status, 'pending_confirmation');
-  assert.equal(prepareCalls[0].adminId, principals.abigail.id);
+  assert.equal(prepareCalls[0].adminId, principals.marietjie.id);
   assert.equal(prepareCalls[0].crmV2Client.id, '123');
   const selection = db.calls.find((call) => call.sql.includes('st.id = $1'));
-  assert.deepEqual(selection.params, [20, 44, [10]]);
+  assert.deepEqual(selection.params, [20, 44]);
 });
 
 test('out-of-scope service is rejected before CRM V2 lookup or booking preparation', async () => {
   let clientReads = 0; let prepares = 0;
   const service = createCalendarCreateBookingService({
-    db: bookingDb({ admin: principals.marietjie, selection: null }),
+    db: bookingDb({ admin: principals.marietjie, allowedServiceIds: [] }),
     env: enabledEnv,
     crmV2Service: { ...crmV2(), async getClientById() { clientReads += 1; return client(); } },
     prepareBooking: async () => { prepares += 1; },
@@ -109,7 +109,7 @@ test('out-of-scope service is rejected before CRM V2 lookup or booking preparati
 });
 
 test('mobile acknowledgement and final confirmation are bound to session actor, scope and V2 pending state', async () => {
-  const db = bookingDb({ admin: principals.abigail, pending: pending() });
+  const db = bookingDb({ admin: principals.marietjie, pending: pending() });
   const ackCalls = []; const confirmCalls = [];
   const service = createCalendarCreateBookingService({
     db,
@@ -118,11 +118,11 @@ test('mobile acknowledgement and final confirmation are bound to session actor, 
     acknowledgeBooking: async (adminId) => { ackCalls.push(adminId); return { status: 'acknowledged', client: client() }; },
     confirmBooking: async (...args) => { confirmCalls.push(args); return { status: 'created', appointmentId: 777 }; },
   });
-  const acknowledgement = await service.acknowledgeMobile({ adminId: principals.abigail.id, actorAdminId: 99, clientId: 999 });
-  const result = await service.confirm({ adminId: principals.abigail.id, actorAdminId: 99, clientId: 999 });
+  const acknowledgement = await service.acknowledgeMobile({ adminId: principals.marietjie.id, actorAdminId: 99, clientId: 999 });
+  const result = await service.confirm({ adminId: principals.marietjie.id, actorAdminId: 99, clientId: 999 });
   assert.equal(acknowledgement.confirmationSafe, true);
-  assert.deepEqual(ackCalls, [principals.abigail.id]);
-  assert.equal(confirmCalls[0][0].id, principals.abigail.id);
+  assert.deepEqual(ackCalls, [principals.marietjie.id]);
+  assert.equal(confirmCalls[0][0].id, principals.marietjie.id);
   assert.deepEqual(confirmCalls[0][1], { source: 'shiloh_calendar' });
   assert.equal(result.appointmentId, 777);
 });

@@ -2,15 +2,17 @@ const { pool } = require('../db/pool');
 const { deriveCalendarViewer } = require('./staffBrowserSession');
 const { pilotPolicy, isAdminAllowedByPilot } = require('./staffBrowserPilotGate');
 const { isEmergencyCalendarBookingEnabled } = require('./emergencyCalendarBootstrap');
-
-const GOVERNED_PRINCIPALS = ['christel', 'jean-pierre', 'abigail', 'marietjie'];
+const { CALENDAR_CAPABILITIES } = require('./calendarAuthorization');
 
 function flagEnabled(env, key) {
   return String(env?.[key] || '').trim().toLowerCase() === 'true';
 }
 
 function sanitizeAuthority(row, env) {
-  const viewer = deriveCalendarViewer(row);
+  const viewer = deriveCalendarViewer({
+    ...row,
+    permissions: { [CALENDAR_CAPABILITIES.VIEW]: row.calendar_view === true },
+  });
   return {
     principal: String(row.display_name || ''),
     adminActive: row.admin_active === true,
@@ -29,12 +31,13 @@ async function runCalendarAccessDiagnostic({ db = pool, env = process.env } = {}
 
   const result = await db.query(
     `SELECT a.id, a.staff_id, a.display_name, a.business_role, a.calendar_scope, a.service_scope,
-            a.active AS admin_active, s.status AS staff_status
+            a.active AS admin_active, s.status AS staff_status,
+            (a.permissions ->> 'appointment:view' = 'true') AS calendar_view
        FROM staff_admin_accounts a
        LEFT JOIN staff s ON s.id = a.staff_id
-      WHERE LOWER(a.display_name) = ANY($1::text[])
-      ORDER BY array_position($1::text[], LOWER(a.display_name)), a.id`,
-    [GOVERNED_PRINCIPALS]
+      WHERE a.permissions ?| $1::text[]
+      ORDER BY a.id`,
+    [Object.values(CALENDAR_CAPABILITIES)]
   );
 
   const policy = pilotPolicy(env);
@@ -45,14 +48,13 @@ async function runCalendarAccessDiagnostic({ db = pool, env = process.env } = {}
     calendarHandoffEnabled: isEmergencyCalendarBookingEnabled(env),
     pilotModeEnabled: policy.enabled,
     pilotConfigValid: policy.valid,
-    expectedPrincipalCount: GOVERNED_PRINCIPALS.length,
+    expectedPrincipalCount: authorities.length,
     matchedPrincipalCount: authorities.length,
     authorities,
   };
 }
 
 module.exports = {
-  GOVERNED_PRINCIPALS,
   flagEnabled,
   sanitizeAuthority,
   runCalendarAccessDiagnostic,

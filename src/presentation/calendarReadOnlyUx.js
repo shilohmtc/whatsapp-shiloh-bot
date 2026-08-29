@@ -3,6 +3,10 @@ const {
   renderServiceFamilyIcon,
   serviceFamilyAccentCss,
 } = require('./calendarServiceFamilyVisuals');
+const {
+  allowsAppointmentTarget,
+  allowsStaffTarget,
+} = require('../services/calendarAuthorization');
 
 const BUSINESS_TIMEZONE = 'Africa/Johannesburg';
 
@@ -130,19 +134,48 @@ function renderProvenance(item) {
 }
 
 function mutationEnabled(model) {
-  return model?.mutationCapability?.enabled === true;
+  return model?.mutationCapability?.enabled === true
+    && Array.isArray(model.mutationCapability.operations)
+    && model.mutationCapability.operations.length > 0;
+}
+
+function operationEnabled(model, operation) {
+  return mutationEnabled(model) && model.mutationCapability.operations.includes(operation);
+}
+
+function appointmentOperationScope(item, model) {
+  const serviceIds = (item.serviceContexts || [])
+    .map((service) => Number(service.serviceId || service.service_id))
+    .filter((id) => Number.isSafeInteger(id) && id > 0);
+  return allowsAppointmentTarget(model?.mutationCapability, {
+    staffIds: eventStaffIds(item),
+    serviceIds,
+  });
+}
+
+function appointmentOperations(item, model) {
+  if (!appointmentOperationScope(item, model)) return [];
+  return ['appointment:reschedule', 'appointment:cancel', 'appointment:reassign']
+    .filter((operation) => operationEnabled(model, operation));
+}
+
+function staffOperationEnabled(model, operation, staffId) {
+  return operationEnabled(model, operation) && allowsStaffTarget(model.mutationCapability, staffId);
 }
 
 function mutationAttributes(item, model) {
   if (!mutationEnabled(model)) return '';
   const revision = escapeHtml(item.revision || '');
   if (item.kind === 'appointment') {
-    return ` data-appointment-id="${escapeHtml(item.id)}" data-revision="${revision}" data-staff-ids="${escapeHtml(eventStaffIds(item).join(','))}" data-starts-at="${escapeHtml(item.startsAt || '')}" data-ends-at="${escapeHtml(item.endsAt || '')}" draggable="true"`;
+    const operations = appointmentOperations(item, model);
+    if (!operations.length) return '';
+    const draggable = operations.includes('appointment:reschedule') ? ' draggable="true"' : '';
+    return ` data-appointment-id="${escapeHtml(item.id)}" data-revision="${revision}" data-staff-ids="${escapeHtml(eventStaffIds(item).join(','))}" data-starts-at="${escapeHtml(item.startsAt || '')}" data-ends-at="${escapeHtml(item.endsAt || '')}" data-allowed-operations="${escapeHtml(operations.join(','))}"${draggable}`;
   }
-  if (item.kind === 'calendar_block') {
+  if (item.kind === 'calendar_block' && staffOperationEnabled(model, 'calendar_block:manage', eventStaffIds(item)[0])) {
     return ` data-block-id="${escapeHtml(item.id)}" data-revision="${revision}" data-staff-ids="${escapeHtml(eventStaffIds(item)[0] || '')}" data-location-id="${escapeHtml(item.locationId || '')}" data-starts-at="${escapeHtml(item.startsAt || '')}" data-ends-at="${escapeHtml(item.endsAt || '')}" data-block-type="${escapeHtml(item.blockType || 'other')}" data-title="${escapeHtml(item.title || 'Operational block')}"`;
   }
-  if (item.kind === 'operational_leave') {
+  if (item.kind === 'operational_leave' && staffOperationEnabled(model, 'operational_leave:manage', eventStaffIds(item)[0])) {
     return ` data-leave-id="${escapeHtml(item.id)}" data-revision="${revision}" data-staff-ids="${escapeHtml(eventStaffIds(item)[0] || '')}" data-location-id="${escapeHtml(item.locationId || '')}" data-date="${escapeHtml(dateKey(item.date || item.startsAt) || '')}" data-reason="${escapeHtml(item.reason || 'Operational leave')}"`;
   }
   return '';
@@ -150,11 +183,11 @@ function mutationAttributes(item, model) {
 
 function renderMutationButton(item, model) {
   if (!mutationEnabled(model)) return '';
-  const action = item.kind === 'appointment'
+  const action = item.kind === 'appointment' && appointmentOperations(item, model).length
     ? 'manage-appointment'
-    : item.kind === 'calendar_block'
+    : item.kind === 'calendar_block' && staffOperationEnabled(model, 'calendar_block:manage', eventStaffIds(item)[0])
       ? 'manage-block'
-      : item.kind === 'operational_leave'
+      : item.kind === 'operational_leave' && staffOperationEnabled(model, 'operational_leave:manage', eventStaffIds(item)[0])
         ? 'manage-leave'
         : null;
   if (!action) return '';
@@ -268,8 +301,13 @@ function renderDay(model) {
     });
     const context = workingContext(model, person.id, day);
     const unavailable = context === 'Not scheduled' || context === 'No working window';
-    const mutationActions = mutationEnabled(model) ? `<div class="lane-actions"><button type="button" data-calendar-operation="add-block" data-staff-id="${escapeHtml(person.id)}" data-date="${escapeHtml(day)}">Add block</button><button type="button" data-calendar-operation="add-leave" data-staff-id="${escapeHtml(person.id)}" data-date="${escapeHtml(day)}">Add leave</button><button type="button" data-calendar-operation="manage-schedule" data-staff-id="${escapeHtml(person.id)}" data-date="${escapeHtml(day)}">Schedule</button></div>` : '';
-    return `<section class="lane" data-staff-id="${escapeHtml(person.id)}" data-date="${escapeHtml(day)}" ${mutationEnabled(model) ? 'data-calendar-drop-target="true"' : ''}>
+    const laneOperations = [
+      staffOperationEnabled(model, 'calendar_block:manage', person.id) ? `<button type="button" data-calendar-operation="add-block" data-staff-id="${escapeHtml(person.id)}" data-date="${escapeHtml(day)}">Add block</button>` : '',
+      staffOperationEnabled(model, 'operational_leave:manage', person.id) ? `<button type="button" data-calendar-operation="add-leave" data-staff-id="${escapeHtml(person.id)}" data-date="${escapeHtml(day)}">Add leave</button>` : '',
+      staffOperationEnabled(model, 'working_schedule:manage', person.id) ? `<button type="button" data-calendar-operation="manage-schedule" data-staff-id="${escapeHtml(person.id)}" data-date="${escapeHtml(day)}">Schedule</button>` : '',
+    ].filter(Boolean).join('');
+    const mutationActions = laneOperations ? `<div class="lane-actions">${laneOperations}</div>` : '';
+    return `<section class="lane" data-staff-id="${escapeHtml(person.id)}" data-date="${escapeHtml(day)}" ${operationEnabled(model, 'appointment:reschedule') ? 'data-calendar-drop-target="true"' : ''}>
       <header><div><h3>${escapeHtml(person.displayName)}</h3><p><span class="status-dot ${unavailable ? 'off' : ''}"></span>${escapeHtml(context)}</p></div><div class="lane-heading-actions"><span class="lane-count">${items.length} item${items.length === 1 ? '' : 's'}</span>${mutationActions}</div></header>
       <div class="lane-events">${items.length ? items.map(item => renderEventCard(item, model)).join('') : '<div class="empty">No scheduled items</div>'}</div>
     </section>`;
@@ -286,7 +324,7 @@ function renderDay(model) {
 function renderWeek(model) {
   const days = model.period.dateKeys.map(day => {
     const items = eventsForDate(model, day);
-    return `<section class="week-day" data-date="${escapeHtml(day)}" ${mutationEnabled(model) ? 'data-calendar-drop-target="true"' : ''}>
+    return `<section class="week-day" data-date="${escapeHtml(day)}" ${operationEnabled(model, 'appointment:reschedule') ? 'data-calendar-drop-target="true"' : ''}>
       <header><span>${escapeHtml(formatDay(day))}</span><small>${items.length} item${items.length === 1 ? '' : 's'}</small></header>
       ${renderClosureStrip(model, day)}
       <div class="week-events">${items.length ? items.map(item => renderEventCard(item, model)).join('') : '<div class="empty">Clear</div>'}</div>
@@ -355,6 +393,9 @@ module.exports = {
   renderOperationalActions,
   renderOperationalSummary,
   mutationEnabled,
+  operationEnabled,
+  appointmentOperations,
+  staffOperationEnabled,
   eventsForDate,
   workingContext,
 };

@@ -23,6 +23,7 @@ function productionRows() {
       whatsapp_number: '+27000000001',
       normalized_whatsapp: '27000000001',
       permissions: { secret: true },
+      calendar_view: true,
       token_hash: 'do-not-log-token-hash',
     },
     {
@@ -37,6 +38,7 @@ function productionRows() {
       whatsapp_number: '+27000000002',
       normalized_whatsapp: '27000000002',
       permissions: { secret: true },
+      calendar_view: true,
     },
     {
       id: 11,
@@ -49,6 +51,7 @@ function productionRows() {
       staff_status: 'active',
       whatsapp_number: '+27000000003',
       normalized_whatsapp: '27000000003',
+      calendar_view: true,
     },
     {
       id: 12,
@@ -61,6 +64,7 @@ function productionRows() {
       staff_status: 'active',
       whatsapp_number: '+27000000004',
       normalized_whatsapp: '27000000004',
+      calendar_view: true,
     },
   ];
 }
@@ -136,7 +140,8 @@ test('Calendar access diagnostic exposes malformed pilot policy only as fail-clo
 
 test('diagnostic source and startup integration contain no mutation or secret logging contract', () => {
   assert.doesNotMatch(diagnosticSource, /\b(?:INSERT|UPDATE|DELETE|UPSERT|MERGE)\b/i);
-  assert.doesNotMatch(diagnosticSource, /whatsapp_number|normalized_whatsapp|permissions|token_hash|challenge_hash/);
+  assert.doesNotMatch(diagnosticSource, /whatsapp_number|normalized_whatsapp|a\.permissions\s*(?:,|AS)|token_hash|challenge_hash/);
+  assert.doesNotMatch(diagnosticSource, /GOVERNED_PRINCIPALS|LOWER\(a\.display_name\)/);
   assert.match(appSource, /runCalendarAccessDiagnostic/);
   assert.match(appSource, /Sanitized Calendar staff access diagnostic/);
 });

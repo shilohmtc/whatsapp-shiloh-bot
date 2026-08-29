@@ -1,5 +1,9 @@
 const crypto = require('crypto');
-const { isBusinessWide } = require('./staffAdminScope');
+const {
+  CALENDAR_CAPABILITIES,
+  evaluateCalendarAuthority,
+  hasCapability,
+} = require('./calendarAuthorization');
 
 const DEFAULT_CHALLENGE_TTL_MS = 5 * 60 * 1000;
 const DEFAULT_SESSION_TTL_MS = 8 * 60 * 60 * 1000;
@@ -51,20 +55,20 @@ function isValidCsrfToken(value) {
 }
 
 function deriveCalendarViewer(admin) {
-  if (!admin || admin.admin_active !== true) return null;
-  const calendarScope = String(admin.calendar_scope || '');
-  if (calendarScope === 'all_business' && isBusinessWide(admin)) {
+  const authority = evaluateCalendarAuthority(admin || {});
+  if (!authority || !hasCapability(authority, CALENDAR_CAPABILITIES.VIEW)) return null;
+  const calendarScope = authority.calendarScope;
+  if (calendarScope === 'all_business') {
     return { calendarScope: 'business_all_staff' };
   }
   if (
     (calendarScope === 'own_services' || calendarScope === 'own_appointments') &&
-    admin.staff_id &&
-    admin.staff_status === 'active'
+    authority.linkedStaffId
   ) {
     return { calendarScope: 'business_all_staff' };
   }
-  if (calendarScope === 'own' && admin.staff_id && admin.staff_status === 'active') {
-    return { calendarScope: 'own_staff', staffId: Number(admin.staff_id) };
+  if (calendarScope === 'own' && authority.linkedStaffId) {
+    return { calendarScope: 'own_staff', staffId: authority.linkedStaffId };
   }
   return null;
 }

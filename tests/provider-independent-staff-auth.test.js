@@ -65,7 +65,7 @@ function canonicalAdmin(overrides = {}) {
     business_role: 'business_admin',
     calendar_scope: 'all_business',
     service_scope: 'all_services',
-    permissions: { 'staff_auth:reset': true },
+    permissions: { 'staff_auth:reset': true, 'appointment:view': true },
     admin_active: true,
     staff_status: null,
     normalized_whatsapp: '27725128605',

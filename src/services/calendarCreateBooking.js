@@ -7,10 +7,13 @@ const {
   cancelPendingBooking,
 } = require('./adminBooking');
 const { isEmergencyCalendarBookingEnabled } = require('./emergencyCalendarBootstrap');
+const {
+  CALENDAR_CAPABILITIES,
+  resolveCalendarAuthority,
+  hasCapability,
+  allowsBookingTarget,
+} = require('./calendarAuthorization');
 
-const GOVERNED_PRACTITIONERS = new Set(['christel', 'abigail', 'marietjie']);
-const JP_UNION_PRINCIPALS = Object.freeze(['christel', 'abigail']);
-const BOOKING_BOUND_BUSINESS_ROLES = new Set(['employee_practitioner', 'tenant_practitioner']);
 const BOOKING_TIME_INCREMENT_MINUTES = 5;
 
 function bookingError(code, message) {
@@ -21,14 +24,6 @@ function bookingError(code, message) {
 
 function clean(value = '') {
   return String(value || '').trim().replace(/\s+/g, ' ');
-}
-
-function normalizedAdminName(admin = {}) {
-  return clean(admin.display_name).toLowerCase();
-}
-
-function hasPermission(admin, permission) {
-  return admin?.permissions && admin.permissions[permission] === true;
 }
 
 function positiveId(value) {
@@ -92,36 +87,6 @@ function crmV2OutcomeError(outcome) {
   return null;
 }
 
-function staticScopeForAdmin(admin = {}) {
-  if (admin.admin_active !== true || !hasPermission(admin, 'appointment:create') || !hasPermission(admin, 'client:lookup')) {
-    return null;
-  }
-  const name = normalizedAdminName(admin);
-  const staffId = positiveId(admin.staff_id);
-  if (name === 'jean-pierre') {
-    if (
-      admin.business_role !== 'business_admin'
-      || admin.calendar_scope !== 'all_business'
-      || admin.service_scope !== 'all_services'
-    ) return null;
-    return { key: 'jp_christel_abigail_union', sourceStaffIds: null };
-  }
-  if (name === 'christel') {
-    if (admin.business_role !== 'owner' || !staffId || admin.staff_status !== 'active') return null;
-    return { key: 'christel_own_services', sourceStaffIds: [staffId] };
-  }
-  if (name === 'abigail' || name === 'marietjie') {
-    if (
-      !staffId
-      || admin.staff_status !== 'active'
-      || admin.service_scope !== 'own_services'
-      || !BOOKING_BOUND_BUSINESS_ROLES.has(String(admin.business_role || '').toLowerCase())
-    ) return null;
-    return { key: `${name}_own_services`, sourceStaffIds: [staffId] };
-  }
-  return null;
-}
-
 function createCalendarCreateBookingService({
   db = pool,
   env = process.env,
@@ -136,53 +101,28 @@ function createCalendarCreateBookingService({
     throw new Error('Calendar Create Booking CRM V2 service is required');
   }
 
-  async function resolveJpUnionSourceStaffIds() {
-    const result = await db.query(
-      `SELECT st.id, LOWER(st.display_name) AS principal
-         FROM staff st
-        WHERE st.status = 'active'
-          AND LOWER(st.display_name) = ANY($1::text[])
-        ORDER BY LOWER(st.display_name), st.id`,
-      [JP_UNION_PRINCIPALS]
-    );
-    const byPrincipal = new Map(JP_UNION_PRINCIPALS.map((name) => [name, []]));
-    for (const row of result.rows) {
-      const principal = String(row.principal || '').toLowerCase();
-      if (byPrincipal.has(principal) && positiveId(row.id)) byPrincipal.get(principal).push(Number(row.id));
-    }
-    if (JP_UNION_PRINCIPALS.some((name) => byPrincipal.get(name).length !== 1)) {
-      throw bookingError(
-        'CALENDAR_BOOKING_SCOPE_UNRESOLVED',
-        'JP booking authority cannot be resolved to exactly one active Christel and Abigail practitioner record.'
-      );
-    }
-    return JP_UNION_PRINCIPALS.map((name) => byPrincipal.get(name)[0]);
-  }
-
   async function resolveOperator(adminId) {
     if (!isEmergencyCalendarBookingEnabled(env)) {
       throw bookingError('CALENDAR_BOOKING_DISABLED', 'Calendar booking is not enabled.');
     }
     const id = positiveId(adminId);
     if (!id) throw bookingError('CALENDAR_BOOKING_FORBIDDEN', 'This browser session cannot create Calendar bookings.');
-    const result = await db.query(
-      `SELECT a.id, a.staff_id, a.display_name, a.role, a.business_role, a.calendar_scope,
-              a.service_scope, a.permissions, a.active AS admin_active,
-              s.status AS staff_status, s.client_bookable
-         FROM staff_admin_accounts a
-         LEFT JOIN staff s ON s.id = a.staff_id
-        WHERE a.id = $1
-          AND a.active = TRUE
-        LIMIT 1`,
-      [id]
-    );
-    const admin = result.rows[0] || null;
-    const scope = staticScopeForAdmin(admin || {});
-    if (!admin || !scope || (!GOVERNED_PRACTITIONERS.has(normalizedAdminName(admin)) && normalizedAdminName(admin) !== 'jean-pierre')) {
+    const admin = await resolveCalendarAuthority(db, id);
+    if (
+      !admin
+      || !hasCapability(admin.calendarAuthority, CALENDAR_CAPABILITIES.BOOKING_CREATE)
+      || !hasCapability(admin.calendarAuthority, CALENDAR_CAPABILITIES.CLIENT_LOOKUP)
+    ) {
       throw bookingError('CALENDAR_BOOKING_FORBIDDEN', 'Current canonical staff authority does not permit Calendar booking.');
     }
-    const sourceStaffIds = scope.sourceStaffIds || await resolveJpUnionSourceStaffIds();
-    return { ...admin, bookingScope: { key: scope.key, sourceStaffIds } };
+    return {
+      ...admin,
+      bookingScope: {
+        key: `${admin.calendarAuthority.calendarScope}:${admin.calendarAuthority.serviceScope}`,
+        calendarScope: admin.calendarAuthority.calendarScope,
+        serviceScope: admin.calendarAuthority.serviceScope,
+      },
+    };
   }
 
   async function listBookableOptions(adminId) {
@@ -198,22 +138,16 @@ function createCalendarCreateBookingService({
          JOIN services sv ON sv.id = ss.service_id
          LEFT JOIN service_categories sc ON sc.id = sv.category_id
         WHERE st.status = 'active'
-          AND st.client_bookable = TRUE
           AND sv.status = 'active'
-          AND EXISTS (
-                SELECT 1
-                  FROM staff_services authority_ss
-                 WHERE authority_ss.service_id = sv.id
-                   AND authority_ss.staff_id = ANY($1::bigint[])
-              )
         ORDER BY sv.name, st.display_name, sv.id, st.id`,
-      [admin.bookingScope.sourceStaffIds]
+      []
     );
     const staffById = new Map();
     const servicesById = new Map();
     for (const row of result.rows) {
       const staffId = Number(row.staff_id);
       const serviceId = Number(row.service_id);
+      if (!allowsBookingTarget(admin.calendarAuthority, { staffId, serviceId })) continue;
       if (!staffById.has(staffId)) staffById.set(staffId, { id: staffId, displayName: row.staff_name, serviceIds: [] });
       staffById.get(staffId).serviceIds.push(serviceId);
       if (!servicesById.has(serviceId)) {
@@ -268,19 +202,12 @@ function createCalendarCreateBookingService({
         WHERE st.id = $1
           AND sv.id = $2
           AND st.status = 'active'
-          AND st.client_bookable = TRUE
           AND sv.status = 'active'
-          AND EXISTS (
-                SELECT 1
-                  FROM staff_services authority_ss
-                 WHERE authority_ss.service_id = sv.id
-                   AND authority_ss.staff_id = ANY($3::bigint[])
-              )
         LIMIT 1`,
-      [staff, service, admin.bookingScope.sourceStaffIds]
+      [staff, service]
     );
     const row = result.rows[0];
-    if (!row) {
+    if (!row || !allowsBookingTarget(admin.calendarAuthority, { staffId: staff, serviceId: service })) {
       throw bookingError(
         'CALENDAR_BOOKING_INELIGIBLE_SELECTION',
         'That treatment/practitioner selection is outside the authenticated operator’s current service authority or is not bookable.'
@@ -452,15 +379,11 @@ function createCalendarCreateBookingService({
 }
 
 module.exports = {
-  GOVERNED_PRACTITIONERS,
-  JP_UNION_PRINCIPALS,
-  BOOKING_BOUND_BUSINESS_ROLES,
   BOOKING_TIME_INCREMENT_MINUTES,
   createCalendarCreateBookingService,
   localDateTimeFromInputs,
   serializeClient,
   normalizeNewClientInput,
   crmV2OutcomeError,
-  staticScopeForAdmin,
   bookingError,
 };

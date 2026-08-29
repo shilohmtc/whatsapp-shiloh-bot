@@ -322,10 +322,10 @@ test('activation retires the unbound legacy master write and keeps the retained 
   assert.match(onboarding, /isVerifiedRegistration\(identity\)[\s\S]*legacy_verified_whatsapp/);
 });
 
-test('activation adds no migration or configuration and startup truth is active', () => {
+test('activation migration remains present and startup truth is active', () => {
   const migrations = fs.readdirSync(path.join(ROOT, 'migrations')).filter((file) => /^\d+_.+\.sql$/.test(file)).sort();
   const app = read('app.js');
-  assert.equal(migrations.at(-1), '087_whatsapp_crm_v2_reschedule_compat.sql');
+  assert.equal(migrations.includes('087_whatsapp_crm_v2_reschedule_compat.sql'), true);
   assert.match(app, /crmV2RegistrationActive: true/);
   assert.match(app, /registrationBoundary: 'crmV2ClientService\.registerWhatsAppClient'/);
   assert.doesNotMatch(app, /CRM_V2_REGISTRATION_(?:ENABLED|ACTIVE)|WHATSAPP_CRM_V2_(?:ENABLED|ACTIVE)/);

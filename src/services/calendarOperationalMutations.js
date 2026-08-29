@@ -3,22 +3,17 @@ const { pool } = require('../db/pool');
 const { checkClinicHours } = require('./clinicHours');
 const { checkAuthoritativeSchedule } = require('./adminAvailability');
 const { cancelCanonicalAppointmentInTransaction } = require('./adminAppointmentCancellation');
+const {
+  CALENDAR_OPERATIONS: OPERATIONS,
+  evaluateCalendarAuthority,
+  resolveCalendarAuthority,
+  operationsForAuthority,
+  allowsAppointmentTarget,
+  allowsStaffTarget,
+  allowsReassignmentTarget,
+} = require('./calendarAuthorization');
 
 const MUTABLE_APPOINTMENT_STATUSES = new Set(['scheduled', 'confirmed']);
-const OPERATIONAL_PRINCIPALS = new Map([
-  ['christel', { businessRole: 'owner', staffRequired: true }],
-  ['abigail', { businessRole: 'employee_practitioner', staffRequired: true }],
-  ['marietjie', { businessRole: 'tenant_practitioner', staffRequired: true }],
-  ['jean-pierre', { businessRole: 'business_admin', staffRequired: false }],
-]);
-const OPERATIONS = Object.freeze([
-  'appointment:reschedule',
-  'appointment:cancel',
-  'appointment:reassign',
-  'calendar_block:manage',
-  'operational_leave:manage',
-  'working_schedule:manage',
-]);
 const OPERATIONAL_LEAVE_REASON = /^Operational leave by Calendar admin #(\d+)(?::\s*(.*))?$/i;
 
 function mutationError(code, message, details = null) {
@@ -91,20 +86,15 @@ function operationFingerprint(action, payload) {
   return crypto.createHash('sha256').update(`${action}\n${JSON.stringify(payload)}`).digest('hex');
 }
 
-function staticMutationCapability(admin = {}) {
-  if (admin.admin_active !== true) return null;
-  const principal = clean(admin.display_name).toLowerCase();
-  const policy = OPERATIONAL_PRINCIPALS.get(principal);
-  if (!policy || String(admin.business_role || '').toLowerCase() !== policy.businessRole) return null;
-  const staffId = admin.staff_id == null ? null : Number(admin.staff_id);
-  if (policy.staffRequired && (!Number.isSafeInteger(staffId) || staffId <= 0 || admin.staff_status !== 'active')) return null;
-  if (principal === 'jean-pierre' && (admin.calendar_scope !== 'all_business' || admin.service_scope !== 'all_services')) return null;
+function staticMutationCapability(admin = {}, { allowedServiceIds = [] } = {}) {
+  const authority = evaluateCalendarAuthority(admin, { allowedServiceIds });
+  if (!authority) return null;
+  const operations = operationsForAuthority(authority);
+  if (!operations.length) return null;
   return {
-    key: 'calendar_operational_mutations_p0',
-    principal,
-    operatorAdminId: Number(admin.id),
-    linkedStaffId: staffId,
-    operations: [...OPERATIONS],
+    ...authority,
+    key: 'calendar_operational_mutations_capability_v1',
+    operations,
   };
 }
 
@@ -140,21 +130,13 @@ function createCalendarOperationalMutationService({
     throw new Error('Calendar operational mutations require a transactional database.');
   }
 
-  async function resolveOperator(adminId, queryable = db) {
+  async function resolveOperator(adminId, queryable = db, { operation = null } = {}) {
     const id = positiveId(adminId, 'CALENDAR_OPERATION_FORBIDDEN');
-    const result = await queryable.query(
-      `/* calendarOperational:operator */
-       SELECT a.id, a.staff_id, a.display_name, a.business_role, a.calendar_scope, a.service_scope,
-              a.active AS admin_active, s.status AS staff_status
-         FROM staff_admin_accounts a
-         LEFT JOIN staff s ON s.id=a.staff_id
-        WHERE a.id=$1 AND a.active=TRUE
-        LIMIT 1`,
-      [id]
-    );
-    const admin = result.rows[0] || null;
-    const capability = staticMutationCapability(admin || {});
-    if (!admin || !capability) {
+    const admin = await resolveCalendarAuthority(queryable, id);
+    const capability = admin ? staticMutationCapability(admin, {
+      allowedServiceIds: admin.calendarAuthority.allowedServiceIds || [],
+    }) : null;
+    if (!admin || !capability || (operation && !capability.operations.includes(operation))) {
       throw mutationError('CALENDAR_OPERATION_FORBIDDEN', 'Current canonical staff authority does not permit Calendar operations.');
     }
     return { ...admin, mutationCapability: capability };
@@ -188,13 +170,13 @@ function createCalendarOperationalMutationService({
     );
   }
 
-  async function inMutation({ adminId, action, requestId: rawRequestId, fingerprintPayload, execute }) {
+  async function inMutation({ adminId, operation, action, requestId: rawRequestId, fingerprintPayload, execute }) {
     const requestId = requireRequestId(rawRequestId);
     const requestFingerprint = operationFingerprint(action, fingerprintPayload);
     const client = await db.connect();
     try {
       await client.query('BEGIN');
-      const operator = await resolveOperator(adminId, client);
+      const operator = await resolveOperator(adminId, client, { operation });
       await client.query(`SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, [`calendar-operation:${operator.id}:${requestId}`]);
       const replay = await loadReplay(client, operator.id, action, requestId, requestFingerprint);
       if (replay) {
@@ -267,6 +249,29 @@ function createCalendarOperationalMutationService({
     return { appointment, staff: staffResult.rows, services: serviceResult.rows };
   }
 
+  function appointmentAuthorityContext(context) {
+    return {
+      staffIds: context.staff.map((row) => Number(row.staff_id)),
+      serviceIds: context.services.map((row) => Number(row.service_id)),
+    };
+  }
+
+  function requireAppointmentAuthority(operator, context, destinationStaffId = null) {
+    const appointment = appointmentAuthorityContext(context);
+    const allowed = destinationStaffId == null
+      ? allowsAppointmentTarget(operator.calendarAuthority, appointment)
+      : allowsReassignmentTarget(operator.calendarAuthority, { appointment, destinationStaffId });
+    if (!allowed) {
+      throw mutationError('CALENDAR_OPERATION_FORBIDDEN', 'The canonical appointment is outside this operator’s current Calendar/service scope.');
+    }
+  }
+
+  function requireStaffAuthority(operator, staffId) {
+    if (!allowsStaffTarget(operator.calendarAuthority, staffId)) {
+      throw mutationError('CALENDAR_OPERATION_FORBIDDEN', 'The canonical practitioner is outside this operator’s current Calendar scope.');
+    }
+  }
+
   function requireMutableAppointment(appointment, expectedRevision) {
     if (!MUTABLE_APPOINTMENT_STATUSES.has(String(appointment.status || ''))) {
       throw mutationError('CALENDAR_OPERATION_APPOINTMENT_FINAL', 'Only scheduled or confirmed appointments may be changed here.');
@@ -321,11 +326,13 @@ function createCalendarOperationalMutationService({
     const newStart = requireFutureStart(startsAt, now());
     return inMutation({
       adminId,
+      operation: 'appointment:reschedule',
       action: 'calendar.appointment_rescheduled',
       requestId,
       fingerprintPayload: { appointmentId: id, expectedRevision, startsAt: newStart.toISOString() },
       execute: async (client, operator, request) => {
         const context = await appointmentContext(client, id);
+        requireAppointmentAuthority(operator, context);
         requireMutableAppointment(context.appointment, expectedRevision);
         const lockedStaffIds = await lockStaff(client, context.staff.map(row => row.staff_id));
         if (context.staff.some(row => row.staff_status !== 'active')) {
@@ -376,11 +383,13 @@ function createCalendarOperationalMutationService({
     const destinationId = positiveId(destinationStaffId, 'CALENDAR_OPERATION_STAFF_INVALID');
     return inMutation({
       adminId,
+      operation: 'appointment:reassign',
       action: 'calendar.appointment_reassigned',
       requestId,
       fingerprintPayload: { appointmentId: id, expectedRevision, fromStaffId, destinationStaffId: destinationId },
       execute: async (client, operator, request) => {
         const context = await appointmentContext(client, id);
+        requireAppointmentAuthority(operator, context, destinationId);
         requireMutableAppointment(context.appointment, expectedRevision);
         const selected = fromStaffId == null
           ? (context.staff.length === 1 ? context.staff[0] : null)
@@ -453,10 +462,13 @@ function createCalendarOperationalMutationService({
     }
     return inMutation({
       adminId,
+      operation: 'appointment:cancel',
       action: 'calendar.appointment_cancelled',
       requestId,
       fingerprintPayload: { appointmentId: id, expectedRevision: expected, reason: clean(reason) },
       execute: async (client, operator, request) => {
+        const context = await appointmentContext(client, id);
+        requireAppointmentAuthority(operator, context);
         const cancelled = await cancelCanonicalAppointmentInTransaction(client, {
           appointmentId: id,
           actorAdminId: operator.id,
@@ -524,9 +536,10 @@ function createCalendarOperationalMutationService({
   async function createBlock({ adminId, requestId, ...rawInput }) {
     const input = blockInput(rawInput);
     return inMutation({
-      adminId, action: 'calendar.block_created', requestId,
+      adminId, operation: 'calendar_block:manage', action: 'calendar.block_created', requestId,
       fingerprintPayload: { ...input, startsAt: input.startsAt.toISOString(), endsAt: input.endsAt.toISOString() },
       execute: async (client, operator, request) => {
+        requireStaffAuthority(operator, input.staffId);
         await activeStaff(client, input.staffId);
         await lockStaff(client, [input.staffId]);
         await blockConflicts(client, input);
@@ -549,13 +562,15 @@ function createCalendarOperationalMutationService({
     const id = positiveId(blockId);
     const input = blockInput(rawInput);
     return inMutation({
-      adminId, action: 'calendar.block_updated', requestId,
+      adminId, operation: 'calendar_block:manage', action: 'calendar.block_updated', requestId,
       fingerprintPayload: { blockId: id, expectedRevision, ...input, startsAt: input.startsAt.toISOString(), endsAt: input.endsAt.toISOString() },
       execute: async (client, operator, request) => {
         const current = await client.query(`SELECT * FROM calendar_blocks WHERE id=$1 AND source='shiloh' FOR UPDATE`, [id]);
         const row = current.rows[0];
         if (!row) throw mutationError('CALENDAR_OPERATION_BLOCK_NOT_FOUND', 'The canonical Shiloh block no longer exists.');
         if (revisionOf(row.updated_at) !== exactRevision(expectedRevision)) throw mutationError('CALENDAR_OPERATION_STALE_REVISION', 'The block changed. Reload Calendar before retrying.');
+        requireStaffAuthority(operator, Number(row.staff_id));
+        requireStaffAuthority(operator, input.staffId);
         await activeStaff(client, input.staffId);
         await lockStaff(client, [row.staff_id, input.staffId]);
         await blockConflicts(client, input, id);
@@ -580,13 +595,14 @@ function createCalendarOperationalMutationService({
   async function removeBlock({ adminId, blockId, expectedRevision, requestId }) {
     const id = positiveId(blockId);
     return inMutation({
-      adminId, action: 'calendar.block_removed', requestId,
+      adminId, operation: 'calendar_block:manage', action: 'calendar.block_removed', requestId,
       fingerprintPayload: { blockId: id, expectedRevision },
       execute: async (client, operator, request) => {
         const current = await client.query(`SELECT * FROM calendar_blocks WHERE id=$1 AND source='shiloh' FOR UPDATE`, [id]);
         const row = current.rows[0];
         if (!row) throw mutationError('CALENDAR_OPERATION_BLOCK_NOT_FOUND', 'The canonical Shiloh block no longer exists.');
         if (revisionOf(row.updated_at) !== exactRevision(expectedRevision)) throw mutationError('CALENDAR_OPERATION_STALE_REVISION', 'The block changed. Reload Calendar before retrying.');
+        requireStaffAuthority(operator, Number(row.staff_id));
         await lockStaff(client, [row.staff_id]);
         await client.query(`DELETE FROM calendar_blocks WHERE id=$1 AND source='shiloh'`, [id]);
         await audit(client, operator, 'calendar.block_removed', 'calendar_block', id, {
@@ -619,9 +635,10 @@ function createCalendarOperationalMutationService({
     const leaveDate = requireDate(date);
     const targetLocationId = locationId == null ? null : positiveId(locationId);
     return inMutation({
-      adminId, action: 'calendar.operational_leave_created', requestId,
+      adminId, operation: 'operational_leave:manage', action: 'calendar.operational_leave_created', requestId,
       fingerprintPayload: { staffId: targetStaffId, locationId: targetLocationId, date: leaveDate, reason: clean(reason) },
       execute: async (client, operator, request) => {
+        requireStaffAuthority(operator, targetStaffId);
         await activeStaff(client, targetStaffId);
         await lockStaff(client, [targetStaffId]);
         await leaveAppointmentConflicts(client, targetStaffId, leaveDate);
@@ -662,11 +679,12 @@ function createCalendarOperationalMutationService({
     const leaveDate = requireDate(date);
     const targetLocationId = locationId == null ? null : positiveId(locationId);
     return inMutation({
-      adminId, action: 'calendar.operational_leave_updated', requestId,
+      adminId, operation: 'operational_leave:manage', action: 'calendar.operational_leave_updated', requestId,
       fingerprintPayload: { leaveId: id, expectedRevision, date: leaveDate, reason: clean(reason), locationId: targetLocationId },
       execute: async (client, operator, request) => {
         const row = await operationalLeaveForUpdate(client, id);
         if (revisionOf(row.updated_at) !== exactRevision(expectedRevision)) throw mutationError('CALENDAR_OPERATION_STALE_REVISION', 'The leave record changed. Reload Calendar before retrying.');
+        requireStaffAuthority(operator, Number(row.staff_id));
         await lockStaff(client, [row.staff_id]);
         await leaveAppointmentConflicts(client, Number(row.staff_id), leaveDate);
         const existing = await client.query(
@@ -698,11 +716,12 @@ function createCalendarOperationalMutationService({
   async function removeLeave({ adminId, leaveId, expectedRevision, requestId }) {
     const id = positiveId(leaveId);
     return inMutation({
-      adminId, action: 'calendar.operational_leave_removed', requestId,
+      adminId, operation: 'operational_leave:manage', action: 'calendar.operational_leave_removed', requestId,
       fingerprintPayload: { leaveId: id, expectedRevision },
       execute: async (client, operator, request) => {
         const row = await operationalLeaveForUpdate(client, id);
         if (revisionOf(row.updated_at) !== exactRevision(expectedRevision)) throw mutationError('CALENDAR_OPERATION_STALE_REVISION', 'The leave record changed. Reload Calendar before retrying.');
+        requireStaffAuthority(operator, Number(row.staff_id));
         await lockStaff(client, [row.staff_id]);
         await client.query(`DELETE FROM staff_schedule_exceptions WHERE id=$1`, [id]);
         await audit(client, operator, 'calendar.operational_leave_removed', 'staff_schedule_exception', id, {
@@ -739,8 +758,9 @@ function createCalendarOperationalMutationService({
   }
 
   async function getScheduleState(adminId, { staffId, dayOfWeek, locationId = null }) {
-    await resolveOperator(adminId);
     const targetStaffId = positiveId(staffId, 'CALENDAR_OPERATION_STAFF_INVALID');
+    const operator = await resolveOperator(adminId, db, { operation: 'working_schedule:manage' });
+    requireStaffAuthority(operator, targetStaffId);
     const day = Number(dayOfWeek);
     if (!Number.isInteger(day) || day < 0 || day > 6) throw mutationError('CALENDAR_OPERATION_INVALID_DAY', 'Choose a valid weekday.');
     const targetLocationId = locationId == null ? null : positiveId(locationId);
@@ -773,9 +793,10 @@ function createCalendarOperationalMutationService({
   async function setWorkingSchedule({ adminId, requestId, ...rawInput }) {
     const input = scheduleInput(rawInput);
     return inMutation({
-      adminId, action: 'calendar.working_schedule_replaced', requestId,
+      adminId, operation: 'working_schedule:manage', action: 'calendar.working_schedule_replaced', requestId,
       fingerprintPayload: input,
       execute: async (client, operator, request) => {
+        requireStaffAuthority(operator, input.staffId);
         const staff = await activeStaff(client, input.staffId);
         await lockStaff(client, [input.staffId]);
         const before = await loadScheduleState(client, { ...input, forUpdate: true });
@@ -855,7 +876,6 @@ function createCalendarOperationalMutationService({
 
 module.exports = {
   MUTABLE_APPOINTMENT_STATUSES,
-  OPERATIONAL_PRINCIPALS,
   OPERATIONS,
   OPERATIONAL_LEAVE_REASON,
   createCalendarOperationalMutationService,

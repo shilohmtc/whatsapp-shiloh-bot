@@ -49,7 +49,7 @@ function authorityRow(overrides = {}) {
     business_role: 'owner',
     calendar_scope: 'all_business',
     service_scope: 'all_services',
-    permissions: { 'appointment:create': true, 'client:lookup': true },
+    permissions: { 'appointment:view': true, 'appointment:create': true, 'client:lookup': true },
     admin_active: true,
     staff_status: 'active',
     client_bookable: true,

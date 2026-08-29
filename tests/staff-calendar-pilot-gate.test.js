@@ -118,7 +118,7 @@ test('one allowlisted canonical admin can request and verify a challenge with mo
         business_role: 'practitioner',
         calendar_scope: 'own',
         service_scope: 'own_services',
-        permissions: {},
+        permissions: { 'appointment:view': true },
         admin_active: true,
         staff_status: 'active',
       }], rowCount: 1 },
