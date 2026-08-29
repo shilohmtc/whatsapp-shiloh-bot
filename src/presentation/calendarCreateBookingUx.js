@@ -1,6 +1,7 @@
 const {
   SERVICE_FAMILIES,
   renderServiceFamilyIcon,
+  serviceFamilyAccentCss,
   withServiceFamily,
 } = require('./calendarServiceFamilyVisuals');
 
@@ -26,7 +27,7 @@ function renderCalendarCreateBookingPage({ options = { staff: [], services: [] }
     ...options,
     services: (options.services || []).map(withServiceFamily),
   };
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Create Shiloh booking</title><style>${styles()}</style><script src="${escapeHtml(clientScriptPath)}" defer></script></head><body data-calendar-create-booking="true"><div class="shell">
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Create Shiloh booking</title><style>${serviceFamilyAccentCss()}${styles()}</style><script src="${escapeHtml(clientScriptPath)}" defer></script></head><body data-calendar-create-booking="true"><div class="shell">
     <header class="topbar"><div><h1>Create booking</h1><p>Choose the client, treatment, practitioner and time.</p></div><div class="actions"><a data-back-calendar href="/calendar/read-only${date ? `?view=day&date=${escapeHtml(date)}` : ''}">← Back to Calendar</a></div></header>
     <main>
       <section class="panel"><div class="steps">

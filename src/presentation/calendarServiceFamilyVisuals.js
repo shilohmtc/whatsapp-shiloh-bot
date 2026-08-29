@@ -26,6 +26,16 @@ const SERVICE_FAMILIES = Object.freeze({
   }),
 });
 
+// Restrained icon-stroke accents only. Text, cards, practitioner identity and
+// appointment status retain the Calendar palette and remain independent.
+const SERVICE_FAMILY_ACCENTS = Object.freeze({
+  facial_skin: '#8A6518',
+  foot_pedicure: '#9A503C',
+  targeted_therapeutic: '#3F6653',
+  massage_body: '#3F6785',
+  permanent_makeup_beauty: '#80506E',
+});
+
 // Canonical catalogue category authority. Historical spelling variants are
 // enumerated deliberately because catalogue polish did not change every
 // environment atomically. This is exact matching, never fuzzy name inference.
@@ -92,6 +102,12 @@ function renderServiceFamilyIcon(service, { className = '' } = {}) {
   return `<svg class="${classes}" data-service-family="${family.key}" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${ICON_PATHS[family.icon]}</svg>`;
 }
 
+function serviceFamilyAccentCss() {
+  return Object.entries(SERVICE_FAMILY_ACCENTS)
+    .map(([familyKey, color]) => `.service-family-icon[data-service-family="${familyKey}"]{color:${color}}`)
+    .join('');
+}
+
 function withServiceFamily(service = {}) {
   const family = resolveServiceFamily(service);
   return {
@@ -102,10 +118,12 @@ function withServiceFamily(service = {}) {
 
 module.exports = {
   SERVICE_FAMILIES,
+  SERVICE_FAMILY_ACCENTS,
   CATEGORY_FAMILY,
   SERVICE_FAMILY_OVERRIDE,
   resolveServiceFamily,
   renderServiceFamilyIcon,
+  serviceFamilyAccentCss,
   withServiceFamily,
   externalKey,
 };

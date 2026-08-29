@@ -1,6 +1,7 @@
 const {
   resolveServiceFamily,
   renderServiceFamilyIcon,
+  serviceFamilyAccentCss,
 } = require('./calendarServiceFamilyVisuals');
 
 const BUSINESS_TIMEZONE = 'Africa/Johannesburg';
@@ -335,7 +336,7 @@ function renderCalendarPage(model, {
   const content = model.view === 'week' ? renderWeek(model) : model.view === 'agenda' ? renderAgenda(model) : renderDay(model);
   const canMutate = mutationEnabled(model);
   const operationScript = canMutate ? `<script src="${escapeHtml(operationalMutationsScriptPath)}" defer></script>` : '';
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Shiloh Calendar</title><style>${styles()}${canMutate ? operationalStyles() : ''}</style><script src="${escapeHtml(staffAccessScriptPath)}" defer></script>${operationScript}</head><body data-calendar-readonly="${canMutate ? 'false' : 'true'}"><div class="shell">
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Shiloh Calendar</title><style>${serviceFamilyAccentCss()}${styles()}${canMutate ? operationalStyles() : ''}</style><script src="${escapeHtml(staffAccessScriptPath)}" defer></script>${operationScript}</head><body data-calendar-readonly="${canMutate ? 'false' : 'true'}"><div class="shell">
     <header class="topbar"><div class="brand"><h1>Shiloh Calendar</h1><p>Your clinic schedule, clearly presented.</p></div><div class="topbar-side">${renderOperationalActions(operationalActions)}<div class="truth-note">Africa/Johannesburg • Read-only timeline • Shiloh is the scheduling authority</div><div class="access-controls"><button class="signout-button" type="button" data-shiloh-logout>Sign out</button><span class="access-status" role="status" aria-live="polite" data-shiloh-calendar-access-status></span></div></div></header>
     ${renderControls(model, basePath)}${renderOperationalSummary(model)}${canMutate ? '<span class="operation-status" role="status" aria-live="polite" data-calendar-operation-status>Canonical changes are revalidated when saved.</span>' : ''}${content}
     <div class="footer-note">${escapeHtml(timelineReadOnlyMessage)}</div>
@@ -343,7 +344,7 @@ function renderCalendarPage(model, {
 }
 
 function renderUnavailablePage({ code = 'CALENDAR_UNAVAILABLE', message = 'Calendar is temporarily unavailable.' } = {}) {
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Shiloh Calendar unavailable</title><style>${styles()}</style></head><body data-calendar-readonly="true"><div class="shell"><header class="topbar"><div class="brand"><h1>Shiloh Calendar</h1><p>Read-only operational Calendar</p></div></header><main class="calendar-view"><div class="view-heading"><div><span class="eyebrow">Unavailable</span><h2>Calendar unavailable</h2></div><span class="read-only-badge">Fail closed</span></div><p>${escapeHtml(message)}</p><p class="footer-note">Reference: ${escapeHtml(code)}</p></main></div></body></html>`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Shiloh Calendar unavailable</title><style>${serviceFamilyAccentCss()}${styles()}</style></head><body data-calendar-readonly="true"><div class="shell"><header class="topbar"><div class="brand"><h1>Shiloh Calendar</h1><p>Read-only operational Calendar</p></div></header><main class="calendar-view"><div class="view-heading"><div><span class="eyebrow">Unavailable</span><h2>Calendar unavailable</h2></div><span class="read-only-badge">Fail closed</span></div><p>${escapeHtml(message)}</p><p class="footer-note">Reference: ${escapeHtml(code)}</p></main></div></body></html>`;
 }
 
 module.exports = {

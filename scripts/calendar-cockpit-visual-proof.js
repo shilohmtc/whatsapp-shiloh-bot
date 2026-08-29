@@ -5,6 +5,7 @@ const crypto = require('node:crypto');
 const { spawnSync } = require('node:child_process');
 const { pathToFileURL } = require('node:url');
 const { renderCalendarPage } = require('../src/presentation/calendarReadOnlyUx');
+const { SERVICE_FAMILY_ACCENTS } = require('../src/presentation/calendarServiceFamilyVisuals');
 const { applyCalendarResponsivePolish } = require('../src/routes/calendarReadOnlyUx');
 
 function chromeExecutable() {
@@ -40,6 +41,27 @@ function buildModel(view) {
       }],
       startsAt: '2026-08-28T08:00:00.000Z', endsAt: '2026-08-28T09:00:00.000Z',
       staffIds: [2], staff: [{ staffId: 2, nameSnapshot: 'Abigail' }],
+    },
+    {
+      id: 7003, kind: 'appointment', canonical: true, source: 'appointments', status: 'scheduled',
+      clientName: 'Foot Care Client', serviceName: 'Medi-Heel Pedicure (No Gel Toes) & Foot Massage',
+      serviceContexts: [{ serviceName: 'Medi-Heel Pedicure (No Gel Toes) & Foot Massage', categoryName: 'Pedicures & Foot Care' }],
+      startsAt: '2026-08-29T08:00:00.000Z', endsAt: '2026-08-29T09:00:00.000Z',
+      staffIds: [1], staff: [{ staffId: 1, nameSnapshot: 'Christel' }],
+    },
+    {
+      id: 7004, kind: 'appointment', canonical: true, source: 'appointments', status: 'confirmed',
+      clientName: 'Massage Client', serviceName: 'Aromatherapy Massage',
+      serviceContexts: [{ serviceName: 'Aromatherapy Massage', categoryName: 'Massage' }],
+      startsAt: '2026-08-30T08:00:00.000Z', endsAt: '2026-08-30T09:00:00.000Z',
+      staffIds: [2], staff: [{ staffId: 2, nameSnapshot: 'Abigail' }],
+    },
+    {
+      id: 7005, kind: 'appointment', canonical: true, source: 'appointments', status: 'scheduled',
+      clientName: 'Beauty Client', serviceName: 'Ombré Brows',
+      serviceContexts: [{ serviceName: 'Ombré Brows', categoryName: 'Permanent Makeup' }],
+      startsAt: '2026-08-31T08:00:00.000Z', endsAt: '2026-08-31T09:00:00.000Z',
+      staffIds: [1], staff: [{ staffId: 1, nameSnapshot: 'Christel' }],
     },
   ];
   const blocks = [{
@@ -94,6 +116,18 @@ for (const view of ['day', 'week', 'agenda']) {
   if (!/data-service-family="targeted_therapeutic"/.test(html) || !/Bamboo Sports Massage - Area Specific/.test(html)) {
     throw new Error(`${view} visual proof is missing the authoritative service-family identifier or service text`);
   }
+  for (const [familyKey, color] of Object.entries(SERVICE_FAMILY_ACCENTS)) {
+    if (!html.includes(`.service-family-icon[data-service-family="${familyKey}"]{color:${color}}`)) {
+      throw new Error(`${view} visual proof is missing the controlled ${familyKey} icon accent`);
+    }
+  }
+  if (view !== 'day') {
+    for (const familyKey of Object.keys(SERVICE_FAMILY_ACCENTS)) {
+      if (!html.includes(`data-service-family="${familyKey}"`)) {
+        throw new Error(`${view} visual proof is missing the ${familyKey} appointment icon`);
+      }
+    }
+  }
   for (const viewport of [
     { name: 'desktop', width: 1440, height: 1000 },
     { name: 'mobile', width: 390, height: 844 },
@@ -122,7 +156,8 @@ if (!/^[0-9a-f]{40}$/.test(exactHead)) throw new Error('Calendar cockpit proof c
 fs.writeFileSync(path.join(outDir, 'manifest.json'), `${JSON.stringify({
   generatedAt: new Date().toISOString(), exactHead,
   serviceVisuals: {
-    day: 'targeted_therapeutic', week: ['targeted_therapeutic', 'facial_skin'], agenda: ['targeted_therapeutic', 'facial_skin'],
+    day: ['targeted_therapeutic'], week: Object.keys(SERVICE_FAMILY_ACCENTS), agenda: Object.keys(SERVICE_FAMILY_ACCENTS),
+    palette: SERVICE_FAMILY_ACCENTS, iconStrokeOnly: true,
     serviceTextVisible: true, controlledSvg: true, practitionerStatusColoursUnchanged: true,
   },
   productionMutations: 0, screenshots: manifest,
