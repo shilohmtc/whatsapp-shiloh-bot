@@ -283,7 +283,7 @@ test('handoff URL keeps credential in fragment on an isolated landing page and b
   assert.doesNotMatch(url.split('#')[0], /handoff=/);
 
   const route = read('src/routes/staffCalendarAccessUx.js');
-  assert.match(route, /router\.get\('\/handoff', createStaffCalendarHandoffPageHandler\)/);
+  assert.match(route, /router\.get\('\/handoff', createStaffCalendarHandoffPageHandler\(options\)\)/);
   assert.doesNotMatch(route, /decorateHandoffAccessPage/);
 });
 
