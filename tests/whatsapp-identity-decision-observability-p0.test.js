@@ -282,6 +282,73 @@ test('stale dual-master session terminates at identity_contract_invalid before r
   }
 });
 
+test('valid stale session enters current-authority reset and re-entry while clearing non-authoritative identity state', async () => {
+  const staleSession = {
+    phone: '27820000000',
+    client_id: 741,
+    crm_v2_client_id: null,
+    identity_model: 'legacy',
+    state: 'collect_name',
+    pending_name: null,
+    pending_contact: '27820000000',
+    pending_date_of_birth: null,
+    pending_gender: null,
+    booking_requested: true,
+    authority_version: 'verified_client_v2_pre_crm_v2_registration',
+  };
+  const legacyResult = {
+    status: 'historical_unverified',
+    reason: 'history_without_explicit_verification',
+    clients: [{ id: 741, has_appointment_history: true }],
+    client: { id: 741 },
+  };
+  const crmV2Result = { status: 'not_found', identity: null, client: null, audit: null };
+  const runtime = await loadSyntheticOnboarding({ initialSession: staleSession, legacyResult, crmV2Result });
+
+  let result;
+  try {
+    result = await runtime.onboarding.processClientIdentityMessage('27820000000', 'booking');
+    assert.equal(result.handled, true);
+    assert.equal(result.identityStatus, undefined);
+    assert.deepEqual(runtime.calls, { legacy: 1, crmV2: 0, sessionWrites: 2 });
+    const durable = runtime.currentSession();
+    assert.equal(durable.client_id, null);
+    assert.equal(durable.crm_v2_client_id, null);
+    assert.equal(durable.identity_model, null);
+    assert.equal(durable.state, 'collect_name');
+    assert.equal(durable.authority_version, AUTHORITY_VERSION);
+  } finally {
+    runtime.restore();
+  }
+
+  const observer = createWhatsAppIdentityDecisionObservability({
+    db: fakeDb(staleSession),
+    legacyResolver: async () => structuredClone(legacyResult),
+    crmV2Resolver: async () => structuredClone(crmV2Result),
+  });
+  const logger = capturingLogger();
+  const sessionBefore = await observer.captureSession('27820000000', AUTHORITY_VERSION);
+  const event = await observer.observeAndLog({
+    logger,
+    phone: '27820000000',
+    currentAuthorityVersion: AUTHORITY_VERSION,
+    sessionBefore,
+    originalResult: result,
+    finalResult: result,
+  });
+
+  assert.equal(event.selectedRoute, 'stale_session_reset_reentry');
+  assert.equal(event.legacyResolutionClass, 'historical_unverified');
+  assert.equal(event.crmV2ResolutionClass, 'not_found');
+  assert.equal(event.durableVerifiedLegacyAuthority, false);
+  assert.equal(event.onboardingSessionPresent, true);
+  assert.equal(event.authorityVersionClass, 'stale');
+  assert.equal(event.clientIdPresent, true);
+  assert.equal(event.crmV2ClientIdPresent, false);
+  assert.equal(event.identityModelPresent, true);
+  assert.equal(logger.records.length, 1);
+});
+
 test('ordinary historical_unverified with no exact CRM V2 authority still enters fresh registration', async () => {
   const runtime = await loadSyntheticOnboarding({
     initialSession: null,
