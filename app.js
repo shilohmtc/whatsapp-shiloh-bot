@@ -58,24 +58,13 @@ const { startGoogleBusinessProfileSyncScheduler } = require("./src/services/goog
 const { startAppointmentLifecycleScheduler } = require("./src/services/appointmentLifecycle");
 const { startCustomerCareScheduler } = require("./src/services/customerCare");
 const { startBookingIntegrityScheduler } = require("./src/services/bookingIntegrityMonitor");
-const { ensureDemoClientPermissions } = require("./src/services/demoClientAccessBootstrap");
-const { ensureJuvanBookingApprovalPolicy } = require("./src/services/juvanBookingApprovalPolicy");
-const { ensureChristelMediHeelOwnership } = require("./src/services/pedicureOwnershipBootstrap");
-const { ensureMassagePackageSchema } = require("./src/services/massagePackageBootstrap");
-const { ensureChristelServiceCatalogueCorrection } = require("./src/services/christelServiceCatalogueCorrectionBootstrap");
 const { startMandatoryDemoCleanupScheduler } = require("./src/services/demoMandatoryCleanup");
 const { startAttendanceFinalizationReminderScheduler } = require("./src/services/attendanceFinalizationReminders");
 const { startHistoricalFinalizationPromptScheduler } = require("./src/services/historicalFinalizationPrompt");
-const { ensureHistoricalFinalizationFinancialSchema } = require("./src/services/historicalFinalizationFinancialBootstrap");
 const { runConfiguredClientProvenanceAudit } = require("./src/services/clientProvenanceAudit");
 const { runCalendarAccessDiagnostic } = require("./src/services/calendarAccessDiagnostic");
-const { runDummyTestAppointmentCleanup } = require("./src/services/dummyTestAppointmentCleanup");
-const { submitStaffFinalizationTemplate, submitStaffFinalizationActionTemplate } = require("./src/services/staffFinalizationTemplateProvisioning");
-const { submitBookingConfirmationTemplate } = require("./src/services/bookingConfirmationTemplateProvisioning");
-const { submitBookingConfirmationV2Template } = require("./src/services/bookingConfirmationV2TemplateProvisioning");
-const { DEFINITIONS: CLIENT_LIFECYCLE_TEMPLATE_DEFINITIONS, getClientLifecycleTemplateStatus, submitClientLifecycleTemplate } = require("./src/services/clientLifecycleTemplateProvisioning");
 const { inspectMetaTemplateInventory } = require("./src/services/metaTemplateContracts");
-const { applyMigrationFile } = require("./src/services/migrations");
+const { verifyMigrationState } = require("./src/services/migrations");
 const {
   ensureDeliveryTable: ensureBookingConfirmationDeliverySchema,
   startCustomerBookingConfirmationScheduler,
@@ -91,28 +80,6 @@ app.get("/health", async (req, res) => { const ok = await checkDatabase(); retur
 app.use("/audit-read", auditReadRoutes); app.use("/admin/privacy", privacyRoutes); app.use("/admin", adminRoutes); app.use("/calendar", calendarRoutes); app.use("/", serviceRoutes); app.use("/", walkinRoutes); app.use("/", bookRoutes); app.use("/", webhookRoutes);
 app.use((err, req, res, next) => { const log = req.log || logger; log.error({ err }, "Unhandled Express error"); if (res.headersSent) return next(err); return res.status(500).json({ error: "Internal server error", requestId: req.id }); });
 
-async function provisionStaffFinalizationTemplateSafely() { try { const result = await submitStaffFinalizationTemplate(); logger.info({ ok: result?.ok === true, submitted: result?.submitted === true, reason: result?.reason || null, templateName: result?.templateName || null, providerStatus: result?.provider?.status || result?.template?.status || null, providerCategory: result?.provider?.category || result?.template?.category || null }, "Staff finalization WhatsApp template provisioning checked"); } catch (error) { logger.warn({ err: error }, "Staff finalization WhatsApp template provisioning failed; reminders remain fail-closed"); } }
-async function provisionStaffFinalizationActionTemplateSafely() { try { const result = await submitStaffFinalizationActionTemplate(); logger.info({ ok: result?.ok === true, submitted: result?.submitted === true, reason: result?.reason || null, templateName: result?.templateName || null, providerStatus: result?.provider?.status || result?.template?.status || null, providerCategory: result?.provider?.category || result?.template?.category || null }, "Staff finalization action template provisioning checked"); } catch (error) { logger.warn({ err: error }, "Staff finalization action template provisioning failed; button prompt remains fail-closed"); } }
-async function provisionBookingConfirmationTemplateSafely() { try { const result = await submitBookingConfirmationTemplate(); logger.info({ ok: result?.ok === true, submitted: result?.submitted === true, reason: result?.reason || null, templateName: result?.templateName || null, configuredTemplateName: result?.configuredTemplateName || null, providerStatus: result?.provider?.status || result?.template?.status || null, providerCategory: result?.provider?.category || result?.template?.category || null }, "Booking confirmation WhatsApp template provisioning checked"); } catch (error) { logger.warn({ err: error }, "Booking confirmation WhatsApp template provisioning failed; plain-text confirmation remains active"); } }
-async function provisionBookingConfirmationV2IfExplicitlyEnabled() {
-  if (String(process.env.META_BOOKING_CONFIRMATION_V2_PROVISION_ON_START || '').toLowerCase() !== 'true') return;
-  try {
-    const result = await submitBookingConfirmationV2Template();
-    logger.info({
-      ok: result?.ok === true,
-      submitted: result?.submitted === true,
-      reason: result?.reason || null,
-      templateName: result?.templateName || null,
-      providerStatus: result?.provider?.status || result?.template?.status || null,
-      providerCategory: result?.provider?.category || result?.template?.category || null,
-      providerLanguage: result?.template?.language || null,
-      exact: result?.template?.exact ?? null,
-      duplicateCount: result?.duplicateCount ?? result?.template?.duplicateCount ?? null,
-    }, "Booking confirmation v2 one-shot provisioning checked");
-  } catch (error) {
-    logger.error({ err: error, metaError: error.response?.data?.error }, "Booking confirmation v2 one-shot provisioning failed");
-  }
-}
 async function auditMetaTemplateInventoryIfExplicitlyEnabled() {
   if (String(process.env.META_TEMPLATE_INVENTORY_AUDIT_ON_START || '').toLowerCase() !== 'true') return;
   try {
@@ -126,34 +93,23 @@ async function auditMetaTemplateInventoryIfExplicitlyEnabled() {
     logger.error({ err: error, metaError: error.response?.data?.error }, "Sanitized Meta template inventory audit failed");
   }
 }
-async function provisionClientLifecycleTemplatesIfExplicitlyEnabled() {
-  if (String(process.env.META_LIFECYCLE_PROVISION_ON_START || '').toLowerCase() !== 'true') return;
-  try {
-    const before = await getClientLifecycleTemplateStatus();
-    if (!before?.ok) { logger.warn({ reason: before?.reason || null }, "Client lifecycle template one-shot provisioning skipped"); return; }
-    const keys = Object.keys(CLIENT_LIFECYCLE_TEMPLATE_DEFINITIONS); const results = [];
-    for (const key of keys) { const existing = before.templates.find((item) => item.key === key)?.provider; if (existing) { results.push({ key, submitted: false, reason: 'already_exists', providerStatus: existing.status || null }); continue; } const result = await submitClientLifecycleTemplate(key); results.push({ key, submitted: result?.submitted === true, reason: result?.reason || null, providerStatus: result?.provider?.status || null }); }
-    logger.info({ results }, "Client lifecycle template one-shot provisioning completed");
-  } catch (error) { logger.error({ err: error, metaError: error.response?.data?.error }, "Client lifecycle template one-shot provisioning failed"); }
-}
-
 const PORT = process.env.PORT || 3000; let server;
 async function start() {
-  const packageSchema = await ensureMassagePackageSchema(); logger.info(packageSchema, "Massage package schema verified");
-  const demoAccess = await ensureDemoClientPermissions(); logger.info(demoAccess, "Controlled demo client production UI disabled");
+  const migrationAuthority = await verifyMigrationState();
+  logger.info({
+    migrationFiles: migrationAuthority.migrationFiles,
+    ledgerRows: migrationAuthority.ledgerRows,
+    pending: migrationAuthority.pending.length,
+    checksumMismatches: migrationAuthority.checksumMismatches.length,
+    ledgerRowsAbsentFromRelease: migrationAuthority.ledgerRowsAbsentFromRelease.length,
+    mutationAuthority: 'npm run db:migrate',
+    startupMode: 'verify_only',
+  }, "Production migration authority verified");
   try { const calendarAccess = await runCalendarAccessDiagnostic(); logger.info(calendarAccess, "Sanitized Calendar staff access diagnostic"); } catch (error) { logger.warn({ err: error }, "Sanitized Calendar staff access diagnostic failed"); }
-  const juvanApprovalPolicy = await ensureJuvanBookingApprovalPolicy(); logger.info(juvanApprovalPolicy, "Juvan Botha JP booking approval policy verified");
-  const mediHeelOwnership = await ensureChristelMediHeelOwnership(); logger.info(mediHeelOwnership, "Christel MediHeel ownership verified");
-  const christelCatalogueCorrection = await ensureChristelServiceCatalogueCorrection(); logger.info(christelCatalogueCorrection, "Christel service catalogue correction verified");
-  await ensureHistoricalFinalizationFinancialSchema(); logger.info({ initialized: true }, "Historical finalization financial schema verified");
-  const initialConfirmationMigration = await applyMigrationFile('083_initial_booking_confirmation_guarantee.sql');
-  const calendarCrmV2Migration = await applyMigrationFile('085_calendar_clean_crm_v2_cutover.sql');
-  const whatsAppCrmV2IdentityCompatMigration = await applyMigrationFile('086_whatsapp_crm_v2_identity_compat.sql');
-  logger.info({ initialized: true, migration: whatsAppCrmV2IdentityCompatMigration.filename, migrationAppliedNow: whatsAppCrmV2IdentityCompatMigration.applied, checksumVerified: whatsAppCrmV2IdentityCompatMigration.checksumVerified === true, identityContractVersion: 'whatsapp_crm_identity_compat_v1', legacyCompatibility: true, crmV2RegistrationActive: true, registrationBoundary: 'crmV2ClientService.registerWhatsAppClient' }, "WhatsApp CRM V2 identity compatibility schema verified");
-  await ensureBookingConfirmationDeliverySchema(); logger.info({ initialized: true, migrations: ['071_booking_confirmation_template_evidence.sql', '083_initial_booking_confirmation_guarantee.sql', '085_calendar_clean_crm_v2_cutover.sql'], migrationAppliedNow: initialConfirmationMigration.applied || calendarCrmV2Migration.applied, checksumVerified: initialConfirmationMigration.checksumVerified === true && calendarCrmV2Migration.checksumVerified === true, durableRetryColumns: true, crmV2RecipientSnapshots: true }, "Booking confirmation delivery evidence schema verified");
-  const dummyTestCleanup = await runDummyTestAppointmentCleanup(); if (dummyTestCleanup.enabled) logger.info(dummyTestCleanup, "Dummy Test booking cleanup startup gate completed");
+  logger.info({ initialized: true, migrationAppliedNow: false, identityContractVersion: 'whatsapp_crm_identity_compat_v1', legacyCompatibility: true, crmV2RegistrationActive: true, registrationBoundary: 'crmV2ClientService.registerWhatsAppClient' }, "WhatsApp CRM V2 identity compatibility schema verified");
+  await ensureBookingConfirmationDeliverySchema(); logger.info({ initialized: true, migrations: ['071_booking_confirmation_template_evidence.sql', '083_initial_booking_confirmation_guarantee.sql', '085_calendar_clean_crm_v2_cutover.sql'], migrationAppliedNow: false, checksumVerified: true, durableRetryColumns: true, crmV2RecipientSnapshots: true }, "Booking confirmation delivery evidence schema verified");
   try { await runConfiguredClientProvenanceAudit(logger); } catch (error) { logger.error({ err: error }, "Read-only CRM provenance audit failed"); }
-  await provisionStaffFinalizationTemplateSafely(); await provisionStaffFinalizationActionTemplateSafely(); await provisionBookingConfirmationTemplateSafely(); await provisionBookingConfirmationV2IfExplicitlyEnabled(); await provisionClientLifecycleTemplatesIfExplicitlyEnabled(); await auditMetaTemplateInventoryIfExplicitlyEnabled();
+  await auditMetaTemplateInventoryIfExplicitlyEnabled();
   server = app.listen(PORT, () => { logger.info({ port: PORT }, "Shiloh started"); startConversationSessionCleanupScheduler(); startTemporarySessionCleanupScheduler(); startGoogleBusinessProfileSyncScheduler(); startAppointmentLifecycleScheduler(); startCustomerCareScheduler(); startBookingIntegrityScheduler(); startCustomerBookingConfirmationScheduler(); startMandatoryDemoCleanupScheduler(); startAttendanceFinalizationReminderScheduler(); startHistoricalFinalizationPromptScheduler(); });
 }
 start().catch((error) => { logger.fatal({ err: error }, "Shiloh failed during startup"); process.exit(1); });

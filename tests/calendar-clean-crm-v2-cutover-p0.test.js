@@ -16,7 +16,8 @@ test('085 is the smallest expand-only compatibility seam and performs no data mu
   assert.match(sql, /customer_message_deliveries_v2_recipient_check/);
   assert.doesNotMatch(sql, /\b(?:UPDATE|INSERT\s+INTO|DELETE\s+FROM)\b/i);
   assert.doesNotMatch(sql, /ALTER TABLE appointments|crm_v2_client_id\s*=|FROM clients|JOIN clients/i);
-  assert.match(read('app.js'), /applyMigrationFile\('085_calendar_clean_crm_v2_cutover\.sql'\)/);
+  assert.match(read('app.js'), /verifyMigrationState\(\)/);
+  assert.doesNotMatch(read('app.js'), /applyMigrationFile/);
 });
 
 test('V2 final commit orders all canonical checks, last identity reread, appointment write, durable queue and commit', () => {

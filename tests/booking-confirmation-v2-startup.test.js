@@ -6,10 +6,10 @@ const path = require('node:path');
 const appSource = fs.readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8');
 const liveConfirmation = fs.readFileSync(path.join(__dirname, '..', 'src', 'services', 'customerBookingConfirmation.js'), 'utf8');
 
-test('booking confirmation v2 provisioning is explicit one-shot only', () => {
-  assert.match(appSource, /META_BOOKING_CONFIRMATION_V2_PROVISION_ON_START/);
-  assert.match(appSource, /toLowerCase\(\) !== 'true'/);
-  assert.match(appSource, /submitBookingConfirmationV2Template/);
+test('booking confirmation v2 provider provisioning is not attached to ordinary startup', () => {
+  assert.doesNotMatch(appSource, /META_BOOKING_CONFIRMATION_V2_PROVISION_ON_START/);
+  assert.doesNotMatch(appSource, /submitBookingConfirmationV2Template/);
+  assert.match(appSource, /verifyMigrationState\(\)/);
 });
 
 test('booking confirmation v1 remains an explicit fallback while v2 is selected only by configuration', () => {

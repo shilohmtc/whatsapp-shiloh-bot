@@ -10,6 +10,7 @@ const { postConfirmationButtons, bookingConfirmationV2QuickReplyPayloads } = req
 const { createAppointment: enrollAppointmentLifecycle } = require('./appointmentLifecycle');
 const { resolveClientFacingName } = require('./clientFacingNameAuthority');
 const { exactPhoneCandidates } = require('./clientVerifiedIdentity');
+const { verifyMigrationFiles } = require('./migrations');
 const logger = require('../lib/logger');
 
 const LIVE_BOOKING_CONFIRMATION_V1 = 'shiloh_booking_confirmation_v1';
@@ -39,82 +40,38 @@ function bookingConfirmationTemplatePayload({template,appointmentId,clientName,s
 function providerMessageId(response){return response?.messages?.[0]?.id||null;}
 
 async function ensureDeliveryTable(){
-  if(deliveryTableReady)return;
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS customer_message_deliveries (
-      appointment_id BIGINT NOT NULL REFERENCES appointments(id) ON DELETE CASCADE,
-      message_kind TEXT NOT NULL,
-      status TEXT NOT NULL CHECK (status IN ('pending','sending','sent','failed','uncertain')),
-      claimed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      sent_at TIMESTAMPTZ,
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      template_name TEXT,
-      provider_message_id TEXT,
-      client_id BIGINT REFERENCES clients(id) ON DELETE CASCADE,
-      crm_v2_client_id BIGINT REFERENCES crm_v2_clients(id) ON DELETE RESTRICT,
-      recipient_mobile TEXT,
-      client_name_snapshot TEXT,
-      contact_id BIGINT REFERENCES client_contacts(id) ON DELETE SET NULL,
-      name_authority_id BIGINT REFERENCES client_facing_name_authorities(id) ON DELETE SET NULL,
-      attempt_count INTEGER NOT NULL DEFAULT 0 CHECK (attempt_count >= 0),
-      last_attempt_at TIMESTAMPTZ,
-      next_attempt_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      last_error TEXT,
-      PRIMARY KEY (appointment_id,message_kind)
-    )
+  if(deliveryTableReady)return {initialized:true,verifiedOnly:true};
+  await verifyMigrationFiles([
+    '071_booking_confirmation_template_evidence.sql',
+    '083_initial_booking_confirmation_guarantee.sql',
+    '085_calendar_clean_crm_v2_cutover.sql',
+  ]);
+  const verification=await pool.query(`
+    SELECT
+      to_regclass('public.customer_message_deliveries') IS NOT NULL AS delivery_table,
+      (SELECT COUNT(*)::int FROM information_schema.columns
+        WHERE table_schema='public' AND table_name='customer_message_deliveries'
+          AND column_name IN ('template_name','provider_message_id','client_id','crm_v2_client_id',
+            'recipient_mobile','client_name_snapshot','contact_id','name_authority_id','attempt_count',
+            'last_attempt_at','next_attempt_at','last_error')) = 12 AS required_columns,
+      (SELECT COUNT(*)::int FROM pg_constraint
+        WHERE conrelid='customer_message_deliveries'::regclass
+          AND conname IN ('customer_message_deliveries_status_check',
+            'customer_message_deliveries_attempt_count_check',
+            'customer_message_deliveries_one_client_model_check',
+            'customer_message_deliveries_v2_recipient_check')
+          AND convalidated) = 4 AS required_constraints,
+      EXISTS (SELECT 1 FROM pg_indexes
+        WHERE schemaname='public' AND indexname='idx_customer_message_deliveries_retry') AS retry_index,
+      EXISTS (SELECT 1 FROM pg_indexes
+        WHERE schemaname='public' AND indexname='idx_customer_message_deliveries_crm_v2_client_id') AS crm_v2_index
   `);
-  await pool.query(`
-    ALTER TABLE customer_message_deliveries
-      ADD COLUMN IF NOT EXISTS template_name TEXT,
-      ADD COLUMN IF NOT EXISTS provider_message_id TEXT,
-      ADD COLUMN IF NOT EXISTS client_id BIGINT REFERENCES clients(id) ON DELETE CASCADE,
-      ADD COLUMN IF NOT EXISTS crm_v2_client_id BIGINT REFERENCES crm_v2_clients(id) ON DELETE RESTRICT,
-      ADD COLUMN IF NOT EXISTS recipient_mobile TEXT,
-      ADD COLUMN IF NOT EXISTS client_name_snapshot TEXT,
-      ADD COLUMN IF NOT EXISTS contact_id BIGINT REFERENCES client_contacts(id) ON DELETE SET NULL,
-      ADD COLUMN IF NOT EXISTS name_authority_id BIGINT REFERENCES client_facing_name_authorities(id) ON DELETE SET NULL,
-      ADD COLUMN IF NOT EXISTS attempt_count INTEGER NOT NULL DEFAULT 0,
-      ADD COLUMN IF NOT EXISTS last_attempt_at TIMESTAMPTZ,
-      ADD COLUMN IF NOT EXISTS next_attempt_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      ADD COLUMN IF NOT EXISTS last_error TEXT
-  `);
-  await pool.query(`
-    UPDATE customer_message_deliveries delivery
-       SET client_id=appointment.client_id
-      FROM appointments appointment
-     WHERE delivery.appointment_id=appointment.id
-       AND delivery.client_id IS NULL
-  `);
-  await pool.query(`
-    DO $$
-    DECLARE status_constraint TEXT;
-    BEGIN
-      SELECT pg_get_constraintdef(oid)
-        INTO status_constraint
-        FROM pg_constraint
-       WHERE conrelid='customer_message_deliveries'::regclass
-         AND conname='customer_message_deliveries_status_check';
-      IF status_constraint IS NULL OR POSITION('pending' IN status_constraint)=0 OR POSITION('failed' IN status_constraint)=0 OR POSITION('uncertain' IN status_constraint)=0 THEN
-        ALTER TABLE customer_message_deliveries DROP CONSTRAINT IF EXISTS customer_message_deliveries_status_check;
-        ALTER TABLE customer_message_deliveries ADD CONSTRAINT customer_message_deliveries_status_check
-          CHECK (status IN ('pending','sending','sent','failed','uncertain'));
-      END IF;
-      IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint
-         WHERE conrelid='customer_message_deliveries'::regclass
-           AND conname='customer_message_deliveries_attempt_count_check'
-      ) THEN
-        ALTER TABLE customer_message_deliveries ADD CONSTRAINT customer_message_deliveries_attempt_count_check
-          CHECK (attempt_count >= 0);
-      END IF;
-    END $$
-  `);
-  await pool.query(`
-    CREATE INDEX IF NOT EXISTS idx_customer_message_deliveries_retry
-      ON customer_message_deliveries(next_attempt_at,appointment_id)
-      WHERE message_kind='booking_confirmation' AND status IN ('pending','failed')
-  `);
+  const state=verification.rows[0]||{};
+  if(!state.delivery_table||!state.required_columns||!state.required_constraints||!state.retry_index||!state.crm_v2_index){
+    throw new Error('Booking confirmation delivery schema verification failed; run controlled migration tooling before startup');
+  }
   deliveryTableReady=true;
+  return {initialized:true,verifiedOnly:true};
 }
 
 async function loadBookingConfirmationAuthority(appointmentId,db=pool){

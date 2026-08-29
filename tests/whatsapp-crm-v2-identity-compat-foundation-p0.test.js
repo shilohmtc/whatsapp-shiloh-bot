@@ -67,9 +67,10 @@ test('086 enforces no dual master and a strict durable discriminator without bac
 
 test('production startup still verifies 086 before traffic and now reports registration active', () => {
   const app = read('app.js');
-  const migration = app.indexOf("applyMigrationFile('086_whatsapp_crm_v2_identity_compat.sql')");
+  const migration = app.indexOf('verifyMigrationState()');
   const listen = app.indexOf('app.listen(PORT');
   assert.ok(migration >= 0 && listen > migration);
+  assert.doesNotMatch(app, /applyMigrationFile/);
   assert.match(app, /identityContractVersion: 'whatsapp_crm_identity_compat_v1'/);
   assert.match(app, /crmV2RegistrationActive: true/);
 });

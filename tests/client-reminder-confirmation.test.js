@@ -89,10 +89,12 @@ test('customer-care router gives explicit reminder confirmation first chance', (
 });
 
 test('booking confirmation has a durable per-appointment delivery claim', () => {
-  assert.match(bookingConfirmation, /CREATE TABLE IF NOT EXISTS customer_message_deliveries/);
-  assert.match(bookingConfirmation, /PRIMARY KEY \(appointment_id,message_kind\)/);
+  const migration = fs.readFileSync(path.join(root, 'migrations/071_booking_confirmation_template_evidence.sql'), 'utf8');
+  assert.match(migration, /CREATE TABLE IF NOT EXISTS customer_message_deliveries/);
+  assert.match(migration, /PRIMARY KEY \(appointment_id, message_kind\)/);
   assert.match(bookingConfirmation, /ON CONFLICT \(appointment_id,message_kind\) DO NOTHING/);
   assert.match(bookingConfirmation, /already_sent_or_in_progress/);
+  assert.match(bookingConfirmation, /verifyMigrationFiles/);
 });
 
 test('unverified booking-confirmation recipient is exposed as manual action rather than ordinary retry', () => {

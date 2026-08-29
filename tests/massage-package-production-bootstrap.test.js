@@ -17,12 +17,11 @@ test('massage package bootstrap applies only the approved migration with checksu
   assert.match(bootstrap, /await client\.query\('ROLLBACK'\)/);
 });
 
-test('production startup verifies package schema before opening the HTTP listener', () => {
-  const schemaCall = app.indexOf('await ensureMassagePackageSchema()');
+test('ordinary startup verifies migration authority without applying package bootstrap', () => {
+  const schemaCall = app.indexOf('await verifyMigrationState()');
   const listenCall = app.indexOf('server = app.listen');
-  assert.ok(schemaCall >= 0, 'package schema bootstrap must be called');
-  assert.ok(listenCall > schemaCall, 'package schema must be verified before Shiloh accepts traffic');
-  assert.match(app, /Massage package schema verified/);
+  assert.ok(schemaCall >= 0 && listenCall > schemaCall, 'migration authority must be verified before Shiloh accepts traffic');
+  assert.doesNotMatch(app, /ensureMassagePackageSchema/);
 });
 
 test('Sports Massage activation delegates before the generic Admin assistant fallback is captured by webhook routes', () => {

@@ -165,9 +165,11 @@ test('admin lookup searches aliases but does not turn an alias into name authori
 test('startup verifies migration 080 before application process', () => {
   const pkg = JSON.parse(source('package.json'));
   const start = pkg.scripts.start;
-  assert.match(start, /ensure-client-identity-verification\.js && node scripts\/ensure-client-facing-name-authority\.js/);
+  assert.match(start, /^node scripts\/verify-migrations\.js && node /);
   const guard = source('scripts/ensure-client-facing-name-authority.js');
   assert.match(guard, /080_client_facing_name_authority\.sql/);
   assert.match(guard, /checksumVerified/);
   assert.match(guard, /heuristicPromotionPerformed: false/);
+  assert.match(guard, /verifyMigrationFile/);
+  assert.doesNotMatch(guard, /applyMigrationFile/);
 });

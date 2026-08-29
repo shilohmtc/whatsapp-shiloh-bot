@@ -1,5 +1,5 @@
 const { pool } = require('../db/pool');
-const { applyMigrationFile } = require('./migrations');
+const { verifyMigrationFile } = require('./migrations');
 const { ensureClientRescheduleApprovalSchema } = require('./clientRescheduleApprovalSchema');
 const { sendWhatsAppTemplate } = require('./whatsapp');
 const { resolveClientFacingName } = require('./clientFacingNameAuthority');
@@ -35,7 +35,7 @@ async function ensureApprovedRescheduleNotificationSchema() {
   if (schemaReady) return schemaReady;
   schemaReady = (async () => {
     await ensureClientRescheduleApprovalSchema();
-    const migration = await applyMigrationFile(MIGRATION);
+    const migration = await verifyMigrationFile(MIGRATION);
     const verification = await pool.query(`
       SELECT
         EXISTS (
@@ -69,8 +69,8 @@ async function ensureApprovedRescheduleNotificationSchema() {
     return {
       initialized: true,
       migration: MIGRATION,
-      applied: migration.applied === true,
-      checksumVerified: migration.checksumVerified === true,
+      applied: false,
+      checksumVerified: migration.checksumMatches === true,
       appliedAt: migration.appliedAt || null,
       attemptColumn: row.attempt_column === true,
       claimColumn: row.claim_column === true,

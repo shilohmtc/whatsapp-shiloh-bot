@@ -1,6 +1,6 @@
 require('dotenv').config();
 const { pool } = require('../src/db/pool');
-const { applyMigrationFile, getMigrationStatus } = require('../src/services/migrations');
+const { verifyMigrationFile } = require('../src/services/migrations');
 
 const FILENAME = '080_client_facing_name_authority.sql';
 
@@ -25,18 +25,14 @@ async function verifySchema() {
 }
 
 async function main() {
-  const applied = await applyMigrationFile(FILENAME);
-  const status = (await getMigrationStatus()).find((item) => item.filename === FILENAME);
-  if (!status?.applied || status.checksumMatches !== true) {
-    throw new Error(`Client-facing-name authority migration failed verification: ${FILENAME}`);
-  }
+  const status = await verifyMigrationFile(FILENAME);
   const schema = await verifySchema();
   console.log(JSON.stringify({
     event: 'client_facing_name_authority_schema_verified',
     filename: FILENAME,
-    appliedNow: applied.applied,
-    checksumVerified: applied.checksumVerified === true && status.checksumMatches === true,
-    appliedAt: status.appliedAt || applied.appliedAt || null,
+    appliedNow: false,
+    checksumVerified: status.checksumMatches === true,
+    appliedAt: status.appliedAt || null,
     aliasTable: schema.alias_table === true,
     authorityTable: schema.authority_table === true,
     oneActiveIndex: schema.one_active_index === true,
