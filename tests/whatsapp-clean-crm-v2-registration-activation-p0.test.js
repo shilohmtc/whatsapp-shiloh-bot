@@ -117,7 +117,7 @@ function registrationSession(overrides = {}) {
     pending_date_of_birth: '1990-05-14',
     pending_gender: 'female',
     booking_requested: true,
-    authority_version: 'verified_client_v2_archive_reclaim',
+    authority_version: 'verified_client_v3_crm_v2_fresh_registration',
     ...overrides,
   };
 }
