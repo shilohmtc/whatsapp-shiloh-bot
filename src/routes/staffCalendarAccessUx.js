@@ -3,6 +3,7 @@ const {
   renderStaffCalendarAccessPage,
   staffCalendarAccessClientScript,
 } = require('../presentation/staffCalendarAccessUx');
+const { staffCalendarHandoffClientScript } = require('../presentation/staffCalendarHandoffUx');
 const { providerIndependentAuthPolicy } = require('../services/providerIndependentStaffAuth');
 
 function isStaffCalendarAccessUxEnabled(env = process.env) {
@@ -25,6 +26,10 @@ function normalizeReason(value) {
   return reason === 'logout' || reason === 'session' ? reason : null;
 }
 
+function decorateHandoffAccessPage(html, scriptPath) {
+  return String(html).replace('</head>', `<script src="${scriptPath}" defer></script></head>`);
+}
+
 function createStaffCalendarAccessPageHandler({
   env = process.env,
   renderPage = renderStaffCalendarAccessPage,
@@ -33,11 +38,11 @@ function createStaffCalendarAccessPageHandler({
     setAccessSecurityHeaders(res);
     if (!isStaffCalendarAccessUxEnabled(env)) return res.status(404).type('text/plain').send('Not Found');
     const basePath = req.baseUrl || '/calendar/staff';
-    const html = renderPage({
+    const html = decorateHandoffAccessPage(renderPage({
       reason: normalizeReason(req.query?.reason),
       clientScriptPath: `${basePath}/client.js`,
       providerIndependentAuthEnabled: providerIndependentAuthPolicy(env).operational,
-    });
+    }), `${basePath}/handoff.js`);
     return res.status(200).type('html').send(html);
   };
 }
@@ -53,10 +58,22 @@ function createStaffCalendarAccessClientHandler({
   };
 }
 
+function createStaffCalendarHandoffClientHandler({
+  env = process.env,
+  renderClient = staffCalendarHandoffClientScript,
+} = {}) {
+  return function staffCalendarHandoffClient(_req, res) {
+    setAccessSecurityHeaders(res);
+    if (!isStaffCalendarAccessUxEnabled(env)) return res.status(404).type('text/plain').send('Not Found');
+    return res.status(200).type('application/javascript').send(renderClient());
+  };
+}
+
 function createStaffCalendarAccessRouter(options = {}) {
   const router = express.Router();
   router.get('/', createStaffCalendarAccessPageHandler(options));
   router.get('/client.js', createStaffCalendarAccessClientHandler(options));
+  router.get('/handoff.js', createStaffCalendarHandoffClientHandler(options));
   return router;
 }
 
@@ -64,6 +81,8 @@ module.exports = createStaffCalendarAccessRouter();
 module.exports.createStaffCalendarAccessRouter = createStaffCalendarAccessRouter;
 module.exports.createStaffCalendarAccessPageHandler = createStaffCalendarAccessPageHandler;
 module.exports.createStaffCalendarAccessClientHandler = createStaffCalendarAccessClientHandler;
+module.exports.createStaffCalendarHandoffClientHandler = createStaffCalendarHandoffClientHandler;
 module.exports.isStaffCalendarAccessUxEnabled = isStaffCalendarAccessUxEnabled;
 module.exports.setAccessSecurityHeaders = setAccessSecurityHeaders;
 module.exports.normalizeReason = normalizeReason;
+module.exports.decorateHandoffAccessPage = decorateHandoffAccessPage;
