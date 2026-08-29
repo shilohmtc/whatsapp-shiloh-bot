@@ -1,7 +1,6 @@
 const express = require('express');
 const { pool } = require('../db/pool');
 const { createCalendarCreateBookingService } = require('../services/calendarCreateBooking');
-const { isEmergencyCalendarBookingEnabled } = require('../services/emergencyCalendarBootstrap');
 const {
   requireStaffSession,
   sameOriginGuard,
@@ -26,7 +25,6 @@ function setBookingSecurityHeaders(res) {
 
 function statusForError(error) {
   const code = String(error?.code || '');
-  if (code === 'CALENDAR_BOOKING_DISABLED') return 404;
   if (code === 'CALENDAR_BOOKING_FORBIDDEN' || code === 'CALENDAR_BOOKING_SCOPE_UNRESOLVED') return 403;
   if (code === 'CALENDAR_BOOKING_CRM_V2_CONFLICT' || code === 'CALENDAR_BOOKING_CLIENT_MOBILE_CHANGED' || code === 'CALENDAR_BOOKING_CRM_V2_CLIENT_INACTIVE') return 409;
   if (code === 'CALENDAR_BOOKING_INELIGIBLE_SELECTION' || code === 'CALENDAR_BOOKING_CONFIRMATION_UNSAFE' || code === 'CALENDAR_BOOKING_NO_PENDING') return 409;
@@ -84,7 +82,6 @@ function createCalendarCreateBookingRouter({
 
   router.use((req, res, next) => {
     setBookingSecurityHeaders(res);
-    if (!isEmergencyCalendarBookingEnabled(env)) return res.status(404).type('text/plain').send('Not Found');
     return next();
   });
 

@@ -4,7 +4,6 @@ const calendarReadOnlyUxRoutes = require('./calendarReadOnlyUx');
 const staffCalendarAccessUxRoutes = require('./staffCalendarAccessUx');
 const { createCalendarCreateBookingRouter } = require('./calendarCreateBooking');
 const { createStaffBrowserSessionService } = require('../services/staffBrowserSession');
-const { createPilotGuardedStaffBrowserSessionService } = require('../services/staffBrowserPilotGate');
 const { createStaffBrowserSessionRouter } = require('./staffBrowserSession');
 const { createStaffBrowserChallengeDispatcher } = require('../services/staffBrowserChallengeDelivery');
 const { createOptionalCalendarSessionMiddleware } = require('../middleware/staffBrowserSession');
@@ -12,13 +11,9 @@ const { createOperatorContactAuthorityRouter } = require('./operatorContactAutho
 const { createCalendarOperationalMutationRouter } = require('./calendarOperationalMutations');
 const router = express.Router();
 
-const baseStaffBrowserSessionService = createStaffBrowserSessionService({
+const staffBrowserSessionService = createStaffBrowserSessionService({
   db: pool,
   challengeDispatcher: createStaffBrowserChallengeDispatcher(),
-});
-const staffBrowserSessionService = createPilotGuardedStaffBrowserSessionService({
-  service: baseStaffBrowserSessionService,
-  db: pool,
 });
 
 function esc(v=''){return String(v).replace(/\\/g,'\\\\').replace(/\n/g,'\\n').replace(/,/g,'\\,').replace(/;/g,'\\;');}

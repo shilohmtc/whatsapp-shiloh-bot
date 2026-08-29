@@ -37,7 +37,6 @@ function fileSha256(file) {
 function createFixture() {
   const env = {
     NODE_ENV: 'production',
-    SHILOH_EMERGENCY_CHRISTEL_CALENDAR_BOOKING_ENABLED: 'true',
   };
   const token = opaque('crm-v2-calendar-browser-session');
   const session = { sessionId: 1526, adminId: 71, csrfToken: opaque('csrf:0'), rotations: 0 };

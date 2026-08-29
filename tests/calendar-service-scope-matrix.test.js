@@ -5,7 +5,7 @@ const path = require('node:path');
 
 const { createCalendarCreateBookingService } = require('../src/services/calendarCreateBooking');
 
-const env = { SHILOH_EMERGENCY_CHRISTEL_CALENDAR_BOOKING_ENABLED: 'true' };
+const env = {};
 const createPermissions = { 'appointment:view': true, 'appointment:create': true, 'client:lookup': true };
 
 const admins = {

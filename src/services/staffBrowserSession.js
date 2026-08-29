@@ -325,7 +325,7 @@ function createStaffBrowserSessionService({
     const result = await db.query(
       `SELECT bs.id AS session_id, bs.admin_id, bs.csrf_hash, bs.issued_at, bs.expires_at, bs.revoked_at,
               bs.auth_method, bs.reauthenticated_at, bs.recovery_required,
-              a.staff_id, a.role, a.business_role, a.calendar_scope, a.service_scope,
+              a.id, a.staff_id, a.role, a.business_role, a.calendar_scope, a.service_scope,
               a.permissions, a.active AS admin_active, s.status AS staff_status
          FROM staff_browser_sessions bs
          JOIN staff_admin_accounts a ON a.id = bs.admin_id

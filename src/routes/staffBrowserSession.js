@@ -1,7 +1,6 @@
 const express = require('express');
 const { pool } = require('../db/pool');
 const { createStaffBrowserSessionService } = require('../services/staffBrowserSession');
-const { createEmergencyCalendarBootstrapService } = require('../services/emergencyCalendarBootstrap');
 const { createProviderIndependentStaffAuthService } = require('../services/providerIndependentStaffAuth');
 const {
   renderProviderIndependentStaffAuthPage,
@@ -19,7 +18,6 @@ const {
 function createStaffBrowserSessionRouter({
   env = process.env,
   service = createStaffBrowserSessionService({ db: pool, challengeDispatcher: null }),
-  emergencyBootstrapService = createEmergencyCalendarBootstrapService({ db: pool, env }),
   providerIndependentAuthService = createProviderIndependentStaffAuthService({ db: pool, env }),
 } = {}) {
   const router = express.Router();
@@ -141,32 +139,6 @@ function createStaffBrowserSessionRouter({
       if (!result.ok) return providerAuthError(res, result, 'Invalid or expired controlled recovery handoff');
       return sendAuthenticatedSession(res, result);
     } catch (error) { return next(error); }
-  });
-
-  router.post('/emergency-bootstrap/exchange', sameOrigin, async (req, res, next) => {
-    try {
-      const result = await emergencyBootstrapService.exchange({
-        token: req.body?.token,
-        requestFingerprintHash: requestFingerprintHash(req),
-      });
-      if (!result.ok && result.code === 'EMERGENCY_CALENDAR_DISABLED') {
-        return res.status(404).json({ error: 'Not Found', requestId: req.id });
-      }
-      if (!result.ok) {
-        return res.status(401).json({ error: 'Invalid or expired secure Calendar handoff', requestId: req.id });
-      }
-      res.setHeader('Cache-Control', 'no-store');
-      res.setHeader('Set-Cookie', serializeSessionCookie(result.sessionToken, {
-        env,
-        maxAgeSeconds: Math.max(1, Math.floor((new Date(result.expiresAt).getTime() - Date.now()) / 1000)),
-      }));
-      return res.status(200).json({
-        authenticated: true,
-        viewer: result.viewer || null,
-      });
-    } catch (error) {
-      return next(error);
-    }
   });
 
   router.get('/session', requireSession, async (req, res, next) => {

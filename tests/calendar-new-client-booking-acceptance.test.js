@@ -7,13 +7,12 @@ const {
   createCalendarCreateBookingService,
   normalizeNewClientInput,
 } = require('../src/services/calendarCreateBooking');
-const { EMERGENCY_ADMIN_ID } = require('../src/services/emergencyCalendarBootstrap');
-
-const enabledEnv = { SHILOH_EMERGENCY_CHRISTEL_CALENDAR_BOOKING_ENABLED: 'true' };
+const TEST_ADMIN_ID = 2;
+const enabledEnv = {};
 
 function authorityRow(overrides = {}) {
   return {
-    id: EMERGENCY_ADMIN_ID,
+    id: TEST_ADMIN_ID,
     staff_id: 9,
     display_name: 'Christel',
     role: 'admin',
@@ -154,7 +153,7 @@ test('client choice is exclusive and invalid identity fails before service selec
     crmV2Service: crmV2({ async createClient() { creates += 1; } }),
   });
   await assert.rejects(
-    service.prepare({ adminId: EMERGENCY_ADMIN_ID, clientId: 701, newClient: { name: 'Jane Doe', mobile: '0821234567' }, staffId: 9, serviceId: 44, date: '2026-08-28', time: '10:15' }),
+    service.prepare({ adminId: TEST_ADMIN_ID, clientId: 701, newClient: { name: 'Jane Doe', mobile: '0821234567' }, staffId: 9, serviceId: 44, date: '2026-08-28', time: '10:15' }),
     (error) => error?.code === 'CALENDAR_BOOKING_INVALID_CLIENT_SELECTION'
   );
   assert.equal(creates, 0);
@@ -170,7 +169,7 @@ test('out-of-scope service is rejected before createClient can mutate CRM V2', a
     crmV2Service: crmV2({ async createClient() { creates += 1; } }),
   });
   await assert.rejects(
-    service.prepare({ adminId: EMERGENCY_ADMIN_ID, newClient: { name: 'Jane Doe', mobile: '0821234567' }, staffId: 9, serviceId: 44, date: '2026-08-28', time: '10:15' }),
+    service.prepare({ adminId: TEST_ADMIN_ID, newClient: { name: 'Jane Doe', mobile: '0821234567' }, staffId: 9, serviceId: 44, date: '2026-08-28', time: '10:15' }),
     (error) => error?.code === 'CALENDAR_BOOKING_INELIGIBLE_SELECTION'
   );
   assert.equal(creates, 0);
@@ -189,11 +188,11 @@ test('New client uses createClient, exact actor provenance, server reread and th
     }),
     prepareBooking: async (input) => { prepareCalls.push(input); return preparedResult(input.crmV2Client); },
   });
-  const result = await service.prepare({ adminId: EMERGENCY_ADMIN_ID, newClient: { name: 'Jane Doe', mobile: '082 123 4567' }, staffId: 9, serviceId: 44, date: '2026-08-28', time: '10:15' });
-  assert.deepEqual(createCalls, [{ name: 'Jane Doe', mobile: '082 123 4567', actorReference: `calendar_admin:${EMERGENCY_ADMIN_ID}` }]);
+  const result = await service.prepare({ adminId: TEST_ADMIN_ID, newClient: { name: 'Jane Doe', mobile: '082 123 4567' }, staffId: 9, serviceId: 44, date: '2026-08-28', time: '10:15' });
+  assert.deepEqual(createCalls, [{ name: 'Jane Doe', mobile: '082 123 4567', actorReference: `calendar_admin:${TEST_ADMIN_ID}` }]);
   assert.deepEqual(getCalls, ['701']);
   assert.equal(prepareCalls[0].crmV2Client.id, '701');
-  assert.equal(prepareCalls[0].adminId, EMERGENCY_ADMIN_ID);
+  assert.equal(prepareCalls[0].adminId, TEST_ADMIN_ID);
   assert.equal(result.review.client.created, true);
   assert.equal(result.review.client.contactHint, 'ending in 4567');
   assert.equal(result.review.mobileAcknowledgementRequired, true);
@@ -209,7 +208,7 @@ test('exact-mobile existing result resolves the same canonical CRM V2 client', a
     }),
     prepareBooking: async (input) => preparedResult(input.crmV2Client),
   });
-  const result = await service.prepare({ adminId: EMERGENCY_ADMIN_ID, newClient: { name: 'Jane Doe', mobile: '0821234567' }, staffId: 9, serviceId: 44, date: '2026-08-28', time: '10:15' });
+  const result = await service.prepare({ adminId: TEST_ADMIN_ID, newClient: { name: 'Jane Doe', mobile: '0821234567' }, staffId: 9, serviceId: 44, date: '2026-08-28', time: '10:15' });
   assert.equal(result.review.client.id, '333');
   assert.equal(result.review.client.matchedExisting, true);
   assert.equal(result.review.client.created, false);
@@ -224,7 +223,7 @@ test('CRM V2 exact-mobile conflict fails closed before pending booking preparati
     prepareBooking: async () => { prepares += 1; },
   });
   await assert.rejects(
-    service.prepare({ adminId: EMERGENCY_ADMIN_ID, newClient: { name: 'Jane Doe', mobile: '0821234567' }, staffId: 9, serviceId: 44, date: '2026-08-28', time: '10:15' }),
+    service.prepare({ adminId: TEST_ADMIN_ID, newClient: { name: 'Jane Doe', mobile: '0821234567' }, staffId: 9, serviceId: 44, date: '2026-08-28', time: '10:15' }),
     (error) => error?.code === 'CALENDAR_BOOKING_CRM_V2_CONFLICT'
   );
   assert.equal(prepares, 0);
@@ -237,7 +236,7 @@ test('Find client searches CRM V2 only and always requires explicit selection', 
     env: enabledEnv,
     crmV2Service: crmV2({ async searchClients(input) { searches.push(input); return [v2Client()]; } }),
   });
-  const result = await service.searchClients(EMERGENCY_ADMIN_ID, '  Jane   Doe  ');
+  const result = await service.searchClients(TEST_ADMIN_ID, '  Jane   Doe  ');
   assert.deepEqual(searches, [{ query: 'Jane Doe', status: 'active', limit: 10 }]);
   assert.equal(result.requiresExplicitSelection, true);
   assert.equal(result.identityModel, 'crm_v2_operator_search_only');
@@ -254,8 +253,8 @@ test('discard removes only the server pending session and never deletes a CRM V2
     crmV2Service: crmV2(),
     cancelBooking: async (adminId) => { cancellations.push(adminId); return true; },
   });
-  const result = await service.discard({ adminId: EMERGENCY_ADMIN_ID });
-  assert.deepEqual(cancellations, [EMERGENCY_ADMIN_ID]);
+  const result = await service.discard({ adminId: TEST_ADMIN_ID });
+  assert.deepEqual(cancellations, [TEST_ADMIN_ID]);
   assert.deepEqual(result, { status: 'discarded', crmV2ClientRemoved: false });
 });
 
@@ -270,8 +269,8 @@ test('final mobile acknowledgement is derived from pending server state and acce
       return { status: 'acknowledged', client: v2Client() };
     },
   });
-  const result = await service.acknowledgeMobile({ adminId: EMERGENCY_ADMIN_ID, clientId: 999, mobile: '27829999999' });
-  assert.deepEqual(acknowledgementCalls, [EMERGENCY_ADMIN_ID]);
+  const result = await service.acknowledgeMobile({ adminId: TEST_ADMIN_ID, clientId: 999, mobile: '27829999999' });
+  assert.deepEqual(acknowledgementCalls, [TEST_ADMIN_ID]);
   assert.equal(result.clientId, '701');
   assert.equal(result.mobileHint, 'ending in 4567');
   const routeSegment = routeSource.slice(routeSource.indexOf("router.post('/mobile-acknowledgement'"), routeSource.indexOf("router.post('/discard'"));
@@ -286,7 +285,7 @@ test('final confirmation fails closed until server-side acknowledgement is prese
     crmV2Service: crmV2(),
     confirmBooking: async () => { confirmations += 1; },
   });
-  await assert.rejects(service.confirm({ adminId: EMERGENCY_ADMIN_ID }), (error) => error?.code === 'CALENDAR_BOOKING_CONFIRMATION_UNSAFE');
+  await assert.rejects(service.confirm({ adminId: TEST_ADMIN_ID }), (error) => error?.code === 'CALENDAR_BOOKING_CONFIRMATION_UNSAFE');
   assert.equal(confirmations, 0);
 });
 
@@ -298,9 +297,9 @@ test('acknowledged confirmation delegates once with authenticated operator and b
     crmV2Service: crmV2(),
     confirmBooking: async (...args) => { calls.push(args); return { status: 'created', appointmentId: 9001 }; },
   });
-  const result = await service.confirm({ adminId: EMERGENCY_ADMIN_ID, clientId: 999 });
+  const result = await service.confirm({ adminId: TEST_ADMIN_ID, clientId: 999 });
   assert.equal(result.appointmentId, 9001);
-  assert.equal(calls[0][0].id, EMERGENCY_ADMIN_ID);
+  assert.equal(calls[0][0].id, TEST_ADMIN_ID);
   assert.deepEqual(calls[0][1], { source: 'shiloh_calendar' });
 });
 

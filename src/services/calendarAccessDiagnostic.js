@@ -1,14 +1,12 @@
 const { pool } = require('../db/pool');
 const { deriveCalendarViewer } = require('./staffBrowserSession');
-const { pilotPolicy, isAdminAllowedByPilot } = require('./staffBrowserPilotGate');
-const { isEmergencyCalendarBookingEnabled } = require('./emergencyCalendarBootstrap');
 const { CALENDAR_CAPABILITIES } = require('./calendarAuthorization');
 
 function flagEnabled(env, key) {
   return String(env?.[key] || '').trim().toLowerCase() === 'true';
 }
 
-function sanitizeAuthority(row, env) {
+function sanitizeAuthority(row) {
   const viewer = deriveCalendarViewer({
     ...row,
     permissions: { [CALENDAR_CAPABILITIES.VIEW]: row.calendar_view === true },
@@ -21,7 +19,6 @@ function sanitizeAuthority(row, env) {
     businessRole: String(row.business_role || ''),
     calendarScope: String(row.calendar_scope || ''),
     serviceScope: String(row.service_scope || ''),
-    pilotAllowed: isAdminAllowedByPilot(Number(row.id), env),
     viewerScope: viewer?.calendarScope || null,
   };
 }
@@ -40,14 +37,10 @@ async function runCalendarAccessDiagnostic({ db = pool, env = process.env } = {}
     [Object.values(CALENDAR_CAPABILITIES)]
   );
 
-  const policy = pilotPolicy(env);
-  const authorities = (result.rows || []).map((row) => sanitizeAuthority(row, env));
+  const authorities = (result.rows || []).map((row) => sanitizeAuthority(row));
   return {
     calendarReadOnlyUxEnabled: flagEnabled(env, 'SHILOH_CALENDAR_READONLY_UX_ENABLED'),
     staffBrowserCalendarBridgeEnabled: flagEnabled(env, 'SHILOH_STAFF_BROWSER_SESSION_CALENDAR_BRIDGE_ENABLED'),
-    calendarHandoffEnabled: isEmergencyCalendarBookingEnabled(env),
-    pilotModeEnabled: policy.enabled,
-    pilotConfigValid: policy.valid,
     expectedPrincipalCount: authorities.length,
     matchedPrincipalCount: authorities.length,
     authorities,

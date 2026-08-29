@@ -13,9 +13,7 @@ const {
 } = require('../src/presentation/calendarCreateBookingUx');
 
 const enabledEnv = {
-  SHILOH_EMERGENCY_CHRISTEL_CALENDAR_BOOKING_ENABLED: 'true',
   SHILOH_CALENDAR_PUBLIC_ORIGIN: 'https://shiloh.example.test',
-  SHILOH_STAFF_BROWSER_PILOT_MODE_ENABLED: 'false',
 };
 
 function authorityRow() {

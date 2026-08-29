@@ -146,7 +146,6 @@ function createFixture() {
     NODE_ENV: 'production',
     SHILOH_CALENDAR_READONLY_UX_ENABLED: 'true',
     SHILOH_STAFF_BROWSER_SESSION_CALENDAR_BRIDGE_ENABLED: 'true',
-    SHILOH_EMERGENCY_CHRISTEL_CALENDAR_BOOKING_ENABLED: 'true',
   };
   const sessions = new Map();
   const byId = new Map();

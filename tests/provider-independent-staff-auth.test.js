@@ -12,7 +12,6 @@ const OTPAuth = require('otpauth');
 
 const auth = require('../src/services/providerIndependentStaffAuth');
 const sessions = require('../src/services/staffBrowserSession');
-const browserPilot = require('../src/services/staffBrowserPilotGate');
 const sessionMiddleware = require('../src/middleware/staffBrowserSession');
 const requestContext = require('../src/middleware/requestContext');
 const logger = require('../src/lib/logger');
@@ -44,15 +43,6 @@ function enabledEnv(ids = '1,2') {
     SHILOH_STAFF_TOTP_ACTIVE_KEY_VERSION: 'v1',
     SHILOH_STAFF_TOTP_ENCRYPTION_KEYS_JSON: JSON.stringify({ v1: Buffer.alloc(32, 42).toString('base64url') }),
     SHILOH_CALENDAR_PUBLIC_ORIGIN: 'https://calendar.shiloh.example',
-  };
-}
-
-function browserPilotEnv(browserPilotIds = '1', totpPilotIds = '1') {
-  return {
-    ...enabledEnv(totpPilotIds),
-    NODE_ENV: 'production',
-    SHILOH_STAFF_BROWSER_PILOT_MODE_ENABLED: 'true',
-    SHILOH_STAFF_BROWSER_PILOT_ADMIN_IDS: browserPilotIds,
   };
 }
 
@@ -484,8 +474,12 @@ test('valid RFC 6238 SHA-1 six-digit TOTP creates the existing opaque session wi
   assert.equal(db.audits.some((event) => event.eventType === 'totp_verification_succeeded'), true);
 });
 
-test('browser-pilot mismatch rejects a valid TOTP before timestep consumption or session issuance', async () => {
-  const env = browserPilotEnv('2', '1');
+test('retired browser-pilot variables cannot reject valid TOTP authentication', async () => {
+  const env = {
+    ...enabledEnv('1'),
+    SHILOH_STAFF_BROWSER_PILOT_MODE_ENABLED: 'true',
+    SHILOH_STAFF_BROWSER_PILOT_ADMIN_IDS: '999',
+  };
   const secret = new OTPAuth.Secret({ size: 20 }).base32;
   const db = memoryDb({ credentials: [activeCredential(1, secret, env)] });
   const service = auth.createProviderIndependentStaffAuthService({ db, env, now: () => FIXED_NOW, randomBytes: deterministicRandom() });
@@ -493,16 +487,10 @@ test('browser-pilot mismatch rejects a valid TOTP before timestep consumption or
 
   const result = await service.verifyTotp({ identifier: '27725128605', code, requestFingerprintHash: 'a'.repeat(64) });
 
-  assert.equal(result.ok, false);
-  assert.equal(result.code, 'STAFF_AUTH_INVALID');
-  assert.equal(db.credentials.get(1).last_accepted_timestep, null);
-  assert.equal(db.totpAdvanceTransitions, 0);
-  assert.equal(db.sessions.length, 0);
-  const mismatch = db.audits.find((event) => event.eventType === 'pilot_authority_mismatch');
-  assert.equal(mismatch.subjectAdminId, 1);
-  assert.equal(mismatch.authMethod, 'totp');
-  assert.equal(mismatch.reason, 'staff_browser_pilot_rejected');
-  assert.deepEqual(mismatch.metadata, { oneTimeCredentialConsumed: false, staffBrowserSessionIssued: false });
+  assert.equal(result.ok, true);
+  assert.equal(db.totpAdvanceTransitions, 1);
+  assert.equal(db.sessions.length, 1);
+  assert.equal(db.audits.some((event) => event.eventType === 'pilot_authority_mismatch'), false);
 });
 
 test('invalid and malformed TOTP fail closed without session creation', async () => {
@@ -706,8 +694,12 @@ test('recovery code is atomically single-use and its session cannot authorize Ca
   assert.equal(replay.ok, false);
 });
 
-test('browser-pilot mismatch rejects a valid recovery code before consumption or session issuance', async () => {
-  const env = browserPilotEnv('2', '1');
+test('retired browser-pilot variables cannot reject valid single-use recovery authentication', async () => {
+  const env = {
+    ...enabledEnv('1'),
+    SHILOH_STAFF_BROWSER_PILOT_MODE_ENABLED: 'true',
+    SHILOH_STAFF_BROWSER_PILOT_ADMIN_IDS: '999',
+  };
   const secret = new OTPAuth.Secret({ size: 20 }).base32;
   const code = 'FACE'.repeat(8);
   const db = memoryDb({
@@ -718,15 +710,12 @@ test('browser-pilot mismatch rejects a valid recovery code before consumption or
 
   const result = await service.verifyRecovery({ identifier: '27725128605', recoveryCode: code, requestFingerprintHash: 'b'.repeat(64) });
 
-  assert.equal(result.ok, false);
-  assert.equal(result.code, 'STAFF_AUTH_INVALID');
-  assert.equal(db.recoveryCodes[0].consumed_at, null);
-  assert.equal(db.recoveryConsumptionTransitions, 0);
-  assert.equal(db.sessions.length, 0);
-  const mismatch = db.audits.find((event) => event.eventType === 'pilot_authority_mismatch');
-  assert.equal(mismatch.subjectAdminId, 1);
-  assert.equal(mismatch.authMethod, 'recovery_code');
-  assert.deepEqual(mismatch.metadata, { oneTimeCredentialConsumed: false, staffBrowserSessionIssued: false });
+  assert.equal(result.ok, true);
+  assert.equal(result.recoveryRequired, true);
+  assert.equal(db.recoveryCodes[0].consumed_at != null, true);
+  assert.equal(db.recoveryConsumptionTransitions, 1);
+  assert.equal(db.sessions.length, 1);
+  assert.equal(db.audits.some((event) => event.eventType === 'pilot_authority_mismatch'), false);
 });
 
 test('concurrent recovery-code use consumes once, issues one recovery session, and rejects every replay', async () => {
@@ -831,67 +820,24 @@ test('controlled break-glass handoff is hash-at-rest, short-lived, single-use, a
   assert.equal((await service.exchangeBreakGlass({ token: issued.token })).ok, false);
 });
 
-test('browser-pilot mismatch prohibits break-glass issuance without creating a handoff', async () => {
-  const env = browserPilotEnv('2', '1');
-  const secret = new OTPAuth.Secret({ size: 20 }).base32;
-  const db = memoryDb({ credentials: [activeCredential(1, secret, env)] });
-  const service = auth.createProviderIndependentStaffAuthService({ db, env, now: () => FIXED_NOW, randomBytes: deterministicRandom() });
-
-  const result = await service.issueBreakGlass({ adminId: 1, operatorReference: '40:JP', controlReference: '00:WS-10-recovery' });
-
-  assert.equal(result.ok, false);
-  assert.equal(result.code, 'STAFF_BREAK_GLASS_FORBIDDEN');
-  assert.equal(db.breakGlass.length, 0);
-  assert.equal(db.sessions.length, 0);
-  assert.equal(db.audits.some((event) => event.eventType === 'pilot_authority_mismatch' && event.authMethod === 'break_glass'), true);
-});
-
-test('mismatched break-glass exchange preserves the same handoff for aligned retry within TTL', async () => {
-  const env = browserPilotEnv('1', '1');
-  const secret = new OTPAuth.Secret({ size: 20 }).base32;
-  const db = memoryDb({ credentials: [activeCredential(1, secret, env)] });
-  const service = auth.createProviderIndependentStaffAuthService({ db, env, now: () => FIXED_NOW, randomBytes: deterministicRandom() });
-  const issued = await service.issueBreakGlass({ adminId: 1, operatorReference: '40:JP', controlReference: '00:WS-10-recovery' });
-  assert.equal(issued.ok, true);
-
-  env.SHILOH_STAFF_BROWSER_PILOT_ADMIN_IDS = '2';
-  const mismatched = await service.exchangeBreakGlass({ token: issued.token, requestFingerprintHash: 'c'.repeat(64) });
-  assert.equal(mismatched.ok, false);
-  assert.equal(mismatched.code, 'STAFF_BREAK_GLASS_INVALID');
-  assert.equal(db.breakGlass[0].consumed_at, null);
-  assert.equal(db.breakGlass[0].revoked_at, null);
-  assert.equal(db.breakGlassConsumptionTransitions, 0);
-  assert.equal(db.sessions.length, 0);
-  const mismatch = db.audits.find((event) => event.eventType === 'pilot_authority_mismatch');
-  assert.equal(mismatch.subjectAdminId, 1);
-  assert.equal(mismatch.authMethod, 'break_glass');
-  assert.deepEqual(mismatch.metadata, { oneTimeCredentialConsumed: false, staffBrowserSessionIssued: false });
-
-  env.SHILOH_STAFF_BROWSER_PILOT_ADMIN_IDS = '1';
-  const aligned = await service.exchangeBreakGlass({ token: issued.token, requestFingerprintHash: 'c'.repeat(64) });
-  assert.equal(aligned.ok, true);
-  assert.equal(aligned.recoveryRequired, true);
-  assert.equal(aligned.viewer, null);
-  assert.equal(db.breakGlassConsumptionTransitions, 1);
-  assert.equal(db.sessions.length, 1);
-  assert.equal((await service.exchangeBreakGlass({ token: issued.token })).ok, false);
-});
-
-test('mismatched exchange route emits no session cookie and the same aligned handoff later succeeds', async () => {
-  const env = browserPilotEnv('1', '1');
+test('retired browser-pilot variables cannot deny controlled break-glass issuance or exchange', async () => {
+  const env = {
+    ...enabledEnv('1'),
+    NODE_ENV: 'production',
+    SHILOH_STAFF_BROWSER_PILOT_MODE_ENABLED: 'true',
+    SHILOH_STAFF_BROWSER_PILOT_ADMIN_IDS: '999',
+  };
   const secret = new OTPAuth.Secret({ size: 20 }).base32;
   const db = memoryDb({ credentials: [activeCredential(1, secret, env)] });
   const providerService = auth.createProviderIndependentStaffAuthService({ db, env, now: () => FIXED_NOW, randomBytes: deterministicRandom() });
   const issued = await providerService.issueBreakGlass({ adminId: 1, operatorReference: '40:JP', controlReference: '00:WS-10-route-proof' });
   assert.equal(issued.ok, true);
-  env.SHILOH_STAFF_BROWSER_PILOT_ADMIN_IDS = '2';
 
   const app = express();
   app.use(express.json());
   app.use('/calendar/staff-auth', createStaffBrowserSessionRouter({
     env,
     service: { async validateSessionToken() { return { ok: false }; }, validateCsrfToken() { return false; } },
-    emergencyBootstrapService: { async exchange() { return { ok: false }; } },
     providerIndependentAuthService: providerService,
   }));
 
@@ -909,18 +855,10 @@ test('mismatched exchange route emits no session cookie and the same aligned han
       body: JSON.stringify({ token: issued.token }),
     });
 
-    const mismatched = await exchange();
-    assert.equal(mismatched.status, 401);
-    assert.equal(mismatched.headers.get('set-cookie'), null);
-    assert.deepEqual(await mismatched.json(), { error: 'Invalid or expired controlled recovery handoff' });
-    assert.equal(db.breakGlass[0].consumed_at, null);
-    assert.equal(db.sessions.length, 0);
-
-    env.SHILOH_STAFF_BROWSER_PILOT_ADMIN_IDS = '1';
-    const aligned = await exchange();
-    assert.equal(aligned.status, 200);
-    assert.match(aligned.headers.get('set-cookie'), /^__Host-shiloh_staff_session=[A-Za-z0-9_-]{43};/);
-    assert.equal((await aligned.json()).recoveryRequired, true);
+    const accepted = await exchange();
+    assert.equal(accepted.status, 200);
+    assert.match(accepted.headers.get('set-cookie'), /^__Host-shiloh_staff_session=[A-Za-z0-9_-]{43};/);
+    assert.equal((await accepted.json()).recoveryRequired, true);
     assert.equal(db.breakGlassConsumptionTransitions, 1);
     assert.equal(db.sessions.length, 1);
 
@@ -939,17 +877,12 @@ test('real Chromium persists the break-glass session and executes management sta
   }
 
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'shiloh-staff-auth-browser-'));
-  const env = browserPilotEnv('1', '1');
+  const env = { ...enabledEnv('1'), NODE_ENV: 'production' };
   const current = new Date();
   const secret = new OTPAuth.Secret({ size: 20 }).base32;
   const db = memoryDb({ credentials: [activeCredential(1, secret, env)] });
   const providerService = auth.createProviderIndependentStaffAuthService({ db, env, now: () => current });
   const baseSessionService = sessions.createStaffBrowserSessionService({ db, now: () => current });
-  const guardedSessionService = browserPilot.createPilotGuardedStaffBrowserSessionService({
-    service: baseSessionService,
-    db,
-    env,
-  });
   const responseBodies = [];
   const capturedLogs = [];
   const captureLogger = { info(...args) { capturedLogs.push(args); }, error(...args) { capturedLogs.push(args); } };
@@ -979,8 +912,7 @@ test('real Chromium persists the break-glass session and executes management sta
     app.get('/calendar/staff/client.js', (_req, res) => res.type('application/javascript').send(staffCalendarAccessClientScript()));
     app.use('/calendar/staff-auth', createStaffBrowserSessionRouter({
       env,
-      service: guardedSessionService,
-      emergencyBootstrapService: { async exchange() { return { ok: false }; } },
+      service: baseSessionService,
       providerIndependentAuthService: providerService,
     }));
 
@@ -1262,7 +1194,6 @@ test('secret-shaped inputs are absent from error responses, request logs, and se
         async validateSessionToken() { return { ok: false }; },
         validateCsrfToken() { return false; },
       },
-      emergencyBootstrapService: { async exchange() { return { ok: false }; } },
       providerIndependentAuthService: {
         async verifyTotp() { return { ok: false, code: 'STAFF_AUTH_INVALID' }; },
         async verifyRecovery() { return { ok: false, code: 'STAFF_AUTH_INVALID' }; },

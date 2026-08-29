@@ -10,15 +10,9 @@ const { processAdminPendingBookingApprovalsMessage } = require('./adminPendingBo
 const { processAdminScheduleUxMessage } = require('./adminScheduleUx');
 const { abigailEarningsButtons, christelEarningsButtons, marietjieEarningsButtons } = require('./adminEarningsButtons');
 const { canAccessFinalization } = require('./adminAppointmentsMenu');
-const {
-  buildEmergencyCalendarUrl,
-  createEmergencyCalendarBootstrapService,
-  emergencyCalendarPublicOrigin,
-} = require('./emergencyCalendarBootstrap');
 
 const SECTION_ORDER = ['Appointments', 'Reports', 'Clients', 'Services', 'Schedule', 'More'];
 const APPOINTMENT_PRIORITY = ['finalize', 'booking', 'manage_booking', 'today', 'tomorrow'];
-const calendarHandoffService = createEmergencyCalendarBootstrapService();
 
 const ACTIONS = [
   { key: 'today', labels: ["Today's clients", 'My clients today'], command: 'today', description: 'View today’s appointments' },
@@ -168,19 +162,25 @@ async function getRoleScopedMenu(sender) {
   if (!result?.handled || !result?.interactive?.body) return result;
   return enrichPrivilegedReportsMenu(result);
 }
-async function issueCalendarHandoffForSender(sender) {
-  if (!emergencyCalendarPublicOrigin(process.env)) {
+function calendarStaffAccessUrl(env = process.env) {
+  const raw = String(env.SHILOH_CALENDAR_PUBLIC_ORIGIN || env.RENDER_EXTERNAL_URL || '').trim();
+  if (!raw) return null;
+  try {
+    const url = new URL(raw);
+    if (url.protocol !== 'https:' || url.username || url.password) return null;
+    return `${url.origin}/calendar/staff`;
+  } catch (_) {
+    return null;
+  }
+}
+async function issueCalendarHandoffForSender(_sender) {
+  const url = calendarStaffAccessUrl(process.env);
+  if (!url) {
     return { handled: true, reply: 'Calendar access is not available right now. Please try again later.' };
   }
-  const issued = await calendarHandoffService.issueForWhatsapp({ whatsapp: sender });
-  if (!issued?.ok) {
-    return { handled: true, reply: 'Calendar access is not available for this staff account.' };
-  }
-  const url = buildEmergencyCalendarUrl(issued.token, process.env);
-  if (!url) return { handled: true, reply: 'Calendar access is not available right now. Please try again later.' };
   return {
     handled: true,
-    reply: `*Open Calendar*\n\nUse this one-time secure link to open Shiloh Calendar as your own staff account:\n${url}\n\nThe link expires shortly and can only be used once.`,
+    reply: `*Open Calendar*\n\nSign in to Shiloh Calendar with your own staff account:\n${url}`,
   };
 }
 async function dispatchStableAction(sender, action) {
@@ -267,6 +267,7 @@ module.exports = {
   enrichPrivilegedReportsMenu,
   isActionVisibleInMenu,
   isWorkspaceLauncherTerm,
+  calendarStaffAccessUrl,
   issueCalendarHandoffForSender,
   parseVisibleMenu,
   processAdminInteractiveMenuMessage,
