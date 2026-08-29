@@ -1,5 +1,6 @@
 const { currentRequestLog } = require('../lib/requestLogContext');
 const { whatsappIdentityDecisionObservability } = require('./whatsappIdentityDecisionObservability');
+const { staleOnboardingIdentityRecovery } = require('./staleOnboardingIdentityRecovery');
 
 function clean(value = '') {
   return String(value || '').trim().replace(/\s+/g, ' ');
@@ -40,10 +41,21 @@ async function safelyObserveDecision(observer, input) {
   }
 }
 
+async function safelyRecoverStaleIdentity(recovery, input) {
+  if (!recovery || typeof recovery.recoverAndRetry !== 'function') return null;
+  try {
+    return await recovery.recoverAndRetry(input);
+  } catch (_error) {
+    // Recovery errors must preserve the original fail-closed identity result.
+    return null;
+  }
+}
+
 function installClientNavigationPriority({
   identityService,
   discoveryService,
   identityDecisionObservability = whatsappIdentityDecisionObservability,
+  identityRecovery = staleOnboardingIdentityRecovery,
 }) {
   if (!identityService || !discoveryService) throw new Error('client navigation services are required');
   if (identityService.__clientNavigationPriorityInstalled && discoveryService.__clientNavigationPriorityInstalled) return;
@@ -80,7 +92,17 @@ function installClientNavigationPriority({
       return result;
     }
 
-    const identity = await originalIdentity(sender, text, ...rest);
+    const originalResult = await originalIdentity(sender, text, ...rest);
+    let identity = originalResult;
+    if (originalResult?.identityStatus === 'identity_contract_invalid') {
+      const recovery = await safelyRecoverStaleIdentity(identityRecovery, {
+        phone: sender,
+        currentAuthorityVersion,
+        retry: () => originalIdentity(sender, text, ...rest),
+      });
+      if (recovery?.recovered === true && recovery.result) identity = recovery.result;
+    }
+
     let result = identity;
     let navigationKind = null;
     if (isGreetingNavigation(text) && identity?.identityStatus === 'matched_complete') {
@@ -98,7 +120,7 @@ function installClientNavigationPriority({
       phone: sender,
       currentAuthorityVersion,
       sessionBefore,
-      originalResult: identity,
+      originalResult,
       finalResult: result,
       navigationKind,
     });
