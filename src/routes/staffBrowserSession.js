@@ -1,6 +1,7 @@
 const express = require('express');
 const { pool } = require('../db/pool');
 const { createStaffBrowserSessionService } = require('../services/staffBrowserSession');
+const { createStaffCalendarHandoffService } = require('../services/staffCalendarHandoff');
 const { createProviderIndependentStaffAuthService } = require('../services/providerIndependentStaffAuth');
 const {
   renderProviderIndependentStaffAuthPage,
@@ -18,6 +19,7 @@ const {
 function createStaffBrowserSessionRouter({
   env = process.env,
   service = createStaffBrowserSessionService({ db: pool, challengeDispatcher: null }),
+  calendarHandoffService = createStaffCalendarHandoffService({ db: pool }),
   providerIndependentAuthService = createProviderIndependentStaffAuthService({ db: pool, env }),
 } = {}) {
   const router = express.Router();
@@ -137,6 +139,20 @@ function createStaffBrowserSessionRouter({
         requestFingerprintHash: requestFingerprintHash(req),
       });
       if (!result.ok) return providerAuthError(res, result, 'Invalid or expired controlled recovery handoff');
+      return sendAuthenticatedSession(res, result);
+    } catch (error) { return next(error); }
+  });
+
+  router.post('/calendar-handoff/exchange', sameOrigin, async (req, res, next) => {
+    try {
+      const result = await calendarHandoffService.exchange({
+        token: req.body?.token,
+        requestFingerprintHash: requestFingerprintHash(req),
+      });
+      if (!result.ok) {
+        setNoStore(res);
+        return res.status(401).json({ error: 'Invalid or expired secure Calendar handoff', requestId: req.id });
+      }
       return sendAuthenticatedSession(res, result);
     } catch (error) { return next(error); }
   });

@@ -20,9 +20,9 @@ const {
   createCalendarCreateBookingService,
 } = require('../src/services/calendarCreateBooking');
 const {
-  calendarStaffAccessUrl,
-  issueCalendarHandoffForSender,
-} = require('../src/services/adminInteractiveMenu');
+  buildCalendarHandoffUrl,
+  isCalendarHandoffAuthority,
+} = require('../src/services/staffCalendarHandoff');
 
 const CREATE = {
   'appointment:view': true,
@@ -199,30 +199,27 @@ test('ordinary session validation reloads current canonical active/view authorit
   assert.deepEqual(await service.validateSessionToken(token), { ok: false, code: 'STAFF_SESSION_INVALID' });
 });
 
-test('Open Calendar is a normal provider-independent sign-in URL, not a session-minting handoff', async () => {
+test('Open Calendar uses one-time handoff while canonical capability remains sole human authority', () => {
+  const token = Buffer.alloc(32, 7).toString('base64url');
   assert.equal(
-    calendarStaffAccessUrl({ SHILOH_CALENDAR_PUBLIC_ORIGIN: 'https://calendar.example.test/path' }),
-    'https://calendar.example.test/calendar/staff',
+    buildCalendarHandoffUrl(token, { SHILOH_CALENDAR_PUBLIC_ORIGIN: 'https://calendar.example.test/path' }),
+    `https://calendar.example.test/calendar/staff#handoff=${token}`,
   );
-  assert.equal(calendarStaffAccessUrl({ SHILOH_CALENDAR_PUBLIC_ORIGIN: 'http://calendar.example.test' }), null);
-  assert.equal(calendarStaffAccessUrl({ SHILOH_CALENDAR_PUBLIC_ORIGIN: 'https://user:pass@calendar.example.test' }), null);
-  const source = read('src/services/adminInteractiveMenu.js');
-  assert.match(source, /Sign in to Shiloh Calendar with your own staff account/);
-  assert.doesNotMatch(source, /token|bootstrap|single-use|EMERGENCY_ADMIN_ID/i);
+  assert.equal(buildCalendarHandoffUrl(token, { SHILOH_CALENDAR_PUBLIC_ORIGIN: 'http://calendar.example.test' }), null);
+  assert.equal(buildCalendarHandoffUrl(token, { SHILOH_CALENDAR_PUBLIC_ORIGIN: 'https://user:pass@calendar.example.test' }), null);
 
-  const previous = process.env.SHILOH_CALENDAR_PUBLIC_ORIGIN;
-  process.env.SHILOH_CALENDAR_PUBLIC_ORIGIN = 'https://calendar.example.test';
-  try {
-    const result = await issueCalendarHandoffForSender('synthetic-sender');
-    assert.deepEqual(result, {
-      handled: true,
-      reply: '*Open Calendar*\n\nSign in to Shiloh Calendar with your own staff account:\nhttps://calendar.example.test/calendar/staff',
-    });
-    assert.doesNotMatch(result.reply, /#|token|single-use|expires/i);
-  } finally {
-    if (previous == null) delete process.env.SHILOH_CALENDAR_PUBLIC_ORIGIN;
-    else process.env.SHILOH_CALENDAR_PUBLIC_ORIGIN = previous;
-  }
+  assert.equal(isCalendarHandoffAuthority(principal('Canonical viewer')), true);
+  assert.equal(isCalendarHandoffAuthority(principal('No view', { permissions: {} })), false);
+  assert.equal(isCalendarHandoffAuthority(principal('Inactive', { admin_active: false })), false);
+  assert.equal(isCalendarHandoffAuthority(principal('Inactive linked staff', { staff_id: 11, staff_status: 'inactive' })), false);
+
+  const launcher = read('src/services/adminInteractiveMenu.js');
+  const handoff = read('src/services/staffCalendarHandoff.js');
+  assert.match(launcher, /issueForWhatsapp\(\{ whatsapp: sender \}\)/);
+  assert.match(launcher, /secure one-time link/);
+  assert.doesNotMatch(launcher, /Sign in to Shiloh Calendar with your own staff account/);
+  assert.doesNotMatch(handoff, /EMERGENCY_ADMIN_ID|staffBrowserPilotGate|SHILOH_STAFF_BROWSER_PILOT|SHILOH_EMERGENCY_CHRISTEL_CALENDAR_BOOKING_ENABLED/);
+  assert.doesNotMatch(handoff, /display_name\s*===|Christel|Jean-Pierre|Naomi|Marietjie|Abigail/);
 });
 
 test('TOTP, recovery, break-glass, CSRF and endpoint revalidation owners remain installed', () => {
@@ -238,6 +235,7 @@ test('TOTP, recovery, break-glass, CSRF and endpoint revalidation owners remain 
   assert.match(authRoutes, /totp\/verify/);
   assert.match(authRoutes, /totp\/recovery\/verify/);
   assert.match(authRoutes, /totp\/break-glass\/exchange/);
+  assert.match(authRoutes, /calendar-handoff\/exchange/);
   assert.match(middleware, /sameOriginGuard/);
   assert.match(middleware, /csrfGuard/);
   assert.match(bookingRoutes, /sameOrigin, requireSession, requireCsrf/);
