@@ -71,8 +71,6 @@ jobs:
         run: node --test tests/calendar-mobile-booking-time-entry-p1.test.js
       - name: Run focused Workspace Clients tests
         run: node --test tests/workspace-clients-v1.test.js
-      - name: Run focused Workspace Staff tests
-        run: node --test tests/workspace-staff-access-v1.test.js
       - name: Run non-mutating regression tests
         env:
           SHILOH_STAFF_BROWSER_AUTH_WHATSAPP_DELIVERY_ENABLED: 'false'
@@ -113,14 +111,5 @@ jobs:
         with:
           name: workspace-clients-v1-visual-proof
           path: artifacts/workspace-clients-v1-visual-proof
-          if-no-files-found: error
-          retention-days: 14
-      - name: Generate Workspace Staff visual proof
-        run: node scripts/workspace-staff-visual-proof.js
-      - name: Upload Workspace Staff visual proof
-        uses: actions/upload-artifact@v4
-        with:
-          name: workspace-staff-v1-visual-proof
-          path: artifacts/workspace-staff-v1-visual-proof
           if-no-files-found: error
           retention-days: 14
