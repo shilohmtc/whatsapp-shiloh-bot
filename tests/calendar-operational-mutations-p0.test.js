@@ -237,12 +237,13 @@ test('cockpit renders only data-granted operation families for a booking operato
   assert.doesNotMatch(html, /data-block-id=|data-leave-id=/);
 });
 
-test('manual and drag/drop rescheduling share one client function and one endpoint', () => {
+test('management panel and drag/drop rescheduling share one client function and one endpoint', () => {
   const script = calendarOperationalMutationsClientScript();
   assert.doesNotThrow(() => new Function(script));
   assert.equal((script.match(/function rescheduleAppointment\(/g) || []).length, 1);
   assert.equal((script.match(/\/appointments\/'\+data\.id\+'\/reschedule/g) || []).length, 1);
-  assert.match(script, /askReschedule\(card\)/);
+  assert.match(script, /data-panel-action="appointment:reschedule"/);
+  assert.match(script, /rescheduleAppointment\(data,form\.elements\.date\.value,form\.elements\.time\.value\)/);
   assert.match(script, /askReschedule\(card,date\)/);
   assert.match(script, /window\.location\.reload\(\)/, 'browser never treats optimistic state as authoritative');
   assert.doesNotMatch(script, /adminId|actorAdminId|google|whatsapp|provider/i);
