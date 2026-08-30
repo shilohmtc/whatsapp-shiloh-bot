@@ -1,5 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 
 const {
   ControlledReleaseMigrationError,
@@ -13,6 +15,17 @@ function migrationError(code, filenames = []) {
   error.details = { filenames };
   return error;
 }
+
+test('production startup keeps one migration authority entrypoint and no apply-all startup path', () => {
+  const root = path.join(__dirname, '..');
+  const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
+  const verifier = fs.readFileSync(path.join(root, 'scripts/verify-migrations.js'), 'utf8');
+  assert.match(pkg.scripts.start, /^node scripts\/verify-migrations\.js && node /);
+  assert.doesNotMatch(pkg.scripts.start, /scripts\/migrate\.js|db:migrate|applyPendingMigrations/);
+  assert.match(verifier, /runControlledReleaseMigration\(\)/);
+  assert.match(verifier, /verifyMigrationState\(\)/);
+  assert.doesNotMatch(verifier, /applyPendingMigrations/);
+});
 
 test('controlled release migration gate is a no-op when the flag is unset', async () => {
   const migrationService = new Proxy({}, {
