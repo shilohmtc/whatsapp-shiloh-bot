@@ -8,7 +8,7 @@ const {
   canPresentAdminBooking,
   isJeanPierreBookingException,
 } = require('../src/services/adminBookingEntitlement');
-const { appointmentsInteractive } = require('../src/services/adminAppointmentsMenu');
+const { getMenuOptions } = require('../src/services/adminMobileMenu');
 
 const bookingPermissions = { 'appointment:view': true, 'appointment:create': true, 'booking:update': true };
 const jp = {
@@ -20,7 +20,7 @@ const jp = {
   permissions: bookingPermissions,
 };
 
-test('JP explicit business exception presents booking and grants only Christel + Abigail scope', () => {
+test('JP internal booking entitlement remains narrow while ordinary WhatsApp presents no booking mutation', () => {
   assert.equal(isJeanPierreBookingException(jp), true);
   assert.deepEqual(adminBookingEntitlement(jp), {
     key: 'christel_abigail',
@@ -29,11 +29,11 @@ test('JP explicit business exception presents booking and grants only Christel +
     label: 'Christel & Abigail services',
   });
   assert.equal(canPresentAdminBooking(jp), true);
-  assert.ok(appointmentsInteractive(jp).rows.some((row) => row.id === 'admin_appointment_booking'));
-  assert.ok(!appointmentsInteractive(jp).rows.some((row) => row.id === 'admin_appointment_finalize'));
+  assert.equal(getMenuOptions(jp).some((option) => option.key === 'booking'), false);
+  assert.equal(getMenuOptions(jp).some((option) => option.key === 'finalize'), false);
 });
 
-test('unlinked Admins without the complete named exception stay fail-closed and see no booking action', () => {
+test('unlinked Admins without the complete named exception stay fail-closed', () => {
   for (const admin of [
     { ...jp, display_name: 'Another Admin' },
     { ...jp, business_role: 'admin' },
@@ -42,7 +42,6 @@ test('unlinked Admins without the complete named exception stay fail-closed and 
   ]) {
     assert.equal(adminBookingEntitlement(admin).key, 'no_practitioner_scope');
     assert.equal(canPresentAdminBooking(admin), false);
-    assert.ok(!appointmentsInteractive(admin).rows.some((row) => row.id === 'admin_appointment_booking'));
   }
 });
 
@@ -67,9 +66,8 @@ test('database enforcement mirrors the narrow JP exception and never grants clin
 
 test('catalogue and practitioner queries consume the same canonical entitlement', () => {
   const flow = fs.readFileSync(path.join(__dirname, '..', 'src/services/adminMobileBookingFlow.js'), 'utf8');
-  const menu = fs.readFileSync(path.join(__dirname, '..', 'src/services/adminAppointmentsMenu.js'), 'utf8');
   assert.match(flow, /const bookingScope = adminBookingEntitlement/);
   assert.match(flow, /async function scopedActiveServiceRows\(admin\)[\s\S]*const scope = bookingScope\(admin\)/);
   assert.match(flow, /async function staffRowsForService\(serviceId, admin\)[\s\S]*const scope = bookingScope\(admin\)/);
-  assert.match(menu, /canPresentAdminBooking\(admin\)/);
+  assert.equal(fs.existsSync(path.join(__dirname, '..', 'src/services/adminAppointmentsMenu.js')), false);
 });

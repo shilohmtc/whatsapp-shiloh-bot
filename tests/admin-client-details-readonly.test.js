@@ -16,7 +16,7 @@ test('client lookup retains masked ambiguity handling and a read-only full-detai
 });
 
 test('client details request reuses the existing permission gate and scope filter', () => {
-  assert.match(menuSource, /clientCommand&&has\(admin,'client:lookup'\)/);
+  assert.match(menuSource, /clientCommand && has\(admin, 'client:lookup'\)/);
   assert.match(menuSource, /filterClientsForAdminScope/);
   assert.match(lookupSource, /const detailsMatch = cleaned\.match/);
   assert.match(lookupSource, /getClientDetails\(detailsMatch\[1\]\)/);

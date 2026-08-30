@@ -166,7 +166,7 @@ test('Workspace keeps Open Calendar first and natural-language Calendar entry di
   assert.equal(isWorkspaceLauncherTerm('Admin'), false);
   const source = read('src/services/adminInteractiveMenu.js');
   assert.match(source, /admin_open_calendar\|open calendar\|calendar/);
-  assert.match(source, /issueCalendarHandoffForSender\(sender\)/);
+  assert.match(source, /issueCalendarHandoffForSender\(sender, admin\)/);
 });
 
 test('canonical inbound WhatsApp viewer gets hash-only short-lived handoff and one successful session exchange', async () => {

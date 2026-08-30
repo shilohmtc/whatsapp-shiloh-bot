@@ -54,5 +54,6 @@ test('ordinary non-English free text remains subject to the English-only guard',
 test('webhook still feeds interactive button IDs into the guarded command pipeline', () => {
   assert.match(webhookSource, /message\.interactive\.button_reply\?\.id/);
   assert.match(webhookSource, /const language=await guardEnglishOnly\(text\)/);
-  assert.match(webhookSource, /processAdminAssistantMessage\(from,text\)/);
+  assert.match(webhookSource, /processAdminRetiredAuthorityMessage\(from,text\)/);
+  assert.doesNotMatch(webhookSource, /processAdminAssistantMessage\(from,text\)/);
 });

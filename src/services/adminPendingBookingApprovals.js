@@ -39,6 +39,21 @@ function authorizedWhere(admin) {
   return { sql: '(aba.approver_admin_id = $1 OR aba.approver_staff_id = $2 OR aba.observer_staff_id = $2)', params: [admin.id, admin.staff_id || 0] };
 }
 
+async function hasPendingForAdmin(admin, db = pool) {
+  const auth = authorizedWhere(admin);
+  const result = await db.query(`
+    SELECT EXISTS(
+      SELECT 1
+        FROM appointment_booking_approvals aba
+        JOIN appointments a ON a.id=aba.appointment_id
+       WHERE aba.status='pending'
+         AND a.status<>'cancelled'
+         AND ${auth.sql}
+    ) AS has_pending
+  `, auth.params);
+  return result.rows[0]?.has_pending === true;
+}
+
 async function listPending(admin, db = pool) {
   await ensureApprovalDeliveryState(db);
   const auth = authorizedWhere(admin);
@@ -150,4 +165,4 @@ async function processAdminPendingBookingApprovalsMessage(sender, text) {
   return resendPendingApproval(admin, Number(match[1]));
 }
 
-module.exports = { APPROVAL_TEMPLATE_NAME,TEMPLATE_LANGUAGE,RESEND_PREFIX,ensureApprovalDeliveryState,listPending,pendingDescription,pendingListInteractive,processAdminPendingBookingApprovalsMessage,resendPendingApproval };
+module.exports = { APPROVAL_TEMPLATE_NAME,TEMPLATE_LANGUAGE,RESEND_PREFIX,ensureApprovalDeliveryState,hasPendingForAdmin,listPending,pendingDescription,pendingListInteractive,processAdminPendingBookingApprovalsMessage,resendPendingApproval };

@@ -16,10 +16,9 @@ test('Menu, Admin Menu and Home are hard admin escape commands',()=>{
   assert.equal(isAdminMenuEscape('pelvic treatment'),false);
 });
 
-test('escape runs before controlled demo routing',()=>{
-  const escape = webhookSource.indexOf('escapeActiveDemoToAdminMenu(from,text)');
-  const demo = webhookSource.indexOf('processAdminClientDemoMessage(from,text)');
-  assert.ok(escape >= 0 && demo >= 0 && escape < demo);
+test('ordinary webhook exposes neither demo escape nor controlled demo routing',()=>{
+  assert.doesNotMatch(webhookSource,/escapeActiveDemoToAdminMenu|processAdminClientDemoMessage/);
+  assert.match(webhookSource,/processAdminRetiredAuthorityMessage\(from,text\)/);
 });
 
 test('unfinished demo escape cannot delete a created appointment',()=>{

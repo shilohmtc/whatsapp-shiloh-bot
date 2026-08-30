@@ -27,12 +27,12 @@ test('Pending cancellation reason and confirmation stay ahead of volatile bookin
   assert.match(bridge, /processAdminAppointmentCancellationMessage\(sender, raw\)/);
 });
 
-test('Canonical cancellation remains confirm-gated and the unrelated plain-text cancel booking command is unchanged', () => {
+test('Canonical cancellation remains confirm-gated while legacy Assistant cancellation is retired', () => {
   assert.match(cancellation, /status==="collecting_reason"/);
   assert.match(cancellation, /status==="awaiting_confirmation"/);
   assert.match(cancellation, /if\(!isConfirmation\(value\)\)/);
   assert.match(cancellation, /cancel_confirm/);
   assert.match(cancellation, /cancel_back/);
-  assert.match(assistant, /value === "cancel booking"/);
-  assert.match(assistant, /cancelPendingBooking\(admin\.id\)/);
+  assert.doesNotMatch(assistant, /cancel booking|cancelPendingBooking/);
+  assert.match(assistant, /handled: false, retired: true/);
 });

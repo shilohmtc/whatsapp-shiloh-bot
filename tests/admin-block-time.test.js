@@ -4,12 +4,10 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const servicePath = path.join(__dirname, '..', 'src', 'services', 'adminBlockTime.js');
-const menuPath = path.join(__dirname, '..', 'src', 'services', 'adminAppointmentsMenu.js');
 const availabilityPath = path.join(__dirname, '..', 'src', 'services', 'availabilityService.js');
 const patchPath = path.join(__dirname, '..', 'src', 'bootstrap', 'adminBlockTimePatch.js');
 const packagePath = path.join(__dirname, '..', 'package.json');
 const source = fs.readFileSync(servicePath, 'utf8');
-const menu = fs.readFileSync(menuPath, 'utf8');
 const availability = fs.readFileSync(availabilityPath, 'utf8');
 const patch = fs.readFileSync(patchPath, 'utf8');
 const pkg = fs.readFileSync(packagePath, 'utf8');
@@ -111,11 +109,9 @@ test('shared client slot generation already excludes calendar blocks', () => {
   assert.match(availability, /cb\.ends_at > \(c\.local_start AT TIME ZONE/);
 });
 
-test('Appointments exposes Block time only through the dedicated authority and startup routes both menu paths', () => {
-  assert.match(menu, /canPresentBlockTime/);
-  assert.match(menu, /id: 'admin_appointment_block_time'/);
-  assert.match(menu, /id: 'admin_block_manage'/);
-  assert.match(patch, /processAdminBlockTimeMessage/);
+test('Block time implementation is retained internally but startup cannot expose it to ordinary WhatsApp', () => {
+  assert.doesNotMatch(patch, /processAdminBlockTimeMessage/);
   assert.match(patch, /enrichAppointments/);
+  assert.match(patch, /return result/);
   assert.match(pkg, /adminBlockTimePatch\.js/);
 });

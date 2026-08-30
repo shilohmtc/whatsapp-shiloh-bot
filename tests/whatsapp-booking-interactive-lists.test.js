@@ -35,18 +35,19 @@ test('WhatsApp transport supports Meta interactive list messages and enforces ro
   assert.match(whatsapp, /description\.length > 72/);
 });
 
-test('incoming list replies route into the guarded booking flow', () => {
+test('incoming list replies are parsed but ordinary admin booking flow is no longer dispatched', () => {
   assert.match(webhook, /message\.interactive\?\.type==="list_reply"/);
   assert.match(webhook, /message\.interactive\.list_reply\?\.id/);
   assert.match(webhook, /sendWhatsAppList/);
-  assert.match(webhook, /sendAdminResult\(from,activeMobileBooking\)/);
+  assert.doesNotMatch(webhook, /activeMobileBooking|processAdminMobileBookingFlowMessage/);
+  assert.match(webhook, /processAdminRetiredAuthorityMessage\(from,text\)/);
 });
 
-test('final booking decision uses real reply buttons, not typed-only confirmation', () => {
+test('stale final booking buttons can only enter Calendar retirement', () => {
   assert.match(booking, /admin_booking_confirm/);
   assert.match(booking, /admin_booking_cancel/);
-  assert.match(buttons, /admin_booking_confirm: 'Confirm booking'/);
-  assert.match(buttons, /admin_booking_cancel: 'Cancel booking'/);
+  assert.match(buttons, /admin_booking_confirm: 'admin_retired_calendar_action'/);
+  assert.match(buttons, /admin_booking_cancel: 'admin_retired_calendar_action'/);
   assert.match(booking, /buttonInteractive/);
 });
 

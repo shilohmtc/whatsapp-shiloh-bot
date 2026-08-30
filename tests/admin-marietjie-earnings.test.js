@@ -24,12 +24,12 @@ test('Marietjie earnings are restricted to Marietjie self, Christel and Jean-Pie
   assert.match(earnings, /Marietjie earnings are available only to Marietjie, Christel, and the authorized business admin/);
 });
 
-test('Marietjie earnings expose all four stable periods and route from Reports', () => {
+test('Marietjie earnings route through generic Earnings with new period IDs', () => {
   for (const suffix of ['today', 'week', 'last_week', 'month']) {
-    assert.match(buttons, new RegExp(`admin_marietjie_earnings_${suffix}`));
+    assert.match(menu, new RegExp(`'${suffix}'`));
   }
-  assert.match(menu, /key: 'marietjie_earnings'/);
-  assert.match(menu, /marietjieEarningsButtons/);
+  assert.match(buttons, /admin_marietjie_earnings_today: 'admin_retired_named_earnings'/);
+  assert.doesNotMatch(menu, /key: 'marietjie_earnings'/);
   assert.match(menu, /processAdminMarietjieEarningsMessage/);
-  assert.match(menu, /\*Reports\*\\n99️⃣ 💰 Marietjie earnings/);
+  assert.match(menu, /function earningsInteractive\(admin\)/);
 });

@@ -1,78 +1,34 @@
 const BUTTON_COMMANDS = Object.freeze({
-  admin_abigail_earnings_today: 'Abigail earnings today',
-  admin_abigail_earnings_week: 'Abigail earnings this week',
-  admin_abigail_earnings_last_week: 'Abigail earnings last week',
-  admin_abigail_earnings_month: 'Abigail earnings this month',
-  admin_christel_earnings_today: 'Christel earnings today',
-  admin_christel_earnings_week: 'Christel earnings this week',
-  admin_christel_earnings_last_week: 'Christel earnings last week',
-  admin_christel_earnings_month: 'Christel earnings this month',
-  admin_marietjie_earnings_today: 'Marietjie earnings today',
-  admin_marietjie_earnings_week: 'Marietjie earnings this week',
-  admin_marietjie_earnings_last_week: 'Marietjie earnings last week',
-  admin_marietjie_earnings_month: 'Marietjie earnings this month',
-  admin_calendar_integrity_scan: 'Calendar integrity scan',
-  admin_calendar_integrity_issues: 'Calendar integrity issues',
-  admin_booking_confirm: 'Confirm booking',
-  admin_booking_cancel: 'Cancel booking',
-  admin_menu_appointments: 'Appointments',
-  admin_demo_client_start: 'Demo Client',
-  admin_appointment_today: 'Appointments today',
-  admin_appointment_tomorrow: 'Appointments tomorrow',
-  admin_appointment_last_week: 'Appointments last week',
-  admin_appointment_availability: 'Find an available time',
-  admin_appointment_booking: 'Make a booking',
-  admin_appointment_manage: 'Manage a booking',
-  admin_appointment_finalize: 'Finalize past appointments',
-  // Backward compatibility for welcome lists already delivered before the
-  // registered-client Book appointment row moved from client_book_now to services.
-  // list_reply payloads are immutable once delivered by WhatsApp, so old rows must
-  // continue to enter deterministic service discovery rather than stale booking state.
+  admin_abigail_earnings_today: 'admin_retired_named_earnings',
+  admin_abigail_earnings_week: 'admin_retired_named_earnings',
+  admin_abigail_earnings_last_week: 'admin_retired_named_earnings',
+  admin_abigail_earnings_month: 'admin_retired_named_earnings',
+  admin_christel_earnings_today: 'admin_retired_named_earnings',
+  admin_christel_earnings_week: 'admin_retired_named_earnings',
+  admin_christel_earnings_last_week: 'admin_retired_named_earnings',
+  admin_christel_earnings_month: 'admin_retired_named_earnings',
+  admin_marietjie_earnings_today: 'admin_retired_named_earnings',
+  admin_marietjie_earnings_week: 'admin_retired_named_earnings',
+  admin_marietjie_earnings_last_week: 'admin_retired_named_earnings',
+  admin_marietjie_earnings_month: 'admin_retired_named_earnings',
+  admin_calendar_integrity_scan: 'admin_retired_internal_action',
+  admin_calendar_integrity_issues: 'admin_retired_internal_action',
+  admin_booking_confirm: 'admin_retired_calendar_action',
+  admin_booking_cancel: 'admin_retired_calendar_action',
+  admin_menu_appointments: 'admin_menu_appointments',
+  admin_demo_client_start: 'admin_retired_internal_action',
+  admin_appointment_today: 'Today',
+  admin_appointment_tomorrow: 'Tomorrow',
+  admin_appointment_last_week: 'admin_retired_last_week_appointments',
+  admin_appointment_availability: 'admin_retired_calendar_action',
+  admin_appointment_booking: 'admin_retired_calendar_action',
+  admin_appointment_manage: 'admin_retired_calendar_action',
+  admin_appointment_finalize: 'admin_retired_internal_action',
   client_book_now: 'services',
 });
 
-function earningsPeriodList(kind) {
-  const names = { christel: 'Christel', abigail: 'Abigail', marietjie: 'Marietjie' };
-  const name = names[kind] || kind;
-  return {
-    type: 'list',
-    body: `*${name} earnings*\nChoose the period you want to view.`,
-    button: 'Choose period',
-    sections: [{
-      title: 'Earnings period',
-      rows: [
-        { id: `admin_${kind}_earnings_today`, title: 'Today' },
-        { id: `admin_${kind}_earnings_week`, title: 'This Week' },
-        { id: `admin_${kind}_earnings_last_week`, title: 'Last Week' },
-        { id: `admin_${kind}_earnings_month`, title: 'This Month' },
-      ],
-    }],
-  };
+function commandForAdminButton(id) {
+  return BUTTON_COMMANDS[String(id || '').trim()] || null;
 }
 
-function abigailEarningsButtons() { return earningsPeriodList('abigail'); }
-function christelEarningsButtons() { return earningsPeriodList('christel'); }
-function marietjieEarningsButtons() { return earningsPeriodList('marietjie'); }
-
-function calendarIntegrityButtons() {
-  return {
-    body: '*Calendar integrity*\nShiloh never auto-imports manual Google Calendar events as CRM bookings. Choose an integrity check.',
-    buttons: [
-      { id: 'admin_calendar_integrity_scan', title: 'Scan Now' },
-      { id: 'admin_calendar_integrity_issues', title: 'Open Issues' },
-    ],
-  };
-}
-
-function commandForAdminButton(buttonId = '') {
-  return BUTTON_COMMANDS[String(buttonId).trim()] || null;
-}
-
-module.exports = {
-  abigailEarningsButtons,
-  christelEarningsButtons,
-  marietjieEarningsButtons,
-  calendarIntegrityButtons,
-  commandForAdminButton,
-  BUTTON_COMMANDS,
-};
+module.exports = { BUTTON_COMMANDS, commandForAdminButton };
