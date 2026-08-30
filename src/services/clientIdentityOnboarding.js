@@ -183,10 +183,6 @@ function persistedDateOfBirthError() {
 
 function normalizePersistedDateOfBirth(value) {
   if (value === null) return null;
-  if (value instanceof Date) {
-    if (Number.isNaN(value.getTime())) throw persistedDateOfBirthError();
-    return value.toISOString().slice(0, 10);
-  }
   if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
     const date = new Date(`${value}T00:00:00.000Z`);
     if (!Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value) return value;
@@ -202,9 +198,11 @@ function normalizeOnboardingSessionRow(row) {
   };
 }
 
+const ONBOARDING_SESSION_PROJECTION = `phone,client_id,crm_v2_client_id,identity_model,state,pending_name,pending_contact,TO_CHAR(pending_date_of_birth, 'YYYY-MM-DD') AS pending_date_of_birth,pending_gender,booking_requested,authority_version,created_at,updated_at`;
+
 async function getSession(phone) {
   await ensureOnboardingSchema();
-  const r = await pool.query(`SELECT phone,client_id,crm_v2_client_id,identity_model,state,pending_name,pending_contact,pending_date_of_birth,pending_gender,booking_requested,authority_version,created_at,updated_at FROM client_onboarding_sessions WHERE phone=$1`, [normalizePhone(phone)]);
+  const r = await pool.query(`SELECT ${ONBOARDING_SESSION_PROJECTION} FROM client_onboarding_sessions WHERE phone=$1`, [normalizePhone(phone)]);
   return normalizeOnboardingSessionRow(r.rows[0]);
 }
 function patchValue(patch, key, current, fallback = null) {
@@ -248,7 +246,7 @@ async function saveSession(phone, patch = {}) {
     bookingRequested: patchValue(patch, "bookingRequested", c.booking_requested, false),
     authorityVersion: patchValue(patch, "authorityVersion", c.authority_version, AUTHORITY_VERSION),
   };
-  const r = await pool.query(`INSERT INTO client_onboarding_sessions (phone,client_id,crm_v2_client_id,identity_model,state,pending_name,pending_contact,pending_date_of_birth,pending_gender,booking_requested,authority_version,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,NOW()) ON CONFLICT (phone) DO UPDATE SET client_id=EXCLUDED.client_id,crm_v2_client_id=EXCLUDED.crm_v2_client_id,identity_model=EXCLUDED.identity_model,state=EXCLUDED.state,pending_name=EXCLUDED.pending_name,pending_contact=EXCLUDED.pending_contact,pending_date_of_birth=EXCLUDED.pending_date_of_birth,pending_gender=EXCLUDED.pending_gender,booking_requested=EXCLUDED.booking_requested,authority_version=EXCLUDED.authority_version,updated_at=NOW() RETURNING *`, [key,values.clientId,values.crmV2ClientId,values.identityModel,values.state,values.pendingName,values.pendingContact,values.pendingDateOfBirth,values.pendingGender,values.bookingRequested,values.authorityVersion]);
+  const r = await pool.query(`INSERT INTO client_onboarding_sessions (phone,client_id,crm_v2_client_id,identity_model,state,pending_name,pending_contact,pending_date_of_birth,pending_gender,booking_requested,authority_version,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,NOW()) ON CONFLICT (phone) DO UPDATE SET client_id=EXCLUDED.client_id,crm_v2_client_id=EXCLUDED.crm_v2_client_id,identity_model=EXCLUDED.identity_model,state=EXCLUDED.state,pending_name=EXCLUDED.pending_name,pending_contact=EXCLUDED.pending_contact,pending_date_of_birth=EXCLUDED.pending_date_of_birth,pending_gender=EXCLUDED.pending_gender,booking_requested=EXCLUDED.booking_requested,authority_version=EXCLUDED.authority_version,updated_at=NOW() RETURNING ${ONBOARDING_SESSION_PROJECTION}`, [key,values.clientId,values.crmV2ClientId,values.identityModel,values.state,values.pendingName,values.pendingContact,values.pendingDateOfBirth,values.pendingGender,values.bookingRequested,values.authorityVersion]);
   return normalizeOnboardingSessionRow(r.rows[0]);
 }
 function nextState(session = {}) {
