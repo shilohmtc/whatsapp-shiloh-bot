@@ -11,6 +11,7 @@
     "db:migrate": "node scripts/migrate.js",
     "maintenance": "node scripts/maintenance.js",
     "test:maintenance-framework": "node --test tests/maintenance-operation-framework.test.js",
+    "test:controlled-release-migration": "node --test tests/controlled-release-migration-gate.test.js",
     "test": "node --test tests/*.test.js"
   },
   "keywords": ["whatsapp", "meta", "openai"],
