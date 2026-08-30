@@ -49,21 +49,25 @@ function preservedCountsMatch(before, after) {
   return true;
 }
 
-function assertPostconditions(before, after) {
+function assertOccupancyCleared(after) {
   if (Number(after.active_appointments) !== 0) throw new Error('Calendar reset postcondition failed: active appointments remain');
   if (Number(after.calendar_blocks) !== 0) throw new Error('Calendar reset postcondition failed: calendar blocks remain');
   if (Number(after.active_lifecycle) !== 0) throw new Error('Calendar reset postcondition failed: active lifecycle reminders remain');
   if (Number(after.pending_approvals) !== 0) throw new Error('Calendar reset postcondition failed: pending practitioner approvals remain');
   if (Number(after.retryable_confirmations) !== 0) throw new Error('Calendar reset postcondition failed: retryable booking confirmations remain');
+}
+
+function assertTransactionalPostconditions(before, after) {
+  assertOccupancyCleared(after);
   if (!preservedCountsMatch(before, after)) throw new Error('Calendar reset preservation postcondition failed');
 }
 
-async function postcommitVerification(dbPool, before) {
+async function postcommitVerification(dbPool) {
   const db = await dbPool.connect();
   try {
     await db.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
     const after = await snapshotCounts(db);
-    assertPostconditions(before, after);
+    assertOccupancyCleared(after);
     await db.query('COMMIT');
     return after;
   } catch (error) {
@@ -91,10 +95,10 @@ async function executeCalendarOccupancyReset({ runId, dbPool = pool } = {}) {
       [AUDIT_ACTION, runId]
     );
     if (replay.rowCount) {
-      before = await snapshotCounts(db);
-      assertPostconditions(before, before);
+      const current = await snapshotCounts(db);
+      assertOccupancyCleared(current);
       await db.query('COMMIT');
-      return { status: 'already_executed', runId, after: before };
+      return { status: 'already_executed', runId, after: current };
     }
 
     before = await snapshotCounts(db);
@@ -161,7 +165,7 @@ async function executeCalendarOccupancyReset({ runId, dbPool = pool } = {}) {
     const blocks = await db.query(`DELETE FROM calendar_blocks RETURNING id`);
 
     const after = await snapshotCounts(db);
-    assertPostconditions(before, after);
+    assertTransactionalPostconditions(before, after);
 
     changed = {
       appointmentsCancelled: appointments.rowCount,
@@ -213,7 +217,7 @@ async function executeCalendarOccupancyReset({ runId, dbPool = pool } = {}) {
     db.release();
   }
 
-  const verified = await postcommitVerification(dbPool, before);
+  const verified = await postcommitVerification(dbPool);
   return { status: 'complete', runId, changed, after: verified };
 }
 
