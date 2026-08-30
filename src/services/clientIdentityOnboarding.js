@@ -479,6 +479,10 @@ function verifiedLegacyClient(identity) {
   return identity?.status === "verified_client" && identity.client?.id ? identity.client : null;
 }
 
+function crmV2RegistrationRequiresContinuation(session, client) {
+  return session?.state !== "complete" || client?.profileStatus !== "registered";
+}
+
 async function resetSessionForCurrentAuthority(phone, identity, existingSession) {
   if (manualReviewIdentity(identity)) return null;
   const verifiedClient = verifiedLegacyClient(identity);
@@ -517,7 +521,7 @@ async function processClientIdentityMessage(phone, text) {
     if (durableIdentity?.identityModel === IDENTITY_MODELS.CRM_V2) {
       const revalidated = await whatsappCrmV2IdentityCompat.revalidateSessionIdentity({ phone, session: existingSession });
       if (revalidated.status === "crm_v2_current") {
-        if (existingSession.state !== "complete") {
+        if (crmV2RegistrationRequiresContinuation(existingSession, revalidated.client)) {
           return processActiveSession(phone, text, existingSession);
         }
         if (isWalkinRegistrationRequest(text)) {
@@ -670,6 +674,7 @@ module.exports = {
   processClientIdentityMessage,
   manualReviewIdentity,
   verifiedLegacyClient,
+  crmV2RegistrationRequiresContinuation,
   PREMIUM_GREETING,
   REGISTRATION_START_PROMPT,
   HUMAN_VERIFICATION_REPLY,
