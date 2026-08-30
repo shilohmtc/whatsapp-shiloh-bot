@@ -3,9 +3,6 @@ const {
   processAdminMobileMenuMessage,
 } = require('./adminMobileMenu');
 const { processAdminAppointmentsByDateMessage } = require('./adminAppointmentsByDate');
-const { processAdminHelpMessage } = require('./adminHelp');
-const { processAdminWalkinMessage } = require('./adminWalkin');
-const { processAdminStaffServicesMessage } = require('./adminStaffServices');
 const { processAdminLoyaltyRedemptionMessage } = require('./adminLoyaltyRedemption');
 const { processAdminReportsMessage } = require('./adminReports');
 const { processAdminServiceTrendsMessage } = require('./adminServiceTrends');
@@ -27,17 +24,11 @@ const {
 const calendarHandoffService = createStaffCalendarHandoffService();
 
 const ACTIONS = [
-  { key: 'open_calendar', command: 'Open Calendar', description: 'Open the authoritative Calendar securely' },
   { key: 'today', command: 'Today', description: 'View today’s authorized appointments' },
   { key: 'tomorrow', command: 'Tomorrow', description: 'View tomorrow’s authorized appointments' },
   { key: 'reports', command: 'Reports', description: 'Open operational and service reports' },
   { key: 'earnings', command: 'Earnings', description: 'Open role-authorized earnings reports' },
-  { key: 'help', command: 'Help', description: 'Show retained WhatsApp staff help' },
   { key: 'pending_approvals', command: 'Pending approvals', description: 'Review pending practitioner decisions' },
-  { key: 'client', command: 'Find a client', description: 'Find an authorized CRM client' },
-  { key: 'walkin', command: 'Add a walk-in', description: 'Register a walk-in client' },
-  { key: 'staff_services', command: 'Staff services', description: 'View authorized staff/service mappings' },
-  { key: 'pricing', command: 'Services & pricing', description: 'View or manage authorized service pricing' },
 ];
 
 const ACTION_BY_KEY = new Map(ACTIONS.map((action) => [action.key, action]));
@@ -92,9 +83,9 @@ function topLevelInteractive(admin) {
   const options = getMenuOptions(admin);
   return {
     type: 'list',
-    body: '*Shiloh Admin 🌿*\nWhatsApp provides quick operational views. Calendar owns diary changes.',
+    body: '*Shiloh Admin 🌿*\nQuick operational views only. Open Calendar from the Workspace launcher.',
     buttonText: 'Admin menu',
-    sectionTitle: 'Staff actions',
+    sectionTitle: 'Staff views',
     rows: options.map((option) => ({
       id: `admin_action_${option.key}`,
       title: option.label.slice(0, 24),
@@ -115,7 +106,7 @@ function reportsInteractive() {
       { id: 'admin_report_last_week', title: 'Last week', description: 'Previous completed week' },
       { id: 'admin_report_month', title: 'This month', description: 'Current calendar month' },
       { id: 'admin_report_service_trends', title: 'Service trends', description: 'Last 30 days vs previous 30' },
-      { id: 'admin_open_menu', title: '← Back to Admin', description: 'Return to staff actions' },
+      { id: 'admin_open_menu', title: '← Back to Admin', description: 'Return to staff views' },
     ],
   };
 }
@@ -167,7 +158,7 @@ function earningsInteractive(admin) {
         title: subject.charAt(0).toUpperCase() + subject.slice(1),
         description: 'Open completed-treatment earnings',
       })),
-      { id: 'admin_open_menu', title: '← Back to Admin', description: 'Return to staff actions' },
+      { id: 'admin_open_menu', title: '← Back to Admin', description: 'Return to staff views' },
     ],
   };
 }
@@ -206,7 +197,7 @@ async function issueCalendarHandoffForSender(sender, admin = null) {
   return {
     handled: true,
     admin,
-    reply: `*Open Calendar*\n\nThis diary action now lives in Shiloh Calendar. Tap this secure one-time link:\n${url}\n\nIt expires shortly and can only be used once. No WhatsApp diary mutation was attempted.`,
+    reply: `*Open Calendar*\n\nTap this secure one-time link to open Shiloh Calendar:\n${url}\n\nIt expires shortly and can only be used once.`,
   };
 }
 
@@ -226,7 +217,6 @@ async function dispatchStableAction(sender, action, admin) {
   if (!isActionVisibleForAdmin(action, admin)) {
     return { handled: true, admin, reply: 'That staff action is not available for your role. No action was taken.' };
   }
-  if (action.key === 'open_calendar') return issueCalendarHandoffForSender(sender, admin);
   if (action.key === 'today' || action.key === 'tomorrow') {
     return processAdminAppointmentsByDateMessage(sender, action.command);
   }
@@ -237,10 +227,8 @@ async function dispatchStableAction(sender, action, admin) {
       ? { handled: true, admin, interactive }
       : { handled: true, admin, reply: 'No earnings reports are available for your staff role.' };
   }
-  if (action.key === 'help') return processAdminHelpMessage(sender, action.command);
   if (action.key === 'pending_approvals') return processAdminPendingBookingApprovalsMessage(sender, action.command);
-  if (action.key === 'walkin') return processAdminWalkinMessage(sender, action.command);
-  return processAdminMobileMenuMessage(sender, action.command);
+  return { handled: true, admin, reply: 'That staff action is unavailable. No action was taken.' };
 }
 
 function isWorkspaceLauncherTerm(raw = '') {
@@ -281,15 +269,11 @@ async function processAdminInteractiveMenuMessage(sender, text) {
   if (report.handled) return report;
   const trends = await processAdminServiceTrendsMessage(sender, text);
   if (trends.handled) return trends;
-  const staffServices = await processAdminStaffServicesMessage(sender, text);
-  if (staffServices.handled) return staffServices;
-  const walkin = await processAdminWalkinMessage(sender, text);
-  if (walkin.handled) return walkin;
   const loyalty = await processAdminLoyaltyRedemptionMessage(sender, text);
   if (loyalty.handled) return loyalty;
 
-  if (/^(?:admin_open_calendar|open calendar|calendar)$/i.test(raw)) {
-    return dispatchStableAction(sender, ACTION_BY_KEY.get('open_calendar'), admin);
+  if (/^(?:admin_open_calendar|admin_action_open_calendar|open calendar|calendar)$/i.test(raw)) {
+    return issueCalendarHandoffForSender(sender, admin);
   }
   if (/^(?:admin_open_menu|admin|admin menu)$/i.test(raw)) {
     return { handled: true, admin, interactive: topLevelInteractive(admin) };
@@ -325,13 +309,12 @@ async function processAdminInteractiveMenuMessage(sender, text) {
   }
   if (/^reports?$/i.test(raw)) return dispatchStableAction(sender, ACTION_BY_KEY.get('reports'), admin);
   if (/^(?:earnings|my earnings)$/i.test(raw)) return dispatchStableAction(sender, ACTION_BY_KEY.get('earnings'), admin);
-  if (/^help\b/i.test(raw)) return dispatchStableAction(sender, ACTION_BY_KEY.get('help'), admin);
 
   return {
     handled: true,
     isAdmin: true,
     admin,
-    reply: 'That staff WhatsApp action is unavailable. No action was taken. Send *Menu* for the retained options or *Open Calendar* for diary work.',
+    reply: 'That staff WhatsApp action is unavailable. No action was taken. Send *Menu* for the current options or *Open Calendar* for diary work.',
   };
 }
 

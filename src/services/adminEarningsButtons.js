@@ -24,6 +24,12 @@ const BUTTON_COMMANDS = Object.freeze({
   admin_appointment_booking: 'admin_retired_calendar_action',
   admin_appointment_manage: 'admin_retired_calendar_action',
   admin_appointment_finalize: 'admin_retired_internal_action',
+  admin_action_open_calendar: 'admin_open_calendar',
+  admin_action_help: 'admin_retired_staff_action',
+  admin_action_client: 'admin_retired_staff_action',
+  admin_action_walkin: 'admin_retired_staff_action',
+  admin_action_staff_services: 'admin_retired_staff_action',
+  admin_action_pricing: 'admin_retired_staff_action',
   client_book_now: 'services',
 });
 
