@@ -48,6 +48,32 @@ const CALENDAR_EXACT = new Set([
   'public holiday hours',
 ]);
 
+const RETIRED_STAFF_EXACT = new Set([
+  'help',
+  'find a client',
+  'find client',
+  'find my client',
+  'client details',
+  'my client details',
+  'add a walk-in',
+  'add walk-in',
+  'new walk-in',
+  'create walk-in',
+  'staff services',
+  'my services',
+  'services by staff',
+  'services per staff',
+  'all services per staff',
+  'practitioner services',
+  'who does what',
+  'services & pricing',
+  'my services & pricing',
+  'manage services & pricing',
+  'service pricing',
+  'manage pricing',
+  'pricing',
+]);
+
 function normalizeAuthorityInput(value = '') {
   return String(value).trim().toLowerCase().replace(/\s+/g, ' ');
 }
@@ -69,6 +95,16 @@ function classifyRetiredAdminAction(value = '') {
     || /^(?:appointments?|show appointments?) last week$/i.test(raw)
     || /^admin_appointment_last_week$/i.test(raw)
   ) return { kind: 'calendar', reason: 'last_week_appointments' };
+
+  if (
+    normalized === 'admin_retired_staff_action'
+    || RETIRED_STAFF_EXACT.has(normalized)
+    || /^admin_action_(?:help|client|walkin|staff_services|pricing)$/i.test(raw)
+    || /^(?:find|lookup|search(?: for)?)\s+client\b/i.test(raw)
+    || /^client\s+(?:find|lookup|search)\b/i.test(raw)
+    || /^(?:add|new|create)\s+walk[- ]?in\b/i.test(raw)
+    || /^pricing_(?:service_\d+|more_\d+|change|back_services|confirm|keep)$/i.test(raw)
+  ) return { kind: 'retired', reason: 'ordinary_staff_surface_removed' };
 
   if (
     normalized === 'admin_retired_internal_action'
@@ -143,6 +179,15 @@ async function processRetiredAdminAuthorityMessage(sender, text, db = pool) {
 
   await auditRetirement(authority.admin, disposition, db);
 
+  if (disposition.kind === 'retired') {
+    return {
+      handled: true,
+      admin: authority.admin,
+      disposition,
+      reply: 'That WhatsApp staff action has been retired. No action was taken. Send *Menu* for the current Shiloh options.',
+    };
+  }
+
   if (disposition.kind === 'internal_only') {
     return {
       handled: true,
@@ -157,6 +202,7 @@ async function processRetiredAdminAuthorityMessage(sender, text, db = pool) {
 
 module.exports = {
   CALENDAR_EXACT,
+  RETIRED_STAFF_EXACT,
   auditRetirement,
   classifyRetiredAdminAction,
   normalizeAuthorityInput,

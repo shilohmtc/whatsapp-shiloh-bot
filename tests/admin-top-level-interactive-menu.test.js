@@ -37,44 +37,33 @@ test('workspace keeps Calendar first and adds Pending approvals only when applic
   ]);
 });
 
-test('owner Admin menu is one lightweight retained list', () => {
+test('owner Admin menu is only Today, Tomorrow, Reports and Earnings', () => {
   const menu = topLevelInteractive(owner);
   assert.equal(menu.type, 'list');
   assert.deepEqual(menu.rows.map((row) => row.id), [
-    'admin_action_open_calendar',
     'admin_action_today',
     'admin_action_tomorrow',
     'admin_action_reports',
     'admin_action_earnings',
-    'admin_action_help',
-    'admin_action_client',
-    'admin_action_walkin',
-    'admin_action_staff_services',
-    'admin_action_pricing',
   ]);
-  assert.ok(menu.rows.length <= 10);
+  assert.equal(menu.rows.length, 4);
+  assert.doesNotMatch(JSON.stringify(menu), /open calendar|help|client|walk-in|staff services|pricing/i);
 });
 
-test('practitioner menu remains capability scoped', () => {
+test('practitioner Admin menu has the same minimal capability-scoped quick views', () => {
   const ids = topLevelInteractive(practitioner).rows.map((row) => row.id);
   assert.deepEqual(ids, [
-    'admin_action_open_calendar',
     'admin_action_today',
     'admin_action_tomorrow',
     'admin_action_reports',
     'admin_action_earnings',
-    'admin_action_help',
-    'admin_action_client',
-    'admin_action_staff_services',
   ]);
-  assert.equal(ids.includes('admin_action_pricing'), false);
-  assert.equal(ids.includes('admin_action_walkin'), false);
 });
 
-test('every advertised stable action ID maps explicitly', () => {
+test('every advertised stable action ID maps explicitly and removed rows do not', () => {
   for (const row of topLevelInteractive(owner).rows) assert.ok(actionForId(row.id), row.id);
   assert.equal(actionForId('admin_action_unknown'), null);
-  for (const retired of ['booking', 'manage_booking', 'schedule', 'finalize', 'demo_client']) {
+  for (const retired of ['open_calendar', 'help', 'client', 'walkin', 'staff_services', 'pricing', 'booking', 'manage_booking', 'schedule', 'finalize', 'demo_client']) {
     assert.equal(actionForId(`admin_action_${retired}`), null);
   }
 });

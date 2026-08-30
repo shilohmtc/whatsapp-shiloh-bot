@@ -29,7 +29,7 @@ const christel = { ...jeanPierre, id: 9002, staff_id: 3, display_name: 'Christel
 const abigail = { ...jeanPierre, id: 9003, staff_id: 4, display_name: 'Abigail', business_role: 'employee_practitioner', calendar_scope: 'own_appointments', service_scope: 'own_services' };
 const marietjie = { ...jeanPierre, id: 9004, staff_id: 5, display_name: 'Marietjie', business_role: 'tenant_practitioner', calendar_scope: 'own_services', service_scope: 'own_services' };
 
-test('Jean-Pierre business admin receives Christel business schedule controls without practitioner self controls', () => {
+test('Jean-Pierre business admin receives Christel business schedule controls outside ordinary WhatsApp Admin', () => {
   assert.equal(canControlChristelBusiness(jeanPierre), true);
   const menu = scheduleMenu(jeanPierre);
   const ids = menu.rows.map((row) => row.id);
@@ -38,26 +38,18 @@ test('Jean-Pierre business admin receives Christel business schedule controls wi
   assert.ok(!ids.includes('schedule_my_time_off'));
 });
 
-test('Jean-Pierre business admin controls the shared Christel and Abigail pricing catalogue', () => {
+test('Jean-Pierre business admin still maps to shared Christel and Abigail pricing authority outside ordinary WhatsApp Admin', () => {
   assert.equal(isJeanPierreBusinessAdmin(jeanPierre), true);
   assert.equal(pricingOwner(jeanPierre), 'christel');
 });
 
-test('JP and practitioner ordinary menus both exclude finalization, block time, and schedule authority', () => {
+test('all ordinary staff Admin menus are reduced to the same four quick views', () => {
   for (const admin of [jeanPierre, christel, abigail, marietjie]) {
     const keys = getMenuOptions(admin).map((option) => option.key);
-    assert.equal(keys.includes('finalize'), false);
-    assert.equal(keys.includes('block_time'), false);
-    assert.equal(keys.includes('schedule'), false);
-  }
-});
-
-test('all ordinary practitioner Admin menus retain only quick views and transitional controls', () => {
-  for (const admin of [christel, abigail, marietjie]) {
-    const keys = getMenuOptions(admin).map((option) => option.key);
-    assert.ok(keys.includes('today'));
-    assert.ok(keys.includes('tomorrow'));
-    assert.ok(keys.includes('open_calendar'));
+    assert.deepEqual(keys, ['today', 'tomorrow', 'reports', 'earnings']);
+    for (const removed of ['open_calendar', 'help', 'client', 'walkin', 'staff_services', 'pricing', 'finalize', 'block_time', 'schedule']) {
+      assert.equal(keys.includes(removed), false, `${admin.display_name}: ${removed}`);
+    }
   }
 });
 
