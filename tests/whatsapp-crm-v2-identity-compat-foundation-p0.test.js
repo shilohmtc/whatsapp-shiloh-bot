@@ -268,8 +268,10 @@ test('CRM V2 restart fails closed when exact mobile is missing or ambiguous', as
 
 test('onboarding persistence reads and writes both identity columns and the discriminator', () => {
   const onboarding = read('src/services/clientIdentityOnboarding.js');
-  assert.match(onboarding, /SELECT phone,client_id,crm_v2_client_id,identity_model,state/);
+  assert.match(onboarding, /ONBOARDING_SESSION_PROJECTION = `phone,client_id,crm_v2_client_id,identity_model,state/);
+  assert.match(onboarding, /SELECT \$\{ONBOARDING_SESSION_PROJECTION\} FROM client_onboarding_sessions/);
   assert.match(onboarding, /INSERT INTO client_onboarding_sessions \(phone,client_id,crm_v2_client_id,identity_model,state/);
+  assert.match(onboarding, /RETURNING \$\{ONBOARDING_SESSION_PROJECTION\}/);
   assert.match(onboarding, /client_id=EXCLUDED\.client_id,crm_v2_client_id=EXCLUDED\.crm_v2_client_id,identity_model=EXCLUDED\.identity_model/);
   assert.match(onboarding, /identityFromSession\(\{\s*client_id: candidateClientId,\s*crm_v2_client_id: candidateCrmV2ClientId/);
 });
