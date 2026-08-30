@@ -69,6 +69,8 @@ jobs:
         run: node --test tests/calendar-service-category-visual-identifiers-p2.test.js tests/calendar-service-family-icon-accents-p2.test.js
       - name: Run focused Calendar mobile time-entry tests
         run: node --test tests/calendar-mobile-booking-time-entry-p1.test.js
+      - name: Run focused Workspace Clients tests
+        run: node --test tests/workspace-clients-v1.test.js
       - name: Run non-mutating regression tests
         env:
           SHILOH_STAFF_BROWSER_AUTH_WHATSAPP_DELIVERY_ENABLED: 'false'
@@ -100,5 +102,14 @@ jobs:
         with:
           name: calendar-cockpit-visual-proof
           path: artifacts/calendar-cockpit-visual-proof
+          if-no-files-found: error
+          retention-days: 14
+      - name: Generate Workspace Clients visual proof
+        run: node scripts/workspace-clients-visual-proof.js
+      - name: Upload Workspace Clients visual proof
+        uses: actions/upload-artifact@v4
+        with:
+          name: workspace-clients-v1-visual-proof
+          path: artifacts/workspace-clients-v1-visual-proof
           if-no-files-found: error
           retention-days: 14
