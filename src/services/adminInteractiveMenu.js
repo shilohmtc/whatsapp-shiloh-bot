@@ -83,7 +83,7 @@ function topLevelInteractive(admin) {
   const options = getMenuOptions(admin);
   return {
     type: 'list',
-    body: '*Shiloh Admin 🌿*\nQuick operational views only. Open Calendar from the Workspace launcher.',
+    body: '*Shiloh Admin 🌿*\nQuick operational views.',
     buttonText: 'Admin menu',
     sectionTitle: 'Staff views',
     rows: options.map((option) => ({
@@ -272,7 +272,7 @@ async function processAdminInteractiveMenuMessage(sender, text) {
   const loyalty = await processAdminLoyaltyRedemptionMessage(sender, text);
   if (loyalty.handled) return loyalty;
 
-  if (/^(?:admin_open_calendar|admin_action_open_calendar|open calendar|calendar)$/i.test(raw)) {
+  if (/^(?:admin_open_calendar|open calendar|calendar|admin_action_open_calendar)$/i.test(raw)) {
     return issueCalendarHandoffForSender(sender, admin);
   }
   if (/^(?:admin_open_menu|admin|admin menu)$/i.test(raw)) {
