@@ -125,12 +125,9 @@ test('approval and decline preserve idempotent client confirmation without exter
   assert.match(approval, /client\.booking_approval\.declined/);
 });
 
-test('Reset Juvan menu entry is JP-only and still delegates to the existing reset contract', () => {
-  assert.match(menu, /labels: \['Reset Juvan', 'Reset Juvan profile'\]/);
-  assert.match(menu, /command: 'Reset test client Juvan'/);
-  assert.match(menu, /if \(jeanPierre && !\/Reset Juvan\/i\.test\(body\)\) body \+=/);
-  assert.doesNotMatch(menu, /\(jeanPierre \|\| christel\)[^\n]*Reset Juvan/);
-  assert.match(menu, /if \(action\.key === 'reset_juvan'\) return processAdminTestClientResetMessage\(sender, action\.command\)/);
+test('Reset Juvan remains internal and is absent from ordinary staff routing', () => {
+  assert.doesNotMatch(menu, /Reset Juvan|processAdminTestClientResetMessage|reset_juvan/);
+  assert.match(menu, /processAdminRetiredAuthorityMessage/);
 });
 
 test('existing Dummy Test historical compatibility and ordinary practitioner observer behavior remain present', () => {

@@ -7,13 +7,11 @@ const interactivePath = path.join(__dirname, '..', 'src', 'services', 'adminInte
 const bookingUpdatePath = path.join(__dirname, '..', 'src', 'services', 'adminBookingUpdate.js');
 const interactiveSource = fs.readFileSync(interactivePath, 'utf8');
 const bookingUpdateSource = fs.readFileSync(bookingUpdatePath, 'utf8');
-const { actionForLabel } = require(interactivePath);
+const { classifyRetiredAdminAction } = require('../src/services/adminAuthorityRetirement');
 
-test('Finalize past visits is a canonical action in the current Appointments section', () => {
-  const action = actionForLabel('Finalize past visits');
-  assert.ok(action, 'Finalize past visits is missing from stable admin actions');
-  assert.equal(action.key, 'finalize');
-  assert.equal(action.command, 'Finalize past appointments');
+test('Finalize past visits is internal-only in ordinary staff WhatsApp', () => {
+  assert.equal(classifyRetiredAdminAction('Finalize past visits').kind, 'internal_only');
+  assert.doesNotMatch(interactiveSource, /processAdminAppointmentFinalizationMessage/);
 });
 
 test('Admin/Menu/Hi escape clears a stale Manage booking session before numeric prompting', () => {
@@ -24,10 +22,6 @@ test('Admin/Menu/Hi escape clears a stale Manage booking session before numeric 
   assert.ok(escapeMatch.index < numericPromptIndex, 'stale Manage booking can still intercept Admin/Menu/Hi before escape');
 });
 
-test('section refresh fails closed when role-scoped menu has no interactive body', () => {
-  assert.match(
-    interactiveSource,
-    /if \(!menuResult\?\.handled \|\| !menuResult\?\.interactive\?\.body\)/,
-    'section rendering still dereferences menuResult.interactive.body without a fail-closed guard'
-  );
+test('unknown authenticated staff payloads fail closed after retained routing', () => {
+  assert.match(interactiveSource, /That staff WhatsApp action is unavailable\. No action was taken/);
 });

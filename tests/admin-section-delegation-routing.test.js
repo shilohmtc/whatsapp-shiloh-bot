@@ -19,11 +19,8 @@ test('other deliberately delegated stable actions also invoke their guarded owne
   assert.match(interactive, /action\.key === 'help'.*processAdminHelpMessage\(sender, action\.command\)/s);
 });
 
-test('interactive adapter still runs before generic appointment and admin-assistant fallbacks', () => {
-  const adapter = webhook.indexOf('processAdminInteractiveMenuMessage(from,text)');
-  const appointments = webhook.indexOf('processAdminAppointmentsByDateMessage(from,text)');
-  const assistant = webhook.indexOf('processAdminAssistantMessage(from,text)');
-  assert.ok(adapter >= 0 && appointments >= 0 && assistant >= 0);
-  assert.ok(adapter < appointments);
-  assert.ok(appointments < assistant);
+test('interactive adapter is terminal for authenticated staff and has no generic authority fallbacks', () => {
+  assert.match(webhook, /processAdminInteractiveMenuMessage\(from,text\)/);
+  assert.doesNotMatch(webhook, /processAdminAppointmentsByDateMessage\(from,text\)|processAdminAssistantMessage\(from,text\)/);
+  assert.match(interactive, /That staff WhatsApp action is unavailable\. No action was taken/);
 });

@@ -65,11 +65,11 @@ test('role-specific admin menu contracts remain permission-gated', () => {
   const menu = source('src/services/adminMobileMenu.js');
   assert.match(menu, /tenant_practitioner/);
   assert.match(menu, /employee_practitioner/);
-  assert.match(menu, /My clients today/);
+  assert.match(menu, /My appointments today/);
   assert.match(menu, /My services & pricing/);
   assert.match(menu, /Practitioner access — your diary and assigned client work only/);
-  assert.match(menu, /has\(admin,'service:pricing'\)/);
-  assert.match(menu, /has\(admin,'schedule:manage'\)/);
+  assert.match(menu, /has\(admin, 'service:pricing'\)/);
+  assert.doesNotMatch(menu, /has\(admin, 'schedule:manage'\)|key: 'schedule'/);
 });
 
 test('booking updates retain clinic, staff and canonical Shiloh conflict guards', () => {

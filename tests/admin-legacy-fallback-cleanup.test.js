@@ -38,13 +38,12 @@ test('guarded Admin command replies are left unchanged', () => {
   assert.equal(modernizeLegacyAdminFallback(original), original);
 });
 
-test('active mobile booking routing remains ahead of the legacy Admin assistant fallback', () => {
+test('retirement routing replaces active mobile booking and legacy Assistant fallbacks', () => {
   const controller = fs.readFileSync(path.join(__dirname, '..', 'src', 'controllers', 'webhookController.js'), 'utf8');
-  const activeBooking = controller.indexOf('const activeMobileBooking=await processAdminMobileBookingFlowMessage(from,text)');
-  const fallback = controller.indexOf('const adminAssistant=await processAdminAssistantMessage(from,text)');
-
-  assert.ok(activeBooking >= 0, 'active mobile booking dispatch must remain present');
-  assert.ok(fallback > activeBooking, 'active booking input, including natural dates, must be handled before the Admin fallback');
+  const retired = controller.indexOf('processAdminRetiredAuthorityMessage(from,text)');
+  const retained = controller.indexOf('processAdminInteractiveMenuMessage(from,text)');
+  assert.ok(retired >= 0 && retained > retired);
+  assert.doesNotMatch(controller, /processAdminMobileBookingFlowMessage|processAdminAssistantMessage/);
 });
 
 test('startup preloads the fallback cleanup patch before app.js captures the Admin assistant export', () => {

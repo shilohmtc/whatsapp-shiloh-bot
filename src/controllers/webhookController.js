@@ -18,25 +18,8 @@ const { processClientIdentityMessage } = require("../services/clientIdentityOnbo
 const { processClientTransitionWelcome } = require("../services/clientTransitionWelcome");
 const { processClientServiceFamilyMessage } = require("../services/clientServiceFamilyDiscovery");
 const { processClientDiscoveryMessage } = require("../services/clientDiscoveryPackages");
-const { processAdminWalkinMessage } = require("../services/adminWalkin");
-const { processAdminHelpMessage } = require("../services/adminHelp");
-const { processAdminInteractiveMenuMessage } = require("../services/adminInteractiveMenu");
-const { processAdminMobileBookingFlowMessage } = require("../services/adminMobileBookingFlow");
-const { processAdminBookingUpdateMessage } = require("../services/adminBookingUpdate");
-const { scopeAdminBookingInteractive, processStatelessAdminBookingUpdateMessage } = require("../services/adminBookingUpdateStateless");
+const { processAdminInteractiveMenuMessage, processAdminRetiredAuthorityMessage } = require("../services/adminInteractiveMenu");
 const { hybridizeChoiceInteractive } = require("../presentation/whatsappChoicePresentation");
-const { processAdminAppointmentsByDateMessage } = require("../services/adminAppointmentsByDate");
-const { processAdminReportsMessage } = require("../services/adminReports");
-const { processAdminServiceTrendsMessage } = require("../services/adminServiceTrends");
-const { processAdminRosterAuditMessage } = require("../services/adminRosterAudit");
-const { processAdminNailServicesAuditMessage } = require("../services/adminNailServicesAudit");
-const { processAdminLegacyOrphanAuditMessage } = require("../services/adminLegacyOrphanAudit");
-const { processAdminAvailableSlotsMessage } = require("../services/adminAvailableSlots");
-const { processAdminStaffServicesMessage } = require("../services/adminStaffServices");
-const { processAdminLoyaltyRedemptionMessage } = require("../services/adminLoyaltyRedemption");
-const { processAdminClientDemoMessage } = require("../services/adminClientDemo");
-const { escapeActiveDemoToAdminMenu } = require("../services/adminDemoMenuEscape");
-const { processAdminAssistantMessage } = require("../services/adminAssistant");
 const { commandForAdminButton } = require("../services/adminEarningsButtons");
 const { forceMatchedClientNameConfirmation } = require("../services/identityOnboardingGuard");
 const logger = require("../lib/logger");
@@ -59,7 +42,6 @@ function inboundText(message){
   return null;
 }
 async function sendAdminResult(to,result){
-  result=scopeAdminBookingInteractive(result);
   if (result?.interactive) {
     result = { ...result, interactive: hybridizeChoiceInteractive(result.interactive) };
   }
@@ -77,25 +59,9 @@ async function sendAdminResult(to,result){
 exports.verifyWebhook = (req,res)=>{const mode=req.query["hub.mode"],token=req.query["hub.verify_token"],challenge=req.query["hub.challenge"];if(mode==="subscribe"&&token===process.env.VERIFY_TOKEN){(req.log||logger).info("WhatsApp webhook verified");return res.status(200).send(challenge);}(req.log||logger).warn("WhatsApp webhook verification rejected");return res.sendStatus(403);};
 exports.receiveWebhook=async(req,res)=>{const log=req.log||logger;try{const value=req.body.entry?.[0]?.changes?.[0]?.value;if(!value?.messages)return res.sendStatus(200);const message=value.messages[0];const from=message.from,text=inboundText(message);if(!text){log.info({messageType:message.type},"Ignoring unsupported or unknown WhatsApp message");return res.sendStatus(200);}if(!from){log.warn("Received WhatsApp message without sender");return res.sendStatus(200);}log.info({from:maskPhone(from),messageType:message.type},"Processing incoming WhatsApp message");try{
 const language=await guardEnglishOnly(text);if(!language.allowed){log.info({from:maskPhone(from)},"Rejected non-English WhatsApp message");await sendWhatsAppMessage(from,language.reply);return res.sendStatus(200);}
-const demoMenuEscape=await escapeActiveDemoToAdminMenu(from,text);if(demoMenuEscape.escaped){log.info({from:maskPhone(from),admin:demoMenuEscape.admin?.display_name},"Escaped unfinished client demo to admin menu");}
 const bookingApproval=await processClientBookingApprovalMessage(from,text);if(bookingApproval.handled){log.info({from:maskPhone(from),status:bookingApproval.status||null},"Handled practitioner booking approval decision");await sendAdminResult(from,bookingApproval);return res.sendStatus(200);}
-const adminClientDemo=await processAdminClientDemoMessage(from,text);if(adminClientDemo.handled){log.info({from:maskPhone(from),admin:adminClientDemo.admin?.display_name},"Handled controlled client demo message");await sendWhatsAppMessage(from,adminClientDemo.reply);return res.sendStatus(200);}
-const adminSlots=await processAdminAvailableSlotsMessage(from,text);if(adminSlots.handled){log.info({from:maskPhone(from),admin:adminSlots.admin?.display_name},"Handled authoritative available-slots request");await sendWhatsAppMessage(from,adminSlots.reply);return res.sendStatus(200);}
-const staffServices=await processAdminStaffServicesMessage(from,text);if(staffServices.handled){await sendWhatsAppMessage(from,staffServices.reply);return res.sendStatus(200);}
-const activeMobileBooking=await processAdminMobileBookingFlowMessage(from,text);if(activeMobileBooking.handled){await sendAdminResult(from,activeMobileBooking);return res.sendStatus(200);}
-const statelessAdminBookingUpdate=await processStatelessAdminBookingUpdateMessage(from,text);if(statelessAdminBookingUpdate.handled){log.info({from:maskPhone(from),admin:statelessAdminBookingUpdate.admin?.display_name},"Handled restart-safe admin booking-update interaction");await sendAdminResult(from,statelessAdminBookingUpdate);return res.sendStatus(200);}
-const adminBookingUpdate=await processAdminBookingUpdateMessage(from,text);if(adminBookingUpdate.handled){log.info({from:maskPhone(from),admin:adminBookingUpdate.admin?.display_name},"Handled admin booking-update interaction");await sendAdminResult(from,adminBookingUpdate);return res.sendStatus(200);}
-const adminReports=await processAdminReportsMessage(from,text);if(adminReports.handled){await sendWhatsAppMessage(from,adminReports.reply);return res.sendStatus(200);}
-const serviceTrends=await processAdminServiceTrendsMessage(from,text);if(serviceTrends.handled){await sendWhatsAppMessage(from,serviceTrends.reply);return res.sendStatus(200);}
+const retiredAdminAuthority=await processAdminRetiredAuthorityMessage(from,text);if(retiredAdminAuthority.handled){log.info({from:maskPhone(from),disposition:retiredAdminAuthority.disposition?.kind||null},"Handled retired WhatsApp staff authority safely");await sendAdminResult(from,retiredAdminAuthority);return res.sendStatus(200);}
 const adminMobile=await processAdminInteractiveMenuMessage(from,text);if(adminMobile.handled){await sendAdminResult(from,adminMobile);return res.sendStatus(200);}
-const adminAppointments=await processAdminAppointmentsByDateMessage(from,text);if(adminAppointments.handled){await sendWhatsAppMessage(from,adminAppointments.reply);return res.sendStatus(200);}
-const rosterAudit=await processAdminRosterAuditMessage(from,text);if(rosterAudit.handled){await sendWhatsAppMessage(from,rosterAudit.reply);return res.sendStatus(200);}
-const nailAudit=await processAdminNailServicesAuditMessage(from,text);if(nailAudit.handled){await sendWhatsAppMessage(from,nailAudit.reply);return res.sendStatus(200);}
-const legacyOrphanAudit=await processAdminLegacyOrphanAuditMessage(from,text);if(legacyOrphanAudit.handled){await sendWhatsAppMessage(from,legacyOrphanAudit.reply);return res.sendStatus(200);}
-const adminHelp=await processAdminHelpMessage(from,text);if(adminHelp.handled){await sendWhatsAppMessage(from,adminHelp.reply);return res.sendStatus(200);}
-const adminWalkin=await processAdminWalkinMessage(from,text);if(adminWalkin.handled){await sendWhatsAppMessage(from,adminWalkin.reply);return res.sendStatus(200);}
-const adminLoyalty=await processAdminLoyaltyRedemptionMessage(from,text);if(adminLoyalty.handled){await sendWhatsAppMessage(from,adminLoyalty.reply);return res.sendStatus(200);}
-const adminAssistant=await processAdminAssistantMessage(from,text);if(adminAssistant.handled){await sendWhatsAppMessage(from,adminAssistant.reply);return res.sendStatus(200);}
 const customerExperience=await processCustomerExperienceMessage(from,text);if(customerExperience.handled){await sendAdminResult(from,customerExperience);return res.sendStatus(200);}
 const customerCare=await processCustomerCareMessage(from,text);if(customerCare.handled){await sendAdminResult(from,customerCare);return res.sendStatus(200);}
 const transitionWelcome=await processClientTransitionWelcome(from,text);if(transitionWelcome.handled){await sendAdminResult(from,transitionWelcome);return res.sendStatus(200);}

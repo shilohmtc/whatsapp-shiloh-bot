@@ -291,7 +291,7 @@ test('cleanup path adds a fail-closed outstanding-booking recheck without changi
   assert.equal(identityOnly.calls.some(({ text }) => text.includes('FROM appointments')), false);
 });
 
-test('router remains wired to the CRM reset handler while final menu ownership stays separate', () => {
-  assert.match(routerSource, /processAdminTestClientResetMessage\(sender, action\.command\)/);
-  assert.match(routerSource, /const testClientReset = await processAdminTestClientResetMessage\(sender, text\)/);
+test('reset implementation remains internal and ordinary router cannot invoke it', () => {
+  assert.doesNotMatch(routerSource, /processAdminTestClientResetMessage/);
+  assert.match(routerSource, /processAdminRetiredAuthorityMessage/);
 });

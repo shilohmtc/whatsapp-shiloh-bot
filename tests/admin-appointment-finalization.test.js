@@ -8,15 +8,12 @@ const source = (p) => fs.readFileSync(path.join(root, p), 'utf8');
 const finalization = source('src/services/adminAppointmentFinalization.js');
 const cancellation = source('src/services/adminAppointmentCancellation.js');
 const authority = source('src/services/attendanceFinalizationAuthority.js');
-const appointmentsMenu = source('src/services/adminAppointmentsMenu.js');
 const interactiveMenu = source('src/services/adminInteractiveMenu.js');
 
-test('past finalization remains discoverable only for authorized finalizers', () => {
-  assert.match(appointmentsMenu, /canAccessFinalization\(admin\) && has\(admin, 'booking:update'\) && has\(admin, 'appointment:view'\)/);
-  assert.match(appointmentsMenu, /canAccessOwnFinalization\(admin\)/);
-  assert.match(appointmentsMenu, /admin_appointment_finalize/);
-  assert.match(appointmentsMenu, /Finalize past visits/);
+test('past finalization retains its internal authorization but is absent from ordinary staff routing', () => {
   assert.match(finalization, /!has\(admin, 'appointment:view'\)/);
+  assert.doesNotMatch(interactiveMenu, /processAdminAppointmentFinalizationMessage/);
+  assert.doesNotMatch(interactiveMenu, /Finalize past visits|admin_appointment_finalize/);
 });
 
 test('visibility remains scoped to the approved 1-15 Aug historical window and past non-final appointments', () => {
@@ -113,9 +110,7 @@ test('attendance finalization itself synchronizes lifecycle without directly mut
   assert.doesNotMatch(finalization, /payment|ozow|voucher/i);
 });
 
-test('interactive router owns finalization before generic mobile menu routing', () => {
-  const finalizer = interactiveMenu.indexOf('processAdminAppointmentFinalizationMessage(sender, text)');
-  const mobile = interactiveMenu.indexOf('processAdminMobileMenuMessage(sender, text)');
-  assert.ok(finalizer >= 0 && mobile >= 0);
-  assert.ok(finalizer < mobile);
+test('interactive router cannot execute internal finalization', () => {
+  assert.doesNotMatch(interactiveMenu, /processAdminAppointmentFinalizationMessage/);
+  assert.match(interactiveMenu, /processAdminRetiredAuthorityMessage/);
 });

@@ -1,276 +1,359 @@
-const { processAdminMobileMenuMessage } = require('./adminMobileMenu');
-const { processAdminAppointmentFinalizationMessage } = require('./adminAppointmentFinalization');
+const {
+  getMenuOptions,
+  processAdminMobileMenuMessage,
+} = require('./adminMobileMenu');
 const { processAdminAppointmentsByDateMessage } = require('./adminAppointmentsByDate');
 const { processAdminHelpMessage } = require('./adminHelp');
 const { processAdminWalkinMessage } = require('./adminWalkin');
-const { processJeanPierreControlPlaneMessage } = require('./jeanPierreAdminControlPlane');
+const { processAdminStaffServicesMessage } = require('./adminStaffServices');
+const { processAdminLoyaltyRedemptionMessage } = require('./adminLoyaltyRedemption');
+const { processAdminReportsMessage } = require('./adminReports');
+const { processAdminServiceTrendsMessage } = require('./adminServiceTrends');
+const { processAdminChristelEarningsMessage } = require('./adminChristelEarnings');
 const { processAdminMarietjieEarningsMessage } = require('./adminMarietjieEarnings');
-const { processAdminTestClientResetMessage } = require('./adminTestClientReset');
-const { processAdminPendingBookingApprovalsMessage } = require('./adminPendingBookingApprovals');
-const { processAdminScheduleUxMessage } = require('./adminScheduleUx');
-const { abigailEarningsButtons, christelEarningsButtons, marietjieEarningsButtons } = require('./adminEarningsButtons');
-const { canAccessFinalization } = require('./adminAppointmentsMenu');
+const {
+  hasPendingForAdmin,
+  processAdminPendingBookingApprovalsMessage,
+} = require('./adminPendingBookingApprovals');
+const {
+  processRetiredAdminAuthorityMessage,
+} = require('./adminAuthorityRetirement');
 const {
   buildCalendarHandoffUrl,
   calendarHandoffPublicOrigin,
   createStaffCalendarHandoffService,
 } = require('./staffCalendarHandoff');
 
-const SECTION_ORDER = ['Appointments', 'Reports', 'Clients', 'Services', 'Schedule', 'More'];
-const APPOINTMENT_PRIORITY = ['finalize', 'booking', 'manage_booking', 'today', 'tomorrow'];
 const calendarHandoffService = createStaffCalendarHandoffService();
 
 const ACTIONS = [
-  { key: 'today', labels: ["Today's clients", 'My clients today'], command: 'today', description: 'View today’s appointments' },
-  { key: 'tomorrow', labels: ["Tomorrow's clients", 'My clients tomorrow'], command: 'tomorrow', description: 'View tomorrow’s appointments' },
-  { key: 'availability', labels: ['Find an available time'], command: 'Find an available time', description: 'Check the authoritative diary' },
-  { key: 'demo_client', labels: ['🧪 Demo Client', 'Demo Client'], command: 'Demo Client', description: 'Controlled regression harness' },
-  { key: 'today_report', labels: ["Today's report", 'My report today'], command: "Today's report", description: 'View today’s clinic activity' },
-  { key: 'earnings', labels: ['Earnings'], command: 'Earnings', description: 'View completed-treatment earnings' },
-  { key: 'christel_earnings', labels: ['💰 Christel earnings', 'Christel earnings'], command: 'Christel earnings', description: 'Completed-only earnings report' },
-  { key: 'abigail_earnings', labels: ['💰 Abigail earnings', 'Abigail earnings'], command: 'Abigail earnings', description: 'Completed-only earnings report' },
-  { key: 'marietjie_earnings', labels: ['💰 Marietjie earnings', 'Marietjie earnings'], command: 'Marietjie earnings', description: 'Completed-only earnings report' },
-  { key: 'booking', labels: ['Make a booking'], command: 'Make a booking', description: 'Book using authoritative availability' },
-  { key: 'manage_booking', labels: ['Manage a booking'], command: 'Manage a booking', description: 'Reschedule or cancel an existing appointment' },
-  { key: 'finalize', labels: ['Finalize past visits'], command: 'Finalize past appointments', description: 'Completed, No-show, Reschedule or leave unresolved' },
-  { key: 'client', labels: ['Find a client', 'Find my client', 'Client details', 'My client details'], command: 'Find a client', description: 'View full authorized CRM client details' },
-  { key: 'reset_juvan', labels: ['Reset Juvan', 'Reset Juvan profile'], command: 'Reset test client Juvan', description: 'Choose booking cleanup or identity-only reset' },
-  { key: 'walkin', labels: ['Add a walk-in'], command: 'Add a walk-in', description: 'Register a walk-in client' },
-  { key: 'staff_services', labels: ['Staff services', 'My services'], command: 'Staff services', description: 'View authorized service mappings' },
-  { key: 'pricing', labels: ['Services & pricing', 'My services & pricing'], command: 'Services & pricing', description: 'View or manage service pricing' },
-  { key: 'schedule', labels: ['Schedule management', 'My schedule', 'Manage schedule'], command: 'Schedule', description: 'Leave, time off and clinic closures' },
-  { key: 'calendar_integrity', labels: ['🛡️ Calendar integrity', 'Calendar integrity'], command: 'Calendar integrity scan', description: 'Check booking/calendar integrity' },
-  { key: 'help', labels: ['Help'], command: 'Help', description: 'Show admin help' },
+  { key: 'open_calendar', command: 'Open Calendar', description: 'Open the authoritative Calendar securely' },
+  { key: 'today', command: 'Today', description: 'View today’s authorized appointments' },
+  { key: 'tomorrow', command: 'Tomorrow', description: 'View tomorrow’s authorized appointments' },
+  { key: 'reports', command: 'Reports', description: 'Open operational and service reports' },
+  { key: 'earnings', command: 'Earnings', description: 'Open role-authorized earnings reports' },
+  { key: 'help', command: 'Help', description: 'Show retained WhatsApp staff help' },
+  { key: 'pending_approvals', command: 'Pending approvals', description: 'Review pending practitioner decisions' },
+  { key: 'client', command: 'Find a client', description: 'Find an authorized CRM client' },
+  { key: 'walkin', command: 'Add a walk-in', description: 'Register a walk-in client' },
+  { key: 'staff_services', command: 'Staff services', description: 'View authorized staff/service mappings' },
+  { key: 'pricing', command: 'Services & pricing', description: 'View or manage authorized service pricing' },
 ];
 
-function normalizeLabel(value = '') {
-  return String(value).replace(/[🧪💰🛡️]/gu, '').trim().toLowerCase().replace(/\s+/g, ' ');
+const ACTION_BY_KEY = new Map(ACTIONS.map((action) => [action.key, action]));
+const REPORT_COMMANDS = {
+  admin_report_today: "Today's report",
+  admin_report_week: 'This week report',
+  admin_report_last_week: 'Last week report',
+  admin_report_month: 'This month report',
+  admin_report_service_trends: 'Service trends',
+};
+const EARNINGS_PERIODS = ['today', 'week', 'last_week', 'month'];
+
+function normalizedAdminName(admin) {
+  return String(admin?.display_name || '').trim().toLowerCase().replace(/\s+/g, ' ');
 }
-function actionForLabel(label) {
-  const normalized = normalizeLabel(label);
-  return ACTIONS.find((action) => action.labels.some((candidate) => normalizeLabel(candidate) === normalized)) || null;
+function isBusinessWide(admin) {
+  return ['owner', 'business_admin'].includes(admin?.business_role)
+    || admin?.calendar_scope === 'all_business';
 }
+function has(admin, permission) { return admin?.permissions?.[permission] === true; }
+
 function actionForId(id) {
-  const match = String(id || '').trim().match(/^admin_action_([a-z0-9_]+)$/);
-  return match ? ACTIONS.find((action) => action.key === match[1]) || null : null;
+  const match = String(id || '').trim().match(/^admin_action_([a-z0-9_]+)$/i);
+  return match ? ACTION_BY_KEY.get(match[1].toLowerCase()) || null : null;
 }
-function parseVisibleMenu(body = '') {
-  const sections = new Map();
-  let current = null;
-  for (const line of String(body).split('\n')) {
-    const sectionMatch = line.trim().match(/^\*(Appointments|Reports|Clients|Services|Schedule|More)\*$/);
-    if (sectionMatch) {
-      current = sectionMatch[1];
-      if (!sections.has(current)) sections.set(current, []);
-      continue;
-    }
-    const optionMatch = line.trim().match(/^\d+️⃣\s+(.+)$/u);
-    if (!optionMatch || !current) continue;
-    const action = actionForLabel(optionMatch[1]);
-    if (action) sections.get(current).push({ action, title: optionMatch[1].trim() });
-  }
-  return sections;
+
+function isActionVisibleForAdmin(action, admin) {
+  if (!action || !admin) return false;
+  if (action.key === 'pending_approvals') return has(admin, 'appointment:view');
+  return getMenuOptions(admin).some((option) => option.key === action.key);
 }
-function earningsEntries(body = '') {
-  return (parseVisibleMenu(body).get('Reports') || []).filter(({ action }) => ['christel_earnings', 'abigail_earnings', 'marietjie_earnings'].includes(action.key));
-}
-function isActionVisibleInMenu(action, body = '') {
-  if (!action?.key) return false;
-  if (action.key === 'earnings') return earningsEntries(body).length > 0;
-  for (const entries of parseVisibleMenu(body).values()) if (entries.some((entry) => entry.action.key === action.key)) return true;
-  return false;
-}
-function compactMenuBody(body = '') {
-  const compact = [];
-  let promptAdded = false;
-  for (const line of String(body).split('\n')) {
-    const trimmed = line.trim();
-    if (/^\*(Appointments|Reports|Clients|Services|Schedule|More)\*$/.test(trimmed) || /^\d+️⃣\s+/u.test(trimmed)) continue;
-    if (/^Use the real \*/.test(trimmed)) {
-      if (!promptAdded) compact.push('Choose a section below.');
-      promptAdded = true;
-      continue;
-    }
-    compact.push(line);
-  }
-  while (compact.length && !compact[compact.length - 1].trim()) compact.pop();
-  return compact.join('\n').replace(/\n{3,}/g, '\n\n');
-}
-function visibleEntriesBySection(body = '') {
-  const parsed = parseVisibleMenu(body);
-  const sections = new Map(parsed);
-  const clients = (sections.get('Clients') || []).filter(({ action }) => action.key !== 'walkin' && action.key !== 'client');
-  const more = (sections.get('More') || []).filter(({ action }) => action.key !== 'calendar_integrity' && action.key !== 'help');
-  const client = (parsed.get('Clients') || []).find(({ action }) => action.key === 'client');
-  if (client && !more.some(({ action }) => action.key === 'client')) more.unshift({ ...client, title: 'Client details' });
-  const reports = (sections.get('Reports') || []).filter(({ action }) => !['christel_earnings', 'abigail_earnings', 'marietjie_earnings'].includes(action.key));
-  if (earningsEntries(body).length) reports.push({ action: ACTIONS.find((action) => action.key === 'earnings'), title: 'Earnings' });
-  sections.set('Clients', clients);
-  sections.set('More', more);
-  sections.set('Reports', reports);
-  return sections;
-}
-function workspaceLauncherInteractive(admin) {
+
+function workspaceLauncherInteractive(admin, pendingApprovals = false) {
   const name = String(admin?.display_name || 'Shiloh staff').trim();
+  const buttons = [
+    { id: 'admin_open_calendar', title: 'Open Calendar' },
+    { id: 'admin_open_menu', title: 'Admin' },
+  ];
+  if (pendingApprovals) buttons.push({ id: 'admin_action_pending_approvals', title: 'Pending approvals' });
   return {
     type: 'button',
     body: `*Shiloh Workspace 🌿*\n\nHello ${name}. Choose where you want to go.`,
-    buttons: [
-      { id: 'admin_open_calendar', title: 'Open Calendar' },
-      { id: 'admin_open_menu', title: 'Admin' },
+    buttons,
+  };
+}
+
+function menuDescription(key) {
+  return ACTION_BY_KEY.get(key)?.description || 'Open authorized staff action';
+}
+
+function topLevelInteractive(admin) {
+  const options = getMenuOptions(admin);
+  return {
+    type: 'list',
+    body: '*Shiloh Admin 🌿*\nWhatsApp provides quick operational views. Calendar owns diary changes.',
+    buttonText: 'Admin menu',
+    sectionTitle: 'Staff actions',
+    rows: options.map((option) => ({
+      id: `admin_action_${option.key}`,
+      title: option.label.slice(0, 24),
+      description: menuDescription(option.key),
+    })),
+  };
+}
+
+function reportsInteractive() {
+  return {
+    type: 'list',
+    body: '*Reports*\nChoose an operational report. Service trends remain under Reports.',
+    buttonText: 'Reports',
+    sectionTitle: 'Reports',
+    rows: [
+      { id: 'admin_report_today', title: 'Today', description: 'Today’s authorized activity' },
+      { id: 'admin_report_week', title: 'This week', description: 'Current calendar week' },
+      { id: 'admin_report_last_week', title: 'Last week', description: 'Previous completed week' },
+      { id: 'admin_report_month', title: 'This month', description: 'Current calendar month' },
+      { id: 'admin_report_service_trends', title: 'Service trends', description: 'Last 30 days vs previous 30' },
+      { id: 'admin_open_menu', title: '← Back to Admin', description: 'Return to staff actions' },
     ],
   };
 }
-function topLevelInteractive(body) {
-  const sections = visibleEntriesBySection(body);
+
+function earningsSubjects(admin) {
+  if (!has(admin, 'appointment:view')) return [];
+  const name = normalizedAdminName(admin);
+  if (name === 'christel' && isBusinessWide(admin)) return ['christel', 'abigail', 'marietjie'];
+  if (name === 'jean-pierre' && isBusinessWide(admin)) return ['christel', 'abigail', 'marietjie'];
+  if (name === 'marietjie' && admin?.staff_id) return ['marietjie'];
+  if (name === 'abigail' && admin?.staff_id) return ['abigail'];
+  return [];
+}
+
+function earningsPeriodInteractive(subject) {
+  const title = subject.charAt(0).toUpperCase() + subject.slice(1);
+  const rows = [
+    ['today', 'Today'],
+    ['week', 'This week'],
+    ['last_week', 'Last week'],
+    ['month', 'This month'],
+  ].map(([period, label]) => ({
+    id: `admin_earnings_period_${subject}_${period}`,
+    title: label,
+    description: `${title} completed-treatment earnings`,
+  }));
+  rows.push({ id: 'admin_action_earnings', title: '← Back to Earnings', description: 'Choose earnings scope' });
   return {
-    type: 'list', body: compactMenuBody(body), buttonText: 'Admin menu',
-    rows: SECTION_ORDER.filter((section) => (sections.get(section) || []).length > 0).map((section) => ({ id: `admin_section_${section.toLowerCase()}`, title: section, description: `Open ${section.toLowerCase()} admin actions` })),
-    sectionTitle: 'Shiloh Admin',
+    type: 'list',
+    body: `*Earnings*\n${title} — choose a reporting period.`,
+    buttonText: 'Earnings period',
+    sectionTitle: 'Reporting period',
+    rows,
   };
 }
-function sectionInteractive(section, body) {
-  let entries = visibleEntriesBySection(body).get(section) || [];
-  if (!entries.length) return null;
-  if (section === 'Appointments') entries = entries.filter(({ action }) => action.key !== 'availability' && action.key !== 'demo_client').sort((a, b) => APPOINTMENT_PRIORITY.indexOf(a.action.key) - APPOINTMENT_PRIORITY.indexOf(b.action.key));
-  if (!entries.length) return null;
-  const rows = entries.map(({ action, title }) => ({ id: `admin_action_${action.key}`, title: action.key === 'schedule' ? 'Manage schedule' : (title.length <= 24 ? title : title.slice(0, 24)), description: action.description }));
-  rows.push({ id: 'admin_open_menu', title: '← Back to Admin', description: 'Return to the main admin menu' });
-  return { type: 'list', body: `*${section}*\nChoose what you want to do.`, buttonText: section.length <= 20 ? section : 'Open options', rows, sectionTitle: section };
+
+function earningsInteractive(admin) {
+  const subjects = earningsSubjects(admin);
+  if (!subjects.length) return null;
+  if (subjects.length === 1) return earningsPeriodInteractive(subjects[0]);
+  return {
+    type: 'list',
+    body: '*Earnings*\nChoose an authorized earnings scope.',
+    buttonText: 'Earnings',
+    sectionTitle: 'Earnings scope',
+    rows: [
+      ...subjects.map((subject) => ({
+        id: `admin_earnings_subject_${subject}`,
+        title: subject.charAt(0).toUpperCase() + subject.slice(1),
+        description: 'Open completed-treatment earnings',
+      })),
+      { id: 'admin_open_menu', title: '← Back to Admin', description: 'Return to staff actions' },
+    ],
+  };
 }
-function earningsInteractive(body) {
-  const entries = earningsEntries(body);
-  if (!entries.length || entries.length === 1) return null;
-  const rows = entries.map(({ action, title }) => ({ id: `admin_action_${action.key}`, title: title.replace(/^💰\s*/u, '').slice(0, 24), description: 'Completed-only earnings report' }));
-  rows.push({ id: 'admin_section_reports', title: '← Back to Reports', description: 'Return to Reports' });
-  return { type: 'list', body: '*Earnings*\nChoose whose completed-treatment earnings you want to view.', buttonText: 'Earnings', rows, sectionTitle: 'Earnings' };
+
+function periodCommand(subject, period) {
+  const periodText = period === 'last_week'
+    ? 'last week'
+    : period === 'week'
+      ? 'this week'
+      : period === 'month'
+        ? 'this month'
+        : 'today';
+  return `${subject.charAt(0).toUpperCase() + subject.slice(1)} earnings ${periodText}`;
 }
-function normalizedAdminName(admin) { return String(admin?.display_name || '').trim().toLowerCase(); }
-function isJeanPierreBusinessAdmin(admin) { return normalizedAdminName(admin) === 'jean-pierre' && admin?.business_role === 'business_admin' && admin?.calendar_scope === 'all_business' && admin?.service_scope === 'all_services'; }
-function isChristelOwnerAdmin(admin) { return normalizedAdminName(admin) === 'christel' && ['owner', 'business_admin'].includes(admin?.business_role) && admin?.calendar_scope === 'all_business'; }
-function isMarietjieAdmin(admin) { return normalizedAdminName(admin) === 'marietjie' && Boolean(admin?.staff_id); }
-function enrichPrivilegedReportsMenu(result) {
-  if (!result?.handled || !result?.interactive?.body) return result;
-  const jeanPierre = isJeanPierreBusinessAdmin(result.admin);
-  const christel = isChristelOwnerAdmin(result.admin);
-  const marietjie = isMarietjieAdmin(result.admin);
-  let body = String(result.interactive.body).replace(/\n?\d+️⃣\s+Reset Juvan(?: profile)?/giu, '');
-  if (canAccessFinalization(result.admin) && result.admin?.permissions?.['booking:update'] === true && result.admin?.permissions?.['appointment:view'] === true && !/Finalize past visits/i.test(body)) body += '\n\n*Appointments*\n93️⃣ Finalize past visits';
-  if (!jeanPierre && !christel && !marietjie) return { ...result, interactive: { ...result.interactive, body } };
-  if (jeanPierre && !/Christel earnings/i.test(body)) body += '\n\n*Reports*\n98️⃣ 💰 Christel earnings';
-  if (!/Marietjie earnings/i.test(body)) body += '\n\n*Reports*\n99️⃣ 💰 Marietjie earnings';
-  if (jeanPierre && !/Reset Juvan/i.test(body)) body += '\n\n*Clients*\n95️⃣ Reset Juvan';
-  return { ...result, interactive: { ...result.interactive, body } };
+
+async function dispatchEarningsPeriod(sender, admin, subject, period) {
+  if (!earningsSubjects(admin).includes(subject) || !EARNINGS_PERIODS.includes(period)) {
+    return { handled: true, admin, reply: 'That earnings action is not available for your staff role.' };
+  }
+  const command = periodCommand(subject, period);
+  if (subject === 'christel') return processAdminChristelEarningsMessage(sender, command);
+  if (subject === 'marietjie') return processAdminMarietjieEarningsMessage(sender, command);
+  return processAdminReportsMessage(sender, command);
 }
-function enrichJeanPierreMenu(result) { return enrichPrivilegedReportsMenu(result); }
-async function getRoleScopedMenu(sender) {
-  const result = await processAdminMobileMenuMessage(sender, 'Menu');
-  if (!result?.handled || !result?.interactive?.body) return result;
-  return enrichPrivilegedReportsMenu(result);
-}
-async function issueCalendarHandoffForSender(sender) {
+
+async function issueCalendarHandoffForSender(sender, admin = null) {
   if (!calendarHandoffPublicOrigin(process.env)) {
-    return { handled: true, reply: 'Calendar access is not available right now. Please try again later.' };
+    return { handled: true, admin, reply: 'Calendar access is not available right now. No WhatsApp mutation was attempted.' };
   }
   const issued = await calendarHandoffService.issueForWhatsapp({ whatsapp: sender });
   if (!issued?.ok) {
-    return { handled: true, reply: 'Calendar access is not available for this staff account.' };
+    return { handled: true, admin, reply: 'Calendar access is not available for this staff account. No WhatsApp mutation was attempted.' };
   }
   const url = buildCalendarHandoffUrl(issued.token, process.env);
-  if (!url) return { handled: true, reply: 'Calendar access is not available right now. Please try again later.' };
+  if (!url) return { handled: true, admin, reply: 'Calendar access is not available right now. No WhatsApp mutation was attempted.' };
   return {
     handled: true,
-    reply: `*Open Calendar*\n\nTap this secure one-time link to open Shiloh Calendar:\n${url}\n\nIt expires shortly and can only be used once.`,
+    admin,
+    reply: `*Open Calendar*\n\nThis diary action now lives in Shiloh Calendar. Tap this secure one-time link:\n${url}\n\nIt expires shortly and can only be used once. No WhatsApp diary mutation was attempted.`,
   };
 }
-async function dispatchStableAction(sender, action) {
-  if (action.key === 'today' || action.key === 'tomorrow') return processAdminAppointmentsByDateMessage(sender, action.command);
-  if (action.key === 'help') return processAdminHelpMessage(sender, action.command);
-  if (action.key === 'walkin') return processAdminWalkinMessage(sender, action.command);
-  if (action.key === 'finalize') return processAdminAppointmentFinalizationMessage(sender, action.command);
-  if (action.key === 'schedule') return processAdminScheduleUxMessage(sender, 'admin_action_schedule');
-  if (action.key === 'earnings') {
-    const menuResult = await getRoleScopedMenu(sender);
-    if (!menuResult?.handled || !menuResult?.interactive?.body) return { handled: true, admin: menuResult?.admin, reply: 'Admin menu could not be refreshed safely. Send *Menu* to restart Admin.' };
-    const entries = earningsEntries(menuResult.interactive.body);
-    if (entries.length === 1) return dispatchStableAction(sender, entries[0].action);
-    const interactive = earningsInteractive(menuResult.interactive.body);
-    return interactive ? { handled: true, admin: menuResult.admin, interactive } : { handled: true, admin: menuResult.admin, reply: 'No earnings reports are available for your account.' };
+
+async function processAdminRetiredAuthorityMessage(sender, text) {
+  const retired = await processRetiredAdminAuthorityMessage(sender, text);
+  if (!retired.handled || retired.reply) return retired;
+  if (retired.disposition?.kind === 'generic_earnings') {
+    const interactive = earningsInteractive(retired.admin);
+    return interactive
+      ? { handled: true, admin: retired.admin, interactive }
+      : { handled: true, admin: retired.admin, reply: 'No earnings reports are available for your staff role.' };
   }
-  if (action.key === 'abigail_earnings') return { handled: true, interactive: abigailEarningsButtons() };
-  if (action.key === 'christel_earnings') return { handled: true, interactive: christelEarningsButtons() };
-  if (action.key === 'marietjie_earnings') return { handled: true, interactive: marietjieEarningsButtons() };
-  if (action.key === 'reset_juvan') return processAdminTestClientResetMessage(sender, action.command);
-  const privileged = await processJeanPierreControlPlaneMessage(sender, action.command);
-  if (privileged.handled) return privileged;
+  return issueCalendarHandoffForSender(sender, retired.admin);
+}
+
+async function dispatchStableAction(sender, action, admin) {
+  if (!isActionVisibleForAdmin(action, admin)) {
+    return { handled: true, admin, reply: 'That staff action is not available for your role. No action was taken.' };
+  }
+  if (action.key === 'open_calendar') return issueCalendarHandoffForSender(sender, admin);
+  if (action.key === 'today' || action.key === 'tomorrow') {
+    return processAdminAppointmentsByDateMessage(sender, action.command);
+  }
+  if (action.key === 'reports') return { handled: true, admin, interactive: reportsInteractive() };
+  if (action.key === 'earnings') {
+    const interactive = earningsInteractive(admin);
+    return interactive
+      ? { handled: true, admin, interactive }
+      : { handled: true, admin, reply: 'No earnings reports are available for your staff role.' };
+  }
+  if (action.key === 'help') return processAdminHelpMessage(sender, action.command);
+  if (action.key === 'pending_approvals') return processAdminPendingBookingApprovalsMessage(sender, action.command);
+  if (action.key === 'walkin') return processAdminWalkinMessage(sender, action.command);
   return processAdminMobileMenuMessage(sender, action.command);
 }
+
 function isWorkspaceLauncherTerm(raw = '') {
   return /^(?:menu|home|start|hi|hello|hey|howzit|hiya|good morning|good afternoon|good evening)[!. ]*$/i.test(String(raw).trim());
 }
-async function processAdminInteractiveMenuMessage(sender, text) {
-  const pendingApproval = await processAdminPendingBookingApprovalsMessage(sender, text);
-  if (pendingApproval.handled) return pendingApproval;
-  const schedule = await processAdminScheduleUxMessage(sender, text);
-  if (schedule.handled) return schedule;
-  const finalizer = await processAdminAppointmentFinalizationMessage(sender, text);
-  if (finalizer.handled) return finalizer;
-  const testClientReset = await processAdminTestClientResetMessage(sender, text);
-  if (testClientReset.handled) return testClientReset;
-  const marietjieEarnings = await processAdminMarietjieEarningsMessage(sender, text);
-  if (marietjieEarnings.handled) return marietjieEarnings;
-  const privileged = await processJeanPierreControlPlaneMessage(sender, text);
-  if (privileged.handled) return privileged;
-  const raw = String(text || '').trim();
 
-  if (isWorkspaceLauncherTerm(raw)) {
-    const menuResult = await getRoleScopedMenu(sender);
-    if (!menuResult?.handled || !menuResult?.admin) return menuResult;
-    return { handled: true, admin: menuResult.admin, interactive: workspaceLauncherInteractive(menuResult.admin) };
+async function renderMobileResult(sender, result) {
+  if (result?.view === 'workspace') {
+    const pending = has(result.admin, 'appointment:view')
+      ? await hasPendingForAdmin(result.admin)
+      : false;
+    return { handled: true, admin: result.admin, interactive: workspaceLauncherInteractive(result.admin, pending) };
   }
-  if (/^(?:admin_open_calendar|open calendar|calendar)$/i.test(raw)) return issueCalendarHandoffForSender(sender);
-  if (/^(?:admin_open_menu|admin|admin menu)$/i.test(raw)) {
-    const menuResult = await getRoleScopedMenu(sender);
-    if (!menuResult?.handled || !menuResult?.interactive?.body) return menuResult;
-    return { handled: true, admin: menuResult.admin, interactive: topLevelInteractive(menuResult.interactive.body) };
+  if (result?.view === 'admin_menu') {
+    return { handled: true, admin: result.admin, interactive: topLevelInteractive(result.admin) };
   }
-
-  const sectionMatch = raw.match(/^admin_section_(appointments|reports|clients|services|schedule|more)$/i);
-  if (sectionMatch) {
-    const menuResult = await getRoleScopedMenu(sender);
-    if (!menuResult?.handled || !menuResult?.interactive?.body) return { handled: true, admin: menuResult?.admin, reply: 'Admin menu could not be refreshed safely. Send *Menu* to restart Admin.' };
-    const section = SECTION_ORDER.find((value) => value.toLowerCase() === sectionMatch[1].toLowerCase());
-    const interactive = sectionInteractive(section, menuResult.interactive.body);
-    if (!interactive) return { handled: true, admin: menuResult.admin, reply: 'That admin section is not available for your account. Send *Menu* to refresh your options.' };
-    return { handled: true, admin: menuResult.admin, interactive };
-  }
-  const action = actionForId(raw);
-  if (action) {
-    if (action.key === 'walkin') return { handled: true, reply: 'That admin action is no longer available. Send *Menu* to refresh your options.' };
-    const menuResult = await getRoleScopedMenu(sender);
-    if (!menuResult?.handled || !menuResult?.interactive?.body) return { handled: true, admin: menuResult?.admin, reply: 'Admin menu could not be refreshed safely. Send *Menu* to restart Admin.' };
-    if (!isActionVisibleInMenu(action, menuResult.interactive.body)) return { handled: true, admin: menuResult.admin, reply: 'That admin action is not available for your account. Send *Menu* to refresh your options.' };
-    return dispatchStableAction(sender, action);
-  }
-  if (/^admin_action_/i.test(raw)) return { handled: true, reply: 'That admin action is no longer available. Send *Menu* to refresh your options.' };
-  const result = enrichPrivilegedReportsMenu(await processAdminMobileMenuMessage(sender, text));
-  if (result?.handled && result?.interactive?.type === 'button' && /^\*Shiloh Admin 🌿\*/.test(result.interactive.body || '')) return { ...result, interactive: topLevelInteractive(result.interactive.body) };
+  if (result?.handled) return result;
+  if (result?.action) return dispatchStableAction(sender, ACTION_BY_KEY.get(result.action), result.admin);
   return result;
 }
+
+async function processAdminInteractiveMenuMessage(sender, text) {
+  const mobile = await processAdminMobileMenuMessage(sender, text);
+  const renderedMobile = await renderMobileResult(sender, mobile);
+  if (renderedMobile?.handled) return renderedMobile;
+  if (!mobile?.isAdmin || !mobile.admin) return { handled: false };
+
+  const admin = mobile.admin;
+  const raw = String(text || '').trim();
+
+  const retired = await processAdminRetiredAuthorityMessage(sender, text);
+  if (retired.handled) return retired;
+
+  const pendingApproval = await processAdminPendingBookingApprovalsMessage(sender, text);
+  if (pendingApproval.handled) return pendingApproval;
+
+  const report = await processAdminReportsMessage(sender, text);
+  if (report.handled) return report;
+  const trends = await processAdminServiceTrendsMessage(sender, text);
+  if (trends.handled) return trends;
+  const staffServices = await processAdminStaffServicesMessage(sender, text);
+  if (staffServices.handled) return staffServices;
+  const walkin = await processAdminWalkinMessage(sender, text);
+  if (walkin.handled) return walkin;
+  const loyalty = await processAdminLoyaltyRedemptionMessage(sender, text);
+  if (loyalty.handled) return loyalty;
+
+  if (/^(?:admin_open_calendar|open calendar|calendar)$/i.test(raw)) {
+    return dispatchStableAction(sender, ACTION_BY_KEY.get('open_calendar'), admin);
+  }
+  if (/^(?:admin_open_menu|admin|admin menu)$/i.test(raw)) {
+    return { handled: true, admin, interactive: topLevelInteractive(admin) };
+  }
+
+  const reportCommand = REPORT_COMMANDS[raw.toLowerCase()];
+  if (reportCommand) {
+    return raw.toLowerCase() === 'admin_report_service_trends'
+      ? processAdminServiceTrendsMessage(sender, reportCommand)
+      : processAdminReportsMessage(sender, reportCommand);
+  }
+
+  const subjectMatch = raw.match(/^admin_earnings_subject_(christel|abigail|marietjie)$/i);
+  if (subjectMatch) {
+    const subject = subjectMatch[1].toLowerCase();
+    if (!earningsSubjects(admin).includes(subject)) {
+      return { handled: true, admin, reply: 'That earnings scope is not available for your staff role.' };
+    }
+    return { handled: true, admin, interactive: earningsPeriodInteractive(subject) };
+  }
+
+  const periodMatch = raw.match(/^admin_earnings_period_(christel|abigail|marietjie)_(today|week|last_week|month)$/i);
+  if (periodMatch) return dispatchEarningsPeriod(sender, admin, periodMatch[1].toLowerCase(), periodMatch[2].toLowerCase());
+
+  const action = actionForId(raw);
+  if (action) return dispatchStableAction(sender, action, admin);
+
+  if (/^(?:today|today's clients|todays clients|appointments today)$/i.test(raw)) {
+    return dispatchStableAction(sender, ACTION_BY_KEY.get('today'), admin);
+  }
+  if (/^(?:tomorrow|tomorrow's clients|tomorrows clients|appointments tomorrow)$/i.test(raw)) {
+    return dispatchStableAction(sender, ACTION_BY_KEY.get('tomorrow'), admin);
+  }
+  if (/^reports?$/i.test(raw)) return dispatchStableAction(sender, ACTION_BY_KEY.get('reports'), admin);
+  if (/^(?:earnings|my earnings)$/i.test(raw)) return dispatchStableAction(sender, ACTION_BY_KEY.get('earnings'), admin);
+  if (/^help\b/i.test(raw)) return dispatchStableAction(sender, ACTION_BY_KEY.get('help'), admin);
+
+  return {
+    handled: true,
+    isAdmin: true,
+    admin,
+    reply: 'That staff WhatsApp action is unavailable. No action was taken. Send *Menu* for the retained options or *Open Calendar* for diary work.',
+  };
+}
+
+function enrichPrivilegedReportsMenu(result) { return result; }
+function enrichJeanPierreMenu(result) { return result; }
+
 module.exports = {
   ACTIONS,
   actionForId,
-  actionForLabel,
-  compactMenuBody,
+  dispatchEarningsPeriod,
   dispatchStableAction,
+  earningsInteractive,
+  earningsPeriodInteractive,
+  earningsSubjects,
   enrichJeanPierreMenu,
   enrichPrivilegedReportsMenu,
-  isActionVisibleInMenu,
+  isActionVisibleForAdmin,
   isWorkspaceLauncherTerm,
   issueCalendarHandoffForSender,
-  parseVisibleMenu,
   processAdminInteractiveMenuMessage,
-  sectionInteractive,
+  processAdminRetiredAuthorityMessage,
+  reportsInteractive,
   topLevelInteractive,
   workspaceLauncherInteractive,
 };

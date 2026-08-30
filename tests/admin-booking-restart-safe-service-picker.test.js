@@ -20,10 +20,8 @@ test('restart-safe bridge reconstructs the authorized booking before replaying s
   assert.match(bridge, /processAdminBookingUpdateMessage\(sender, `manage_service_pick_\$\{serviceId\}`\)/);
 });
 
-test('webhook scopes outbound manage-booking cards and handles scoped actions before volatile session fallback', () => {
-  assert.match(webhook, /result=scopeAdminBookingInteractive\(result\)/);
-  const stateless = webhook.indexOf('processStatelessAdminBookingUpdateMessage(from,text)');
-  const volatile = webhook.indexOf('processAdminBookingUpdateMessage(from,text)');
-  assert.ok(stateless >= 0 && volatile >= 0 && stateless < volatile);
-  assert.match(webhook, /Handled restart-safe admin booking-update interaction/);
+test('restart-safe bridge is not reachable from the ordinary staff webhook', () => {
+  assert.doesNotMatch(webhook, /scopeAdminBookingInteractive/);
+  assert.doesNotMatch(webhook, /processStatelessAdminBookingUpdateMessage|processAdminBookingUpdateMessage/);
+  assert.match(webhook, /processAdminRetiredAuthorityMessage\(from,text\)/);
 });

@@ -114,13 +114,12 @@ test('representative client practitioner choices become one-tap buttons', () => 
   assert.match(presented.body, /Use any eligible practitioner/);
 });
 
-test('the hybrid conversion runs only after the Admin booking-scope guard', () => {
+test('hybrid conversion remains while retired Admin booking scoping is absent', () => {
   const source = fs.readFileSync(
     path.resolve(__dirname, '../src/controllers/webhookController.js'),
     'utf8'
   );
-  const scopeIndex = source.indexOf('result=scopeAdminBookingInteractive(result);');
   const hybridIndex = source.indexOf('hybridizeChoiceInteractive(result.interactive)');
-  assert.ok(scopeIndex >= 0);
-  assert.ok(hybridIndex > scopeIndex);
+  assert.ok(hybridIndex >= 0);
+  assert.doesNotMatch(source, /scopeAdminBookingInteractive/);
 });

@@ -35,13 +35,9 @@ test('demo mode uses isolated virtual identity and never imports outbound WhatsA
   assert.doesNotMatch(source,/sendWhatsAppMessage\(/);
 });
 
-test('demo handler runs before ordinary admin routing',()=>{
-  const demo = webhook.indexOf('processAdminClientDemoMessage(from,text)');
-  const slots = webhook.indexOf('processAdminAvailableSlotsMessage(from,text)');
-  const assistant = webhook.indexOf('processAdminAssistantMessage(from,text)');
-  assert.ok(demo >= 0 && slots >= 0 && assistant >= 0);
-  assert.ok(demo < slots);
-  assert.ok(demo < assistant);
+test('demo handler is not exposed through ordinary admin routing',()=>{
+  assert.doesNotMatch(webhook,/processAdminClientDemoMessage|processAdminAvailableSlotsMessage|processAdminAssistantMessage/);
+  assert.match(webhook,/processAdminRetiredAuthorityMessage\(from,text\)/);
 });
 
 test('demo booking purge is proof-bound and cannot be an arbitrary appointment delete',()=>{

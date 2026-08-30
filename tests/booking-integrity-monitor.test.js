@@ -43,9 +43,8 @@ test('integrity scan runs automatically on a bounded interval', () => {
   assert.match(app, /startBookingIntegrityScheduler\(\)/);
 });
 
-test('Christel integrity controls use genuine WhatsApp reply button ids', () => {
-  assert.match(buttons, /admin_calendar_integrity_scan/);
-  assert.match(buttons, /admin_calendar_integrity_issues/);
-  assert.match(buttons, /title: 'Scan Now'/);
-  assert.match(buttons, /title: 'Open Issues'/);
+test('stale integrity button ids fail into internal-only retirement', () => {
+  assert.match(buttons, /admin_calendar_integrity_scan: 'admin_retired_internal_action'/);
+  assert.match(buttons, /admin_calendar_integrity_issues: 'admin_retired_internal_action'/);
+  assert.doesNotMatch(buttons, /title: 'Scan Now'|title: 'Open Issues'/);
 });

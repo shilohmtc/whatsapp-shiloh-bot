@@ -41,9 +41,11 @@ test('redemption is appointment-bound and never asserts payment truth', () => {
   assert.match(admin, /No payment status/);
 });
 
-test('WhatsApp webhook routes loyalty commands before generic admin fallback', () => {
-  const loyaltyIndex = webhook.indexOf('processAdminLoyaltyRedemptionMessage(from,text)');
-  const fallbackIndex = webhook.indexOf('processAdminAssistantMessage(from,text)');
-  assert.ok(loyaltyIndex > -1);
-  assert.ok(fallbackIndex > loyaltyIndex);
+test('WhatsApp webhook routes loyalty commands before the terminal retained staff router', () => {
+  const interactive = fs.readFileSync(path.join(root, 'src/services/adminInteractiveMenu.js'), 'utf8');
+  assert.match(webhook, /processAdminInteractiveMenuMessage\(from,text\)/);
+  assert.match(interactive, /processAdminLoyaltyRedemptionMessage\(sender, text\)/);
+  assert.ok(interactive.indexOf('processAdminMobileMenuMessage(sender, text)') < interactive.indexOf('processAdminLoyaltyRedemptionMessage(sender, text)'));
+  assert.ok(interactive.indexOf('processAdminLoyaltyRedemptionMessage(sender, text)') < interactive.indexOf('That staff WhatsApp action is unavailable'));
+  assert.doesNotMatch(webhook, /processAdminAssistantMessage/);
 });

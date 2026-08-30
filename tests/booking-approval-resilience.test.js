@@ -22,14 +22,13 @@ test('pending approvals are discoverable and explicitly resendable without recre
 });
 
 test('appointments admin exposes and routes pending booking approvals', () => {
-  const menu = source('src/services/adminAppointmentsMenu.js');
   const interactive = source('src/services/adminInteractiveMenu.js');
-  assert.match(menu, /Pending approvals/);
-  assert.match(menu, /admin_action_pending_approvals/);
+  assert.match(interactive, /Pending approvals/);
+  assert.match(interactive, /admin_action_pending_approvals/);
   assert.match(interactive, /processAdminPendingBookingApprovalsMessage/);
   const pendingRoute = interactive.indexOf('processAdminPendingBookingApprovalsMessage(sender, text)');
   const genericRoute = interactive.indexOf('processAdminMobileMenuMessage(sender, text)');
-  assert.ok(pendingRoute >= 0 && genericRoute >= 0 && pendingRoute < genericRoute);
+  assert.ok(pendingRoute > genericRoute, 'pending approvals must sit behind the exact-one active Admin gate');
 });
 
 test('resend path is pending-only auditable and does not decide approval', () => {

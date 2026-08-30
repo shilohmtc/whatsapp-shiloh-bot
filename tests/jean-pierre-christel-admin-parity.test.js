@@ -4,8 +4,7 @@ const assert = require('node:assert/strict');
 const { scheduleMenu, canControlChristelBusiness } = require('../src/services/adminScheduleUx');
 const { pricingOwner, isJeanPierreBusinessAdmin } = require('../src/services/adminServicePricing');
 const { certificationStaffIds, authorityDescription } = require('../src/services/attendanceFinalizationAuthority');
-const { appointmentsInteractive } = require('../src/services/adminAppointmentsMenu');
-const { enrichPrivilegedReportsMenu } = require('../src/services/adminInteractiveMenu');
+const { getMenuOptions } = require('../src/services/adminMobileMenu');
 
 const jeanPierre = {
   id: 9001,
@@ -44,30 +43,22 @@ test('Jean-Pierre business admin controls the shared Christel and Abigail pricin
   assert.equal(pricingOwner(jeanPierre), 'christel');
 });
 
-test('JP appointment parity excludes practitioner-only finalization and block-time authority', () => {
-  const jpIds = appointmentsInteractive(jeanPierre).rows.map((row) => row.id);
-  const christelIds = appointmentsInteractive(christel).rows.map((row) => row.id);
-  const practitionerOnly = [
-    'admin_appointment_finalize',
-    'admin_appointment_block_time',
-    'admin_block_manage',
-  ];
-  for (const id of practitionerOnly) {
-    assert.ok(christelIds.includes(id));
-    assert.ok(!jpIds.includes(id));
+test('JP and practitioner ordinary menus both exclude finalization, block time, and schedule authority', () => {
+  for (const admin of [jeanPierre, christel, abigail, marietjie]) {
+    const keys = getMenuOptions(admin).map((option) => option.key);
+    assert.equal(keys.includes('finalize'), false);
+    assert.equal(keys.includes('block_time'), false);
+    assert.equal(keys.includes('schedule'), false);
   }
-  assert.deepEqual(jpIds, christelIds.filter((id) => !practitionerOnly.includes(id)));
 });
 
-test('all three practitioner Admin menus expose own finalization while JP remains excluded', () => {
+test('all ordinary practitioner Admin menus retain only quick views and transitional controls', () => {
   for (const admin of [christel, abigail, marietjie]) {
-    assert.ok(appointmentsInteractive(admin).rows.some((row) => row.id === 'admin_appointment_finalize'));
+    const keys = getMenuOptions(admin).map((option) => option.key);
+    assert.ok(keys.includes('today'));
+    assert.ok(keys.includes('tomorrow'));
+    assert.ok(keys.includes('open_calendar'));
   }
-  assert.ok(!appointmentsInteractive(jeanPierre).rows.some((row) => row.id === 'admin_appointment_finalize'));
-
-  const base = (admin) => ({ handled: true, admin, interactive: { body: '*Shiloh Admin 🌿*\n\n*Appointments*\n1️⃣ Make a booking' } });
-  assert.doesNotMatch(enrichPrivilegedReportsMenu(base(jeanPierre)).interactive.body, /Finalize past visits/);
-  assert.match(enrichPrivilegedReportsMenu(base(abigail)).interactive.body, /Finalize past visits/);
 });
 
 test('Jean-Pierre business admin parity does not grant attendance certification authority', async () => {

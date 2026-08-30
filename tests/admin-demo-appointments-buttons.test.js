@@ -3,52 +3,32 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const { appointmentsInteractive } = require('../src/services/adminAppointmentsMenu');
 const { commandForAdminButton } = require('../src/services/adminEarningsButtons');
-const menuSource = fs.readFileSync(path.join(__dirname,'..','src','services','adminMobileMenu.js'),'utf8');
+const { classifyRetiredAdminAction } = require('../src/services/adminAuthorityRetirement');
+const { getMenuOptions } = require('../src/services/adminMobileMenu');
 
-const commonPermissions = {
-  'appointment:view': true,
-  'appointment:create': true,
-  'booking:update': true,
-  'demo:client': true,
-};
-
-test('legacy Demo Client control remains normalized for regression infrastructure only',()=>{
-  assert.equal(commandForAdminButton('admin_menu_appointments'),'Appointments');
-  assert.equal(commandForAdminButton('admin_demo_client_start'),'Demo Client');
-  assert.match(menuSource,/if\(has\(admin,'demo:client'\)\)buttons\.push/);
+test('legacy Demo and Appointments controls normalize only to retirement dispositions', () => {
+  assert.equal(commandForAdminButton('admin_menu_appointments'), 'admin_menu_appointments');
+  assert.equal(commandForAdminButton('admin_demo_client_start'), 'admin_retired_internal_action');
+  assert.equal(classifyRetiredAdminAction(commandForAdminButton('admin_menu_appointments')).kind, 'calendar');
+  assert.equal(classifyRetiredAdminAction(commandForAdminButton('admin_demo_client_start')).kind, 'internal_only');
 });
 
-test('production Appointments panels do not expose Demo Client or standalone availability',()=>{
-  for (const admin of [
-    { display_name:'Abigail', business_role:'employee_practitioner', calendar_scope:'own_appointments', permissions:commonPermissions },
-    { display_name:'Marietjie', business_role:'tenant_practitioner', calendar_scope:'own_services', permissions:commonPermissions },
-    { display_name:'Christel', business_role:'owner', calendar_scope:'all_business', permissions:commonPermissions },
-  ]) {
-    const panel = appointmentsInteractive(admin);
-    assert.equal(panel.type,'list');
-    assert.equal(panel.sectionTitle,'Appointments');
-    assert.equal(panel.rows.some(row=>/demo/i.test(row.id)||/Demo Client/i.test(row.title)),false);
-    assert.ok(panel.rows.some(row=>row.id==='admin_appointment_booking'));
-    assert.equal(panel.rows.some(row=>row.id==='admin_appointment_availability'), false);
-    assert.ok(panel.rows.some(row=>row.id==='admin_action_pending_approvals'));
-    assert.ok(panel.rows.length <= 10);
-  }
-});
-
-test('Jean-Pierre production Appointments panel also excludes Demo Client',()=>{
-  const panel = appointmentsInteractive({
-    display_name:'Jean-Pierre',
-    business_role:'business_admin',
-    calendar_scope:'all_business',
-    permissions:{'appointment:view':true,'appointment:create':true,'booking:update':true},
-  });
-  assert.equal(panel.rows.some(row=>/demo/i.test(row.id)||/Demo Client/i.test(row.title)),false);
-});
-
-test('flat-menu Demo Client fallback remains permission-gated but production bootstrap revokes that permission',()=>{
-  assert.match(menuSource,/key:'demo_client',label:'🧪 Demo Client',section:'Appointments'/);
-  assert.match(menuSource,/if\(has\(admin,'demo:client'\)\)options\.push/);
-  assert.match(menuSource,/selected\.key==='demo_client'/);
+test('ordinary staff menu never exposes Demo or an alternate Appointments panel', () => {
+  const admin = {
+    display_name: 'Christel',
+    business_role: 'owner',
+    calendar_scope: 'all_business',
+    permissions: {
+      'appointment:view': true,
+      'appointment:create': true,
+      'booking:update': true,
+      'demo:client': true,
+    },
+  };
+  const keys = getMenuOptions(admin).map((option) => option.key);
+  assert.equal(keys.includes('demo_client'), false);
+  assert.equal(keys.includes('appointments'), false);
+  assert.equal(keys.includes('booking'), false);
+  assert.equal(fs.existsSync(path.join(__dirname, '..', 'src/services/adminAppointmentsMenu.js')), false);
 });
