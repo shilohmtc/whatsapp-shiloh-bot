@@ -764,7 +764,19 @@ function createCalendarOperationalMutationService({
     const day = Number(dayOfWeek);
     if (!Number.isInteger(day) || day < 0 || day > 6) throw mutationError('CALENDAR_OPERATION_INVALID_DAY', 'Choose a valid weekday.');
     const targetLocationId = locationId == null ? null : positiveId(locationId);
-    await activeStaff(db, targetStaffId);
+    const staff = await activeStaff(db, targetStaffId);
+    if (staff.scheduling_type === 'regular') {
+      return {
+        staffId: targetStaffId,
+        dayOfWeek: day,
+        locationId: targetLocationId,
+        mode: 'inherit',
+        windows: [],
+        closures: [],
+        recurringAuthority: 'location_working_hours',
+        revision: scheduleStateRevision({ staffId: targetStaffId, dayOfWeek: day, locationId: targetLocationId }),
+      };
+    }
     const state = await loadScheduleState(db, { staffId: targetStaffId, dayOfWeek: day, locationId: targetLocationId });
     return {
       ...state,
@@ -798,6 +810,9 @@ function createCalendarOperationalMutationService({
       execute: async (client, operator, request) => {
         requireStaffAuthority(operator, input.staffId);
         const staff = await activeStaff(client, input.staffId);
+        if (staff.scheduling_type === 'regular') {
+          throw mutationError('CALENDAR_OPERATION_CLINIC_HOURS_AUTHORITATIVE', 'Regular practitioners use canonical clinic hours. Use dated leave or unavailable exceptions for staff-specific constraints.');
+        }
         await lockStaff(client, [input.staffId]);
         const before = await loadScheduleState(client, { ...input, forUpdate: true });
         if (before.revision !== input.expectedRevision) throw mutationError('CALENDAR_OPERATION_STALE_REVISION', 'The working schedule changed. Reload it before retrying.');

@@ -96,16 +96,22 @@ async function listAvailableSlots({
      ),
      base_windows AS (
        SELECT wh.starts_local, wh.ends_local
-         FROM staff_working_hours wh, requested r
+         FROM staff_working_hours wh
+         JOIN requested r ON TRUE
+         JOIN staff st ON st.id = wh.staff_id
         WHERE wh.staff_id = $2
+          AND st.scheduling_type <> 'regular'
           AND wh.day_of_week = r.dow
           AND wh.active = TRUE
           AND (wh.location_id IS NULL OR wh.location_id = r.location_id)
      ),
      recurring_closed AS (
        SELECT 1
-         FROM staff_recurring_day_closures c, requested r
+         FROM staff_recurring_day_closures c
+         JOIN requested r ON TRUE
+         JOIN staff st ON st.id = c.staff_id
         WHERE c.staff_id = $2
+          AND st.scheduling_type <> 'regular'
           AND c.day_of_week = r.dow
           AND (c.location_id IS NULL OR c.location_id = r.location_id)
         LIMIT 1
@@ -122,8 +128,6 @@ async function listAvailableSlots({
          FROM clinic_windows cw
          JOIN staff st ON st.id = $2
         WHERE st.scheduling_type = 'regular'
-          AND NOT EXISTS (SELECT 1 FROM base_windows)
-          AND NOT EXISTS (SELECT 1 FROM recurring_closed)
      ),
      staff_windows AS (
        SELECT starts_local, ends_local FROM base_windows

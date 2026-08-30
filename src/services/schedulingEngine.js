@@ -136,6 +136,20 @@ function buildWorkingWindows(staff, staffHours, recurringClosures, locationHours
   for (const person of staff) {
     for (let day = 0; day <= 6; day += 1) {
       const key = `${person.id}:${day}`;
+      if (person.scheduling_type === 'regular') {
+        for (const row of activeLocationHours) {
+          if (Number(row.day_of_week) !== day) continue;
+          windows.push(canonical('working_window', 'location_working_hours', {
+            staffId: person.id,
+            dayOfWeek: day,
+            startsLocal: row.starts_local,
+            endsLocal: row.ends_local,
+            locationId: row.location_id,
+            effectiveRule: 'regular_staff_inherits_clinic_hours',
+          }));
+        }
+        continue;
+      }
       const explicit = explicitByStaffDay.get(key) || [];
       if (explicit.length) {
         for (const row of explicit) {
@@ -152,18 +166,7 @@ function buildWorkingWindows(staff, staffHours, recurringClosures, locationHours
         }
         continue;
       }
-      if (person.scheduling_type !== 'regular' || closed.has(key)) continue;
-      for (const row of activeLocationHours) {
-        if (Number(row.day_of_week) !== day) continue;
-        windows.push(canonical('working_window', 'location_working_hours', {
-          staffId: person.id,
-          dayOfWeek: day,
-          startsLocal: row.starts_local,
-          endsLocal: row.ends_local,
-          locationId: row.location_id,
-          effectiveRule: 'regular_staff_inherits_clinic_hours',
-        }));
-      }
+      if (closed.has(key)) continue;
     }
   }
   return windows;
@@ -408,7 +411,7 @@ function createSchedulingEngine({
       })),
       workingWindows,
       scheduleExceptions,
-      recurringClosures: (recurringClosureResult.rows || []).map(row => canonical('recurring_day_closure', 'staff_recurring_day_closures', {
+      recurringClosures: (recurringClosureResult.rows || []).filter(row => staff.find(person => Number(person.id) === Number(row.staff_id))?.scheduling_type !== 'regular').map(row => canonical('recurring_day_closure', 'staff_recurring_day_closures', {
         id: row.id, staffId: Number(row.staff_id), dayOfWeek: Number(row.day_of_week), locationId: row.location_id ? Number(row.location_id) : null,
         revision: row.updated_at ? new Date(row.updated_at).toISOString() : null,
       })),

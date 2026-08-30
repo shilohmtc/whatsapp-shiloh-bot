@@ -68,6 +68,7 @@ async function replaceWorkingHoursDay({ staffId, dayOfWeek, windows, locationId 
   if (!validated.ok) return { status:'invalid_windows', reply:validated.message };
   const staffResult = await pool.query(`SELECT id, display_name, status, scheduling_type FROM staff WHERE id=$1`, [staffId]);
   if (!staffResult.rowCount || staffResult.rows[0].status !== 'active') return { status:'staff_not_found', reply:'Active staff member not found.' };
+  if (staffResult.rows[0].scheduling_type === 'regular') return { status:'clinic_hours_authoritative', reply:'Regular practitioners use canonical clinic hours. Use dated leave or unavailable exceptions for staff-specific constraints.' };
   const db = await pool.connect();
   try {
     await db.query('BEGIN');
@@ -87,15 +88,7 @@ async function clearWorkingHoursDayOverride({ staffId, dayOfWeek, locationId = n
   const staffResult = await pool.query(`SELECT id, display_name, status, scheduling_type FROM staff WHERE id=$1`, [staffId]);
   if (!staffResult.rowCount || staffResult.rows[0].status !== 'active') return { status:'staff_not_found', reply:'Active staff member not found.' };
   if (staffResult.rows[0].scheduling_type !== 'regular') return { status:'not_regular', reply:'Only regular practitioners inherit clinic hours.' };
-  const db = await pool.connect();
-  try {
-    await db.query('BEGIN');
-    const removedHours = await db.query(`DELETE FROM staff_working_hours WHERE staff_id=$1 AND day_of_week=$2 AND (($3::bigint IS NULL AND location_id IS NULL) OR location_id=$3)`, [staffId, day, locationId]);
-    const removedClosures = await db.query(`DELETE FROM staff_recurring_day_closures WHERE staff_id=$1 AND day_of_week=$2 AND (($3::bigint IS NULL AND location_id IS NULL) OR location_id=$3)`, [staffId, day, locationId]);
-    await db.query(`INSERT INTO crm_audit_events (actor_admin_id, action, entity_type, entity_id, metadata) VALUES ($1,'schedule.working_hours_inheritance_restored','staff',$2,$3::jsonb)`, [actorAdminId, staffId, JSON.stringify({ dayOfWeek:day, day:DAYS[day], locationId, removedWorkingHourRows:removedHours.rowCount, removedClosureRows:removedClosures.rowCount })]);
-    await db.query('COMMIT');
-    return { status:'updated', staff:staffResult.rows[0], day, inherited:true };
-  } catch (e) { await db.query('ROLLBACK'); throw e; } finally { db.release(); }
+  return { status:'clinic_hours_authoritative', staff:staffResult.rows[0], day, inherited:true, reply:'Regular practitioners already use canonical clinic hours. No recurring staff rows were changed.' };
 }
 
 async function addScheduleException({ staffId, date, type, startsLocal = null, endsLocal = null, reason = null, locationId = null, actorAdminId = null }) {
@@ -139,9 +132,9 @@ function formatWorkingHours(data) {
   for (let d=0; d<7; d++) {
     const rows = data.hours.filter((r) => Number(r.day_of_week) === d);
     const closed = closures.some((r) => Number(r.day_of_week) === d);
-    if (rows.length) lines.push(`• ${DAYS[d]}: ${rows.map((r)=>`${r.starts_local.slice(0,5)}-${r.ends_local.slice(0,5)}`).join(', ')} (staff override)`);
-    else if (closed) lines.push(`• ${DAYS[d]}: Closed (staff override)`);
-    else if (regular) lines.push(`• ${DAYS[d]}: Clinic hours (inherited)`);
+    if (regular) lines.push(`• ${DAYS[d]}: Clinic hours`);
+    else if (rows.length) lines.push(`• ${DAYS[d]}: ${rows.map((r)=>`${r.starts_local.slice(0,5)}-${r.ends_local.slice(0,5)}`).join(', ')} (staff schedule)`);
+    else if (closed) lines.push(`• ${DAYS[d]}: Closed (staff schedule)`);
   }
   if (!regular && !data.hours.length && !closures.length) lines.push('', 'No recurring working hours are configured yet.');
   if (data.exceptions.length) {
