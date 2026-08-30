@@ -100,6 +100,7 @@ test('startup fails closed for pending, mismatch, unknown ledger file, and missi
 test('controlled executor keeps migration SQL and ledger row atomic', async () => {
   const calls = [];
   const filename = migrations.migrationFiles().at(-1);
+  const migrationSql = read(`migrations/${filename}`);
   const db = {
     async query(sql, values = []) {
       calls.push({ sql, values });
@@ -111,7 +112,7 @@ test('controlled executor keeps migration SQL and ledger row atomic', async () =
   const result = await migrations.applyMigrationFile(filename, { db });
   assert.equal(result.applied, true);
   const begin = calls.findIndex(({ sql }) => sql === 'BEGIN');
-  const body = calls.findIndex(({ sql }) => sql.includes('--') && sql.includes('ALTER'));
+  const body = calls.findIndex(({ sql }) => sql === migrationSql);
   const ledger = calls.findIndex(({ sql }) => /INSERT INTO schema_migrations/.test(sql));
   const commit = calls.findIndex(({ sql }) => sql === 'COMMIT');
   assert.ok(begin >= 0 && body > begin && ledger > body && commit > ledger);
@@ -143,11 +144,12 @@ test('canonical pending runner applies one valid additive release migration', as
 test('controlled executor rolls back SQL and ledger together on migration failure', async () => {
   const calls = [];
   const filename = migrations.migrationFiles().at(-1);
+  const migrationSql = read(`migrations/${filename}`);
   const db = {
     async query(sql) {
       calls.push(sql);
       if (/SELECT checksum, applied_at FROM schema_migrations/.test(sql)) return { rows: [], rowCount: 0 };
-      if (sql.includes('--') && sql.includes('ALTER')) throw new Error('synthetic migration failure');
+      if (sql === migrationSql) throw new Error('synthetic migration failure');
       return { rows: [], rowCount: 0 };
     },
   };
