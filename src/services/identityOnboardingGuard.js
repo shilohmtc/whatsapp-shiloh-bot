@@ -1,5 +1,3 @@
-const { resolveVerifiedClientByWhatsApp } = require('./clientVerifiedIdentity');
-
 function cleanName(text = "") {
   return String(text)
     .trim()
@@ -92,28 +90,8 @@ async function forceMatchedClientNameConfirmation() {
   return false;
 }
 
-async function guardActiveNameConfirmation(phone) {
-  const identity = await resolveVerifiedClientByWhatsApp(phone);
-  if (identity.status === 'ambiguous' || identity.status === 'manual_review') {
-    return {
-      handled: true,
-      identityStatus: identity.status,
-      reply: "I found an identity conflict for this WhatsApp number, so I won't update, merge or select a client record automatically. Please contact the clinic team so we can verify the correct profile safely.",
-    };
-  }
-  if (identity.status === 'historical_unverified') {
-    return {
-      handled: true,
-      identityStatus: identity.status,
-      reply: "This number matches a Shiloh profile with appointment history, but history and imported details are not identity proof. Please contact the clinic team so we can verify the profile before continuing.",
-    };
-  }
-  return { handled: false, identityStatus: identity.status };
-}
-
 module.exports = {
   forceMatchedClientNameConfirmation,
-  guardActiveNameConfirmation,
   namesCompatible,
   parseNaturalDateOfBirth,
   expandTwoDigitYear,

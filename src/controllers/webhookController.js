@@ -38,7 +38,7 @@ const { processAdminClientDemoMessage } = require("../services/adminClientDemo")
 const { escapeActiveDemoToAdminMenu } = require("../services/adminDemoMenuEscape");
 const { processAdminAssistantMessage } = require("../services/adminAssistant");
 const { commandForAdminButton } = require("../services/adminEarningsButtons");
-const { forceMatchedClientNameConfirmation, guardActiveNameConfirmation } = require("../services/identityOnboardingGuard");
+const { forceMatchedClientNameConfirmation } = require("../services/identityOnboardingGuard");
 const logger = require("../lib/logger");
 function maskPhone(phone = "") { return phone.length > 4 ? `***${phone.slice(-4)}` : "***"; }
 function isGreetingOnly(text = "") { return /^(hi|hello|hey|good morning|good afternoon|good evening|howzit|hiya)[!. ]*$/i.test(String(text).trim()); }
@@ -98,7 +98,6 @@ const adminLoyalty=await processAdminLoyaltyRedemptionMessage(from,text);if(admi
 const adminAssistant=await processAdminAssistantMessage(from,text);if(adminAssistant.handled){await sendWhatsAppMessage(from,adminAssistant.reply);return res.sendStatus(200);}
 const customerExperience=await processCustomerExperienceMessage(from,text);if(customerExperience.handled){await sendAdminResult(from,customerExperience);return res.sendStatus(200);}
 const customerCare=await processCustomerCareMessage(from,text);if(customerCare.handled){await sendAdminResult(from,customerCare);return res.sendStatus(200);}
-const nameGuard=await guardActiveNameConfirmation(from,text);if(nameGuard.handled){await sendWhatsAppMessage(from,nameGuard.reply);return res.sendStatus(200);}
 const transitionWelcome=await processClientTransitionWelcome(from,text);if(transitionWelcome.handled){await sendAdminResult(from,transitionWelcome);return res.sendStatus(200);}
 const identity=await processClientIdentityMessage(from,text);if(identity.handled){let reply=identity.reply;if(identity.identityStatus==="matched_incomplete"&&identity.client?.id){const forced=await forceMatchedClientNameConfirmation(from,identity.client.id);if(forced)reply=`Welcome back, ${identity.client.display_name}. Before I can continue with the booking, please confirm your full name.`;}if(identity.onboardingComplete&&identity.resumeBooking){const booking=decorateClientBookingResult(await processBookingMessage(from,"booking"));if(booking.handled&&booking.interactive){booking.interactive={...booking.interactive,body:`${reply}\n\n${booking.interactive.body}`};await sendAdminResult(from,booking);return res.sendStatus(200);}if(booking.handled&&booking.reply)reply=`${reply}\n\n${sanitizeBookingReply(booking.reply)}`;}await sendWhatsAppMessage(from,reply);return res.sendStatus(200);}
 if(identity.identityStatus==="matched_incomplete"&&identity.client?.display_name&&isGreetingOnly(text)){await sendWhatsAppMessage(from,`Welcome back, ${identity.client.display_name} 👋 How can I help you today?`);return res.sendStatus(200);}
