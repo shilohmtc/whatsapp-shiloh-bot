@@ -15,56 +15,61 @@ async function listClients({ q, status, limit, offset }) {
   const values = [];
   const where = [];
   if (status) { values.push(status); where.push(`c.status = $${values.length}`); }
-  if (q) {
-    values.push(`%${q.trim()}%`);
-    const p = `$${values.length}`;
-    where.push(`(c.display_name ILIKE ${p} OR EXISTS (SELECT 1 FROM client_contacts ccq WHERE ccq.client_id = c.id AND ccq.value ILIKE ${p}))`);
+  const search = String(q || '').trim().replace(/\s+/g, ' ').slice(0, 120);
+  if (search) {
+    values.push(`%${search}%`);
+    const nameParam = `$${values.length}`;
+    const mobileDigits = search.replace(/[^0-9]/g, '');
+    values.push(mobileDigits ? `%${mobileDigits}%` : null);
+    const mobileParam = `$${values.length}`;
+    where.push(`(c.name ILIKE ${nameParam} OR (${mobileParam}::text IS NOT NULL AND c.normalized_mobile LIKE ${mobileParam}))`);
   }
-  values.push(clampLimit(limit)); const limitParam = `$${values.length}`;
+  values.push(clampLimit(limit, 25, 50)); const limitParam = `$${values.length}`;
   values.push(parseOffset(offset)); const offsetParam = `$${values.length}`;
   const result = await pool.query(`
-    SELECT c.id, c.display_name, c.date_of_birth, c.preferred_language, c.status, c.preferences, c.tags,
-           c.custom_attributes, c.source, c.created_at, c.updated_at,
-           (c.display_name IS NOT NULL AND c.date_of_birth IS NOT NULL AND EXISTS (
-              SELECT 1 FROM client_contacts ccv WHERE ccv.client_id = c.id AND ccv.verified_at IS NOT NULL
-           )) AS onboarding_complete,
-           COALESCE(jsonb_agg(jsonb_build_object('id', cc.id, 'type', cc.contact_type, 'value', cc.value,
-             'isPrimary', cc.is_primary, 'verifiedAt', cc.verified_at) ORDER BY cc.is_primary DESC, cc.id)
-             FILTER (WHERE cc.id IS NOT NULL), '[]'::jsonb) AS contacts
-    FROM clients c LEFT JOIN client_contacts cc ON cc.client_id = c.id
+    /* workspaceClients:list:crm_v2 */
+    SELECT c.id, c.name, c.normalized_mobile,
+           TO_CHAR(c.date_of_birth, 'YYYY-MM-DD') AS date_of_birth,
+           c.gender, c.profile_status, c.mobile_verified_at, c.status,
+           (SELECT MAX(a_last.starts_at)
+              FROM appointments a_last
+             WHERE a_last.crm_v2_client_id=c.id
+               AND a_last.client_id IS NULL) AS last_appointment_at
+    FROM crm_v2_clients c
     ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
-    GROUP BY c.id ORDER BY c.display_name NULLS LAST, c.id
+    ORDER BY LOWER(c.name), c.id
     LIMIT ${limitParam} OFFSET ${offsetParam}`, values);
   return result.rows;
 }
 
 async function getClient(id) {
   const result = await pool.query(`
-    SELECT c.id, c.display_name, c.date_of_birth, c.preferred_language, c.status, c.preferences, c.tags,
-           c.custom_attributes, c.source, c.created_at, c.updated_at,
-           (c.display_name IS NOT NULL AND c.date_of_birth IS NOT NULL AND EXISTS (
-              SELECT 1 FROM client_contacts ccv WHERE ccv.client_id = c.id AND ccv.verified_at IS NOT NULL
-           )) AS onboarding_complete,
-           COALESCE(jsonb_agg(jsonb_build_object('id', cc.id, 'type', cc.contact_type, 'value', cc.value,
-             'isPrimary', cc.is_primary, 'verifiedAt', cc.verified_at) ORDER BY cc.is_primary DESC, cc.id)
-             FILTER (WHERE cc.id IS NOT NULL), '[]'::jsonb) AS contacts
-    FROM clients c LEFT JOIN client_contacts cc ON cc.client_id = c.id
-    WHERE c.id = $1 GROUP BY c.id`, [id]);
+    /* workspaceClients:detail:crm_v2 */
+    SELECT c.id, c.name, c.normalized_mobile,
+           TO_CHAR(c.date_of_birth, 'YYYY-MM-DD') AS date_of_birth,
+           c.gender, c.profile_status, c.mobile_verified_at, c.status
+      FROM crm_v2_clients c
+     WHERE c.id=$1
+     LIMIT 1`, [id]);
   return result.rows[0] || null;
 }
 
 async function getClientAppointments(id, { limit, offset }) {
   const result = await pool.query(`
-    SELECT a.id, a.starts_at, a.ends_at, a.status, a.title, a.notes, a.total_price, a.currency,
-           a.source, a.created_at, a.updated_at, l.id AS location_id, l.name AS location_name,
-           COALESCE((SELECT jsonb_agg(jsonb_build_object('id', aps.id, 'serviceId', aps.service_id,
+    /* workspaceClients:history:crm_v2_xor */
+    SELECT a.starts_at, a.ends_at, a.status, a.title,
+           COALESCE((SELECT jsonb_agg(jsonb_build_object(
              'name', aps.service_name_snapshot, 'price', aps.price_snapshot, 'durationMinutes', aps.duration_minutes_snapshot)
              ORDER BY aps.position) FROM appointment_services aps WHERE aps.appointment_id = a.id), '[]'::jsonb) AS services,
-           COALESCE((SELECT jsonb_agg(jsonb_build_object('id', ast.id, 'staffId', ast.staff_id,
-             'name', ast.staff_name_snapshot) ORDER BY ast.position) FROM appointment_staff ast WHERE ast.appointment_id = a.id), '[]'::jsonb) AS staff
-    FROM appointments a LEFT JOIN locations l ON l.id = a.location_id
-    WHERE a.client_id = $1 ORDER BY a.starts_at DESC
-    LIMIT $2 OFFSET $3`, [id, clampLimit(limit), parseOffset(offset)]);
+           COALESCE((SELECT jsonb_agg(jsonb_build_object('name', ast.staff_name_snapshot)
+             ORDER BY ast.position) FROM appointment_staff ast WHERE ast.appointment_id = a.id), '[]'::jsonb) AS staff
+      FROM appointments a
+      JOIN crm_v2_clients c ON c.id=a.crm_v2_client_id
+     WHERE c.id=$1
+       AND a.crm_v2_client_id=$1
+       AND a.client_id IS NULL
+     ORDER BY a.starts_at DESC
+     LIMIT $2 OFFSET $3`, [id, clampLimit(limit, 20, 50), parseOffset(offset)]);
   return result.rows;
 }
 
