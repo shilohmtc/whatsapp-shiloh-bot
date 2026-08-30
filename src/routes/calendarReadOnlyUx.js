@@ -5,6 +5,7 @@ const { renderCalendarPage, renderUnavailablePage } = require('../presentation/c
 const { isCalendarBridgeEnabled } = require('../middleware/staffBrowserSession');
 const { createCalendarCreateBookingService } = require('../services/calendarCreateBooking');
 const { createCalendarOperationalMutationService } = require('../services/calendarOperationalMutations');
+const workspaceClients = require('../services/workspaceClients');
 
 const CALENDAR_VIEWER_CONTEXT = Symbol.for('shiloh.calendar.server.viewer');
 
@@ -73,6 +74,8 @@ function createCalendarReadOnlyHandler({
   bookingPath = '/calendar/book',
   bookingService = createCalendarCreateBookingService({ db: pool, env }),
   mutationService = createCalendarOperationalMutationService({ db: pool }),
+  clientAccessService = workspaceClients,
+  clientsPath = '/calendar/clients',
   operationalMutationsScriptPath = '/calendar/operations/client.js',
 } = {}) {
   return async function calendarReadOnlyHandler(req, res, next) {
@@ -119,6 +122,16 @@ function createCalendarReadOnlyHandler({
         }
       }
 
+      let clientNavigationAllowed = false;
+      if (req.staffBrowserSession?.adminId != null) {
+        try {
+          clientNavigationAllowed = Boolean(await clientAccessService.resolveAccess(req.staffBrowserSession.adminId));
+        } catch (_clientAuthorityError) {
+          // Calendar remains available under its own authority. Clients navigation
+          // fails closed unless current canonical client:lookup authority resolves.
+        }
+      }
+
       const renderedModel = {
         ...model,
         mutationCapability: mutationCapability ? { ...mutationCapability, enabled: true } : { enabled: false },
@@ -129,6 +142,8 @@ function createCalendarReadOnlyHandler({
         staffAccessPath,
         staffAccessScriptPath: `${staffAccessPath}/client.js`,
         operationalMutationsScriptPath,
+        clientNavigationAllowed,
+        clientsPath,
         operationalActions: bookingAllowed ? bookingOperationalActions(model.dateKey, bookingPath) : [],
         timelineReadOnlyMessage: mutationCapability
           ? 'Calendar operations update Shiloh canonical state only. Every save revalidates current authority, revision, schedules and conflicts; no client message is sent by these controls.'
