@@ -451,11 +451,11 @@ test('block and operational-leave removals commit without moving or cancelling a
   }
 });
 
-test('schedule narrowing that strands an appointment rolls back the tentative schedule', async () => {
+test('non-regular schedule narrowing that strands an appointment rolls back the tentative schedule', async () => {
   const windows = [{ id: 1, starts_local: '08:00:00', ends_local: '17:00:00', updated_at: REVISION }];
   const expectedRevision = scheduleStateRevision({ staffId: 1, dayOfWeek: 4, locationId: null, windows, closures: [] });
   const fake = fakeDatabase(async (sql) => {
-    if (sql.includes("FROM staff") && sql.includes("resource_type='practitioner'")) return result([{ id: 1, display_name: 'Christel', scheduling_type: 'regular' }]);
+    if (sql.includes("FROM staff") && sql.includes("resource_type='practitioner'")) return result([{ id: 1, display_name: 'Freelancer', scheduling_type: 'freelance' }]);
     if (sql.includes('FROM staff_working_hours')) return result(windows);
     if (sql.includes('FROM staff_recurring_day_closures')) return result();
     if (sql.startsWith('DELETE FROM') || sql.startsWith('INSERT INTO staff_working_hours')) return result();
@@ -473,13 +473,13 @@ test('schedule narrowing that strands an appointment rolls back the tentative sc
   assert.ok(!fake.calls.some(call => call.sql.startsWith('INSERT INTO crm_audit_events')));
 });
 
-test('safe schedule replacement commits atomically with revision and audit', async () => {
+test('safe non-regular schedule replacement commits atomically with revision and audit', async () => {
   const beforeWindows = [{ id: 1, starts_local: '08:00:00', ends_local: '17:00:00', updated_at: REVISION }];
   const afterWindows = [{ id: 2, starts_local: '09:00:00', ends_local: '16:00:00', updated_at: NEXT_REVISION }];
   const expectedRevision = scheduleStateRevision({ staffId: 1, dayOfWeek: 4, locationId: null, windows: beforeWindows, closures: [] });
   let windowReads = 0;
   const fake = fakeDatabase(async (sql) => {
-    if (sql.includes("FROM staff") && sql.includes("resource_type='practitioner'")) return result([{ id: 1, display_name: 'Christel', scheduling_type: 'regular' }]);
+    if (sql.includes("FROM staff") && sql.includes("resource_type='practitioner'")) return result([{ id: 1, display_name: 'Freelancer', scheduling_type: 'freelance' }]);
     if (sql.includes('FROM staff_working_hours')) return result(windowReads++ === 0 ? beforeWindows : afterWindows);
     if (sql.includes('FROM staff_recurring_day_closures')) return result();
     if (sql.startsWith('DELETE FROM') || sql.startsWith('INSERT INTO staff_working_hours')) return result();
@@ -497,14 +497,14 @@ test('safe schedule replacement commits atomically with revision and audit', asy
   assert.equal(fake.calls.filter(call => call.sql.startsWith('INSERT INTO crm_audit_events')).length, 1);
 });
 
-test('working-schedule closure and inheritance restoration use canonical schedule strands safely', async () => {
+test('non-regular working-schedule closure and inheritance restoration use canonical schedule strands safely', async () => {
   for (const mode of ['closed', 'inherit']) {
     const beforeWindows = [{ id: 1, starts_local: '08:00:00', ends_local: '17:00:00', updated_at: REVISION }];
     const expectedRevision = scheduleStateRevision({ staffId: 1, dayOfWeek: 4, locationId: null, windows: beforeWindows, closures: [] });
     let windowReads = 0;
     let closureReads = 0;
     const fake = fakeDatabase(async (sql) => {
-      if (sql.includes("FROM staff") && sql.includes("resource_type='practitioner'")) return result([{ id: 1, display_name: 'Christel', scheduling_type: 'regular' }]);
+      if (sql.includes("FROM staff") && sql.includes("resource_type='practitioner'")) return result([{ id: 1, display_name: 'Freelancer', scheduling_type: 'freelance' }]);
       if (sql.includes('FROM staff_working_hours')) return result(windowReads++ === 0 ? beforeWindows : []);
       if (sql.includes('FROM staff_recurring_day_closures')) {
         closureReads += 1;

@@ -304,7 +304,7 @@ function renderDay(model) {
     const laneOperations = [
       staffOperationEnabled(model, 'calendar_block:manage', person.id) ? `<button type="button" data-calendar-operation="add-block" data-staff-id="${escapeHtml(person.id)}" data-date="${escapeHtml(day)}">Add block</button>` : '',
       staffOperationEnabled(model, 'operational_leave:manage', person.id) ? `<button type="button" data-calendar-operation="add-leave" data-staff-id="${escapeHtml(person.id)}" data-date="${escapeHtml(day)}">Add leave</button>` : '',
-      staffOperationEnabled(model, 'working_schedule:manage', person.id) ? `<button type="button" data-calendar-operation="manage-schedule" data-staff-id="${escapeHtml(person.id)}" data-date="${escapeHtml(day)}">Schedule</button>` : '',
+      person.schedulingType !== 'regular' && staffOperationEnabled(model, 'working_schedule:manage', person.id) ? `<button type="button" data-calendar-operation="manage-schedule" data-staff-id="${escapeHtml(person.id)}" data-date="${escapeHtml(day)}">Schedule</button>` : '',
     ].filter(Boolean).join('');
     const mutationActions = laneOperations ? `<div class="lane-actions">${laneOperations}</div>` : '';
     return `<section class="lane" data-staff-id="${escapeHtml(person.id)}" data-date="${escapeHtml(day)}" ${operationEnabled(model, 'appointment:reschedule') ? 'data-calendar-drop-target="true"' : ''}>
