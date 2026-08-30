@@ -170,7 +170,7 @@ function mutationAttributes(item, model) {
     const operations = appointmentOperations(item, model);
     if (!operations.length) return '';
     const draggable = operations.includes('appointment:reschedule') ? ' draggable="true"' : '';
-    return ` data-appointment-id="${escapeHtml(item.id)}" data-revision="${revision}" data-staff-ids="${escapeHtml(eventStaffIds(item).join(','))}" data-starts-at="${escapeHtml(item.startsAt || '')}" data-ends-at="${escapeHtml(item.endsAt || '')}" data-allowed-operations="${escapeHtml(operations.join(','))}"${draggable}`;
+    return ` data-appointment-id="${escapeHtml(item.id)}" data-revision="${revision}" data-staff-ids="${escapeHtml(eventStaffIds(item).join(','))}" data-starts-at="${escapeHtml(item.startsAt || '')}" data-ends-at="${escapeHtml(item.endsAt || '')}" data-client-name="${escapeHtml(item.clientName || 'Client')}" data-service-name="${escapeHtml(item.serviceName || '')}" data-allowed-operations="${escapeHtml(operations.join(','))}"${draggable}`;
   }
   if (item.kind === 'calendar_block' && staffOperationEnabled(model, 'calendar_block:manage', eventStaffIds(item)[0])) {
     return ` data-block-id="${escapeHtml(item.id)}" data-revision="${revision}" data-staff-ids="${escapeHtml(eventStaffIds(item)[0] || '')}" data-location-id="${escapeHtml(item.locationId || '')}" data-starts-at="${escapeHtml(item.startsAt || '')}" data-ends-at="${escapeHtml(item.endsAt || '')}" data-block-type="${escapeHtml(item.blockType || 'other')}" data-title="${escapeHtml(item.title || 'Operational block')}"`;
@@ -290,13 +290,41 @@ function renderClosureStrip(model, day) {
   return `<div class="closure-strip">${closures.map(item => `<span>Closed • ${escapeHtml(item.reason || 'Clinic closure')}</span>`).join('')}</div>`;
 }
 
+const GRID_START_MINUTES = 7 * 60;
+const GRID_END_MINUTES = 20 * 60;
+const GRID_PIXELS_PER_HOUR = 72;
+
+function localMinutes(value) {
+  const time = formatTime(value);
+  const [hour, minute] = time.split(':').map(Number);
+  return Number.isFinite(hour) && Number.isFinite(minute) ? (hour * 60) + minute : GRID_START_MINUTES;
+}
+
+function renderTimeRail() {
+  const ticks = [];
+  for (let minute = GRID_START_MINUTES; minute <= GRID_END_MINUTES; minute += 60) {
+    ticks.push(`<span style="--grid-top:${((minute - GRID_START_MINUTES) / 60) * GRID_PIXELS_PER_HOUR}px">${String(Math.floor(minute / 60)).padStart(2, '0')}:00</span>`);
+  }
+  return `<div class="time-rail" aria-hidden="true">${ticks.join('')}</div>`;
+}
+
+function renderPositionedEvent(item, model) {
+  if (item.allDay || !item.startsAt || !item.endsAt) return renderEventCard(item, model);
+  const start = Math.max(GRID_START_MINUTES, localMinutes(item.startsAt));
+  const end = Math.min(GRID_END_MINUTES, Math.max(start + 15, localMinutes(item.endsAt)));
+  const top = ((start - GRID_START_MINUTES) / 60) * GRID_PIXELS_PER_HOUR;
+  const height = Math.max(34, ((end - start) / 60) * GRID_PIXELS_PER_HOUR - 3);
+  return `<div class="positioned-event" style="--event-top:${top}px;--event-height:${height}px">${renderEventCard(item, model)}</div>`;
+}
+
 function renderDay(model) {
   const day = model.period.dateKeys[0];
   const sharedAppointments = (model.timeline.appointments || []).filter(item => dateKey(item.startsAt) === day && eventStaffIds(item).length > 1);
-  const lanes = (model.timeline.staff || []).map(person => {
+  const staff = model.timeline.staff || [];
+  const lanes = staff.map((person, index) => {
     const items = eventsForDate(model, day).filter(item => {
       if (item.kind === 'clinic_closure') return false;
-      if (item.kind === 'appointment' && eventStaffIds(item).length > 1) return false;
+      if (item.kind === 'appointment' && eventStaffIds(item).length > 1) return index === 0;
       return eventStaffIds(item).includes(Number(person.id));
     });
     const context = workingContext(model, person.id, day);
@@ -309,15 +337,15 @@ function renderDay(model) {
     const mutationActions = laneOperations ? `<div class="lane-actions">${laneOperations}</div>` : '';
     return `<section class="lane" data-staff-id="${escapeHtml(person.id)}" data-date="${escapeHtml(day)}" ${operationEnabled(model, 'appointment:reschedule') ? 'data-calendar-drop-target="true"' : ''}>
       <header><div><h3>${escapeHtml(person.displayName)}</h3><p><span class="status-dot ${unavailable ? 'off' : ''}"></span>${escapeHtml(context)}</p></div><div class="lane-heading-actions"><span class="lane-count">${items.length} item${items.length === 1 ? '' : 's'}</span>${mutationActions}</div></header>
-      <div class="lane-events">${items.length ? items.map(item => renderEventCard(item, model)).join('') : '<div class="empty">No scheduled items</div>'}</div>
+      <div class="time-column">${items.map(item => renderPositionedEvent(item, model)).join('')}</div>
     </section>`;
   }).join('');
 
   return `<main class="calendar-view day-view" data-view="day">
     <div class="view-heading"><div><span class="eyebrow">Day</span><h2>${escapeHtml(formatDay(day, { weekday: 'long', month: 'long', year: 'numeric' }))}</h2></div><span class="read-only-badge">${mutationEnabled(model) ? 'Canonical operations' : 'Read-only'}</span></div>
     ${renderClosureStrip(model, day)}
-    ${sharedAppointments.length ? `<section class="shared-band"><div class="section-label">Shared appointments • one canonical booking</div>${sharedAppointments.map(item => renderEventCard(item, model)).join('')}</section>` : ''}
-    <div class="lanes">${lanes || '<div class="empty large">No permitted practitioner lanes</div>'}</div>
+    ${sharedAppointments.length ? '<div class="shared-note">Shared appointments appear once as one canonical booking and retain all assigned practitioners.</div>' : ''}
+    <div class="time-grid day-time-grid">${renderTimeRail()}<div class="lanes" style="--lane-count:${Math.max(staff.length, 1)}">${lanes || '<div class="empty large">No permitted practitioner lanes</div>'}</div></div>
   </main>`;
 }
 
@@ -327,12 +355,12 @@ function renderWeek(model) {
     return `<section class="week-day" data-date="${escapeHtml(day)}" ${operationEnabled(model, 'appointment:reschedule') ? 'data-calendar-drop-target="true"' : ''}>
       <header><span>${escapeHtml(formatDay(day))}</span><small>${items.length} item${items.length === 1 ? '' : 's'}</small></header>
       ${renderClosureStrip(model, day)}
-      <div class="week-events">${items.length ? items.map(item => renderEventCard(item, model)).join('') : '<div class="empty">Clear</div>'}</div>
+      <div class="time-column">${items.map(item => renderPositionedEvent(item, model)).join('')}</div>
     </section>`;
   }).join('');
   return `<main class="calendar-view week-view" data-view="week">
     <div class="view-heading"><div><span class="eyebrow">Week</span><h2>${escapeHtml(formatDay(model.period.startKey, { weekday: 'short', month: 'long' }))} – ${escapeHtml(formatDay(model.period.dateKeys.at(-1), { weekday: 'short', month: 'long', year: 'numeric' }))}</h2></div><span class="read-only-badge">${mutationEnabled(model) ? 'Canonical operations' : 'Read-only'}</span></div>
-    <div class="week-grid">${days}</div>
+    <div class="time-grid week-time-grid">${renderTimeRail()}<div class="week-grid">${days}</div></div>
   </main>`;
 }
 
@@ -364,6 +392,16 @@ function operationalStyles() {
   return `.event-card-actions{display:flex;align-items:center;justify-content:space-between;gap:8px}.event-operation,.lane-actions button{border:1px solid var(--line-strong);background:#fff;color:var(--leaf-deep);border-radius:999px;min-height:32px;padding:5px 9px;font:inherit;font-size:.68rem;font-weight:800;cursor:pointer}.event-operation:hover,.lane-actions button:hover{border-color:var(--leaf);background:var(--leaf-soft)}.lane-heading-actions{display:grid;justify-items:end;gap:7px}.lane-actions{display:flex;justify-content:flex-end;gap:5px;flex-wrap:wrap}.lane[data-calendar-drop-target="true"],.week-day[data-calendar-drop-target="true"]{outline:2px solid transparent;outline-offset:-2px}.event-card[draggable="true"]{cursor:grab}.event-card[draggable="true"]:active{cursor:grabbing}.operation-status{display:block;min-height:1.2em;margin:5px 0 10px;color:var(--muted);font-size:.78rem}.operation-status[data-tone="working"]{color:var(--leaf-deep);font-weight:750}.operation-status[data-tone="error"]{color:#8a3128;font-weight:750}@media(max-width:700px){.event-operation,.lane-actions button{min-height:44px;padding:8px 11px}.lane-heading-actions{justify-items:stretch}.lane-actions{display:grid;grid-template-columns:repeat(3,1fr)}.lane-actions button{padding:5px;font-size:.63rem}.event-card-actions{margin-top:7px}}`;
 }
 
+function workspaceV1Styles() {
+  return `.workspace-frame{display:grid;grid-template-columns:188px minmax(0,1fr);min-height:100vh}.workspace-nav{background:#17382d;color:#f7faf7;padding:24px 16px;display:flex;flex-direction:column;gap:28px}.workspace-mark{display:grid;gap:2px;font-weight:850;letter-spacing:-.02em}.workspace-mark small{color:#b9ccc3;font-size:.68rem;text-transform:uppercase;letter-spacing:.13em}.workspace-links{display:grid;gap:7px}.workspace-link{display:flex;align-items:center;gap:9px;border-radius:10px;padding:10px 11px;color:#d7e4dd;font-size:.86rem;font-weight:750}.workspace-link.active{background:#f6faf7;color:#17382d}.workspace-link.future{color:#809f91}.workspace-main{min-width:0}.time-grid{display:grid;grid-template-columns:58px minmax(0,1fr);overflow:auto;border:1px solid var(--line);border-radius:13px;background:#fff}.time-rail{position:relative;height:${((GRID_END_MINUTES - GRID_START_MINUTES) / 60) * GRID_PIXELS_PER_HOUR}px;border-right:1px solid var(--line);background:#fafbf8}.time-rail span{position:absolute;top:var(--grid-top);right:8px;transform:translateY(-50%);font-size:.66rem;color:var(--muted)}.time-column{position:relative;height:${((GRID_END_MINUTES - GRID_START_MINUTES) / 60) * GRID_PIXELS_PER_HOUR}px;background:repeating-linear-gradient(to bottom,transparent 0,transparent ${GRID_PIXELS_PER_HOUR - 1}px,var(--line) ${GRID_PIXELS_PER_HOUR - 1}px,var(--line) ${GRID_PIXELS_PER_HOUR}px)}.positioned-event{position:absolute;z-index:2;top:var(--event-top);height:var(--event-height);left:4px;right:4px;min-height:44px}.positioned-event .event-card{position:relative;height:100%;overflow:hidden;padding:6px 7px;box-shadow:0 2px 7px rgba(32,50,43,.08)}.positioned-event .appointment-reference,.positioned-event .provenance{display:none}.positioned-event .event-card-actions{position:absolute;right:3px;bottom:3px}.positioned-event .event-operation{min-width:44px;min-height:44px;background:rgba(255,255,255,.94)}.positioned-event .event-card h4{font-size:.78rem;padding-right:48px}.positioned-event .event-card p{font-size:.68rem;padding-right:48px}.day-time-grid .lanes{display:grid;grid-template-columns:repeat(var(--lane-count),minmax(210px,1fr));gap:0;min-width:max-content}.day-time-grid .lane{border:0;border-right:1px solid var(--line);border-radius:0;min-width:230px}.day-time-grid .lane>header{height:73px;position:sticky;top:0;z-index:4}.day-time-grid .time-rail{margin-top:73px}.week-grid{display:grid;grid-template-columns:repeat(7,minmax(154px,1fr));gap:0;overflow:visible;padding:0;min-width:1078px}.week-day{border:0;border-right:1px solid var(--line);border-radius:0;min-width:154px}.week-day>header{height:45px}.week-time-grid .time-rail{margin-top:45px}.week-events{padding:0}.shared-note{margin:-3px 0 10px;color:var(--muted);font-size:.73rem}.management-panel{border:0;padding:0;background:transparent;max-width:none;max-height:none;width:100%;height:100%;margin:0}.management-panel::backdrop{background:rgba(13,31,24,.42)}.management-card{position:absolute;right:0;top:0;height:100%;width:min(430px,100%);overflow:auto;background:var(--panel);padding:22px;box-shadow:-12px 0 40px rgba(20,45,35,.2)}.panel-head{display:flex;justify-content:space-between;gap:12px;align-items:start;border-bottom:1px solid var(--line);padding-bottom:14px}.panel-head h2{margin:3px 0;font-size:1.25rem}.panel-close{border:1px solid var(--line);background:#fff;border-radius:999px;width:44px;height:44px;font-size:1.15rem}.panel-summary{margin:16px 0;padding:12px;border-radius:12px;background:var(--leaf-soft);display:grid;gap:4px}.panel-actions{display:grid;gap:14px}.panel-action{display:none;border-top:1px solid var(--line);padding-top:14px}.panel-action.visible{display:grid;gap:9px}.panel-action label{display:grid;gap:5px;font-size:.76rem;font-weight:750}.panel-action input,.panel-action select,.panel-action textarea{width:100%;min-height:44px;border:1px solid var(--line-strong);border-radius:9px;padding:9px;font:inherit;background:#fff}.panel-action button{min-height:44px;border:0;border-radius:9px;padding:10px 13px;background:var(--leaf-deep);color:#fff;font:inherit;font-weight:800}.panel-action.danger button{background:#843f35}.panel-hint{font-size:.72rem;color:var(--muted)}@media(max-width:900px){.workspace-frame{grid-template-columns:1fr}.workspace-nav{padding:11px 12px;display:flex;flex-direction:row;align-items:center;justify-content:space-between;gap:12px}.workspace-links{display:flex}.workspace-link{min-height:44px}.workspace-link.future{display:none}.shell{padding-top:12px}}@media(max-width:700px){.time-grid{margin-left:-6px;margin-right:-6px;grid-template-columns:48px minmax(0,1fr)}.day-time-grid .lanes{grid-template-columns:repeat(var(--lane-count),minmax(78vw,1fr))}.day-time-grid .lane{min-width:78vw}.week-grid{grid-template-columns:repeat(7,minmax(78vw,1fr));min-width:max-content}.week-day{min-width:78vw}.positioned-event .event-card{min-height:44px}.management-card{padding:16px}.workspace-mark small{display:none}}`;
+}
+
+function renderManagementPanel(model) {
+  if (!mutationEnabled(model)) return '';
+  const options = (model.permittedStaff || []).map(person => `<option value="${escapeHtml(person.id)}">${escapeHtml(person.displayName)}</option>`).join('');
+  return `<dialog class="management-panel" data-calendar-management-panel aria-labelledby="management-title"><section class="management-card"><header class="panel-head"><div><span class="eyebrow">Appointment</span><h2 id="management-title" data-panel-title>Manage appointment</h2><span class="panel-hint">Every change is revalidated by canonical Calendar authority.</span></div><button class="panel-close" type="button" data-panel-close aria-label="Close">×</button></header><div class="panel-summary"><strong data-panel-client></strong><span data-panel-service></span><span data-panel-time></span></div><div class="panel-actions"><form class="panel-action" data-panel-action="appointment:reschedule"><label>Date<input name="date" type="date" required></label><label>Start time<input name="time" type="time" required></label><button type="submit">Save new time</button></form><form class="panel-action" data-panel-action="appointment:reassign"><label>Practitioner<select name="destinationStaffId" required>${options}</select></label><button type="submit">Reassign</button></form><form class="panel-action danger" data-panel-action="appointment:cancel"><label>Cancellation reason<textarea name="reason" required></textarea></label><label><input name="confirmed" type="checkbox" required> I confirm this exact appointment should be cancelled.</label><button type="submit">Cancel appointment</button></form></div></section></dialog>`;
+}
+
 function renderCalendarPage(model, {
   basePath = '/calendar/read-only',
   staffAccessScriptPath = '/calendar/staff/client.js',
@@ -374,11 +412,11 @@ function renderCalendarPage(model, {
   const content = model.view === 'week' ? renderWeek(model) : model.view === 'agenda' ? renderAgenda(model) : renderDay(model);
   const canMutate = mutationEnabled(model);
   const operationScript = canMutate ? `<script src="${escapeHtml(operationalMutationsScriptPath)}" defer></script>` : '';
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Shiloh Calendar</title><style>${serviceFamilyAccentCss()}${styles()}${canMutate ? operationalStyles() : ''}</style><script src="${escapeHtml(staffAccessScriptPath)}" defer></script>${operationScript}</head><body data-calendar-readonly="${canMutate ? 'false' : 'true'}"><div class="shell">
-    <header class="topbar"><div class="brand"><h1>Shiloh Calendar</h1><p>Your clinic schedule, clearly presented.</p></div><div class="topbar-side">${renderOperationalActions(operationalActions)}<div class="truth-note">Africa/Johannesburg • Read-only timeline • Shiloh is the scheduling authority</div><div class="access-controls"><button class="signout-button" type="button" data-shiloh-logout>Sign out</button><span class="access-status" role="status" aria-live="polite" data-shiloh-calendar-access-status></span></div></div></header>
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Calendar — Shiloh Workspace</title><style>${serviceFamilyAccentCss()}${styles()}${workspaceV1Styles()}${canMutate ? operationalStyles() : ''}</style><script src="${escapeHtml(staffAccessScriptPath)}" defer></script>${operationScript}</head><body data-calendar-readonly="${canMutate ? 'false' : 'true'}"><div class="workspace-frame"><aside class="workspace-nav"><div class="workspace-mark">Shiloh <small>Workspace</small></div><nav class="workspace-links" aria-label="Workspace"><span class="workspace-link active" aria-current="page">Calendar</span><span class="workspace-link future" aria-disabled="true">Clients</span><span class="workspace-link future" aria-disabled="true">Staff</span><span class="workspace-link future" aria-disabled="true">Services</span></nav></aside><div class="workspace-main"><div class="shell">
+    <header class="topbar"><div class="brand"><h1>Calendar</h1><p>Your clinic day, at a glance.</p></div><div class="topbar-side">${renderOperationalActions(operationalActions)}<div class="truth-note">Africa/Johannesburg • Shiloh is the scheduling authority</div><div class="access-controls"><button class="signout-button" type="button" data-shiloh-logout>Sign out</button><span class="access-status" role="status" aria-live="polite" data-shiloh-calendar-access-status></span></div></div></header>
     ${renderControls(model, basePath)}${renderOperationalSummary(model)}${canMutate ? '<span class="operation-status" role="status" aria-live="polite" data-calendar-operation-status>Canonical changes are revalidated when saved.</span>' : ''}${content}
-    <div class="footer-note">${escapeHtml(timelineReadOnlyMessage)}</div>
-  </div></body></html>`;
+    <div class="footer-note">${escapeHtml(timelineReadOnlyMessage)}</div>${renderManagementPanel(model)}
+  </div></div></div></body></html>`;
 }
 
 function renderUnavailablePage({ code = 'CALENDAR_UNAVAILABLE', message = 'Calendar is temporarily unavailable.' } = {}) {

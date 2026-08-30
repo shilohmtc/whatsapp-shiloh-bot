@@ -103,6 +103,35 @@ test('cockpit exposes labelled controls, scan summary and lane state', () => {
   assert.match(html, /Shiloh scheduling truth/);
   assert.match(html, /class="lane-count">1 item/);
   assert.match(html, /aria-current="page"/);
+  assert.match(html, /Shiloh <small>Workspace<\/small>/);
+  assert.match(html, /class="workspace-link active" aria-current="page">Calendar/);
+  assert.match(html, /class="time-grid day-time-grid"/);
+  assert.match(html, /class="positioned-event" style="--event-top:72px;--event-height:69px"/);
+});
+
+test('Week uses one shared vertical time rail and seven horizontally responsive day columns', () => {
+  const html = renderCalendarPage(model('week'));
+  assert.match(html, /class="time-grid week-time-grid"/);
+  assert.equal((html.match(/class="week-day"/g) || []).length, 7);
+  assert.match(html, /class="time-rail"/);
+  assert.match(html, /grid-template-columns:repeat\(7,minmax\(154px,1fr\)\)/);
+  assert.match(html, /@media\(max-width:700px\).*minmax\(78vw,1fr\)/s);
+});
+
+test('appointment management surface exposes only server-granted operations', () => {
+  const m = model();
+  m.mutationCapability = {
+    enabled: true,
+    operations: ['appointment:reschedule'],
+    calendarScope: 'all_business',
+    serviceScope: 'all_services',
+    allowedServiceIds: null,
+  };
+  const html = renderCalendarPage(m);
+  assert.match(html, /data-calendar-management-panel/);
+  assert.match(html, /data-panel-action="appointment:reschedule"/);
+  assert.match(html, /Every change is revalidated by canonical Calendar authority/);
+  assert.doesNotMatch(html, /data-allowed-operations="[^"]*appointment:cancel/);
 });
 
 test('legacy non-canonical events are excluded from day/week/agenda data projection', () => {

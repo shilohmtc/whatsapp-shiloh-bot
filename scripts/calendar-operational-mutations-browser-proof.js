@@ -454,6 +454,15 @@ async function main() {
       await poll(() => evaluate(cdp, 'document.readyState'), (value) => value === 'complete');
       assert.deepEqual(dialogPlan, []);
     }
+    async function panelOperation(action, setup, expectedType, adminId = 71) {
+      const beforeOperations = state.operations.length;
+      const beforeRenders = Number(state.renders.get(adminId) || 0);
+      await evaluate(cdp, `(()=>{document.querySelector('[data-calendar-operation="manage-appointment"]').click();const form=document.querySelector('[data-panel-action="${action}"]');${setup};form.requestSubmit();return true;})()`);
+      await poll(() => state.operations.slice(beforeOperations), (items) => items.some((item) => item.type === expectedType));
+      assert.equal(state.operations.slice(beforeOperations).at(-1).type, expectedType);
+      await poll(() => Number(state.renders.get(adminId) || 0), (value) => value > beforeRenders);
+      await poll(() => evaluate(cdp, 'document.readyState'), (value) => value === 'complete');
+    }
 
     const screenshots = [];
     const operatorProof = [];
@@ -500,11 +509,7 @@ async function main() {
     assert.ok(operatorProof.find((item) => item.identity === 'Naomi').controls < operatorProof.find((item) => item.identity === 'Christel').controls);
 
     await navigate('christel');
-    await operation('[data-calendar-operation="manage-appointment"]', [
-      { text: 'R', includes: 'Manage appointment' },
-      { text: '2026-09-04', includes: 'New date' },
-      { text: '10:00', includes: 'Exact new start time' },
-    ], 'reschedule');
+    await panelOperation('appointment:reschedule', `form.elements.date.value='2026-09-04';form.elements.time.value='10:00'`, 'reschedule');
     const manualPath = state.requests.filter((item) => item.path.endsWith('/reschedule')).at(-1);
     assert.deepEqual(manualPath, { method: 'POST', path: '/calendar/operations/appointments/7001/reschedule' });
 
@@ -520,25 +525,14 @@ async function main() {
     assert.equal(reschedulePaths.length, 2);
     assert.equal(new Set(reschedulePaths.map((item) => `${item.method} ${item.path}`)).size, 1);
 
-    await operation('[data-calendar-operation="manage-appointment"]', [
-      { text: 'A', includes: 'Manage appointment' }, { text: '2', includes: 'Destination canonical practitioner ID' },
-    ], 'reassign');
+    await panelOperation('appointment:reassign', `form.elements.destinationStaffId.value='2'`, 'reassign');
 
     const beforeDecline = state.operations.length;
-    dialogPlan = [
-      { type: 'prompt', text: 'C', includes: 'Manage appointment' },
-      { type: 'prompt', text: 'Synthetic cancellation check', includes: 'Cancellation reason' },
-      { type: 'confirm', accept: false, includes: 'exact current revision' },
-    ];
-    await evaluate(cdp, `document.querySelector('[data-calendar-operation="manage-appointment"]').click();true`);
-    await poll(() => dialogPlan.length, (value) => value === 0);
+    await evaluate(cdp, `(()=>{document.querySelector('[data-calendar-operation="manage-appointment"]').click();const form=document.querySelector('[data-panel-action="appointment:cancel"]');form.elements.reason.value='Synthetic cancellation check';form.requestSubmit();return true;})()`);
     await new Promise((resolve) => setTimeout(resolve, 150));
-    assert.equal(state.operations.length, beforeDecline, 'declined cancellation must not submit');
-    await operation('[data-calendar-operation="manage-appointment"]', [
-      { text: 'C', includes: 'Manage appointment' },
-      { text: 'Synthetic cancellation check', includes: 'Cancellation reason' },
-      { type: 'confirm', accept: true, includes: 'exact current revision' },
-    ], 'cancel');
+    assert.equal(state.operations.length, beforeDecline, 'unchecked cancellation confirmation must not submit');
+    await evaluate(cdp, `document.querySelector('[data-panel-close]').click();true`);
+    await panelOperation('appointment:cancel', `form.elements.reason.value='Synthetic cancellation check';form.elements.confirmed.checked=true`, 'cancel');
     assert.deepEqual(state.operations.at(-1).confirmation, { confirmed: true, appointmentId: 7001, revision: REVISION });
 
     await operation('[data-calendar-operation="add-block"]', [
@@ -651,7 +645,7 @@ async function main() {
         { identity: 'Abigail', adminId: 72, result: 'fail-closed', craftedEndpointStatus: craftedDenial.status, ...closed },
         { identity: 'Unrelated Operator', adminId: 76, result: 'fail-closed', ...unrelatedClosed },
       ],
-      cancellation: { deliberateConfirmationObserved: dialogs.some((item) => item.type === 'confirm' && item.message.includes('exact current revision')), declinedSubmissionCount: 0 },
+      cancellation: { deliberateConfirmationObserved: true, confirmationControl: 'required checkbox', declinedSubmissionCount: 0 },
       actorAuthority: { suppliedAdminId: 75, effectiveAdminId: effectiveImpersonationActor, source: 'authenticated HttpOnly session' },
       reschedule: { manualAndDragDropPath: 'POST /calendar/operations/appointments/7001/reschedule', sharedPathCount: reschedulePaths.length },
       canonicalRefresh: { verifiedAfterEverySuccessfulUiMutation: true },
