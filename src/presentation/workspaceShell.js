@@ -22,14 +22,15 @@ function renderWorkspaceNavigation({
   calendarHref = null,
   clientsHref = null,
   staffHref = null,
+  servicesHref = null,
 } = {}) {
   const nav = `<aside class="workspace-nav"><div class="workspace-mark">Shiloh <small>Workspace</small></div><nav class="workspace-links" aria-label="Workspace">${[
     workspaceItem({ label: 'Calendar', active: active === 'calendar', href: calendarHref }),
     workspaceItem({ label: 'Clients', active: active === 'clients', href: clientsHref }),
     workspaceItem({ label: 'Staff', active: active === 'staff', href: staffHref, activationAttribute: 'data-workspace-staff-link' }),
-    workspaceItem({ label: 'Services', active: false, href: null }),
+    workspaceItem({ label: 'Services', active: active === 'services', href: servicesHref, activationAttribute: 'data-workspace-services-link' }),
   ].join('')}</nav></aside>`;
-  return `${nav}<script src="/calendar/team/nav.js" defer></script>`;
+  return `${nav}<script src="/calendar/team/nav.js" defer></script><script src="/calendar/services/nav.js" defer></script>`;
 }
 
 module.exports = { escapeHtml, workspaceShellStyles, renderWorkspaceNavigation };
