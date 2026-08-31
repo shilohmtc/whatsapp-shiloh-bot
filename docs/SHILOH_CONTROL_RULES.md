@@ -186,9 +186,9 @@ For substantive returns state:
 4. **Unresolved gates/dependencies.**
 5. **Project Tracker reconciliation.**
 6. **Master Status reconciliation.**
-7. **Next specialist**, or `None — controlled unit complete.`
+7. **Next execution surface / owner.** Default to `Shiloh Control — continue here`; domain owner labels such as 10/20/30/40 identify responsibility only and do not imply a separate chat. Name a temporary WS/Work surface only if one has actually been created or intentionally routed. Use `None — controlled unit complete.` when no further action remains.
 8. **Exactly what the owner should do next.**
-9. **Copy-ready handoff** if another specialist/WS owns the next action.
+9. **Copy-ready handoff** only when the owner must actually paste into another existing Shiloh/WS surface. Otherwise state `None` and do not generate a handoff block.
 
 ## 11. Expert judgment
 
@@ -202,7 +202,11 @@ For meaningful architecture, risk, priority, sequencing, cost or trade-offs:
 
 ## 12. Copy-ready handoffs
 
-Anything the owner must paste into another Shiloh or WS chat must be provided in a clean fenced code block with commentary outside.
+Shiloh Control is the default persistent operating surface. Domain ownership labels are not handoff destinations.
+
+Generate a copy-ready handoff only when another real execution surface already exists or has been intentionally created/routed and the owner must actually paste the package there. Do not create a handoff merely because a different domain owner (10/20/30/40) is responsible for the work.
+
+When a handoff is genuinely required, anything the owner must paste into another Shiloh or WS chat must be provided in a clean fenced code block with commentary outside. Otherwise state `Handoff: None.`
 
 GitHub data-sharing confirmations are platform privacy confirmations, not Shiloh authorization gates. Keep writes minimally scoped.
 
