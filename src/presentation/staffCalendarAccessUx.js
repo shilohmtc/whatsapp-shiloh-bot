@@ -24,14 +24,14 @@ function renderStaffCalendarAccessPage({ reason = null, clientScriptPath = '/cal
         <span class="eyebrow">Direct browser sign-in</span><h2>Use your authenticator</h2>
         <p class="lead">Enter the six-digit code from your enrolled authenticator app. This path does not contact WhatsApp or Meta.</p>
         <form method="post" data-shiloh-totp-form novalidate>
-          <div class="field"><label for="staff-totp-whatsapp">Staff account number</label><input id="staff-totp-whatsapp" type="tel" inputmode="tel" autocomplete="username" placeholder="e.g. +27 82 123 4567"></div>
+          <div class="field"><label for="staff-totp-whatsapp">Staff account number</label><input id="staff-totp-whatsapp" type="tel" inputmode="tel" autocomplete="username" placeholder="e.g. 082 123 4567"></div>
           <div class="field"><label for="staff-totp-code">Authenticator code</label><input id="staff-totp-code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" placeholder="6 digits"></div>
           <div class="actions"><button class="button" type="submit" data-shiloh-totp-button>Sign in with authenticator</button></div>
         </form>
         <details><summary>Use a recovery code</summary>
           <p class="lead">A recovery code works once. After sign-in, Shiloh requires authenticator replacement before Workspace access.</p>
           <form method="post" data-shiloh-recovery-form novalidate>
-            <div class="field"><label for="staff-recovery-whatsapp">Staff account number</label><input id="staff-recovery-whatsapp" type="tel" inputmode="tel" autocomplete="username" placeholder="e.g. +27 82 123 4567"></div>
+            <div class="field"><label for="staff-recovery-whatsapp">Staff account number</label><input id="staff-recovery-whatsapp" type="tel" inputmode="tel" autocomplete="username" placeholder="e.g. 082 123 4567"></div>
             <div class="field"><label for="staff-recovery-code">Recovery code</label><input id="staff-recovery-code" type="text" inputmode="text" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="39" placeholder="XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX"></div>
             <div class="actions"><button class="button secondary" type="submit" data-shiloh-recovery-button>Use recovery code</button></div>
           </form>
@@ -70,6 +70,7 @@ function jsonHeaders(extra){var headers={'Content-Type':'application/json','Acce
 function postJson(url,payload,extraHeaders){return fetch(url,{method:'POST',credentials:'same-origin',cache:'no-store',headers:jsonHeaders(extraHeaders),body:JSON.stringify(payload||{})});}
 function safeJson(response){return response.json().catch(function(){return {};});}
 function viewerPermitsWorkspace(viewer){return !!(viewer&&typeof viewer==='object'&&(viewer.calendarScope==='own_staff'||viewer.calendarScope==='business_all_staff'));}
+function normalizeStaffAccountNumber(value){var raw=String(value||'').trim();var digits=raw.replace(/\D/g,'');if(/^0\d{9}$/.test(digits))return '27'+digits.slice(1);return raw;}
 
 async function probeSession(){
   try{
@@ -88,7 +89,7 @@ async function probeSession(){
 
 async function verifyTotp(event){
   event.preventDefault();
-  var identifier=String((select('#staff-totp-whatsapp')||{}).value||'').trim();
+  var identifier=normalizeStaffAccountNumber((select('#staff-totp-whatsapp')||{}).value||'');
   var code=String((select('#staff-totp-code')||{}).value||'').trim();
   var button=select('[data-shiloh-totp-button]');
   if(!identifier||!/^[0-9]{6}$/.test(code)){setStatus('invalid','Enter your staff account number and six-digit authenticator code.');return;}
@@ -112,7 +113,7 @@ async function verifyTotp(event){
 
 async function verifyRecovery(event){
   event.preventDefault();
-  var identifier=String((select('#staff-recovery-whatsapp')||{}).value||'').trim();
+  var identifier=normalizeStaffAccountNumber((select('#staff-recovery-whatsapp')||{}).value||'');
   var recoveryCode=String((select('#staff-recovery-code')||{}).value||'').trim();
   var button=select('[data-shiloh-recovery-button]');
   if(!identifier||!recoveryCode){setStatus('invalid','Enter your staff account number and recovery code.');return;}
