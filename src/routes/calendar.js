@@ -5,7 +5,6 @@ const staffCalendarAccessUxRoutes = require('./staffCalendarAccessUx');
 const { createCalendarCreateBookingRouter } = require('./calendarCreateBooking');
 const { createStaffBrowserSessionService } = require('../services/staffBrowserSession');
 const { createStaffBrowserSessionRouter } = require('./staffBrowserSession');
-const { createStaffBrowserChallengeDispatcher } = require('../services/staffBrowserChallengeDelivery');
 const { createOptionalCalendarSessionMiddleware } = require('../middleware/staffBrowserSession');
 const { createOperatorContactAuthorityRouter } = require('./operatorContactAuthority');
 const { createCalendarOperationalMutationRouter } = require('./calendarOperationalMutations');
@@ -14,10 +13,7 @@ const { createWorkspaceStaffRouter } = require('./workspaceStaff');
 const { createWorkspaceServicesRouter } = require('./workspaceServices');
 const router = express.Router();
 
-const staffBrowserSessionService = createStaffBrowserSessionService({
-  db: pool,
-  challengeDispatcher: createStaffBrowserChallengeDispatcher(),
-});
+const staffBrowserSessionService = createStaffBrowserSessionService({ db: pool });
 
 function esc(v=''){return String(v).replace(/\\/g,'\\\\').replace(/\n/g,'\\n').replace(/,/g,'\\,').replace(/;/g,'\\;');}
 function stamp(v){return new Date(v).toISOString().replace(/[-:]/g,'').replace(/\.\d{3}Z$/,'Z');}

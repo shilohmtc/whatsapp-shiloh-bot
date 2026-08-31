@@ -64,50 +64,6 @@ function createStaffBrowserSessionRouter({
     });
   }
 
-  router.post('/challenge', sameOrigin, async (req, res, next) => {
-    try {
-      const result = await service.beginChallenge({
-        whatsapp: req.body?.whatsapp,
-        requestFingerprintHash: requestFingerprintHash(req),
-      });
-      if (!result.ok && result.code === 'STAFF_AUTH_DELIVERY_DISABLED') {
-        return res.status(503).json({ error: 'Staff sign-in delivery is not enabled', requestId: req.id });
-      }
-      if (!result.ok) {
-        return res.status(503).json({ error: 'Staff sign-in is temporarily unavailable', requestId: req.id });
-      }
-      return res.status(202).json({
-        accepted: true,
-        message: 'If this staff account is eligible, a one-time sign-in challenge will be delivered.',
-      });
-    } catch (error) {
-      return next(error);
-    }
-  });
-
-  router.post('/verify', sameOrigin, async (req, res, next) => {
-    try {
-      const result = await service.verifyChallenge({
-        whatsapp: req.body?.whatsapp,
-        code: req.body?.code,
-        requestFingerprintHash: requestFingerprintHash(req),
-      });
-      if (!result.ok) return res.status(401).json({ error: 'Invalid or expired sign-in challenge', requestId: req.id });
-      res.setHeader('Cache-Control', 'no-store');
-      res.setHeader('Set-Cookie', serializeSessionCookie(result.sessionToken, {
-        env,
-        maxAgeSeconds: Math.max(1, Math.floor((new Date(result.expiresAt).getTime() - Date.now()) / 1000)),
-      }));
-      return res.status(200).json({
-        authenticated: true,
-        csrfToken: result.csrfToken,
-        viewer: result.viewer || null,
-      });
-    } catch (error) {
-      return next(error);
-    }
-  });
-
   router.post('/totp/verify', sameOrigin, async (req, res, next) => {
     try {
       const result = await providerIndependentAuthService.verifyTotp({
