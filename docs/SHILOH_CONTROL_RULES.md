@@ -95,6 +95,21 @@ Before acting:
 
 Recommendations are not authorization.
 
+### Controlled-unit continuity
+
+Once the owner authorizes a bounded controlled unit, Shiloh Control owns continuation of that unit through implementation, verification, release judgment, production proof where applicable and durable reconciliation. The owner must not be required to repeat `continue`, `proceed` or equivalent prompts merely to keep an already-authorized unit moving.
+
+A conversational turn boundary, long-running task, need for additional tool calls, failed optional execution path, connector/local-environment limitation or need to switch tools is not by itself a reason to stop. If one safe execution path fails, Control must use reasonable available fallbacks before declaring the unit blocked.
+
+Control may return the unit to the owner before terminal reconciliation only when at least one of these is true:
+
+- the controlled unit is complete;
+- a genuine blocker prevents safe progress after reasonable fallback attempts;
+- material authoritative-state drift changes the objective, blast radius or verification boundary;
+- Section 5 requires fresh owner authorization for the next action.
+
+`In progress` is a checkpoint status, not a discretionary stopping state. Do not end an active controlled unit merely because more engineering, testing, CI, deployment or reconciliation remains when available tools can continue the work. When a platform-enforced turn boundary interrupts execution, preserve the exact durable continuation point and resume the already-authorized unit from that point on the next interaction without requiring reauthorization.
+
 ### Normally inside 00 authority
 
 - merge accepted and verified PRs;
@@ -188,14 +203,14 @@ Do not treat stale draft/unmerged PRs or superseded one-off issues as active aut
 
 For substantive returns state:
 
-1. **Status** — Complete, Blocked or In progress.
+1. **Status** — Complete, Blocked or In progress. `In progress` must not be used as a discretionary stop when Control can continue an already-authorized unit with available tools.
 2. **Authoritative outcome.**
 3. **Completed / do not redo.**
 4. **Unresolved gates/dependencies.**
 5. **Project Tracker reconciliation.**
 6. **Master Status reconciliation.**
 7. **Next execution surface / owner.** Default to `Shiloh Control — continue here`. Shiloh Control determines internal 10/20/30/40 responsibility; do not ask the owner to route by those labels. Identify Shiloh Workspace only when the next controlled objective is to make justified clinic work human-operable there. Name a temporary Work surface only if one has actually been created or intentionally routed. Use `None — controlled unit complete.` when no further action remains.
-8. **Exactly what the owner should do next.**
+8. **Exactly what the owner should do next.** For an already-authorized active unit, this should normally be `Nothing — Shiloh Control continues` unless a genuine blocker or fresh-authorization boundary requires owner action.
 9. **Copy-ready handoff** only when the owner must actually paste into another existing Shiloh/Work execution surface. Otherwise state `None` and do not generate a handoff block.
 
 ## 11. Expert judgment
@@ -228,7 +243,7 @@ This file should change rarely and intentionally.
 
 - Durable governance changes should be merged to `main` through a bounded, reviewable GitHub change.
 - #611 should record material governance reconciliation and current-state checkpoints, not duplicate this entire rulebook.
-- Project/chat instructions should contain only the compact bootstrap necessary to find and obey this canonical file; they should not become a second full copy.
+- Project/chat instructions should contain only the compact bootstrap necessary to find and obey this canonical file, including the controlled-unit continuity rule; they should not become a second full copy.
 - If current machine state or a newer merged governance change materially conflicts with an older issue/comment, prefer current merged authority and explicitly reconcile the stale record.
 
 Primary governing references: **#591 — Workspace UX North Star** and **#611 — authoritative resume/control contract**.
