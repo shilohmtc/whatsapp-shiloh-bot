@@ -61,7 +61,6 @@ function timelineFor(staff) {
 const enabledEnv = {
   SHILOH_CALENDAR_READONLY_UX_ENABLED: 'true',
   SHILOH_STAFF_BROWSER_SESSION_CALENDAR_BRIDGE_ENABLED: 'true',
-  SHILOH_STAFF_BROWSER_AUTH_WHATSAPP_DELIVERY_ENABLED: 'false',
 };
 
 test('staff Calendar access surface remains default-off and requires both existing Calendar gates', () => {
@@ -84,47 +83,51 @@ test('staff Calendar access surface remains default-off and requires both existi
   assert.match(onRes.headers['content-security-policy'], /connect-src 'self'/);
 });
 
-test('sign-in entry is human initiated and preserves the non-enumerating account contract', () => {
-  const html = renderStaffCalendarAccessPage();
+test('Workspace sign-in is human initiated and exposes authenticator plus one-tap guidance without browser WhatsApp OTP', () => {
+  const html = renderStaffCalendarAccessPage({ providerIndependentAuthEnabled: true });
   const client = staffCalendarAccessClientScript();
-  assert.match(html, /Send sign-in code/);
-  assert.match(html, /For privacy, the request confirmation is the same whether or not the number is eligible/i);
-  assert.match(client, /addEventListener\('submit',requestChallenge\)/);
-  assert.doesNotMatch(client, /requestChallenge\(\);/);
+  assert.match(html, /Shiloh Workspace/);
+  assert.match(html, /Sign in with authenticator/);
+  assert.match(html, /Open from Shiloh WhatsApp/);
+  assert.match(html, /send <code>calendar<\/code>/);
+  assert.doesNotMatch(html, /Send sign-in code|Enter the code from WhatsApp/);
+  assert.match(client, /addEventListener\('submit',verifyTotp\)/);
+  assert.doesNotMatch(client, /verifyTotp\(\);/);
   assert.match(client, /if\(select\('\[data-shiloh-staff-calendar-access\]'\)\)probeSession\(\);/);
-  assert.doesNotMatch(html + client, /beginChallenge|sendWhatsAppMessage/);
+  assert.doesNotMatch(html + client, /beginChallenge|sendWhatsAppMessage|requestChallenge|verifyChallenge/);
 });
 
-test('browser client uses only the accepted staff-auth contracts and never persists browser authority', () => {
+test('browser client uses only provider-independent staff-auth contracts and never persists browser authority', () => {
   const client = staffCalendarAccessClientScript();
-  for (const endpoint of ['/challenge', '/verify', '/session', '/csrf', '/logout']) {
+  for (const endpoint of ['/totp/verify', '/totp/recovery/verify', '/session', '/csrf', '/logout']) {
     assert.match(client, new RegExp(endpoint.replace('/', '\\/')));
   }
-  assert.match(client, /CALENDAR_PATH='\/calendar\/read-only'/);
+  assert.doesNotMatch(client, /AUTH_BASE\+'\/challenge'/);
+  assert.doesNotMatch(client, /AUTH_BASE\+'\/verify'/);
+  assert.match(client, /WORKSPACE_PATH='\/calendar\/read-only'/);
   assert.doesNotMatch(client, /localStorage|sessionStorage|document\.cookie|ADMIN_API_KEY|x-admin-key|Bearer\s|jsonwebtoken|\bJWT\b/i);
   assert.doesNotMatch(client, /location\.(?:assign|replace)[^\n]*(?:code|csrf|token)=/i);
   assert.doesNotMatch(client, /\/appointments|\/blocks|\/leave|\/schedule|\/reschedule|\/cancel/i);
 });
 
-test('sign-in UX exposes accepted, invalid, expired, rate-limit, provider-unavailable, success, session-ended and logout states', () => {
+test('sign-in UX exposes invalid, rate-limit, provider-unavailable, success, session-ended and logout states', () => {
   const client = staffCalendarAccessClientScript();
-  const sessionPage = renderStaffCalendarAccessPage({ reason: 'session' });
-  const logoutPage = renderStaffCalendarAccessPage({ reason: 'logout' });
-  assert.match(client, /Request accepted\. If this number is eligible/i);
-  assert.match(client, /code is invalid or no longer active/i);
-  assert.match(client, /code has expired/i);
-  assert.match(client, /Too many sign-in requests/i);
+  const sessionPage = renderStaffCalendarAccessPage({ reason: 'session', providerIndependentAuthEnabled: true });
+  const logoutPage = renderStaffCalendarAccessPage({ reason: 'logout', providerIndependentAuthEnabled: true });
+  assert.match(client, /sign-in details are invalid or no longer active/i);
+  assert.match(client, /Too many attempts/i);
   assert.match(client, /temporarily unavailable/i);
-  assert.match(client, /Sign-in successful\. Opening your read-only Shiloh Calendar/i);
+  assert.match(client, /Sign-in successful\. Opening Shiloh Workspace/i);
   assert.match(sessionPage, /missing, expired, or revoked/i);
   assert.match(logoutPage, /You are signed out/i);
 });
 
-test('challenge and CSRF secrets remain request-body or in-memory only and never enter URLs or persistent storage', () => {
-  const html = renderStaffCalendarAccessPage();
+test('authenticator, recovery and CSRF secrets remain request-body or in-memory only and never enter URLs or persistent storage', () => {
+  const html = renderStaffCalendarAccessPage({ providerIndependentAuthEnabled: true });
   const client = staffCalendarAccessClientScript();
   assert.match(client, /body:JSON\.stringify\(payload\|\|\{\}\)/);
-  assert.match(client, /\{whatsapp:phone,code:code\}/);
+  assert.match(client, /\{identifier:identifier,code:code\}/);
+  assert.match(client, /\{identifier:identifier,recoveryCode:recoveryCode\}/);
   assert.match(client, /csrfToken=String\(csrfBody\.csrfToken\|\|''\)/);
   assert.match(client, /'x-shiloh-csrf-token':csrfToken/);
   assert.doesNotMatch(html, /name="(?:code|csrf|token|session)/i);
