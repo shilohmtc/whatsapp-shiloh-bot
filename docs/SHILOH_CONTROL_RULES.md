@@ -49,7 +49,7 @@ The canonical resume phrase remains:
 
 > **SHILOH RESUME — reconstruct from GitHub authoritative state.**
 
-On resume, inspect current `main`, current governing issues/PRs, and production state where release/runtime truth matters. Identify completed/do-not-redo work, unresolved work, owner, priority and next controlled unit. Stop and report material drift.
+On resume, inspect current `main`, the **Current Active Controlled Unit** block in #611, current governing issues/PRs, and production state where release/runtime truth matters. Resume from the recorded next executable action after only the minimum verification needed to detect material drift. Identify completed/do-not-redo work, unresolved work, owner, priority and next controlled unit. Stop and report material drift.
 
 ## 4. Control authority
 
@@ -97,20 +97,40 @@ Recommendations are not authorization.
 
 ### Controlled-unit continuity
 
-Once the owner authorizes a bounded controlled unit, Shiloh Control owns continuation of that unit through implementation, verification, release judgment, production proof where applicable and durable reconciliation. During an active execution turn, the owner must not be required to repeat `continue`, `proceed` or equivalent prompts merely to keep that already-authorized unit moving.
+Once the owner authorizes a bounded controlled unit, that controlled unit remains active until one of the following terminal conditions is reached:
 
-A long-running task, need for additional tool calls, failed optional execution path, connector/local-environment limitation or need to switch tools is not by itself a reason to stop. If one safe execution path fails, Control must use reasonable available fallbacks before declaring the unit blocked.
-
-Control may return the unit to the owner before terminal reconciliation only when at least one of these is true:
-
-- the controlled unit is complete;
+- the controlled unit is complete and durably reconciled;
+- the owner explicitly stops or materially changes the objective;
 - a genuine blocker prevents safe progress after reasonable fallback attempts;
 - material authoritative-state drift changes the objective, blast radius or verification boundary;
 - Section 5 requires fresh owner authorization for the next action.
 
-`In progress` is a checkpoint status, not a discretionary stopping state. During an active execution turn, do not emit a final response merely because more engineering, testing, CI, deployment, tool calls or reconciliation remain when available tools can continue the work.
+ChatGPT turn boundaries, platform limits, tool interruptions, context resets, model restarts, long-running execution, additional tool calls, failed optional execution paths, connector limitations and local-environment limitations do **not** cancel authorization or execution ownership of an already-authorized controlled unit.
 
-A platform-enforced turn boundary can end runtime execution. This governance does not create background execution after a final response and must never be represented as doing so. If the platform ends a turn before the controlled unit reaches a terminal state, preserve the exact durable continuation point and, on the next interaction, resume the already-authorized unit from that point without requiring reauthorization, reconstruction or repetition of completed work.
+Shiloh Control owns continuation of an active controlled unit through implementation, verification, release judgment, production proof where applicable and durable reconciliation. The owner must not be required to repeat `continue`, `proceed` or equivalent prompts merely to keep already-authorized work moving.
+
+If one safe execution path fails, Control must use reasonable available fallbacks before declaring the unit blocked. `In progress` is a checkpoint status, not a discretionary stopping state. During an active execution turn, do not emit a final response merely because more engineering, testing, CI, deployment, tool calls or reconciliation remain when available tools can continue the work.
+
+### Durable active-unit pointer
+
+#611 must maintain one explicit **Current Active Controlled Unit** block whenever a controlled unit is active. Control updates that block **in place** whenever the unit crosses a meaningful execution gate.
+
+At minimum the block records:
+
+- issue / controlled unit and stage;
+- active status and whether authorization remains valid;
+- canonical implementation base where relevant;
+- branch and PR where relevant;
+- current implementation head;
+- last completed verification/release gate;
+- exact next executable action;
+- completed/do-not-redo state;
+- any separate authorization/release gate;
+- whether any owner action is actually required.
+
+On every resume, Control must read this block before reopening discovery. Resume from the recorded next executable action after only the minimum current-state verification needed to detect material drift. Do not repeat completed stages, re-request authorization, or make the owner reconstruct recoverable work.
+
+A platform-enforced turn boundary can end runtime execution. This governance does not create background execution after a final response and must never be represented as doing so. If runtime ends before the controlled unit reaches a terminal state, execution stops until the next interaction; the controlled unit itself remains active. The next interaction resumes from the #611 durable active-unit pointer without reauthorization, reconstruction or repetition of completed work.
 
 ### Normally inside 00 authority
 
@@ -195,9 +215,9 @@ Stable invariants belong in code. Changeable business policy belongs in canonica
 
 Project Tracker records current work and gates. Master Status records durable authoritative state.
 
-In the current repository, governing GitHub issues — especially #611 for control continuity — may serve these functions until a separate artifact provides enough value to justify its maintenance cost.
+In the current repository, governing GitHub issues — especially #611 for control continuity — may serve these functions until a separate artifact provides enough value to justify its maintenance cost. While a controlled unit is active, #611's **Current Active Controlled Unit** block is the durable execution pointer and must be updated in place at meaningful gates.
 
-Avoid intermediate documentation churn. Reconcile at material terminal states or when architecture, governance, production authority, dependencies, Human-Operability state or sequencing materially changes.
+Avoid intermediate documentation churn outside that active pointer. Reconcile broader durable status at material terminal states or when architecture, governance, production authority, dependencies, Human-Operability state or sequencing materially changes.
 
 Do not treat stale draft/unmerged PRs or superseded one-off issues as active authority. Historical evidence remains available, but superseded work must not be revived without a fresh current-state comparison and bounded authorization.
 
@@ -212,7 +232,7 @@ For substantive returns state:
 5. **Project Tracker reconciliation.**
 6. **Master Status reconciliation.**
 7. **Next execution surface / owner.** Default to `Shiloh Control — continue here`. Shiloh Control determines internal 10/20/30/40 responsibility; do not ask the owner to route by those labels. Identify Shiloh Workspace only when the next controlled objective is to make justified clinic work human-operable there. Name a temporary Work surface only if one has actually been created or intentionally routed. Use `None — controlled unit complete.` when no further action remains.
-8. **Exactly what the owner should do next.** For an already-authorized active unit, this should normally be `Nothing while the active execution turn continues`. If a platform-enforced turn boundary ends runtime execution, the next interaction resumes from the durable checkpoint without reauthorization or reconstruction.
+8. **Exactly what the owner should do next.** For an already-authorized active unit, this should normally be `Nothing`. If a platform-enforced turn boundary ends runtime execution, the next interaction resumes from the #611 Current Active Controlled Unit block without reauthorization or reconstruction.
 9. **Copy-ready handoff** only when the owner must actually paste into another existing Shiloh/Work execution surface. Otherwise state `None` and do not generate a handoff block.
 
 ## 11. Expert judgment
@@ -244,8 +264,8 @@ Shiloh is complete when it is the smallest reliable system that can run the clin
 This file should change rarely and intentionally.
 
 - Durable governance changes should be merged to `main` through a bounded, reviewable GitHub change.
-- #611 should record material governance reconciliation and current-state checkpoints, not duplicate this entire rulebook.
-- Project/chat instructions should contain only the compact bootstrap necessary to find and obey this canonical file, including the controlled-unit continuity rule; they should not become a second full copy.
+- #611 should record material governance reconciliation and maintain the Current Active Controlled Unit execution pointer; it should not duplicate this entire rulebook.
+- Project/chat instructions should contain only the compact bootstrap necessary to find and obey this canonical file, including the cross-turn controlled-unit continuity rule and the requirement to read #611's Current Active Controlled Unit block before reopening discovery; they should not become a second full copy.
 - If current machine state or a newer merged governance change materially conflicts with an older issue/comment, prefer current merged authority and explicitly reconcile the stale record.
 
 Primary governing references: **#591 — Workspace UX North Star** and **#611 — authoritative resume/control contract**.
