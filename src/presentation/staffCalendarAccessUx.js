@@ -70,7 +70,7 @@ function jsonHeaders(extra){var headers={'Content-Type':'application/json','Acce
 function postJson(url,payload,extraHeaders){return fetch(url,{method:'POST',credentials:'same-origin',cache:'no-store',headers:jsonHeaders(extraHeaders),body:JSON.stringify(payload||{})});}
 function safeJson(response){return response.json().catch(function(){return {};});}
 function viewerPermitsWorkspace(viewer){return !!(viewer&&typeof viewer==='object'&&(viewer.calendarScope==='own_staff'||viewer.calendarScope==='business_all_staff'));}
-function normalizeStaffAccountNumber(value){var raw=String(value||'').trim();var digits=raw.replace(/\D/g,'');if(/^0\d{9}$/.test(digits))return '27'+digits.slice(1);return raw;}
+function normalizeStaffAccountNumber(value){var raw=String(value||'').trim();var digits=raw.replace(/\\D/g,'');if(/^0\\d{9}$/.test(digits))return '27'+digits.slice(1);return raw;}
 
 async function probeSession(){
   try{
