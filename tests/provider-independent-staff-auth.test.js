@@ -1135,12 +1135,13 @@ test('real Chromium persists the break-glass session and executes management sta
   }
 });
 
-test('feature-off rollback is safe, auditable, and leaves WhatsApp challenge routes intact', () => {
+test('feature-off rollback is safe, auditable, and cannot restore retired browser WhatsApp OTP routes', () => {
   const routes = fs.readFileSync(path.join(__dirname, '..', 'src/routes/staffBrowserSession.js'), 'utf8');
   const rollback = fs.readFileSync(path.join(__dirname, '..', 'scripts/audit-staff-auth-rollback.js'), 'utf8');
-  assert.match(routes, /router\.post\('\/challenge'/);
-  assert.match(routes, /router\.post\('\/verify'/);
+  assert.doesNotMatch(routes, /router\.post\('\/challenge'/);
+  assert.doesNotMatch(routes, /router\.post\('\/verify'/);
   assert.match(routes, /router\.post\('\/totp\/verify'/);
+  assert.match(routes, /router\.post\('\/calendar-handoff\/exchange'/);
   assert.match(rollback, /recordRollback/);
   assert.doesNotMatch(routes, /delete.*template|WABA/i);
 });
