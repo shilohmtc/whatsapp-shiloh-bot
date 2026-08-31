@@ -143,7 +143,7 @@ test('service edit mutates only canonical editable columns while preserving inde
   assert.doesNotMatch(update.sql, /customer_description|booking_note|category_id|client_bookable/i);
   const audit = fake.calls.find(call => call.sql.startsWith('INSERT INTO crm_audit_events'));
   assert.equal(audit.params[1], 'workspace.service_updated');
-  const metadata = JSON.parse(audit.params[4]);
+  const metadata = JSON.parse(audit.params[3]);
   assert.equal(metadata.before.processingTimeMinutes, 10);
   assert.equal(metadata.after.processingTimeMinutes, 12);
   assert.equal(metadata.before.variablePrice, false);
@@ -182,7 +182,7 @@ test('ordinary deactivation is status-only and preserves practitioner mappings a
   assert.equal(fake.calls.some(call => /DELETE FROM staff_services/i.test(call.sql)), false);
   assert.equal(fake.calls.some(call => /appointments|appointment_services|appointment_staff/i.test(call.sql)), false);
   const audit = fake.calls.find(call => call.sql.startsWith('INSERT INTO crm_audit_events'));
-  const metadata = JSON.parse(audit.params[4]);
+  const metadata = JSON.parse(audit.params[3]);
   assert.equal(metadata.assignmentsPreserved, true);
   assert.equal(metadata.historicalAppointmentsUntouched, true);
 });
@@ -301,7 +301,8 @@ test('Workspace Services manage UX exposes only bounded service/status/practitio
   assert.doesNotMatch(viewOnly, /data-service-edit-form|data-service-status-form|data-service-assign-form|data-service-unassign-form|\/calendar\/services\/manage\.js/);
 
   const client = workspaceServicesManageClientScript();
-  assert.match(client, /\/calendar\/staff-auth\/csrf/);
+  assert.match(client, /AUTH='\/calendar\/staff-auth'/);
+  assert.match(client, /AUTH\+'\/csrf'/);
   assert.match(client, /x-shiloh-csrf-token/);
   assert.match(client, /Content-Type':'application\/json/);
   assert.match(client, /window\.location\.reload/);
