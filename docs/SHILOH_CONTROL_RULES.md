@@ -62,15 +62,23 @@ Domain ownership:
 - **30 — WhatsApp & Meta Integration**
 - **40 — Production & DevOps**
 
-Specialist ownership identifies technical responsibility; it does not require a permanent chat.
+These labels are internal technical responsibility markers. The owner does not route work by 10/20/30/40. Shiloh Control determines the responsible domain and continues execution in Control unless it intentionally routes a bounded package to another real execution surface.
+
+The owner only needs to distinguish three surfaces:
+
+- **Shiloh Control** — the default durable technical/governance surface;
+- **Shiloh Workspace**, or another intentional human surface — the product surface for justified normal clinic operations that should be human-operable;
+- **temporary Work execution surface** — used only when substantial engineering materially benefits from isolation, iteration, testing or specialist depth.
+
+Shiloh Control decides when work should become a Workspace capability and when temporary Work is justified. The owner should not infer or manually route either decision from a domain label.
 
 Default execution model:
 
-**Shiloh Control → GitHub work package → temporary WS/Work if useful → tests/CI → 00 release decision → production proof → reconciliation.**
+**Shiloh Control → GitHub work package → temporary Work if useful → tests/CI → 00 release decision → production proof → reconciliation.**
 
-Persistent separate specialist chat streams are retired as the normal operating model. Use temporary WS/Work only when substantial engineering work materially benefits from isolation, iteration, testing or specialist depth. Do not spend Workspace credits on routine discussion, small edits, governance wording or basic cleanup.
+Persistent separate specialist chat streams are retired as the normal operating model. Use temporary Work only when substantial engineering work materially benefits from isolation, iteration, testing or specialist depth. Do not spend Workspace credits on routine discussion, small edits, governance wording or basic cleanup.
 
-WS/Work contexts execute bounded routed packages only. They do not broaden scope, self-merge, deploy outside authorization or make owner-level decisions. If ownership is unclear, route to Shiloh Control — 00.
+Temporary Work contexts execute bounded routed packages only. They do not broaden scope, self-merge, deploy outside authorization or make owner-level decisions. If ownership is unclear, Shiloh Control resolves it internally.
 
 ## 5. Controlled execution
 
@@ -186,9 +194,9 @@ For substantive returns state:
 4. **Unresolved gates/dependencies.**
 5. **Project Tracker reconciliation.**
 6. **Master Status reconciliation.**
-7. **Next execution surface / owner.** Default to `Shiloh Control — continue here`; domain owner labels such as 10/20/30/40 identify responsibility only and do not imply a separate chat. Name a temporary WS/Work surface only if one has actually been created or intentionally routed. Use `None — controlled unit complete.` when no further action remains.
+7. **Next execution surface / owner.** Default to `Shiloh Control — continue here`. Shiloh Control determines internal 10/20/30/40 responsibility; do not ask the owner to route by those labels. Identify Shiloh Workspace only when the next controlled objective is to make justified clinic work human-operable there. Name a temporary Work surface only if one has actually been created or intentionally routed. Use `None — controlled unit complete.` when no further action remains.
 8. **Exactly what the owner should do next.**
-9. **Copy-ready handoff** only when the owner must actually paste into another existing Shiloh/WS surface. Otherwise state `None` and do not generate a handoff block.
+9. **Copy-ready handoff** only when the owner must actually paste into another existing Shiloh/Work execution surface. Otherwise state `None` and do not generate a handoff block.
 
 ## 11. Expert judgment
 
@@ -202,11 +210,11 @@ For meaningful architecture, risk, priority, sequencing, cost or trade-offs:
 
 ## 12. Copy-ready handoffs
 
-Shiloh Control is the default persistent operating surface. Domain ownership labels are not handoff destinations.
+Shiloh Control is the default persistent operating surface. Domain ownership labels are not handoff destinations, and Shiloh Workspace is a product surface rather than a specialist chat destination.
 
-Generate a copy-ready handoff only when another real execution surface already exists or has been intentionally created/routed and the owner must actually paste the package there. Do not create a handoff merely because a different domain owner (10/20/30/40) is responsible for the work.
+Generate a copy-ready handoff only when another real temporary Work execution surface already exists or has been intentionally created/routed and the owner must actually paste the package there. Do not create a handoff merely because a different domain owner (10/20/30/40) is responsible for the work or because a capability belongs in Shiloh Workspace.
 
-When a handoff is genuinely required, anything the owner must paste into another Shiloh or WS chat must be provided in a clean fenced code block with commentary outside. Otherwise state `Handoff: None.`
+When a handoff is genuinely required, anything the owner must paste into another Shiloh or Work chat must be provided in a clean fenced code block with commentary outside. Otherwise state `Handoff: None.`
 
 GitHub data-sharing confirmations are platform privacy confirmations, not Shiloh authorization gates. Keep writes minimally scoped.
 
