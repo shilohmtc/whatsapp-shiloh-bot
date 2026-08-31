@@ -6,6 +6,7 @@ const {
   renderServicesListPage,
   renderServiceDetailPage,
   renderServicesUnavailablePage,
+  workspaceServicesManageClientScript,
 } = require('../presentation/workspaceServicesUx');
 const { requireStaffSession } = require('../middleware/staffBrowserSession');
 
@@ -25,10 +26,11 @@ function setWorkspaceServicesSecurityHeaders(res) {
 
 function safeError(error) {
   const status = Number(error?.httpStatus) || 503;
-  if (status === 400) return { status, message: 'The requested Services view is invalid.' };
-  if (status === 403) return { status, message: 'Your authenticated Shiloh access does not permit Services visibility.' };
+  if (status === 400) return { status, message: 'The requested Services operation is invalid.' };
+  if (status === 403) return { status, message: 'Your authenticated Shiloh access does not permit this Services operation.' };
   if (status === 404) return { status, message: 'That canonical service was not found.' };
-  return { status: 503, message: 'Canonical Services reads are temporarily unavailable.' };
+  if (status === 409) return { status, message: error?.message || 'Canonical Services changed. Reload and retry.' };
+  return { status: 503, message: 'Canonical Services are temporarily unavailable.' };
 }
 
 function navScript() {
@@ -55,6 +57,16 @@ async function pageOptions(req, clientAccessService, staffAccessService, staffAc
     clientsNavigationAllowed,
     staffNavigationAllowed,
   };
+}
+
+async function detailPageOptions(req, service, clientAccessService, staffAccessService, staffAccessPath) {
+  const options = await pageOptions(req, clientAccessService, staffAccessService, staffAccessPath);
+  try {
+    options.manageAllowed = Boolean(await service.resolveManageAccess(req.staffBrowserSession?.adminId));
+  } catch (_error) {
+    options.manageAllowed = false;
+  }
+  return options;
 }
 
 function createWorkspaceServicesListHandler({
@@ -106,7 +118,7 @@ function createWorkspaceServiceDetailHandler({
       });
       return res.status(200).type('html').send(renderPage(
         model,
-        await pageOptions(req, clientAccessService, staffAccessService, staffAccessPath)
+        await detailPageOptions(req, service, clientAccessService, staffAccessService, staffAccessPath)
       ));
     } catch (error) {
       const safe = safeError(error);
@@ -117,6 +129,7 @@ function createWorkspaceServiceDetailHandler({
 
 function createWorkspaceServicesRouter({ sessionService, ...options } = {}) {
   if (!sessionService) throw new Error('Workspace Services requires the existing staff browser session service');
+  const service = options.service || workspaceServices;
   const router = express.Router();
   router.get('/nav.js', (_req, res) => {
     res.setHeader('Cache-Control', 'private, no-store, max-age=0');
@@ -128,14 +141,26 @@ function createWorkspaceServicesRouter({ sessionService, ...options } = {}) {
     res.setHeader('Cache-Control', 'private, no-store, max-age=0');
     if (!isWorkspaceServicesEnabled(options.env || process.env)) return res.sendStatus(404);
     try {
-      const authority = await (options.service || workspaceServices).resolveAccess(req.staffBrowserSession?.adminId);
+      const authority = await service.resolveAccess(req.staffBrowserSession?.adminId);
       return authority ? res.sendStatus(204) : res.sendStatus(403);
     } catch (_error) {
       return res.sendStatus(403);
     }
   });
-  router.get('/', createWorkspaceServicesListHandler(options));
-  router.get('/:id', createWorkspaceServiceDetailHandler(options));
+  router.get('/manage.js', async (req, res) => {
+    setWorkspaceServicesSecurityHeaders(res);
+    if (!isWorkspaceServicesEnabled(options.env || process.env)) return res.sendStatus(404);
+    try {
+      const authority = await service.resolveManageAccess(req.staffBrowserSession?.adminId);
+      if (!authority) return res.sendStatus(403);
+      return res.status(200).type('application/javascript').send(workspaceServicesManageClientScript());
+    } catch (_error) {
+      return res.sendStatus(403);
+    }
+  });
+
+  router.get('/', createWorkspaceServicesListHandler({ ...options, service }));
+  router.get('/:id', createWorkspaceServiceDetailHandler({ ...options, service }));
   return router;
 }
 
@@ -144,6 +169,8 @@ module.exports = {
   setWorkspaceServicesSecurityHeaders,
   safeError,
   navScript,
+  pageOptions,
+  detailPageOptions,
   createWorkspaceServicesListHandler,
   createWorkspaceServiceDetailHandler,
   createWorkspaceServicesRouter,
