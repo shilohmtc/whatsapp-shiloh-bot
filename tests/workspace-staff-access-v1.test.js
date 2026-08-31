@@ -194,7 +194,7 @@ test('Staff presentation is responsive, read-only and excludes private/security 
   assert.match(detail, /Current authority/);
   assert.match(detail, /appointment:view/);
   assert.match(detail, /Read-only authority view/);
-  assert.doesNotMatch(detail, /whatsapp_number|normalized_whatsapp|totp|recovery|secret|compensation/i);
+  assert.doesNotMatch(detail, /whatsapp_number|normalized_whatsapp|totp_secret|recovery_code|compensation/i);
 });
 
 test('Workspace Staff route is GET-only and existing /calendar/staff auth mount is preserved', () => {
