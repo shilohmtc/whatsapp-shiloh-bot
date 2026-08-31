@@ -4,6 +4,7 @@ const workspaceClients = require('../services/workspaceClients');
 const {
   renderStaffListPage,
   renderStaffDetailPage,
+  workspaceStaffManageClientScript,
   renderStaffUnavailablePage,
 } = require('../presentation/workspaceStaffUx');
 const { requireStaffSession } = require('../middleware/staffBrowserSession');
@@ -24,11 +25,11 @@ function setWorkspaceStaffSecurityHeaders(res) {
 
 function safeError(error) {
   const status = Number(error?.httpStatus) || 503;
-  if (status === 400) return { status, message: 'The requested Staff view is invalid.' };
-  if (status === 403) return { status, message: 'Your authenticated Shiloh access does not permit Staff visibility.' };
+  if (status === 400) return { status, message: 'The requested Staff operation is invalid.' };
+  if (status === 403) return { status, message: 'Your authenticated Shiloh access does not permit this Staff operation.' };
   if (status === 404) return { status, message: 'That canonical staff member was not found.' };
-  if (status === 409) return { status, message: 'Canonical Staff access is ambiguous and is failing closed.' };
-  return { status: 503, message: 'Canonical Staff reads are temporarily unavailable.' };
+  if (status === 409) return { status, message: error?.message || 'Canonical Staff changed or is ambiguous. Reload and retry.' };
+  return { status: 503, message: 'Canonical Staff is temporarily unavailable.' };
 }
 
 function navScript() {
@@ -101,6 +102,7 @@ function createWorkspaceStaffDetailHandler({
 
 function createWorkspaceStaffRouter({ sessionService, ...options } = {}) {
   if (!sessionService) throw new Error('Workspace Staff requires the existing staff browser session service');
+  const service = options.service || workspaceStaff;
   const router = express.Router();
   router.get('/nav.js', (_req, res) => {
     res.setHeader('Cache-Control', 'private, no-store, max-age=0');
@@ -112,14 +114,25 @@ function createWorkspaceStaffRouter({ sessionService, ...options } = {}) {
     res.setHeader('Cache-Control', 'private, no-store, max-age=0');
     if (!isWorkspaceStaffEnabled(options.env || process.env)) return res.sendStatus(404);
     try {
-      const authority = await (options.service || workspaceStaff).resolveAccess(req.staffBrowserSession?.adminId);
+      const authority = await service.resolveAccess(req.staffBrowserSession?.adminId);
       return authority ? res.sendStatus(204) : res.sendStatus(403);
     } catch (_error) {
       return res.sendStatus(403);
     }
   });
-  router.get('/', createWorkspaceStaffListHandler(options));
-  router.get('/:id', createWorkspaceStaffDetailHandler(options));
+  router.get('/manage.js', async (req, res) => {
+    setWorkspaceStaffSecurityHeaders(res);
+    if (!isWorkspaceStaffEnabled(options.env || process.env)) return res.sendStatus(404);
+    try {
+      const authority = await service.resolveManageAccess(req.staffBrowserSession?.adminId);
+      if (!authority) return res.sendStatus(403);
+      return res.status(200).type('application/javascript').send(workspaceStaffManageClientScript());
+    } catch (_error) {
+      return res.sendStatus(403);
+    }
+  });
+  router.get('/', createWorkspaceStaffListHandler({ ...options, service }));
+  router.get('/:id', createWorkspaceStaffDetailHandler({ ...options, service }));
   return router;
 }
 
