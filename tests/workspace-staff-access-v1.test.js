@@ -95,7 +95,8 @@ test('Staff list is canonical, name-bounded and page-bounded', async () => {
   assert.equal(model.staff.length, STAFF_LIST_PAGE_SIZE);
   assert.equal(model.hasMore, true);
   assert.equal(model.offset, 100000);
-  const query = db.calls[1];
+  const query = db.calls.find(call => call.sql.includes('workspaceStaff:list'));
+  assert.ok(query);
   assert.match(query.sql, /FROM staff s/);
   assert.match(query.sql, /FROM staff_services ss/);
   assert.match(query.sql, /JOIN services svc/);
