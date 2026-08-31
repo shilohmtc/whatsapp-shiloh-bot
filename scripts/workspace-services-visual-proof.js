@@ -23,6 +23,7 @@ const options = {
   clientsNavigationAllowed: true,
   staffNavigationAllowed: true,
   staffAccessScriptPath: '/calendar/staff/client.js',
+  manageAllowed: true,
 };
 
 function listHtml() {
@@ -33,13 +34,19 @@ function detailHtml() {
   return renderServiceDetailPage({
     service: {
       ...services[0],
+      revision: 'a'.repeat(64),
       customer_description: 'A calming full-body massage using classic Swedish techniques.',
       booking_note: 'Please arrive a few minutes before your appointment.',
     },
     assignedStaff: [
-      { display_name: 'Practitioner One', resource_type: 'practitioner', status: 'active', client_bookable: true },
-      { display_name: 'Practitioner Two', resource_type: 'practitioner', status: 'active', client_bookable: true },
-      { display_name: 'Internal Resource', resource_type: 'business_resource', status: 'active', client_bookable: false },
+      { id: 1, display_name: 'Practitioner One', resource_type: 'practitioner', status: 'active', client_bookable: true },
+      { id: 2, display_name: 'Practitioner Two', resource_type: 'practitioner', status: 'active', client_bookable: true },
+      { id: 20, display_name: 'Internal Resource', resource_type: 'business_resource', status: 'active', client_bookable: false },
+    ],
+    practitioners: [
+      { id: 1, display_name: 'Practitioner One', status: 'active', client_bookable: true, assigned: true },
+      { id: 2, display_name: 'Practitioner Two', status: 'active', client_bookable: true, assigned: true },
+      { id: 3, display_name: 'Practitioner Three', status: 'active', client_bookable: true, assigned: false },
     ],
     bookingEligibility: { eligible: true, clientBookableStaffCount: 2, authority: 'read_projection_only' },
   }, options);
@@ -71,6 +78,9 @@ for (const proof of proofs) {
   if (!/aria-current="page">Services/.test(proof.html) || !/>Calendar<|>Calendar<\//.test(proof.html) || !/>Clients<|>Clients<\//.test(proof.html) || !/>Staff<|>Staff<\//.test(proof.html)) {
     throw new Error(`${proof.view}/${proof.viewport} lacks shared Workspace navigation`);
   }
+  if (proof.view === 'service-detail' && (!/data-service-edit-form/.test(proof.html) || !/data-service-assign-form/.test(proof.html))) {
+    throw new Error(`${proof.view}/${proof.viewport} lacks Services Stage B management controls`);
+  }
   const stem = `${proof.view}-${proof.viewport}`;
   const htmlPath = path.join(outDir, `${stem}.html`);
   const pngPath = path.join(outDir, `${stem}.png`);
@@ -88,5 +98,5 @@ for (const proof of proofs) {
 
 const exactHead = spawnSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).stdout.trim();
 if (!/^[0-9a-f]{40}$/.test(exactHead)) throw new Error('Workspace Services proof could not resolve exact head');
-fs.writeFileSync(path.join(outDir, 'manifest.json'), `${JSON.stringify({ generatedAt: new Date().toISOString(), exactHead, syntheticDataOnly: true, productionReads: 0, productionMutations: 0, screenshots: manifest }, null, 2)}\n`);
+fs.writeFileSync(path.join(outDir, 'manifest.json'), `${JSON.stringify({ generatedAt: new Date().toISOString(), exactHead, syntheticDataOnly: true, productionReads: 0, productionMutations: 0, servicesStageBManageUx: true, screenshots: manifest }, null, 2)}\n`);
 console.log(`Workspace Services visual proof generated: ${manifest.length} screenshots`);
