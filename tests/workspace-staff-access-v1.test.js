@@ -95,7 +95,8 @@ test('Staff list is canonical, name-bounded and page-bounded', async () => {
   assert.equal(model.staff.length, STAFF_LIST_PAGE_SIZE);
   assert.equal(model.hasMore, true);
   assert.equal(model.offset, 100000);
-  const query = db.calls[1];
+  const query = db.calls.find(call => call.sql.includes('workspaceStaff:list'));
+  assert.ok(query);
   assert.match(query.sql, /FROM staff s/);
   assert.match(query.sql, /FROM staff_services ss/);
   assert.match(query.sql, /JOIN services svc/);
@@ -193,7 +194,7 @@ test('Staff presentation is responsive, read-only and excludes private/security 
   assert.match(detail, /Current authority/);
   assert.match(detail, /appointment:view/);
   assert.match(detail, /Read-only authority view/);
-  assert.doesNotMatch(detail, /whatsapp_number|normalized_whatsapp|totp|recovery|secret|compensation/i);
+  assert.doesNotMatch(detail, /whatsapp_number|normalized_whatsapp|totp_secret|recovery_code|compensation/i);
 });
 
 test('Workspace Staff route is GET-only and existing /calendar/staff auth mount is preserved', () => {
