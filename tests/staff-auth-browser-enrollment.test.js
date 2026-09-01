@@ -124,7 +124,8 @@ test('browser enrollment management UX keeps the enrollment token in the one-tim
   const script = staffAuthBrowserEnrollmentClientScript();
   assert.match(html, /Create one-time enrollment link/);
   assert.match(html, /five-minute, single-use enrollment link/);
-  assert.match(script, /admin-enrollment\/issue/);
+  assert.match(script, /HERE=BASE\+'\/admin-enrollment'/);
+  assert.match(script, /fetch\(HERE\+'\/issue'/);
   assert.match(script, /x-shiloh-csrf-token/);
   assert.doesNotMatch(script, /localStorage|sessionStorage/);
 });
