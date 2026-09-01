@@ -57,3 +57,9 @@ test('availability presentation distinguishes blocks and leave without changing 
   assert.match(script, /event-card\[data-kind="operational_leave"\]/);
   assert.match(script, /Leave is currently a canonical whole-day record in Shiloh/);
 });
+
+test('availability actions preserve Shiloh mobile touch-target minimums', () => {
+  assert.match(script, /availability-menu-popover button\{[^}]*min-height:44px!important/);
+  assert.match(script, /availability-menu>summary\{[^}]*min-height:32px/);
+  assert.match(script, /@media\(max-width:700px\)\{\.availability-menu>summary\{min-height:44px/);
+});
