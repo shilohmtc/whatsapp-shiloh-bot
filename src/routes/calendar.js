@@ -14,6 +14,7 @@ const { createWorkspaceStaffRouter } = require('./workspaceStaff');
 const { createWorkspaceStaffMutationRouter } = require('./workspaceStaffMutations');
 const { createWorkspaceServicesRouter } = require('./workspaceServices');
 const { createWorkspaceServicesMutationRouter } = require('./workspaceServicesMutations');
+const { createWorkspaceReportsRouter } = require('./workspaceReports');
 const router = express.Router();
 
 const staffBrowserSessionService = createStaffBrowserSessionService({ db: pool });
@@ -50,6 +51,7 @@ router.use('/team', createWorkspaceStaffRouter({ sessionService: staffBrowserSes
 router.use('/team', createWorkspaceStaffMutationRouter({ sessionService: staffBrowserSessionService }));
 router.use('/services', createWorkspaceServicesRouter({ sessionService: staffBrowserSessionService }));
 router.use('/services', createWorkspaceServicesMutationRouter({ sessionService: staffBrowserSessionService }));
+router.use('/reports', createWorkspaceReportsRouter({ sessionService: staffBrowserSessionService }));
 router.use('/read-only', createOptionalCalendarSessionMiddleware({ service: staffBrowserSessionService }), calendarReadOnlyUxRoutes);
 
 module.exports=router;
