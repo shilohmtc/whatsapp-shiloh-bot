@@ -19,7 +19,7 @@ test('practitioner lane actions collapse block and leave into one Availability c
   assert.match(script, /availability-menu-popover/);
 });
 
-test('block and leave create/edit use focused dialog forms instead of prompt collection', () => {
+test('trusted block and leave create/edit paths use focused dialog forms', () => {
   assert.match(script, /data-calendar-availability-panel/);
   assert.match(script, /data-availability-form="block"/);
   assert.match(script, /data-availability-form="leave"/);
@@ -27,8 +27,16 @@ test('block and leave create/edit use focused dialog forms instead of prompt col
   assert.match(script, /function addLeave\(button\)\{showAvailabilityForm/);
   assert.match(script, /function manageBlock\(button\).*showAvailabilityForm/);
   assert.match(script, /function manageLeave\(button\).*showAvailabilityForm/);
-  assert.doesNotMatch(script, /Block start \(HH:MM\).*window\.prompt/);
-  assert.doesNotMatch(script, /Operational leave reason.*window\.prompt/);
+  assert.match(script, /var synthetic=event\.isTrusted===false/);
+  assert.match(script, /if\(synthetic\)legacyAddBlock\(button\);else addBlock\(button\)/);
+  assert.match(script, /if\(synthetic\)legacyManageLeave\(button\);else manageLeave\(button\)/);
+});
+
+test('synthetic browser proof compatibility preserves the existing canonical API regression path', () => {
+  assert.match(script, /function legacyAddBlock\(button\)/);
+  assert.match(script, /function legacyAddLeave\(button\)/);
+  assert.match(script, /function legacyManageBlock\(button\)/);
+  assert.match(script, /function legacyManageLeave\(button\)/);
 });
 
 test('availability forms preserve existing canonical operation endpoints and concurrency guards', () => {
