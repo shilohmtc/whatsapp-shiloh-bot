@@ -65,6 +65,7 @@ const { runConfiguredClientProvenanceAudit } = require("./src/services/clientPro
 const { runCalendarAccessDiagnostic } = require("./src/services/calendarAccessDiagnostic");
 const { inspectMetaTemplateInventory } = require("./src/services/metaTemplateContracts");
 const { verifyMigrationState } = require("./src/services/migrations");
+const { reconcileStaffAuthResetPilotEligibility } = require("./src/services/staffAuthResetPilotBridge");
 const {
   ensureDeliveryTable: ensureBookingConfirmationDeliverySchema,
   startCustomerBookingConfirmationScheduler,
@@ -105,6 +106,8 @@ async function start() {
     mutationAuthority: 'npm run db:migrate',
     startupMode: 'verify_only',
   }, "Production migration authority verified");
+  const staffAuthPilot = await reconcileStaffAuthResetPilotEligibility();
+  logger.info(staffAuthPilot, "Provider-independent staff-auth pilot eligibility reconciled");
   try { const calendarAccess = await runCalendarAccessDiagnostic(); logger.info(calendarAccess, "Sanitized Calendar staff access diagnostic"); } catch (error) { logger.warn({ err: error }, "Sanitized Calendar staff access diagnostic failed"); }
   logger.info({ initialized: true, migrationAppliedNow: false, identityContractVersion: 'whatsapp_crm_identity_compat_v1', legacyCompatibility: true, crmV2RegistrationActive: true, registrationBoundary: 'crmV2ClientService.registerWhatsAppClient' }, "WhatsApp CRM V2 identity compatibility schema verified");
   await ensureBookingConfirmationDeliverySchema(); logger.info({ initialized: true, migrations: ['071_booking_confirmation_template_evidence.sql', '083_initial_booking_confirmation_guarantee.sql', '085_calendar_clean_crm_v2_cutover.sql'], migrationAppliedNow: false, checksumVerified: true, durableRetryColumns: true, crmV2RecipientSnapshots: true }, "Booking confirmation delivery evidence schema verified");
