@@ -49,7 +49,7 @@ The canonical resume phrase remains:
 
 > **SHILOH RESUME — reconstruct from GitHub authoritative state.**
 
-On resume, inspect current `main`, the **Current Active Controlled Unit** block in #611, current governing issues/PRs, and production state where release/runtime truth matters. Resume from the recorded next executable action after only the minimum verification needed to detect material drift. Identify completed/do-not-redo work, unresolved work, owner, priority and next controlled unit. Stop and report material drift.
+On resume, inspect current `main`, every entry in the **Current Active Controlled Units** block in #611, current governing issues/PRs, and production state where release/runtime truth matters. Resume each safely executable unit from its recorded next executable action after only the minimum verification needed to detect material drift. Identify completed/do-not-redo work, unresolved work, owner, priority, dependencies and coordination constraints. Stop and report material drift for the affected unit without unnecessarily stalling unrelated isolated units.
 
 ## 4. Control authority
 
@@ -111,14 +111,43 @@ Shiloh Control owns continuation of an active controlled unit through implementa
 
 If one safe execution path fails, Control must use reasonable available fallbacks before declaring the unit blocked. `In progress` is a checkpoint status, not a discretionary stopping state. During an active execution turn, do not emit a final response merely because more engineering, testing, CI, deployment, tool calls or reconciliation remain when available tools can continue the work.
 
-### Durable active-unit pointer
+### Concurrent controlled units
 
-#611 must maintain one explicit **Current Active Controlled Unit** block whenever a controlled unit is active. Control updates that block **in place** whenever the unit crosses a meaningful execution gate.
+Shiloh may have multiple active controlled units under one authoritative root ledger when Control has explicitly determined that concurrent execution is safe.
 
-At minimum the block records:
+Concurrency does **not** create independent authorities. `docs/SHILOH_CONTROL_RULES.md` remains the single governance rulebook, #611 remains the single root resume/control ledger, and 00 remains responsible for global sequencing, conflict resolution, release judgment and reconciliation.
+
+Before activating an additional controlled unit, Control must compare it with every active unit across at least:
+
+- repository files/modules and expected merge areas;
+- database schema, migration sequence and retained-data mutations;
+- runtime services, deployment targets, feature/config authority and release order;
+- external provider/account/assets and webhook/routing authority;
+- credentials, secrets, security/session/authentication surfaces and human permissions;
+- canonical business/data authority and any real-world side effects;
+- verification fixtures, test environments and rollback/recovery boundaries;
+- explicit dependencies or assumptions about another unit's unfinished result.
+
+A unit may run concurrently only when its objective and blast radius are bounded, its authorization is independently valid, and Control can identify a safe coordination model. Shared `main` or a shared repository is not by itself a conflict; branches may proceed independently, but each unit must rebase/reconcile and re-run the verification necessary for its own exact merge/release head.
+
+Control must **serialize** or explicitly dependency-order work when units would otherwise mutate the same authority, including competing schema/migration order, the same provider asset, the same credential/security authority, overlapping retained-data repair, conflicting capability/permission changes, or incompatible runtime/config cutovers.
+
+Multiple units may be in different stages at the same time. A human acceptance gate, provider wait, CI wait or genuine blocker on one unit must not stall another isolated unit whose safe next action remains executable.
+
+When multiple units target the same production service, implementation and verification may proceed concurrently if otherwise isolated, but merges, deploys and production proofs must be sequenced so each released unit has an unambiguous deployed SHA and valid post-merge/post-deploy evidence. A later unit must not claim production proof from a deployment that silently includes unverified changes from another unit.
+
+If overlap becomes material after activation, Control must update #611, pause the affected conflicting path, preserve completed/do-not-redo evidence, and either serialize the units or request fresh owner authorization when canonical governance requires it.
+
+### Durable active-unit pointers
+
+#611 must maintain one explicit **Current Active Controlled Units** root block whenever one or more controlled units are active. The block contains one independently resumable entry per active controlled unit plus a compact root coordination state. Control updates the affected entry **in place** whenever that unit crosses a meaningful execution gate, and updates root coordination whenever dependencies or release locks change.
+
+At minimum each active-unit entry records:
 
 - issue / controlled unit and stage;
 - active status and whether authorization remains valid;
+- bounded scope and material owned/mutated surfaces;
+- concurrency/conflict classification and dependencies on other active units;
 - canonical implementation base where relevant;
 - branch and PR where relevant;
 - current implementation head;
@@ -128,9 +157,11 @@ At minimum the block records:
 - any separate authorization/release gate;
 - whether any owner action is actually required.
 
-On every resume, Control must read this block before reopening discovery. Resume from the recorded next executable action after only the minimum current-state verification needed to detect material drift. Do not repeat completed stages, re-request authorization, or make the owner reconstruct recoverable work.
+The root coordination state must identify any serialized shared release/provider/migration/security boundary that constrains otherwise concurrent units.
 
-A platform-enforced turn boundary can end runtime execution. This governance does not create background execution after a final response and must never be represented as doing so. If runtime ends before the controlled unit reaches a terminal state, execution stops until the next interaction; the controlled unit itself remains active. The next interaction resumes from the #611 durable active-unit pointer without reauthorization, reconstruction or repetition of completed work.
+On every resume, Control must read all active-unit entries before reopening discovery. Resume safely executable units from their recorded next actions after only the minimum current-state verification needed to detect material drift. Do not repeat completed stages, re-request authorization, or make the owner reconstruct recoverable work. A blocked or human-gated unit does not prevent progress on unrelated isolated units.
+
+A platform-enforced turn boundary can end runtime execution. This governance does not create background execution after a final response and must never be represented as doing so. If runtime ends before active units reach terminal state, execution stops until the next interaction; the units themselves remain active. The next interaction resumes from #611's durable active-unit pointers without reauthorization, reconstruction or repetition of completed work.
 
 ### Normally inside 00 authority
 
@@ -215,9 +246,9 @@ Stable invariants belong in code. Changeable business policy belongs in canonica
 
 Project Tracker records current work and gates. Master Status records durable authoritative state.
 
-In the current repository, governing GitHub issues — especially #611 for control continuity — may serve these functions until a separate artifact provides enough value to justify its maintenance cost. While a controlled unit is active, #611's **Current Active Controlled Unit** block is the durable execution pointer and must be updated in place at meaningful gates.
+In the current repository, governing GitHub issues — especially #611 for control continuity — may serve these functions until a separate artifact provides enough value to justify its maintenance cost. While controlled units are active, #611's **Current Active Controlled Units** block is the durable execution root: each unit entry must be updated in place at meaningful gates, and root coordination must record material dependency/release locks.
 
-Avoid intermediate documentation churn outside that active pointer. Reconcile broader durable status at material terminal states or when architecture, governance, production authority, dependencies, Human-Operability state or sequencing materially changes.
+Avoid intermediate documentation churn outside those active pointers. Reconcile broader durable status at material terminal states or when architecture, governance, production authority, dependencies, Human-Operability state or sequencing materially changes.
 
 Do not treat stale draft/unmerged PRs or superseded one-off issues as active authority. Historical evidence remains available, but superseded work must not be revived without a fresh current-state comparison and bounded authorization.
 
@@ -225,14 +256,14 @@ Do not treat stale draft/unmerged PRs or superseded one-off issues as active aut
 
 For substantive returns state:
 
-1. **Status** — Complete, Blocked or In progress. `In progress` must not be used as a discretionary stop when Control can continue an already-authorized unit with available tools.
+1. **Status** — Complete, Blocked or In progress for the controlled unit(s) materially addressed. `In progress` must not be used as a discretionary stop when Control can continue an already-authorized unit with available tools.
 2. **Authoritative outcome.**
 3. **Completed / do not redo.**
-4. **Unresolved gates/dependencies.**
+4. **Unresolved gates/dependencies**, including material cross-unit coordination constraints when relevant.
 5. **Project Tracker reconciliation.**
 6. **Master Status reconciliation.**
-7. **Next execution surface / owner.** Default to `Shiloh Control — continue here`. Shiloh Control determines internal 10/20/30/40 responsibility; do not ask the owner to route by those labels. Identify Shiloh Workspace only when the next controlled objective is to make justified clinic work human-operable there. Name a temporary Work surface only if one has actually been created or intentionally routed. Use `None — controlled unit complete.` when no further action remains.
-8. **Exactly what the owner should do next.** For an already-authorized active unit, this should normally be `Nothing`. If a platform-enforced turn boundary ends runtime execution, the next interaction resumes from the #611 Current Active Controlled Unit block without reauthorization or reconstruction.
+7. **Next execution surface / owner.** Default to `Shiloh Control — continue here`. Shiloh Control determines internal 10/20/30/40 responsibility; do not ask the owner to route by those labels. Identify Shiloh Workspace only when the next controlled objective is to make justified clinic work human-operable there. Name a temporary Work surface only if one has actually been created or intentionally routed. Use `None — controlled unit complete.` when no further action remains for that unit.
+8. **Exactly what the owner should do next.** For already-authorized active units, this should normally be `Nothing` except where a specific unit has a genuine human/fresh-authorization gate. If a platform-enforced turn boundary ends runtime execution, the next interaction resumes from #611's Current Active Controlled Units block without reauthorization or reconstruction.
 9. **Copy-ready handoff** only when the owner must actually paste into another existing Shiloh/Work execution surface. Otherwise state `None` and do not generate a handoff block.
 
 ## 11. Expert judgment
@@ -264,8 +295,8 @@ Shiloh is complete when it is the smallest reliable system that can run the clin
 This file should change rarely and intentionally.
 
 - Durable governance changes should be merged to `main` through a bounded, reviewable GitHub change.
-- #611 should record material governance reconciliation and maintain the Current Active Controlled Unit execution pointer; it should not duplicate this entire rulebook.
-- Project/chat instructions should contain only the compact bootstrap necessary to find and obey this canonical file, including the cross-turn controlled-unit continuity rule and the requirement to read #611's Current Active Controlled Unit block before reopening discovery; they should not become a second full copy.
+- #611 should record material governance reconciliation and maintain the **Current Active Controlled Units** execution root; it should not duplicate this entire rulebook.
+- Project/chat instructions should contain only the compact bootstrap necessary to find and obey this canonical file, including the cross-turn controlled-unit continuity rule and the requirement to read all entries in #611's Current Active Controlled Units block before reopening discovery; they should not become a second full copy.
 - If current machine state or a newer merged governance change materially conflicts with an older issue/comment, prefer current merged authority and explicitly reconcile the stale record.
 
 Primary governing references: **#591 — Workspace UX North Star** and **#611 — authoritative resume/control contract**.
