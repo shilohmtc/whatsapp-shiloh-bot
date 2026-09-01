@@ -29,6 +29,13 @@ function normalizeReason(value) {
   return reason === 'logout' || reason === 'session' ? reason : null;
 }
 
+function withAuthenticatorSetupGuidance(html) {
+  const marker = '<section class="section" data-shiloh-whatsapp-handoff-guidance>';
+  if (!String(html || '').includes(marker)) return html;
+  const guidance = `<section class="section" data-shiloh-authenticator-setup-guidance><span class="eyebrow">First-time setup / new phone</span><h2>Need to enroll an authenticator?</h2><p class="lead">Ask an authorized Shiloh staff-auth administrator for a private one-time enrollment link. The link expires after five minutes, works once, and does not use WhatsApp or Meta.</p><div class="actions"><a class="button secondary" href="/calendar/staff-auth/admin-enrollment">Staff-auth administrators: create enrollment link</a></div></section>`;
+  return String(html).replace(marker, `${guidance}${marker}`);
+}
+
 function createStaffCalendarAccessPageHandler({
   env = process.env,
   renderPage = renderStaffCalendarAccessPage,
@@ -37,11 +44,13 @@ function createStaffCalendarAccessPageHandler({
     setAccessSecurityHeaders(res);
     if (!isStaffCalendarAccessUxEnabled(env)) return res.status(404).type('text/plain').send('Not Found');
     const basePath = req.baseUrl || '/calendar/staff';
-    const html = renderPage({
+    const providerIndependentAuthEnabled = providerIndependentAuthPolicy(env).operational;
+    let html = renderPage({
       reason: normalizeReason(req.query?.reason),
       clientScriptPath: `${basePath}/client.js`,
-      providerIndependentAuthEnabled: providerIndependentAuthPolicy(env).operational,
+      providerIndependentAuthEnabled,
     });
+    if (providerIndependentAuthEnabled) html = withAuthenticatorSetupGuidance(html);
     return res.status(200).type('html').send(html);
   };
 }
@@ -97,3 +106,4 @@ module.exports.createStaffCalendarHandoffClientHandler = createStaffCalendarHand
 module.exports.isStaffCalendarAccessUxEnabled = isStaffCalendarAccessUxEnabled;
 module.exports.setAccessSecurityHeaders = setAccessSecurityHeaders;
 module.exports.normalizeReason = normalizeReason;
+module.exports.withAuthenticatorSetupGuidance = withAuthenticatorSetupGuidance;
