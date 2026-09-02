@@ -60,7 +60,13 @@ function fakeDb({ permissions, row = previewRow() } = {}) {
   };
 }
 
-const readyEnv = { PHONE_NUMBER_ID: 'phone-id', WHATSAPP_TOKEN: 'token' };
+const readyEnv = {
+  PHONE_NUMBER_ID: 'phone-id',
+  WHATSAPP_TOKEN: 'token',
+  WHATSAPP_BOOKING_CONFIRMATION_TEMPLATE: 'shiloh_booking_confirmation_v2',
+  SHILOH_WORKSPACE_CLIENT_NOTIFY_PROVIDER_READY: 'true',
+};
+const readyProvider = async () => ({ ready: true });
 
 test('client:notify is a separate fail-closed authority from client:lookup', () => {
   assert.equal(evaluateClientNotificationAuthority([principal({ 'client:lookup': true })]), null);
@@ -74,10 +80,12 @@ test('authorized preview is bounded to the next canonical CRM V2 appointment and
   const service = createWorkspaceClientNotificationService({
     db: fakeDb(),
     env: readyEnv,
+    providerGuard: readyProvider,
     sender: async () => { sendCalls += 1; return { sent: true }; },
   });
   const preview = await service.getPreview({ adminId: 7, clientId: 41 });
   assert.equal(preview.canSend, true);
+  assert.equal(preview.providerReady, true);
   assert.equal(preview.client.id, 41);
   assert.equal(preview.appointment.id, 501);
   assert.equal(preview.appointment.serviceName, 'Treatment');
@@ -93,6 +101,7 @@ test('lookup-only principal is forbidden from preview and sender is never reache
   const service = createWorkspaceClientNotificationService({
     db: fakeDb({ permissions: { 'client:lookup': true } }),
     env: readyEnv,
+    providerGuard: readyProvider,
     sender: async () => { sendCalls += 1; return { sent: true }; },
   });
   await assert.rejects(
@@ -106,10 +115,11 @@ test('lookup-only principal is forbidden from preview and sender is never reache
   assert.equal(sendCalls, 0);
 });
 
-test('preview clearly blocks missing recipient and unavailable channel before delivery', async () => {
+test('preview clearly blocks missing recipient and disabled Workspace provider gate before delivery', async () => {
   const missingRecipient = createWorkspaceClientNotificationService({
     db: fakeDb({ row: previewRow({ normalized_mobile: null }) }),
     env: readyEnv,
+    providerGuard: readyProvider,
     sender: async () => ({ sent: true }),
   });
   const first = await missingRecipient.getPreview({ adminId: 7, clientId: 41 });
@@ -119,21 +129,48 @@ test('preview clearly blocks missing recipient and unavailable channel before de
 
   const noChannel = createWorkspaceClientNotificationService({
     db: fakeDb(),
-    env: {},
+    env: {
+      PHONE_NUMBER_ID: 'phone-id',
+      WHATSAPP_TOKEN: 'token',
+      WHATSAPP_BOOKING_CONFIRMATION_TEMPLATE: 'shiloh_booking_confirmation_v2',
+    },
+    providerGuard: readyProvider,
     sender: async () => ({ sent: true }),
   });
   const second = await noChannel.getPreview({ adminId: 7, clientId: 41 });
   assert.equal(second.canSend, false);
   assert.equal(second.reason, 'channel_unavailable');
-  assert.match(second.reasonMessage, /not configured/);
+  assert.match(second.reasonMessage, /delivery gate is disabled/);
 });
 
-test('final send re-previews authority and delegates only to the existing semantic sender', async () => {
+test('provider-unready state fails closed before the existing sender can be invoked', async () => {
+  let sendCalls = 0;
+  const service = createWorkspaceClientNotificationService({
+    db: fakeDb(),
+    env: readyEnv,
+    providerGuard: async () => { throw new Error('provider blocked'); },
+    sender: async () => { sendCalls += 1; return { sent: true }; },
+  });
+  const preview = await service.getPreview({ adminId: 7, clientId: 41 });
+  assert.equal(preview.canSend, false);
+  assert.equal(preview.providerReady, false);
+  assert.equal(preview.reason, 'provider_unavailable');
+  assert.match(preview.reasonMessage, /Nothing can be sent/);
+  await assert.rejects(
+    service.sendBookingConfirmation({ adminId: 7, clientId: 41 }),
+    error => error.code === 'WORKSPACE_CLIENT_NOTIFY_NOT_SENDABLE'
+  );
+  assert.equal(sendCalls, 0);
+});
+
+test('final send re-previews authority and provider readiness then delegates only to the existing semantic sender', async () => {
   const calls = [];
   const db = fakeDb();
+  let guardCalls = 0;
   const service = createWorkspaceClientNotificationService({
     db,
     env: readyEnv,
+    providerGuard: async () => { guardCalls += 1; return { ready: true }; },
     sender: async (appointmentId, options) => {
       calls.push({ appointmentId, options });
       return { sent: true };
@@ -142,6 +179,7 @@ test('final send re-previews authority and delegates only to the existing semant
   const result = await service.sendBookingConfirmation({ adminId: 7, clientId: 41 });
   assert.equal(result.sent, true);
   assert.equal(result.appointmentId, 501);
+  assert.equal(guardCalls, 1);
   assert.equal(calls.length, 1);
   assert.equal(calls[0].appointmentId, 501);
   assert.equal(calls[0].options.db, db);
