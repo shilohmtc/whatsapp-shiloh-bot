@@ -16,11 +16,16 @@ var selected=field.querySelector('[data-selected-client]');
 var newPanel=field.querySelector('[data-new-client-panel]');
 var useNew=field.querySelector('[data-select-new-client]');
 var newName=document.getElementById('new-client-name');
+var newMobile=document.getElementById('new-client-mobile');
 var review=document.querySelector('[data-review-booking]');
 var status=document.querySelector('[data-booking-status]');
 if(!searchLabel||!searchActions||!searchAction||!results||!newPanel)return;
 var normalGuard=status&&status.nextElementSibling&&status.nextElementSibling.classList&&status.nextElementSibling.classList.contains('guard-note')?status.nextElementSibling:null;
 if(normalGuard)normalGuard.remove();
+var useNewActions=useNew&&useNew.closest?useNew.closest('.actions'):null;
+if(useNewActions)useNewActions.hidden=true;
+var newHint=newPanel.querySelector('.hint');
+if(newHint)newHint.hidden=true;
 var modeHeading=document.createElement('div');
 modeHeading.className='hint';
 modeHeading.textContent='Client';
@@ -68,10 +73,12 @@ function buttonClass(active){return active?'button':'button secondary';}
 function setMode(mode,preserveSelection){var isBrowse=mode==='browse';var isSearch=mode==='search';var isNew=mode==='new';existingPanel.hidden=isNew;newPanel.hidden=!isNew;searchLabel.hidden=!isSearch;searchActions.hidden=!isSearch;existingButton.className=buttonClass(isBrowse);searchButton.className=buttonClass(isSearch);newButton.className=buttonClass(isNew);existingButton.setAttribute('aria-pressed',isBrowse?'true':'false');searchButton.setAttribute('aria-pressed',isSearch?'true':'false');newButton.setAttribute('aria-pressed',isNew?'true':'false');if(!preserveSelection)window.dispatchEvent(new CustomEvent('calendar-client-mode',{detail:{mode:mode}}));}
 function loadExistingClients(){setStatus('Loading existing clients…');search.value=BROWSE_QUERY;searchAction.click();search.value='';}
 function syncModeDisabled(){searchButton.disabled=existingButton.disabled===true;}
+function syncNewClientDraftFromFields(){if(!useNew||!newName||!newMobile)return;window.dispatchEvent(new CustomEvent('calendar-client-mode',{detail:{mode:'new'}}));clearVisibleSelection();var name=String(newName.value||'').trim().replace(/\\s+/g,' ');var mobile=String(newMobile.value||'').trim();if(name.length>=2&&mobile){useNew.click();clearVisibleSelection();if(review)review.disabled=false;}else if(review)review.disabled=true;hideStatus();}
 existingButton.addEventListener('click',function(){if(existingButton.disabled)return;clearVisibleSelection();if(review)review.disabled=true;setMode('browse');loadExistingClients();});
 searchButton.addEventListener('click',function(){if(existingButton.disabled)return;clearVisibleSelection();if(review)review.disabled=true;setMode('search');setStatus('Search for a client by name or mobile number, then explicitly select one result.');search.focus();});
-newButton.addEventListener('click',function(){clearVisibleSelection();if(review)review.disabled=true;setMode('new');setStatus('Enter the new client’s name and South African mobile number.');if(newName)newName.focus();});
-if(useNew)useNew.addEventListener('click',function(){window.setTimeout(function(){if(selected&&!selected.hidden&&selected.textContent.indexOf('New client')===0){setMode('new',true);if(review)review.disabled=false;hideStatus();}},0);});
+newButton.addEventListener('click',function(){clearVisibleSelection();if(review)review.disabled=true;setMode('new');syncNewClientDraftFromFields();if(newName)newName.focus();});
+if(newName)newName.addEventListener('input',syncNewClientDraftFromFields);
+if(newMobile)newMobile.addEventListener('input',syncNewClientDraftFromFields);
 results.addEventListener('click',function(event){var target=event.target.closest?event.target.closest('.client-result'):null;if(!target)return;window.setTimeout(function(){if(selected&&!selected.hidden&&selected.getAttribute('data-client-selection')==='existing'){setMode('browse',true);if(review)review.disabled=false;hideStatus();}},0);});
 if(typeof MutationObserver==='function'){new MutationObserver(syncModeDisabled).observe(existingButton,{attributes:true,attributeFilter:['disabled']});}
 syncModeDisabled();

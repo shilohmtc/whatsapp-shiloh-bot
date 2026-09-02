@@ -77,7 +77,7 @@ test('browse contract is private, shared by route and UX, and cannot expose a fu
   assert.equal(maskContact(''), null);
 });
 
-test('client picker keeps explicit selection and new-client fields bounded to name and mobile', () => {
+test('client picker keeps explicit existing-client selection while new-client mode synchronizes name and mobile directly', () => {
   const script = calendarCreateBookingClientChoiceScript();
 
   assert.doesNotThrow(() => new Function(script));
@@ -88,6 +88,12 @@ test('client picker keeps explicit selection and new-client fields bounded to na
   assert.match(script, /searchAction\.click\(\)/);
   assert.match(script, /calendar-client-mode/);
   assert.match(script, /normalGuard\.remove\(\)/);
+  assert.match(script, /useNewActions\.hidden=true/);
+  assert.match(script, /newHint\.hidden=true/);
+  assert.match(script, /function syncNewClientDraftFromFields\(\)/);
+  assert.match(script, /newName\.addEventListener\('input',syncNewClientDraftFromFields\)/);
+  assert.match(script, /newMobile\.addEventListener\('input',syncNewClientDraftFromFields\)/);
+  assert.match(script, /useNew\.click\(\)/);
   assert.match(script, /function hideStatus\(\)/);
   assert.match(script, /hideStatus\(\)/);
   assert.doesNotMatch(script, /date of birth|gender|email address/i);
