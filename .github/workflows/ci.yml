@@ -114,6 +114,8 @@ jobs:
           retention-days: 14
       - name: Generate Workspace Mobile Polish visual proof
         run: node scripts/workspace-mobile-polish-visual-proof.js
+      - name: Verify true Workspace mobile CSS viewports
+        run: node scripts/workspace-mobile-viewport-proof.js
       - name: Upload Workspace Mobile Polish visual proof
         uses: actions/upload-artifact@v4
         with:
