@@ -79,6 +79,8 @@ jobs:
         run: node --test tests/workspace-services-v1.test.js tests/workspace-services-stage-b.test.js
       - name: Run focused Workspace Mobile Polish tests
         run: node --test tests/workspace-mobile-polish-v1.test.js
+      - name: Run focused Calendar mobile staff overview tests
+        run: node --test tests/calendar-mobile-staff-overview-v1.test.js
       - name: Run non-mutating regression tests
         env:
           SHILOH_STAFF_BROWSER_AUTH_WHATSAPP_DELIVERY_ENABLED: 'false'
@@ -121,6 +123,15 @@ jobs:
         with:
           name: workspace-mobile-polish-v1
           path: artifacts/workspace-mobile-polish-v1
+          if-no-files-found: error
+          retention-days: 14
+      - name: Run Calendar mobile staff overview browser proof
+        run: node scripts/calendar-mobile-staff-overview-browser-proof.js
+      - name: Upload Calendar mobile staff overview browser proof
+        uses: actions/upload-artifact@v4
+        with:
+          name: calendar-mobile-staff-overview-v1
+          path: artifacts/calendar-mobile-staff-overview-v1
           if-no-files-found: error
           retention-days: 14
       - name: Generate Calendar cockpit visual proof
