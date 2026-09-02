@@ -4,83 +4,54 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const {
+  CLIENT_LOOKUP_CAPABILITY,
   CLIENT_NOTIFY_CAPABILITY,
   evaluateClientNotificationAuthority,
   createWorkspaceClientNotificationService,
 } = require('../src/services/workspaceClientNotifications');
-const {
-  renderClientNotificationActionSection,
-} = require('../src/presentation/workspaceCommunicationEvidenceUx');
-const {
-  renderBookingConfirmationPreviewPage,
-} = require('../src/presentation/workspaceClientNotificationsUx');
+const { renderClientNotificationActionSection } = require('../src/presentation/workspaceCommunicationEvidenceUx');
+const { renderBookingConfirmationPreviewPage } = require('../src/presentation/workspaceClientNotificationsUx');
 
-function principal(permissions = { [CLIENT_NOTIFY_CAPABILITY]: true }) {
-  return {
-    id: 7,
-    staff_id: 12,
-    display_name: 'Operator',
-    permissions,
-    admin_active: true,
-    staff_status: 'active',
-  };
+const fullPermissions = { [CLIENT_LOOKUP_CAPABILITY]: true, [CLIENT_NOTIFY_CAPABILITY]: true };
+function principal(permissions = fullPermissions) {
+  return { id: 7, staff_id: 12, display_name: 'Operator', permissions, admin_active: true, staff_status: 'active' };
 }
-
 function previewRow(overrides = {}) {
   return {
-    client_id: 41,
-    client_name: 'Client One',
-    normalized_mobile: '27821234567',
-    mobile_verified_at: new Date('2026-01-01T00:00:00Z'),
-    client_status: 'active',
-    appointment_id: 501,
-    starts_at: new Date('2026-09-10T08:00:00Z'),
-    ends_at: new Date('2026-09-10T09:00:00Z'),
-    appointment_status: 'confirmed',
-    source: 'shiloh',
-    location_name: 'Shiloh',
-    service_name: 'Treatment',
-    staff_name: 'Practitioner',
-    already_sent: false,
-    ...overrides,
+    client_id: 41, client_name: 'Client One', normalized_mobile: '27821234567',
+    mobile_verified_at: new Date('2026-01-01T00:00:00Z'), client_status: 'active',
+    appointment_id: 501, starts_at: new Date('2026-09-10T08:00:00Z'), ends_at: new Date('2026-09-10T09:00:00Z'),
+    appointment_status: 'confirmed', source: 'shiloh', location_name: 'Shiloh', service_name: 'Treatment',
+    staff_name: 'Practitioner', already_sent: false, ...overrides,
   };
 }
-
-function fakeDb({ permissions, row = previewRow() } = {}) {
-  return {
-    async query(sql) {
-      if (String(sql).includes('workspaceClientNotifications:principal')) {
-        return { rows: [principal(permissions)] };
-      }
-      if (String(sql).includes('workspaceClientNotifications:preview')) {
-        return { rows: row ? [row] : [] };
-      }
-      throw new Error(`Unexpected query: ${String(sql).slice(0, 80)}`);
-    },
-  };
+function fakeDb({ permissions = fullPermissions, row = previewRow() } = {}) {
+  return { async query(sql) {
+    if (String(sql).includes('workspaceClientNotifications:principal')) return { rows: [principal(permissions)] };
+    if (String(sql).includes('workspaceClientNotifications:preview')) return { rows: row ? [row] : [] };
+    throw new Error(`Unexpected query: ${String(sql).slice(0, 80)}`);
+  } };
 }
-
 const readyEnv = {
-  PHONE_NUMBER_ID: 'phone-id',
-  WHATSAPP_TOKEN: 'token',
+  PHONE_NUMBER_ID: 'phone-id', WHATSAPP_TOKEN: 'token',
   WHATSAPP_BOOKING_CONFIRMATION_TEMPLATE: 'shiloh_booking_confirmation_v2',
   SHILOH_WORKSPACE_CLIENT_NOTIFY_PROVIDER_READY: 'true',
 };
 const readyProvider = async () => ({ ready: true });
 
-test('client:notify is a separate fail-closed authority from client:lookup', () => {
-  assert.equal(evaluateClientNotificationAuthority([principal({ 'client:lookup': true })]), null);
-  const authority = evaluateClientNotificationAuthority([principal({ 'client:lookup': true, 'client:notify': true })]);
-  assert.equal(authority.capability, 'client:notify');
+test('client notification authority requires client visibility and the distinct outbound capability', () => {
+  assert.equal(evaluateClientNotificationAuthority([principal({ [CLIENT_LOOKUP_CAPABILITY]: true })]), null);
+  assert.equal(evaluateClientNotificationAuthority([principal({ [CLIENT_NOTIFY_CAPABILITY]: true })]), null);
+  const authority = evaluateClientNotificationAuthority([principal(fullPermissions)]);
+  assert.equal(authority.capability, CLIENT_NOTIFY_CAPABILITY);
+  assert.equal(authority.requiredVisibilityCapability, CLIENT_LOOKUP_CAPABILITY);
   assert.equal(authority.key, 'workspace_client_notify_v1');
 });
 
 test('authorized preview is bounded to the next canonical CRM V2 appointment and sends nothing', async () => {
   let sendCalls = 0;
   const service = createWorkspaceClientNotificationService({
-    db: fakeDb(),
-    env: readyEnv,
-    providerGuard: readyProvider,
+    db: fakeDb(), env: readyEnv, providerGuard: readyProvider,
     sender: async () => { sendCalls += 1; return { sent: true }; },
   });
   const preview = await service.getPreview({ adminId: 7, clientId: 41 });
@@ -96,31 +67,23 @@ test('authorized preview is bounded to the next canonical CRM V2 appointment and
   assert.match(html, /Nothing is sent until you press the button and confirm/);
 });
 
-test('lookup-only principal is forbidden from preview and sender is never reached', async () => {
-  let sendCalls = 0;
-  const service = createWorkspaceClientNotificationService({
-    db: fakeDb({ permissions: { 'client:lookup': true } }),
-    env: readyEnv,
-    providerGuard: readyProvider,
-    sender: async () => { sendCalls += 1; return { sent: true }; },
-  });
-  await assert.rejects(
-    service.getPreview({ adminId: 7, clientId: 41 }),
-    error => error.code === 'WORKSPACE_CLIENT_NOTIFY_FORBIDDEN' && error.httpStatus === 403
-  );
-  await assert.rejects(
-    service.sendBookingConfirmation({ adminId: 7, clientId: 41 }),
-    error => error.code === 'WORKSPACE_CLIENT_NOTIFY_FORBIDDEN'
-  );
-  assert.equal(sendCalls, 0);
+test('lookup-only and notify-only principals are both forbidden from direct preview/send', async () => {
+  for (const permissions of [{ [CLIENT_LOOKUP_CAPABILITY]: true }, { [CLIENT_NOTIFY_CAPABILITY]: true }]) {
+    let sendCalls = 0;
+    const service = createWorkspaceClientNotificationService({
+      db: fakeDb({ permissions }), env: readyEnv, providerGuard: readyProvider,
+      sender: async () => { sendCalls += 1; return { sent: true }; },
+    });
+    await assert.rejects(service.getPreview({ adminId: 7, clientId: 41 }), error => error.code === 'WORKSPACE_CLIENT_NOTIFY_FORBIDDEN' && error.httpStatus === 403);
+    await assert.rejects(service.sendBookingConfirmation({ adminId: 7, clientId: 41 }), error => error.code === 'WORKSPACE_CLIENT_NOTIFY_FORBIDDEN');
+    assert.equal(sendCalls, 0);
+  }
 });
 
-test('preview clearly blocks missing recipient and disabled Workspace provider gate before delivery', async () => {
+test('preview blocks missing recipient and disabled Workspace provider gate before delivery', async () => {
   const missingRecipient = createWorkspaceClientNotificationService({
-    db: fakeDb({ row: previewRow({ normalized_mobile: null }) }),
-    env: readyEnv,
-    providerGuard: readyProvider,
-    sender: async () => ({ sent: true }),
+    db: fakeDb({ row: previewRow({ normalized_mobile: null }) }), env: readyEnv,
+    providerGuard: readyProvider, sender: async () => ({ sent: true }),
   });
   const first = await missingRecipient.getPreview({ adminId: 7, clientId: 41 });
   assert.equal(first.canSend, false);
@@ -129,13 +92,8 @@ test('preview clearly blocks missing recipient and disabled Workspace provider g
 
   const noChannel = createWorkspaceClientNotificationService({
     db: fakeDb(),
-    env: {
-      PHONE_NUMBER_ID: 'phone-id',
-      WHATSAPP_TOKEN: 'token',
-      WHATSAPP_BOOKING_CONFIRMATION_TEMPLATE: 'shiloh_booking_confirmation_v2',
-    },
-    providerGuard: readyProvider,
-    sender: async () => ({ sent: true }),
+    env: { PHONE_NUMBER_ID: 'phone-id', WHATSAPP_TOKEN: 'token', WHATSAPP_BOOKING_CONFIRMATION_TEMPLATE: 'shiloh_booking_confirmation_v2' },
+    providerGuard: readyProvider, sender: async () => ({ sent: true }),
   });
   const second = await noChannel.getPreview({ adminId: 7, clientId: 41 });
   assert.equal(second.canSend, false);
@@ -146,8 +104,7 @@ test('preview clearly blocks missing recipient and disabled Workspace provider g
 test('provider-unready state fails closed before the existing sender can be invoked', async () => {
   let sendCalls = 0;
   const service = createWorkspaceClientNotificationService({
-    db: fakeDb(),
-    env: readyEnv,
+    db: fakeDb(), env: readyEnv,
     providerGuard: async () => { throw new Error('provider blocked'); },
     sender: async () => { sendCalls += 1; return { sent: true }; },
   });
@@ -156,25 +113,18 @@ test('provider-unready state fails closed before the existing sender can be invo
   assert.equal(preview.providerReady, false);
   assert.equal(preview.reason, 'provider_unavailable');
   assert.match(preview.reasonMessage, /Nothing can be sent/);
-  await assert.rejects(
-    service.sendBookingConfirmation({ adminId: 7, clientId: 41 }),
-    error => error.code === 'WORKSPACE_CLIENT_NOTIFY_NOT_SENDABLE'
-  );
+  await assert.rejects(service.sendBookingConfirmation({ adminId: 7, clientId: 41 }), error => error.code === 'WORKSPACE_CLIENT_NOTIFY_NOT_SENDABLE');
   assert.equal(sendCalls, 0);
 });
 
-test('final send re-previews authority and provider readiness then delegates only to the existing semantic sender', async () => {
+test('final send re-previews authority and provider readiness then delegates only to the semantic sender', async () => {
   const calls = [];
   const db = fakeDb();
   let guardCalls = 0;
   const service = createWorkspaceClientNotificationService({
-    db,
-    env: readyEnv,
+    db, env: readyEnv,
     providerGuard: async () => { guardCalls += 1; return { ready: true }; },
-    sender: async (appointmentId, options) => {
-      calls.push({ appointmentId, options });
-      return { sent: true };
-    },
+    sender: async (appointmentId, options) => { calls.push({ appointmentId, options }); return { sent: true }; },
   });
   const result = await service.sendBookingConfirmation({ adminId: 7, clientId: 41 });
   assert.equal(result.sent, true);
@@ -186,7 +136,7 @@ test('final send re-previews authority and provider readiness then delegates onl
   assert.equal(calls[0].options.env, readyEnv);
 });
 
-test('client detail exposes a preview deep-link only when client:notify is resolved', () => {
+test('client detail exposes a preview deep-link only when notification authority is resolved', () => {
   const denied = renderClientNotificationActionSection({ id: 41 }, false);
   assert.doesNotMatch(denied, /href="\/calendar\/clients\/41\/booking-confirmation"/);
   assert.match(denied, /Additional capability required: client:notify/);
