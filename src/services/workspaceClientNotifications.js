@@ -1,7 +1,9 @@
 const { pool } = require('../db/pool');
 const { sendCustomerBookingConfirmationForAppointment } = require('./customerBookingConfirmation');
+const { assertTemplateSendAllowed } = require('./metaTemplateContracts');
 
 const CLIENT_NOTIFY_CAPABILITY = 'client:notify';
+const WORKSPACE_CLIENT_NOTIFY_PROVIDER_GATE = 'SHILOH_WORKSPACE_CLIENT_NOTIFY_PROVIDER_READY';
 
 class WorkspaceClientNotificationError extends Error {
   constructor(code, message, httpStatus) {
@@ -37,7 +39,16 @@ function evaluateClientNotificationAuthority(rows = []) {
 }
 
 function channelReady(env = process.env) {
-  return Boolean(String(env.PHONE_NUMBER_ID || '').trim() && String(env.WHATSAPP_TOKEN || '').trim());
+  return String(env[WORKSPACE_CLIENT_NOTIFY_PROVIDER_GATE] || '').trim().toLowerCase() === 'true'
+    && Boolean(String(env.PHONE_NUMBER_ID || '').trim())
+    && Boolean(String(env.WHATSAPP_TOKEN || '').trim())
+    && Boolean(String(env.WHATSAPP_BOOKING_CONFIRMATION_TEMPLATE || '').trim());
+}
+
+async function defaultProviderGuard(env = process.env) {
+  const template = String(env.WHATSAPP_BOOKING_CONFIRMATION_TEMPLATE || '').trim();
+  if (!template) throw new Error('Booking confirmation template is not configured');
+  return assertTemplateSendAllowed(template, String(env.WHATSAPP_TEMPLATE_LANGUAGE || 'en').trim() || 'en');
 }
 
 function validCrmV2Mobile(value) {
@@ -59,7 +70,8 @@ function publicReason(reason) {
     case 'recipient_missing': return 'This client does not have a valid canonical WhatsApp/mobile recipient.';
     case 'no_upcoming_appointment': return 'There is no upcoming Shiloh-owned appointment available for a booking confirmation.';
     case 'already_sent': return 'A booking confirmation is already recorded as sent for this appointment.';
-    case 'channel_unavailable': return 'The WhatsApp delivery channel is not configured for this runtime.';
+    case 'channel_unavailable': return 'The Workspace WhatsApp delivery gate is disabled or the booking-confirmation channel is not configured.';
+    case 'provider_unavailable': return 'The approved Shiloh booking-confirmation provider contract is not currently ready. Nothing can be sent.';
     case 'client_inactive': return 'This canonical client is not active.';
     case 'practitioner_approval_required': return 'The appointment still requires practitioner approval before a confirmation can be sent.';
     case 'appointment_not_found': return 'The appointment is no longer available.';
@@ -71,9 +83,11 @@ function createWorkspaceClientNotificationService({
   db = pool,
   env = process.env,
   sender = sendCustomerBookingConfirmationForAppointment,
+  providerGuard = defaultProviderGuard,
 } = {}) {
   if (!db || typeof db.query !== 'function') throw new Error('Workspace client notification database is required');
   if (typeof sender !== 'function') throw new Error('Workspace client notification sender is required');
+  if (typeof providerGuard !== 'function') throw new Error('Workspace client notification provider guard is required');
 
   async function resolveAccess(adminId) {
     const id = positiveId(adminId);
@@ -158,7 +172,16 @@ function createWorkspaceClientNotificationService({
         404
       );
     }
-    const state = previewState(row, env);
+    let state = previewState(row, env);
+    let providerReady = false;
+    if (state.canSend) {
+      try {
+        await providerGuard(env);
+        providerReady = true;
+      } catch (_error) {
+        state = { canSend: false, reason: 'provider_unavailable' };
+      }
+    }
     return {
       authority,
       client: {
@@ -180,6 +203,7 @@ function createWorkspaceClientNotificationService({
       } : null,
       alreadySent: row.already_sent === true,
       channelReady: channelReady(env),
+      providerReady,
       canSend: state.canSend,
       reason: state.reason,
       reasonMessage: state.reason ? publicReason(state.reason) : null,
@@ -231,10 +255,12 @@ const service = createWorkspaceClientNotificationService();
 
 module.exports = {
   CLIENT_NOTIFY_CAPABILITY,
+  WORKSPACE_CLIENT_NOTIFY_PROVIDER_GATE,
   WorkspaceClientNotificationError,
   positiveId,
   evaluateClientNotificationAuthority,
   channelReady,
+  defaultProviderGuard,
   validCrmV2Mobile,
   previewState,
   publicReason,
