@@ -191,7 +191,8 @@ function assertCase(proof, metrics) {
     if (metrics.minCardWidth < 150) throw new Error(`${proof.name} staff cards are cramped (${metrics.minCardWidth}px)`);
     if (!metrics.cardsInsideViewport) throw new Error(`${proof.name} staff cards leave the viewport`);
     if (!metrics.allCardsUseStaffFilter) throw new Error(`${proof.name} overview does not reuse staff filter URLs`);
-    if (!metrics.mobileGridColumns || metrics.mobileGridColumns.trim().split(/\s+/).length !== 2) {
+    const gridColumnCount = String(metrics.mobileGridColumns || '').trim().split(' ').filter(Boolean).length;
+    if (gridColumnCount !== 2) {
       throw new Error(`${proof.name} overview is not a two-column grid: ${metrics.mobileGridColumns}`);
     }
     if (metrics.dayGridVisibility !== 'hidden' || metrics.dayGridPosition !== 'absolute' || metrics.dayGridWidth > 1.5) {
