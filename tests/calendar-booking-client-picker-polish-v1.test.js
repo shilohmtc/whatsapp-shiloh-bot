@@ -87,6 +87,9 @@ test('client picker keeps explicit selection and new-client fields bounded to na
   assert.match(script, /data-client-mode-search/);
   assert.match(script, /searchAction\.click\(\)/);
   assert.match(script, /calendar-client-mode/);
+  assert.match(script, /normalGuard\.remove\(\)/);
+  assert.match(script, /function hideStatus\(\)/);
+  assert.match(script, /hideStatus\(\)/);
   assert.doesNotMatch(script, /date of birth|gender|email address/i);
   assert.doesNotMatch(script, /\bfetch\s*\(/);
 });
