@@ -140,6 +140,14 @@ const METRICS_EXPRESSION = `(() => {
     const rect = el.getBoundingClientRect();
     return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0;
   }
+  function hasStaffFilter(card) {
+    try {
+      const url = new URL(card.getAttribute('href') || '', 'https://shiloh-proof.local');
+      return /^\\d+$/.test(url.searchParams.get('staff') || '');
+    } catch {
+      return false;
+    }
+  }
   const root = document.documentElement;
   const overview = document.querySelector('[data-mobile-staff-overview]');
   const cards = Array.from(document.querySelectorAll('.mobile-staff-card')).filter(visible);
@@ -163,7 +171,7 @@ const METRICS_EXPRESSION = `(() => {
       const r = card.getBoundingClientRect();
       return r.left >= -1 && r.right <= window.innerWidth + 1;
     }),
-    allCardsUseStaffFilter: cards.every(card => /[?&]staff=\d+/.test(card.getAttribute('href') || '')),
+    allCardsUseStaffFilter: cards.every(hasStaffFilter),
     mobileGridColumns: mobileGrid ? getComputedStyle(mobileGrid).gridTemplateColumns : null,
     dayGridDisplay: dayGridStyle ? dayGridStyle.display : null,
     dayGridVisibility: dayGridStyle ? dayGridStyle.visibility : null,
