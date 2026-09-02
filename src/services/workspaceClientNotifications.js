@@ -2,6 +2,7 @@ const { pool } = require('../db/pool');
 const { sendCustomerBookingConfirmationForAppointment } = require('./customerBookingConfirmation');
 const { assertTemplateSendAllowed } = require('./metaTemplateContracts');
 
+const CLIENT_LOOKUP_CAPABILITY = 'client:lookup';
 const CLIENT_NOTIFY_CAPABILITY = 'client:notify';
 const WORKSPACE_CLIENT_NOTIFY_PROVIDER_GATE = 'SHILOH_WORKSPACE_CLIENT_NOTIFY_PROVIDER_READY';
 
@@ -29,12 +30,14 @@ function evaluateClientNotificationAuthority(rows = []) {
   const adminId = positiveId(principal.id);
   if (!adminId || principal.admin_active !== true) return null;
   if (principal.staff_id != null && principal.staff_status !== 'active') return null;
-  if (permissionSet(principal.permissions)[CLIENT_NOTIFY_CAPABILITY] !== true) return null;
+  const permissions = permissionSet(principal.permissions);
+  if (permissions[CLIENT_LOOKUP_CAPABILITY] !== true || permissions[CLIENT_NOTIFY_CAPABILITY] !== true) return null;
   return {
     key: 'workspace_client_notify_v1',
     operatorAdminId: adminId,
     displayName: String(principal.display_name || 'Staff').trim() || 'Staff',
     capability: CLIENT_NOTIFY_CAPABILITY,
+    requiredVisibilityCapability: CLIENT_LOOKUP_CAPABILITY,
   };
 }
 
@@ -254,6 +257,7 @@ function createWorkspaceClientNotificationService({
 const service = createWorkspaceClientNotificationService();
 
 module.exports = {
+  CLIENT_LOOKUP_CAPABILITY,
   CLIENT_NOTIFY_CAPABILITY,
   WORKSPACE_CLIENT_NOTIFY_PROVIDER_GATE,
   WorkspaceClientNotificationError,
