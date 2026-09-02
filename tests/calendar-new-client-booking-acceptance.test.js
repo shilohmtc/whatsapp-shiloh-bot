@@ -123,9 +123,14 @@ const serviceSource = fs.readFileSync(path.join(ROOT, 'src/services/calendarCrea
 const uxSource = fs.readFileSync(path.join(ROOT, 'src/presentation/calendarCreateBookingUx.js'), 'utf8');
 const choiceSource = fs.readFileSync(path.join(ROOT, 'src/presentation/calendarCreateBookingClientChoiceUx.js'), 'utf8');
 
-test('Create Booking exposes exactly Find client and New client with no registration action', () => {
-  assert.match(choiceSource, /existingButton\.textContent='Find client'/);
-  assert.match(choiceSource, /newButton\.textContent='New client'/);
+test('Create Booking presents existing clients first, keeps search secondary, and exposes Add new client without registration', () => {
+  assert.match(choiceSource, /existingButton\.textContent='Existing clients'/);
+  assert.match(choiceSource, /searchButton\.textContent='Search clients'/);
+  assert.match(choiceSource, /newButton\.textContent='Add new client'/);
+  assert.match(choiceSource, /data-client-mode-existing/);
+  assert.match(choiceSource, /data-client-mode-search/);
+  assert.match(choiceSource, /data-client-mode-new/);
+  assert.match(choiceSource, /loadExistingClients\(\)/);
   assert.doesNotMatch(`${uxSource}\n${choiceSource}`, /Find existing client|\+ New client|Client registration/);
   assert.match(uxSource, /Name or mobile number/);
   assert.doesNotMatch(`${uxSource}\n${choiceSource}`, /Search CRM V2|Clean CRM V2|guarded Shiloh write/);

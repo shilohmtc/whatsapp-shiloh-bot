@@ -1,12 +1,16 @@
+const CLIENT_BROWSE_QUERY = '__shiloh_calendar_active_clients_v1__';
+
 function calendarCreateBookingClientChoiceScript() {
   return `(function(){
 'use strict';
+var BROWSE_QUERY='${CLIENT_BROWSE_QUERY}';
 var search=document.getElementById('client-search');
 if(!search)return;
 var field=search.closest('.field.wide');
 if(!field)return;
 var searchLabel=field.querySelector('label[for="client-search"]');
 var searchActions=search.parentElement;
+var searchAction=field.querySelector('[data-client-search]');
 var results=field.querySelector('[data-client-results]');
 var selected=field.querySelector('[data-selected-client]');
 var newPanel=field.querySelector('[data-new-client-panel]');
@@ -14,7 +18,7 @@ var useNew=field.querySelector('[data-select-new-client]');
 var newName=document.getElementById('new-client-name');
 var review=document.querySelector('[data-review-booking]');
 var status=document.querySelector('[data-booking-status]');
-if(!searchLabel||!searchActions||!results||!newPanel)return;
+if(!searchLabel||!searchActions||!searchAction||!results||!newPanel)return;
 var modeHeading=document.createElement('div');
 modeHeading.className='hint';
 modeHeading.textContent='Client';
@@ -24,20 +28,27 @@ var modeActions=document.createElement('div');
 modeActions.className='actions';
 modeActions.style.marginTop='6px';
 modeActions.setAttribute('role','group');
-modeActions.setAttribute('aria-label','Choose client type');
+modeActions.setAttribute('aria-label','Choose client');
 var existingButton=document.createElement('button');
 existingButton.type='button';
 existingButton.className='button';
-existingButton.textContent='Find client';
+existingButton.textContent='Existing clients';
 existingButton.setAttribute('data-client-mode-existing','');
 existingButton.setAttribute('aria-pressed','true');
+var searchButton=document.createElement('button');
+searchButton.type='button';
+searchButton.className='button secondary';
+searchButton.textContent='Search clients';
+searchButton.setAttribute('data-client-mode-search','');
+searchButton.setAttribute('aria-pressed','false');
 var newButton=document.createElement('button');
 newButton.type='button';
 newButton.className='button secondary';
-newButton.textContent='New client';
+newButton.textContent='Add new client';
 newButton.setAttribute('data-client-mode-new','');
 newButton.setAttribute('aria-pressed','false');
 modeActions.appendChild(existingButton);
+modeActions.appendChild(searchButton);
 modeActions.appendChild(newButton);
 var existingPanel=document.createElement('div');
 existingPanel.setAttribute('data-existing-client-panel','');
@@ -47,18 +58,26 @@ field.insertBefore(existingPanel,searchLabel);
 existingPanel.appendChild(searchLabel);
 existingPanel.appendChild(searchActions);
 existingPanel.appendChild(results);
-searchLabel.textContent='Name or mobile number';
+searchLabel.textContent='Search by name or mobile number';
 function setStatus(message){if(!status)return;status.textContent=message;status.classList.remove('error','ready','warn');}
 function clearVisibleSelection(){if(!selected)return;selected.hidden=true;selected.textContent='';selected.removeAttribute('data-client-selection');}
-function setMode(mode,preserveSelection){var isNew=mode==='new';existingPanel.hidden=isNew;newPanel.hidden=!isNew;existingButton.className=isNew?'button secondary':'button';newButton.className=isNew?'button':'button secondary';existingButton.setAttribute('aria-pressed',isNew?'false':'true');newButton.setAttribute('aria-pressed',isNew?'true':'false');if(!preserveSelection)window.dispatchEvent(new CustomEvent('calendar-client-mode',{detail:{mode:mode}}));}
-existingButton.addEventListener('click',function(){clearVisibleSelection();if(review)review.disabled=true;setMode('existing');setStatus('Find a client by name or mobile number, then explicitly select one result.');search.focus();});
+function buttonClass(active){return active?'button':'button secondary';}
+function setMode(mode,preserveSelection){var isBrowse=mode==='browse';var isSearch=mode==='search';var isNew=mode==='new';existingPanel.hidden=isNew;newPanel.hidden=!isNew;searchLabel.hidden=!isSearch;searchActions.hidden=!isSearch;existingButton.className=buttonClass(isBrowse);searchButton.className=buttonClass(isSearch);newButton.className=buttonClass(isNew);existingButton.setAttribute('aria-pressed',isBrowse?'true':'false');searchButton.setAttribute('aria-pressed',isSearch?'true':'false');newButton.setAttribute('aria-pressed',isNew?'true':'false');if(!preserveSelection)window.dispatchEvent(new CustomEvent('calendar-client-mode',{detail:{mode:mode}}));}
+function loadExistingClients(){setStatus('Loading existing clients…');search.value=BROWSE_QUERY;searchAction.click();search.value='';}
+function syncModeDisabled(){searchButton.disabled=existingButton.disabled===true;}
+existingButton.addEventListener('click',function(){if(existingButton.disabled)return;clearVisibleSelection();if(review)review.disabled=true;setMode('browse');loadExistingClients();});
+searchButton.addEventListener('click',function(){if(existingButton.disabled)return;clearVisibleSelection();if(review)review.disabled=true;setMode('search');setStatus('Search for a client by name or mobile number, then explicitly select one result.');search.focus();});
 newButton.addEventListener('click',function(){clearVisibleSelection();if(review)review.disabled=true;setMode('new');setStatus('Enter the new client’s name and South African mobile number.');if(newName)newName.focus();});
 if(useNew)useNew.addEventListener('click',function(){window.setTimeout(function(){if(selected&&!selected.hidden&&selected.textContent.indexOf('New client')===0){setMode('new',true);if(review)review.disabled=false;}},0);});
-results.addEventListener('click',function(event){var target=event.target.closest?event.target.closest('.client-result'):null;if(!target)return;window.setTimeout(function(){if(selected&&!selected.hidden&&selected.getAttribute('data-client-selection')==='existing'){setMode('existing',true);if(review)review.disabled=false;}},0);});
-setMode('existing');
+results.addEventListener('click',function(event){var target=event.target.closest?event.target.closest('.client-result'):null;if(!target)return;window.setTimeout(function(){if(selected&&!selected.hidden&&selected.getAttribute('data-client-selection')==='existing'){setMode('browse',true);if(review)review.disabled=false;}},0);});
+if(typeof MutationObserver==='function'){new MutationObserver(syncModeDisabled).observe(existingButton,{attributes:true,attributeFilter:['disabled']});}
+syncModeDisabled();
+setMode('browse');
+loadExistingClients();
 })();`;
 }
 
 module.exports = {
+  CLIENT_BROWSE_QUERY,
   calendarCreateBookingClientChoiceScript,
 };

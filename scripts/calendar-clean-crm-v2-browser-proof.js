@@ -42,7 +42,7 @@ function createFixture() {
   const session = { sessionId: 1526, adminId: 71, csrfToken: opaque('csrf:0'), rotations: 0 };
   session.csrfHash = sha256(session.csrfToken);
   const state = {
-    requests: [], searches: [], prepares: [], acknowledgements: [], confirmations: [], canonicalReloads: 0,
+    requests: [], browses: [], searches: [], prepares: [], acknowledgements: [], confirmations: [], canonicalReloads: 0,
   };
   const sessionService = {
     async validateSessionToken(supplied) {
@@ -62,6 +62,17 @@ function createFixture() {
   };
   const selectedClient = {
     id: '912', displayName: 'Synthetic Existing Client', status: 'active', profileStatus: 'minimal', contactHint: 'ending in 4567',
+  };
+  const clientDirectory = {
+    async listActiveClients(limit) {
+      state.browses.push({ limit });
+      return {
+        clients: [selectedClient, { ...selectedClient, id: '913', displayName: 'Synthetic Similar Name', contactHint: 'ending in 9876' }],
+        requiresExplicitSelection: true,
+        ambiguous: true,
+        identityModel: 'crm_v2_operator_browse_only',
+      };
+    },
   };
   const bookingService = {
     async resolveOperator(adminId) {
@@ -158,7 +169,7 @@ function createFixture() {
     state.canonicalReloads += 1;
     return res.status(200).type('html').send('<!doctype html><title>Canonical Calendar</title><h1>Canonical Calendar refreshed</h1>');
   });
-  app.use('/calendar/book', createCalendarCreateBookingRouter({ env, sessionService, bookingService }));
+  app.use('/calendar/book', createCalendarCreateBookingRouter({ env, sessionService, bookingService, clientDirectory }));
   return { app, state };
 }
 
@@ -281,8 +292,12 @@ async function main() {
     }
 
     await navigate();
+    await poll(() => state.browses.length, (value) => value === 1);
+    await poll(() => evaluate(cdp, `document.querySelectorAll('.client-result').length`), (value) => value === 2);
+    assert.deepEqual(state.browses, [{ limit: 10 }]);
+    assert.equal(state.prepares.length, 0, 'default client browse must never auto-select or prepare');
     const surface = await evaluate(cdp, `({
-      choices:[...document.querySelectorAll('[data-client-mode-existing],[data-client-mode-new]')].map(e=>e.textContent.trim()),
+      choices:[...document.querySelectorAll('[data-client-mode-existing],[data-client-mode-search],[data-client-mode-new]')].map(e=>e.textContent.trim()),
       hasRegistration:/register client/i.test(document.body.innerText),
       hasGoogle:/google/i.test(document.body.innerText),
       heading:document.querySelector('header p').textContent,
@@ -290,7 +305,7 @@ async function main() {
       hasInternalJargon:/CRM V2|canonical client|guarded canonical write|review before write/i.test(document.body.innerText),
       cookieVisible:document.cookie
     })`);
-    assert.deepEqual(surface.choices, ['Find client', 'New client']);
+    assert.deepEqual(surface.choices, ['Existing clients', 'Search clients', 'Add new client']);
     assert.equal(surface.hasRegistration, false);
     assert.equal(surface.hasGoogle, false);
     assert.equal(surface.heading, 'Choose the client, treatment, practitioner and time.');
@@ -301,7 +316,9 @@ async function main() {
     assert.ok(desktop.width >= 1200);
     assert.ok(desktop.overflow <= 1);
     const screenshots = [];
-    await evaluate(cdp, `(()=>{const input=document.querySelector('#client-search');input.value='Synthetic';document.querySelector('[data-client-search]').click();return true;})()`);
+    const beforeSearch = state.searches.length;
+    await evaluate(cdp, `(()=>{document.querySelector('[data-client-mode-search]').click();const input=document.querySelector('#client-search');input.value='Synthetic';document.querySelector('[data-client-search]').click();return true;})()`);
+    await poll(() => state.searches.length, (value) => value > beforeSearch);
     await poll(() => evaluate(cdp, `document.querySelectorAll('.client-result').length`), (value) => value === 2);
     assert.equal(state.prepares.length, 0, 'search must never auto-select or prepare');
     await evaluate(cdp, `document.querySelectorAll('.client-result')[0].click();true`);
@@ -380,6 +397,7 @@ async function main() {
       generatedAt: new Date().toISOString(), exactHead: checkedOutHead,
       environment: 'ephemeral HTTPS + authenticated synthetic staff session + system Chromium',
       clientSurface: surface.choices, explicitSelection: true,
+      existingClientBrowse: { crmV2Only: true, resultCount: 2, autoSelection: false, limit: 10 },
       findClient: { crmV2Only: true, resultCount: 2, autoSelection: false, selectedClientId: 912 },
       newClient: { canonicalCrmV2ClientId: 914, legacyShadowWrites: 0 },
       finalMobileAcknowledgement: { serverAuthoritative: true, browserIdentityFieldsSubmitted: 0, requests: acknowledgementRequests.length },

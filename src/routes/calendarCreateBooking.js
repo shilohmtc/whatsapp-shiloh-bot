@@ -1,6 +1,7 @@
 const express = require('express');
 const { pool } = require('../db/pool');
 const { createCalendarCreateBookingService } = require('../services/calendarCreateBooking');
+const { createCalendarBookingClientDirectory } = require('../services/calendarBookingClientDirectory');
 const {
   requireStaffSession,
   sameOriginGuard,
@@ -13,6 +14,8 @@ const {
 const {
   calendarCreateBookingClientChoiceScript,
 } = require('../presentation/calendarCreateBookingClientChoiceUx');
+
+const CLIENT_BROWSE_QUERY = '__shiloh_calendar_active_clients_v1__';
 
 function setBookingSecurityHeaders(res) {
   res.setHeader('Cache-Control', 'private, no-store, max-age=0');
@@ -70,11 +73,15 @@ function createCalendarCreateBookingRouter({
   env = process.env,
   sessionService,
   bookingService = createCalendarCreateBookingService({ db: pool, env }),
+  clientDirectory = createCalendarBookingClientDirectory(),
   renderPage = renderCalendarCreateBookingPage,
   renderClient = calendarCreateBookingClientScript,
   renderClientChoice = calendarCreateBookingClientChoiceScript,
 } = {}) {
   if (!sessionService) throw new Error('Calendar Create Booking staff session service is required');
+  if (!clientDirectory || typeof clientDirectory.listActiveClients !== 'function') {
+    throw new Error('Calendar Create Booking client directory is required');
+  }
   const router = express.Router();
   const requireSession = requireStaffSession({ service: sessionService, env });
   const sameOrigin = sameOriginGuard({ env });
@@ -113,7 +120,14 @@ function createCalendarCreateBookingRouter({
 
   router.post('/client-search', sameOrigin, requireSession, async (req, res, next) => {
     try {
-      const result = await bookingService.searchClients(req.staffBrowserSession.adminId, req.body?.query);
+      const query = String(req.body?.query || '').trim();
+      let result;
+      if (query === CLIENT_BROWSE_QUERY) {
+        await bookingService.resolveOperator(req.staffBrowserSession.adminId);
+        result = await clientDirectory.listActiveClients(10);
+      } else {
+        result = await bookingService.searchClients(req.staffBrowserSession.adminId, query);
+      }
       return res.status(200).json(result);
     } catch (error) {
       const status = statusForError(error);
@@ -191,6 +205,7 @@ function createCalendarCreateBookingRouter({
 }
 
 module.exports = {
+  CLIENT_BROWSE_QUERY,
   createCalendarCreateBookingRouter,
   setBookingSecurityHeaders,
   statusForError,
