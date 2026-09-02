@@ -92,6 +92,15 @@ jobs:
           path: artifacts/calendar-operational-mutations-browser-proof
           if-no-files-found: error
           retention-days: 14
+      - name: Run authenticated Workspace client notification browser proof
+        run: node scripts/workspace-client-notifications-browser-proof.js
+      - name: Upload authenticated Workspace client notification browser proof
+        uses: actions/upload-artifact@v4
+        with:
+          name: workspace-client-notifications-browser-proof
+          path: artifacts/workspace-client-notifications-browser-proof
+          if-no-files-found: error
+          retention-days: 14
       - name: Run Calendar Clean CRM V2 browser proof
         run: node scripts/calendar-clean-crm-v2-browser-proof.js
       - name: Upload Calendar Clean CRM V2 browser proof
