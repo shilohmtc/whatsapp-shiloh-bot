@@ -18,6 +18,20 @@ function formatDateTime(value) {
   };
 }
 
+function renderClientNotificationActionSection(client, notificationActionAllowed = false) {
+  const clientId = Number(client?.id);
+  const href = Number.isSafeInteger(clientId) && clientId > 0
+    ? `/calendar/clients/${encodeURIComponent(String(clientId))}/booking-confirmation`
+    : null;
+  const action = notificationActionAllowed && href
+    ? `<a class="button primary" href="${escapeHtml(href)}">Preview booking confirmation</a>`
+    : '<span class="truth-note">Additional capability required: client:notify</span>';
+  const copy = notificationActionAllowed
+    ? 'Preview the next eligible booking confirmation before any client-facing delivery. Final send authority is rechecked separately.'
+    : 'Client lookup remains read-only for this principal. Sending requires the separate client:notify capability.';
+  return `<section class="history-panel" data-client-notification-action style="margin-bottom:12px"><header class="section-heading"><div><span class="eyebrow">Client action</span><h2>Send booking confirmation</h2></div>${action}</header><p class="truth-note" style="line-height:1.55;margin:0">${escapeHtml(copy)}</p></section>`;
+}
+
 function renderCommunicationSection(communications = [], unavailable = false) {
   const rows = (Array.isArray(communications) ? communications : []).map(entry => {
     const when = formatDateTime(entry?.occurredAt);
@@ -33,14 +47,16 @@ function renderCommunicationSection(communications = [], unavailable = false) {
 
 function renderClientDetailPageWithCommunications(model, options = {}) {
   const base = renderClientDetailPage(model, options);
-  const section = renderCommunicationSection(model?.communications || [], model?.communicationsUnavailable === true);
+  const actionSection = renderClientNotificationActionSection(model?.client, options.notificationActionAllowed === true);
+  const communicationSection = renderCommunicationSection(model?.communications || [], model?.communicationsUnavailable === true);
   const marker = '<section class="history-panel">';
   if (!base.includes(marker)) return base;
-  return base.replace(marker, `${section}${marker}`);
+  return base.replace(marker, `${actionSection}${communicationSection}${marker}`);
 }
 
 module.exports = {
   formatDateTime,
+  renderClientNotificationActionSection,
   renderCommunicationSection,
   renderClientDetailPageWithCommunications,
 };

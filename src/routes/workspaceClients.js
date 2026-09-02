@@ -1,5 +1,6 @@
 const express = require('express');
 const workspaceClients = require('../services/workspaceClients');
+const workspaceClientNotifications = require('../services/workspaceClientNotifications');
 const {
   renderClientListPage,
   renderClientsUnavailablePage,
@@ -29,10 +30,11 @@ function safeError(error) {
   return { status: 503, message: 'Canonical client reads are temporarily unavailable.' };
 }
 
-function pageOptions(req, staffAccessPath) {
+function pageOptions(req, staffAccessPath, extras = {}) {
   return {
     staffAccessScriptPath: `${staffAccessPath}/client.js`,
     calendarNavigationAllowed: Boolean(req.staffBrowserSession?.viewer),
+    ...extras,
   };
 }
 
@@ -64,6 +66,7 @@ function createWorkspaceClientListHandler({
 function createWorkspaceClientDetailHandler({
   env = process.env,
   service = workspaceClients,
+  notificationService = workspaceClientNotifications,
   renderPage = renderClientDetailPageWithCommunications,
   renderUnavailable = renderClientsUnavailablePage,
   staffAccessPath = '/calendar/staff',
@@ -77,7 +80,16 @@ function createWorkspaceClientDetailHandler({
         clientId: req.params?.id,
         historyOffset: req.query?.historyOffset,
       });
-      return res.status(200).type('html').send(renderPage(model, pageOptions(req, staffAccessPath)));
+      let notificationActionAllowed = false;
+      try {
+        notificationActionAllowed = Boolean(await notificationService.resolveAccess(req.staffBrowserSession?.adminId));
+      } catch (_error) {
+        notificationActionAllowed = false;
+      }
+      return res.status(200).type('html').send(renderPage(
+        model,
+        pageOptions(req, staffAccessPath, { notificationActionAllowed })
+      ));
     } catch (error) {
       const safe = safeError(error);
       return res.status(safe.status).type('html').send(renderUnavailable({ code: error?.code, message: safe.message }));
@@ -98,6 +110,7 @@ module.exports = {
   isWorkspaceClientsEnabled,
   setWorkspaceClientsSecurityHeaders,
   safeError,
+  pageOptions,
   createWorkspaceClientListHandler,
   createWorkspaceClientDetailHandler,
   createWorkspaceClientsRouter,
