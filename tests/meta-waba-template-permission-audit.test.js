@@ -151,10 +151,10 @@ test('runtime audit is fail-closed and disabled unless its exact one-shot flag i
   assert.equal(calls, 1);
 });
 
-test('production diagnostic implementation is GET-only and startup-wired', () => {
+test('production diagnostic implementation is GET-only and detached from ordinary startup', () => {
   const serviceSource = fs.readFileSync(path.join(__dirname, '../src/services/metaWabaTemplatePermissionAudit.js'), 'utf8');
   const packageSource = fs.readFileSync(path.join(__dirname, '../package.json'), 'utf8');
   assert.doesNotMatch(serviceSource, /axios\.post|\.post\s*\(/);
   assert.doesNotMatch(serviceSource, /message_templates[^\n]*delete/i);
-  assert.match(packageSource, /metaWabaTemplatePermissionAuditBootstrap\.js/);
+  assert.doesNotMatch(packageSource, /metaWabaTemplatePermissionAuditBootstrap\.js/);
 });
