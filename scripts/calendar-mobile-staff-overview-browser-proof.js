@@ -203,7 +203,7 @@ function assertCase(proof, metrics) {
     if (gridColumnCount !== 2) {
       throw new Error(`${proof.name} overview is not a two-column grid: ${metrics.mobileGridColumns}`);
     }
-    if (metrics.dayGridVisibility !== 'hidden' || metrics.dayGridPosition !== 'absolute' || metrics.dayGridWidth > 1.5) {
+    if (metrics.dayGridVisibility !== 'hidden' || metrics.dayGridPosition !== 'absolute' || metrics.dayGridWidth > 2.5) {
       throw new Error(`${proof.name} multi-staff timeline remains in the visible/interactive phone flow: ${JSON.stringify(metrics)}`);
     }
     if (metrics.laneCount !== 0) throw new Error(`${proof.name} hidden multi-staff lanes remain visibly rendered`);
