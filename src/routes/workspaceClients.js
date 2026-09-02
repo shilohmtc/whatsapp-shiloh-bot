@@ -1,10 +1,11 @@
 const express = require('express');
 const workspaceClients = require('../services/workspaceClients');
+const workspaceCommunicationEvidence = require('../services/workspaceCommunicationEvidence');
 const {
   renderClientListPage,
-  renderClientDetailPage,
   renderClientsUnavailablePage,
 } = require('../presentation/workspaceClientsUx');
+const { renderClientDetailPageWithCommunications } = require('../presentation/workspaceCommunicationEvidenceUx');
 const { requireStaffSession } = require('../middleware/staffBrowserSession');
 
 function isWorkspaceClientsEnabled(env = process.env) {
@@ -64,7 +65,8 @@ function createWorkspaceClientListHandler({
 function createWorkspaceClientDetailHandler({
   env = process.env,
   service = workspaceClients,
-  renderPage = renderClientDetailPage,
+  communicationService = workspaceCommunicationEvidence,
+  renderPage = renderClientDetailPageWithCommunications,
   renderUnavailable = renderClientsUnavailablePage,
   staffAccessPath = '/calendar/staff',
 } = {}) {
@@ -77,6 +79,17 @@ function createWorkspaceClientDetailHandler({
         clientId: req.params?.id,
         historyOffset: req.query?.historyOffset,
       });
+      try {
+        model.communications = await communicationService.listForClient({
+          clientId: model.client?.id,
+          waId: model.client?.normalized_mobile,
+          limit: 30,
+        });
+        model.communicationsUnavailable = false;
+      } catch (_) {
+        model.communications = [];
+        model.communicationsUnavailable = true;
+      }
       return res.status(200).type('html').send(renderPage(model, pageOptions(req, staffAccessPath)));
     } catch (error) {
       const safe = safeError(error);
