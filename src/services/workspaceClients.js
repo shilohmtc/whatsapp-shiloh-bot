@@ -1,5 +1,6 @@
 const { pool } = require('../db/pool');
 const crmReadService = require('./crmReadService');
+const { createWorkspaceCommunicationEvidenceService } = require('./workspaceCommunicationEvidence');
 
 const CLIENT_LOOKUP_CAPABILITY = 'client:lookup';
 const CLIENT_LIST_PAGE_SIZE = 24;
@@ -55,8 +56,9 @@ function normalizeOffset(value) {
   return Math.min(offset, 100000);
 }
 
-function createWorkspaceClientsService({ db = pool, readService = crmReadService } = {}) {
+function createWorkspaceClientsService({ db = pool, readService = crmReadService, communicationService = null } = {}) {
   if (!db || typeof db.query !== 'function') throw new Error('Workspace Clients database is required');
+  const communicationReads = communicationService || createWorkspaceCommunicationEvidenceService({ db });
 
   async function resolveAccess(adminId) {
     const id = positiveId(adminId);
@@ -120,6 +122,17 @@ function createWorkspaceClientsService({ db = pool, readService = crmReadService
       limit: CLIENT_HISTORY_PAGE_SIZE + 1,
       offset: safeOffset,
     });
+    let communications = [];
+    let communicationsUnavailable = false;
+    try {
+      communications = await communicationReads.listForClient({
+        clientId: client.id,
+        waId: client.normalized_mobile,
+        limit: 30,
+      });
+    } catch (_) {
+      communicationsUnavailable = true;
+    }
     return {
       authority,
       client,
@@ -127,6 +140,8 @@ function createWorkspaceClientsService({ db = pool, readService = crmReadService
       hasMore: history.length > CLIENT_HISTORY_PAGE_SIZE,
       historyOffset: safeOffset,
       pageSize: CLIENT_HISTORY_PAGE_SIZE,
+      communications,
+      communicationsUnavailable,
     };
   }
 

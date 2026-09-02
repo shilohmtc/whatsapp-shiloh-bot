@@ -2,9 +2,9 @@ const express = require('express');
 const workspaceClients = require('../services/workspaceClients');
 const {
   renderClientListPage,
-  renderClientDetailPage,
   renderClientsUnavailablePage,
 } = require('../presentation/workspaceClientsUx');
+const { renderClientDetailPageWithCommunications } = require('../presentation/workspaceCommunicationEvidenceUx');
 const { requireStaffSession } = require('../middleware/staffBrowserSession');
 
 function isWorkspaceClientsEnabled(env = process.env) {
@@ -64,7 +64,7 @@ function createWorkspaceClientListHandler({
 function createWorkspaceClientDetailHandler({
   env = process.env,
   service = workspaceClients,
-  renderPage = renderClientDetailPage,
+  renderPage = renderClientDetailPageWithCommunications,
   renderUnavailable = renderClientsUnavailablePage,
   staffAccessPath = '/calendar/staff',
 } = {}) {
