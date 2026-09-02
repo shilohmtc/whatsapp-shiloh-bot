@@ -14,7 +14,7 @@ const {
 
 function providerRestrictionGraph() {
   return async (pathName) => {
-    if (pathName === 'waba-123/message_templates') return { ok: true, data: { data: [{ id: 'template-1' }] };
+    if (pathName === 'waba-123/message_templates') return { ok: true, data: { data: [{ id: 'template-1' }] } };
     if (pathName === 'me/permissions') return { ok: true, data: { data: [
       { permission: 'whatsapp_business_management', status: 'granted' },
       { permission: 'whatsapp_business_messaging', status: 'granted' },
