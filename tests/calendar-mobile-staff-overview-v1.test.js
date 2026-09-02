@@ -74,7 +74,7 @@ test('phone all-staff day mode renders a compact overview for every permitted pr
   const raw = renderCalendarPage(model, { clientNavigationAllowed: true });
   const html = applyCalendarResponsivePolish(raw, model, '/calendar/read-only');
 
-  assert.match(html, /data-calendar-mobile-overview="true"/);
+  assert.match(html, /<body[^>]*data-calendar-mobile-overview="true"/);
   assert.match(html, /data-mobile-staff-overview/);
   assert.equal((html.match(/class="mobile-staff-card"/g) || []).length, 5);
   assert.match(html, /Christel With A Long Display Name/);
@@ -97,7 +97,7 @@ test('selected practitioner keeps one full-width detailed mobile lane and no ove
   const raw = renderCalendarPage(model, { clientNavigationAllowed: true });
   const html = applyCalendarResponsivePolish(raw, model, '/calendar/read-only');
 
-  assert.doesNotMatch(html, /data-calendar-mobile-overview="true"/);
+  assert.doesNotMatch(html, /<body[^>]*data-calendar-mobile-overview="true"/);
   assert.doesNotMatch(html, /data-mobile-staff-overview/);
   assert.equal((html.match(/class="lane"/g) || []).length, 1);
   assert.match(html, /Marietjie/);
