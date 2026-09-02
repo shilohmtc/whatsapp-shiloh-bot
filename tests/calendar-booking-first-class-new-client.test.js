@@ -33,14 +33,20 @@ test('Existing-client choice loads a bounded browse request through the canonica
   assert.doesNotMatch(script, /XMLHttpRequest/);
 });
 
-test('New-client choice opens directly with only Name and Mobile without requiring a failed search', () => {
+test('New-client choice opens directly with Name and Mobile and synchronizes the draft without a visible second confirmation', () => {
   const script = calendarCreateBookingClientChoiceScript();
 
   assert.match(script, /newButton\.addEventListener\('click'/);
   assert.match(script, /setMode\('new'\)/);
   assert.match(script, /newPanel\.hidden=!isNew/);
-  assert.match(script, /Enter the new client’s name and South African mobile number/);
+  assert.match(script, /useNewActions\.hidden=true/);
+  assert.match(script, /newHint\.hidden=true/);
+  assert.match(script, /function syncNewClientDraftFromFields\(\)/);
+  assert.match(script, /newName\.addEventListener\('input',syncNewClientDraftFromFields\)/);
+  assert.match(script, /newMobile\.addEventListener\('input',syncNewClientDraftFromFields\)/);
+  assert.match(script, /useNew\.click\(\)/);
   assert.doesNotMatch(script, /identity key|CRM V2/);
+  assert.doesNotMatch(script, /Enter the new client’s name and South African mobile number/);
   assert.match(script, /if\(newName\)newName\.focus\(\)/);
 });
 
@@ -56,15 +62,15 @@ test('Client-choice enhancement cannot write CRM or bypass guarded booking autho
   assert.doesNotMatch(script, /newClient\s*:/);
 });
 
-test('Switching picker modes blocks stale selection while selected results preserve explicit booking choice', () => {
+test('Switching picker modes blocks stale selection while automatic new-client draft and selected existing results remain explicit', () => {
   const script = calendarCreateBookingClientChoiceScript();
 
   assert.match(script, /clearVisibleSelection\(\);if\(review\)review\.disabled=true;setMode\('browse'\);loadExistingClients\(\)/);
   assert.match(script, /clearVisibleSelection\(\);if\(review\)review\.disabled=true;setMode\('search'\)/);
-  assert.match(script, /clearVisibleSelection\(\);if\(review\)review\.disabled=true;setMode\('new'\)/);
+  assert.match(script, /clearVisibleSelection\(\);if\(review\)review\.disabled=true;setMode\('new'\);syncNewClientDraftFromFields\(\)/);
   assert.match(script, /calendar-client-mode/);
   assert.match(script, /if\(!preserveSelection\)window\.dispatchEvent/);
-  assert.match(script, /setMode\('new',true\)/);
+  assert.match(script, /detail:\{mode:'new'\}/);
   assert.match(script, /setMode\('browse',true\)/);
   assert.match(script, /if\(review\)review\.disabled=false/);
   assert.match(script, /data-client-selection/);
