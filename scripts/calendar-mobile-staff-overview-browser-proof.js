@@ -148,6 +148,7 @@ const METRICS_EXPRESSION = `(() => {
   const laneEls = Array.from(document.querySelectorAll('.day-time-grid .lane')).filter(visible);
   const practitioner = document.querySelector('.practitioner-control');
   const mobileGrid = document.querySelector('.mobile-staff-grid');
+  const dayGridStyle = dayGrid ? getComputedStyle(dayGrid) : null;
   return {
     innerWidth: window.innerWidth,
     innerHeight: window.innerHeight,
@@ -164,7 +165,10 @@ const METRICS_EXPRESSION = `(() => {
     }),
     allCardsUseStaffFilter: cards.every(card => /[?&]staff=\d+/.test(card.getAttribute('href') || '')),
     mobileGridColumns: mobileGrid ? getComputedStyle(mobileGrid).gridTemplateColumns : null,
-    dayGridDisplay: dayGrid ? getComputedStyle(dayGrid).display : null,
+    dayGridDisplay: dayGridStyle ? dayGridStyle.display : null,
+    dayGridVisibility: dayGridStyle ? dayGridStyle.visibility : null,
+    dayGridPosition: dayGridStyle ? dayGridStyle.position : null,
+    dayGridWidth: dayGrid ? dayGrid.getBoundingClientRect().width : 0,
     laneCount: laneEls.length,
     lanesScrollWidth: lanes ? lanes.scrollWidth : 0,
     lanesClientWidth: lanes ? lanes.clientWidth : 0,
@@ -190,11 +194,14 @@ function assertCase(proof, metrics) {
     if (!metrics.mobileGridColumns || metrics.mobileGridColumns.trim().split(/\s+/).length !== 2) {
       throw new Error(`${proof.name} overview is not a two-column grid: ${metrics.mobileGridColumns}`);
     }
-    if (metrics.dayGridDisplay !== 'none') throw new Error(`${proof.name} multi-staff timeline remains visible on phone`);
+    if (metrics.dayGridVisibility !== 'hidden' || metrics.dayGridPosition !== 'absolute' || metrics.dayGridWidth > 1.5) {
+      throw new Error(`${proof.name} multi-staff timeline remains in the visible/interactive phone flow: ${JSON.stringify(metrics)}`);
+    }
+    if (metrics.laneCount !== 0) throw new Error(`${proof.name} hidden multi-staff lanes remain visibly rendered`);
     if (metrics.practitionerDisplay !== 'none') throw new Error(`${proof.name} duplicates practitioner chips above overview cards`);
   } else {
     if (metrics.overviewVisible) throw new Error(`${proof.name} overview should not be visible after selecting one practitioner`);
-    if (metrics.dayGridDisplay === 'none') throw new Error(`${proof.name} selected staff timeline is hidden`);
+    if (metrics.dayGridDisplay === 'none' || metrics.dayGridVisibility === 'hidden') throw new Error(`${proof.name} selected staff timeline is hidden`);
     if (metrics.laneCount !== 1) throw new Error(`${proof.name} expected one visible staff lane, got ${metrics.laneCount}`);
     if (metrics.lanesScrollWidth > metrics.lanesClientWidth + 1) {
       throw new Error(`${proof.name} selected staff lane still scrolls horizontally (${metrics.lanesScrollWidth} > ${metrics.lanesClientWidth})`);
