@@ -84,10 +84,10 @@ test('phone all-staff day mode renders a compact overview for every permitted pr
   assert.match(html, /staff=1/);
   assert.match(html, /staff=5/);
   assert.match(html, /\.mobile-staff-grid\{display:grid;grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
-  assert.match(html, /\.day-view\.mobile-all-staff-overview \.day-time-grid\{display:none\}/);
+  assert.match(html, /\.day-view\.mobile-all-staff-overview \.day-time-grid\{position:absolute!important;width:1px!important;height:1px!important;overflow:hidden!important;clip-path:inset\(50%\)!important;visibility:hidden!important;pointer-events:none!important\}/);
   assert.match(html, /body\[data-calendar-mobile-overview="true"\] \.practitioner-control\{display:none\}/);
 
-  // Desktop detail remains in the document; CSS swaps it only at phone width.
+  // Desktop detail remains in the document; phone CSS removes it from the visible/interactive flow.
   assert.match(html, /class="time-grid day-time-grid"/);
   assert.match(html, /style="--lane-count:5"/);
 });
