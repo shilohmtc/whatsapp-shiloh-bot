@@ -54,6 +54,32 @@ function renderStaffCalendarAccessPage({ reason = null, clientScriptPath = '/cal
   </div></body></html>`;
 }
 
+function allocateWeekOverlapLanes(rectangles = []) {
+  const ordered = rectangles
+    .map((entry, order) => ({
+      ...entry,
+      order,
+      top: Number(entry?.top),
+      height: Number(entry?.height),
+    }))
+    .filter(entry => Number.isFinite(entry.top) && Number.isFinite(entry.height) && entry.height > 0)
+    .map(entry => ({ ...entry, bottom: entry.top + entry.height }))
+    .sort((a, b) => a.top - b.top || a.bottom - b.bottom || a.order - b.order);
+
+  const laneEnds = [];
+  for (const entry of ordered) {
+    let laneIndex = laneEnds.findIndex(end => end <= entry.top + 0.5);
+    if (laneIndex === -1) laneIndex = laneEnds.length;
+    laneEnds[laneIndex] = entry.bottom;
+    entry.laneIndex = laneIndex;
+  }
+
+  return {
+    laneCount: Math.max(1, laneEnds.length),
+    entries: ordered,
+  };
+}
+
 function staffCalendarAccessClientScript() {
   return `(function(){
 'use strict';
@@ -61,6 +87,7 @@ var AUTH_BASE='/calendar/staff-auth';
 var ACCESS_PATH='/calendar/staff';
 var WORKSPACE_PATH='/calendar/read-only';
 var TOTP_ENABLED=document.body&&document.body.getAttribute('data-shiloh-totp-enabled')==='true';
+var allocateWeekOverlapLanes=${allocateWeekOverlapLanes.toString()};
 
 function select(selector){return document.querySelector(selector);}
 function setStatus(state,message){var node=select('[data-shiloh-status]');if(!node)return;node.dataset.state=state;node.textContent=message;}
@@ -71,6 +98,63 @@ function postJson(url,payload,extraHeaders){return fetch(url,{method:'POST',cred
 function safeJson(response){return response.json().catch(function(){return {};});}
 function viewerPermitsWorkspace(viewer){return !!(viewer&&typeof viewer==='object'&&(viewer.calendarScope==='own_staff'||viewer.calendarScope==='business_all_staff'));}
 function normalizeStaffAccountNumber(value){var raw=String(value||'').trim();var digits=raw.replace(/\\D/g,'');if(/^0\\d{9}$/.test(digits))return '27'+digits.slice(1);return raw;}
+
+function resetWeekOverlapLayout(){
+  var grid=select('.week-view .week-grid');
+  if(!grid)return;
+  grid.style.removeProperty('grid-template-columns');
+  grid.style.removeProperty('min-width');
+  grid.removeAttribute('data-week-overlap-layout');
+  Array.prototype.forEach.call(grid.querySelectorAll('.week-day'),function(day){
+    day.removeAttribute('data-week-lane-count');
+    Array.prototype.forEach.call(day.querySelectorAll('.time-column > .positioned-event'),function(node){
+      node.style.removeProperty('left');
+      node.style.removeProperty('right');
+      node.style.removeProperty('width');
+      node.removeAttribute('data-week-lane-index');
+      node.removeAttribute('data-week-lane-count');
+    });
+  });
+}
+
+function applyWeekOverlapLayout(){
+  var grid=select('.week-view .week-grid');
+  if(!grid)return;
+  resetWeekOverlapLayout();
+  if(!window.matchMedia||!window.matchMedia('(min-width: 701px)').matches)return;
+
+  var days=Array.prototype.slice.call(grid.querySelectorAll('.week-day'));
+  if(!days.length)return;
+  var laneCounts=days.map(function(day){
+    var nodes=Array.prototype.slice.call(day.querySelectorAll('.time-column > .positioned-event'));
+    var rectangles=nodes.map(function(node){
+      return {
+        node:node,
+        top:parseFloat(node.style.getPropertyValue('--event-top')),
+        height:parseFloat(node.style.getPropertyValue('--event-height'))
+      };
+    });
+    var layout=allocateWeekOverlapLanes(rectangles);
+    layout.entries.forEach(function(entry){
+      var laneCount=layout.laneCount;
+      var laneWidth=100/laneCount;
+      entry.node.style.left='calc('+(entry.laneIndex*laneWidth)+'% + 4px)';
+      entry.node.style.right='auto';
+      entry.node.style.width='calc('+laneWidth+'% - 8px)';
+      entry.node.setAttribute('data-week-lane-index',String(entry.laneIndex));
+      entry.node.setAttribute('data-week-lane-count',String(laneCount));
+    });
+    day.setAttribute('data-week-lane-count',String(layout.laneCount));
+    return layout.laneCount;
+  });
+
+  var baseLaneWidth=154;
+  grid.style.gridTemplateColumns=laneCounts.map(function(count){
+    return 'minmax('+(baseLaneWidth*count)+'px,'+count+'fr)';
+  }).join(' ');
+  grid.style.minWidth=(laneCounts.reduce(function(total,count){return total+count;},0)*baseLaneWidth)+'px';
+  grid.setAttribute('data-week-overlap-layout','desktop');
+}
 
 async function probeSession(){
   try{
@@ -171,6 +255,8 @@ var recoveryForm=select('[data-shiloh-recovery-form]');if(recoveryForm)recoveryF
 var logoutButton=select('[data-shiloh-logout]');if(logoutButton)logoutButton.addEventListener('click',logout);
 if(select('[data-shiloh-staff-calendar-access]'))exchangeStaffRecoveryFragment();
 if(select('[data-shiloh-staff-calendar-access]'))probeSession();
+applyWeekOverlapLayout();
+if(window.matchMedia){var weekDesktopMedia=window.matchMedia('(min-width: 701px)');if(weekDesktopMedia.addEventListener)weekDesktopMedia.addEventListener('change',applyWeekOverlapLayout);else if(weekDesktopMedia.addListener)weekDesktopMedia.addListener(applyWeekOverlapLayout);}
 })();`;
 }
 
@@ -178,5 +264,6 @@ module.exports = {
   escapeHtml,
   messageForReason,
   renderStaffCalendarAccessPage,
+  allocateWeekOverlapLanes,
   staffCalendarAccessClientScript,
 };
