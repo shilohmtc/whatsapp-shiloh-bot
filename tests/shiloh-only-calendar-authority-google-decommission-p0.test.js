@@ -98,19 +98,20 @@ test('canonical final conflict and P0 delivery/security authority remain in the 
   assert.match(source('src/routes/calendarReadOnlyUx.js'), /CALENDAR_VIEWER_CONTEXT|server_staff_session/);
 });
 
-test('cockpit renders complete canonical cards and suppresses external debug cards without contact PII', () => {
+test('cockpit renders complete canonical cards with canonical mobile and suppresses external debug cards', () => {
   const presentation = source('src/presentation/calendarReadOnlyUx.js');
   const engine = source('src/services/schedulingEngine.js');
   assert.match(engine, /clientName: row\.client_name/);
   assert.match(engine, /serviceName: row\.service_name/);
   assert.match(presentation, /formatRange\(item\)/);
   assert.match(presentation, /item\.clientName/);
+  assert.match(presentation, /formatClientMobile\(item\.clientMobile\)/);
   assert.match(presentation, /item\.serviceName/);
   assert.match(presentation, /staffNamesFor/);
   assert.match(presentation, /item\.status/);
   assert.match(presentation, /Appointment #\$\{escapeHtml\(item\.id\)\}/);
   assert.match(presentation, /item\.canonical !== false/);
-  assert.doesNotMatch(presentation, /Google-only|Non-canonical|PR #395|clientMobile|normalized_value|contact/i);
+  assert.doesNotMatch(presentation, /Google-only|Non-canonical|PR #395/i);
 });
 
 test('the change contains no appointment-specific mutation or configuration disconnect', () => {
