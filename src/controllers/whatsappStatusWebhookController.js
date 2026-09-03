@@ -1,5 +1,6 @@
 const logger = require('../lib/logger');
 const { processWhatsAppStatuses } = require('../services/whatsappStatusCallback');
+const { persistStatuses: persistWhatsAppStatuses } = require('../services/whatsappStatusEvidence');
 
 function logSanitizedStatus(log, status) {
   const fields = {
@@ -12,27 +13,47 @@ function logSanitizedStatus(log, status) {
   log[method](fields, 'Processed WhatsApp delivery status');
 }
 
-function processWhatsAppStatusWebhook(req, res, next) {
-  const log = req.log || logger;
-  try {
-    const value = req.body?.entry?.[0]?.changes?.[0]?.value;
-    if (value?.statuses === undefined) return next();
+function createWhatsAppStatusWebhookController({ persistStatuses = persistWhatsAppStatuses } = {}) {
+  return async function processWhatsAppStatusWebhook(req, res, next) {
+    const log = req.log || logger;
+    try {
+      const value = req.body?.entry?.[0]?.changes?.[0]?.value;
+      if (value?.statuses === undefined) return next();
 
-    const { records, invalidCount } = processWhatsAppStatuses(value.statuses);
-    for (const status of records) logSanitizedStatus(log, status);
-    if (invalidCount > 0) {
-      log.warn({ invalidStatusCount: invalidCount }, 'Ignored malformed WhatsApp delivery status callback');
+      const { records, invalidCount } = processWhatsAppStatuses(value.statuses);
+      for (const status of records) logSanitizedStatus(log, status);
+      if (invalidCount > 0) {
+        log.warn({ invalidStatusCount: invalidCount }, 'Ignored malformed WhatsApp delivery status callback');
+      }
+
+      if (records.length > 0) {
+        try {
+          const persisted = await persistStatuses(records);
+          const unmatchedStatusCount = persisted.filter(item => Number(item?.matched || 0) === 0).length;
+          if (unmatchedStatusCount > 0) {
+            log.info({ unmatchedStatusCount }, 'WhatsApp delivery status had no Shiloh delivery match');
+          }
+        } catch (error) {
+          log.warn(
+            { errorType: String(error?.name || 'Error').slice(0, 60) },
+            'WhatsApp delivery status evidence persistence failed safely'
+          );
+        }
+      }
+
+      if (Array.isArray(value.messages) && value.messages.length > 0) return next();
+      return res.sendStatus(200);
+    } catch (error) {
+      log.warn({ errorType: String(error?.name || 'Error').slice(0, 60) }, 'Ignored malformed WhatsApp delivery status callback');
+      return res.sendStatus(200);
     }
-
-    if (Array.isArray(value.messages) && value.messages.length > 0) return next();
-    return res.sendStatus(200);
-  } catch (error) {
-    log.warn({ errorType: String(error?.name || 'Error').slice(0, 60) }, 'Ignored malformed WhatsApp delivery status callback');
-    return res.sendStatus(200);
-  }
+  };
 }
+
+const processWhatsAppStatusWebhook = createWhatsAppStatusWebhookController();
 
 module.exports = {
   logSanitizedStatus,
+  createWhatsAppStatusWebhookController,
   processWhatsAppStatusWebhook,
 };
