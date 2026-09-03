@@ -150,7 +150,8 @@ test('mobile positioned cards fit their duration rectangle by collapsing lowest-
   assert.match(html, /\.workspace-main \.positioned-event \.event-card\{padding:4px 5px!important\}/);
   assert.match(html, /\.workspace-main \.positioned-event \.event-card\[data-kind="appointment"\] \.kind-pill\{display:none!important\}/);
   assert.match(html, /\.workspace-main \.positioned-event \.event-card-actions\{top:3px!important;right:3px!important;bottom:auto!important;margin:0!important\}/);
-  assert.match(html, /\.workspace-main \.positioned-event \.event-operation\{min-width:44px!important;min-height:34px!important/);
+  assert.match(html, /\.workspace-main \.positioned-event \.event-operation\{min-width:44px!important;min-height:44px!important/);
+  assert.doesNotMatch(html, /@container \(max-height:60px\)[\s\S]*?\.event-operation\{min-height:(?:30|34)px!important/);
   assert.match(html, /@container \(max-height:60px\)\{[^}]*\.event-card\[data-kind="appointment"\] \.event-meta\{display:none!important\}/);
   assert.match(html, /@container \(min-height:61px\) and \(max-height:82px\)\{[^}]*\.event-service-context>span:last-child\{-webkit-line-clamp:1\}[^}]*\.event-detail-separator\+span\{display:none!important\}/);
 });
