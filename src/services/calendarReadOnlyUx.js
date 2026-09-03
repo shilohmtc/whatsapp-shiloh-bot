@@ -1,3 +1,4 @@
+const { pool } = require('../db/pool');
 const schedulingEngine = require('./schedulingEngine');
 
 const BUSINESS_TIMEZONE = 'Africa/Johannesburg';
@@ -146,7 +147,57 @@ function filterTimelineForDisplay(timeline, requestedStaffId) {
   };
 }
 
-function createCalendarReadOnlyUxService({ listTimeline = schedulingEngine.listTimeline } = {}) {
+async function attachCanonicalClientMobiles(timeline, query) {
+  const appointments = Array.isArray(timeline?.appointments) ? timeline.appointments : [];
+  const appointmentIds = [...new Set(appointments
+    .map(item => String(item?.id || '').trim())
+    .filter(id => /^\d+$/.test(id)))];
+  if (!appointmentIds.length) return timeline;
+
+  const result = await query(`/* CalendarReadOnlyUx:canonical_client_mobile */
+    SELECT a.id AS appointment_id,
+           CASE
+             WHEN a.crm_v2_client_id IS NOT NULL THEN v2.normalized_mobile
+             ELSE legacy.mobile
+           END AS client_mobile
+      FROM appointments a
+      LEFT JOIN crm_v2_clients v2 ON v2.id=a.crm_v2_client_id
+      LEFT JOIN LATERAL (
+        SELECT cc.normalized_value AS mobile
+          FROM client_contacts cc
+         WHERE cc.client_id=a.client_id
+           AND cc.contact_type IN ('mobile','whatsapp')
+         ORDER BY cc.is_primary DESC,
+                  CASE cc.contact_type WHEN 'mobile' THEN 0 ELSE 1 END,
+                  cc.id
+         LIMIT 1
+      ) legacy ON TRUE
+     WHERE a.id = ANY($1::bigint[])`, [appointmentIds]);
+
+  const mobileByAppointment = new Map((result.rows || []).map(row => [
+    String(row.appointment_id),
+    String(row.client_mobile || '').trim() || null,
+  ]));
+  const enrichedAppointments = appointments.map(item => ({
+    ...item,
+    clientMobile: mobileByAppointment.get(String(item.id)) || null,
+  }));
+  const enrichedById = new Map(enrichedAppointments.map(item => [String(item.id), item]));
+  const events = Array.isArray(timeline?.events)
+    ? timeline.events.map(item => item?.kind === 'appointment' ? (enrichedById.get(String(item.id)) || item) : item)
+    : timeline?.events;
+
+  return {
+    ...timeline,
+    appointments: enrichedAppointments,
+    events,
+  };
+}
+
+function createCalendarReadOnlyUxService({
+  listTimeline = schedulingEngine.listTimeline,
+  query = (text, params) => pool.query(text, params),
+} = {}) {
   async function buildModel({ view: rawView, date: rawDate, staff: rawStaff, viewer, now = new Date() } = {}) {
     const timelineViewer = normalizeViewerForTimeline(viewer);
     const view = normalizeView(rawView);
@@ -159,8 +210,9 @@ function createCalendarReadOnlyUxService({ listTimeline = schedulingEngine.listT
       to: period.to,
       viewer: timelineViewer,
     });
+    const timelineWithMobiles = await attachCanonicalClientMobiles(timeline, query);
 
-    const filtered = filterTimelineForDisplay(timeline, requestedStaffId);
+    const filtered = filterTimelineForDisplay(timelineWithMobiles, requestedStaffId);
     return {
       view,
       dateKey,
@@ -190,5 +242,6 @@ module.exports = {
   normalizeStaffFilter,
   periodFor,
   filterTimelineForDisplay,
+  attachCanonicalClientMobiles,
   uxError,
 };
