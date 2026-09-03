@@ -62,16 +62,19 @@ test('narrow Desktop appointment cards remove redundant chrome and move Manage o
   assert.doesNotMatch(css, /min-height:44px!important/);
 });
 
-test('Desktop density collapses lower-priority detail before client identity and canonical mobile', () => {
+test('very short Desktop density preserves treatment and collapses practitioner/status first', () => {
   const css = desktopAppointmentCardDensityCss();
-
-  assert.match(css, /@container \(max-width:260px\) and \(max-height:60px\)[\s\S]*?\.event-meta\{display:none!important\}/);
-  assert.match(css, /@container \(max-width:260px\) and \(min-height:61px\) and \(max-height:82px\)[\s\S]*?\.event-service-context>span:last-child\{-webkit-line-clamp:1\}/);
-  assert.match(css, /@container \(max-width:260px\) and \(min-height:61px\) and \(max-height:82px\)[\s\S]*?\.event-detail-separator\+span\{display:none!important\}/);
-
   const shortRule = css.match(/@container \(max-width:260px\) and \(max-height:60px\)\{([\s\S]*?)\n\}/)?.[1] || '';
+
+  assert.match(shortRule, /\.event-meta\{display:block!important/);
+  assert.match(shortRule, /\.event-meta>span:not\(\.event-service-context\)\{display:none!important\}/);
+  assert.match(shortRule, /\.event-service-context>span:last-child\{display:block!important;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis\}/);
+  assert.doesNotMatch(shortRule, /\.event-meta\{display:none/);
   assert.doesNotMatch(shortRule, /event-client-mobile\{display:none/);
   assert.doesNotMatch(shortRule, / h4\{display:none/);
+
+  assert.match(css, /@container \(max-width:260px\) and \(min-height:61px\) and \(max-height:82px\)[\s\S]*?\.event-service-context>span:last-child\{-webkit-line-clamp:1\}/);
+  assert.match(css, /@container \(max-width:260px\) and \(min-height:61px\) and \(max-height:82px\)[\s\S]*?\.event-detail-separator\+span\{display:none!important\}/);
 });
 
 test('accepted Phone appointment-card touch contract remains unchanged', () => {

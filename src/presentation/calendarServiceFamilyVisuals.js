@@ -123,7 +123,14 @@ function desktopAppointmentCardDensityCss() {
 .workspace-main .positioned-event .event-card[data-kind="appointment"] .event-operation{min-width:44px!important;min-height:32px!important;padding:3px 8px!important}
 }
 @container (max-width:260px) and (max-height:60px){
-.workspace-main .positioned-event .event-card[data-kind="appointment"] .event-meta{display:none!important}
+.workspace-main .positioned-event .event-card[data-kind="appointment"]{padding:3px 5px!important}
+.workspace-main .positioned-event .event-card[data-kind="appointment"] h4{margin:0!important;line-height:1.02!important}
+.workspace-main .positioned-event .event-card[data-kind="appointment"] .event-client-mobile{line-height:1!important}
+.workspace-main .positioned-event .event-card[data-kind="appointment"] .event-meta{display:block!important;margin:1px 0 0!important;line-height:1!important;white-space:nowrap;overflow:hidden!important;text-overflow:ellipsis}
+.workspace-main .positioned-event .event-card[data-kind="appointment"] .event-meta>span:not(.event-service-context){display:none!important}
+.workspace-main .positioned-event .event-card[data-kind="appointment"] .event-service-context{display:flex!important;align-items:center!important;gap:2px!important;min-width:0}
+.workspace-main .positioned-event .event-card[data-kind="appointment"] .service-family-icon{width:10px!important;height:10px!important;flex:0 0 10px!important}
+.workspace-main .positioned-event .event-card[data-kind="appointment"] .event-service-context>span:last-child{display:block!important;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 }
 @container (max-width:260px) and (min-height:61px) and (max-height:82px){
 .workspace-main .positioned-event .event-card[data-kind="appointment"] .event-service-context>span:last-child{-webkit-line-clamp:1}
