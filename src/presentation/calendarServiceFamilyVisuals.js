@@ -102,10 +102,43 @@ function renderServiceFamilyIcon(service, { className = '' } = {}) {
   return `<svg class="${classes}" data-service-family="${family.key}" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${ICON_PATHS[family.icon]}</svg>`;
 }
 
+function desktopAppointmentCardDensityCss() {
+  return `@media(min-width:701px){
+.workspace-main .positioned-event{container-type:size}
+.workspace-main .positioned-event .event-card[data-kind="appointment"] .event-operation{min-width:44px!important;min-height:32px!important;padding:4px 8px!important;font-size:.62rem!important}
+@container (max-width:260px){
+.workspace-main .positioned-event .event-card[data-kind="appointment"]{padding:4px 5px!important}
+.workspace-main .positioned-event .event-card[data-kind="appointment"] .kind-pill{display:none!important}
+.workspace-main .positioned-event .event-card[data-kind="appointment"] .event-card-top{min-height:12px;padding-right:54px!important}
+.workspace-main .positioned-event .event-card[data-kind="appointment"] .event-time{font-size:.64rem!important;line-height:1.05}
+.workspace-main .positioned-event .event-card[data-kind="appointment"] h4{margin:1px 0!important;padding-right:54px!important;font-size:.74rem!important;line-height:1.08!important;white-space:nowrap;overflow:hidden!important;text-overflow:ellipsis}
+.workspace-main .positioned-event .event-card[data-kind="appointment"] .event-client-mobile{margin:0!important;padding-right:54px!important;font-size:.60rem!important;line-height:1.05!important;white-space:nowrap;overflow:hidden!important;text-overflow:ellipsis}
+.workspace-main .positioned-event .event-card[data-kind="appointment"] .event-meta{display:grid!important;gap:1px!important;margin:2px 0 0!important;padding-right:0!important;font-size:.59rem!important;line-height:1.08!important}
+.workspace-main .positioned-event .event-card[data-kind="appointment"] .event-detail-separator{display:none!important}
+.workspace-main .positioned-event .event-card[data-kind="appointment"] .event-service-context{display:flex!important;align-items:flex-start!important;gap:3px!important;min-width:0}
+.workspace-main .positioned-event .event-card[data-kind="appointment"] .service-family-icon{width:12px!important;height:12px!important;flex:0 0 12px!important}
+.workspace-main .positioned-event .event-card[data-kind="appointment"] .event-service-context>span:last-child{display:-webkit-box;overflow:hidden;-webkit-box-orient:vertical;-webkit-line-clamp:2}
+.workspace-main .positioned-event .event-card[data-kind="appointment"] .event-detail-separator+span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.workspace-main .positioned-event .event-card[data-kind="appointment"] .event-card-actions{top:3px!important;right:3px!important;bottom:auto!important;margin:0!important}
+.workspace-main .positioned-event .event-card[data-kind="appointment"] .event-operation{min-width:44px!important;min-height:32px!important;padding:3px 8px!important;font-size:.61rem!important}
+}
+@container (max-width:260px) and (max-height:60px){
+.workspace-main .positioned-event .event-card[data-kind="appointment"] .event-meta{display:none!important}
+.workspace-main .positioned-event .event-card[data-kind="appointment"] h4{font-size:.70rem!important}
+.workspace-main .positioned-event .event-card[data-kind="appointment"] .event-client-mobile{font-size:.56rem!important}
+}
+@container (max-width:260px) and (min-height:61px) and (max-height:82px){
+.workspace-main .positioned-event .event-card[data-kind="appointment"] .event-service-context>span:last-child{-webkit-line-clamp:1}
+.workspace-main .positioned-event .event-card[data-kind="appointment"] .event-detail-separator+span{display:none!important}
+}
+}`;
+}
+
 function serviceFamilyAccentCss() {
-  return Object.entries(SERVICE_FAMILY_ACCENTS)
+  const accents = Object.entries(SERVICE_FAMILY_ACCENTS)
     .map(([familyKey, color]) => `.service-family-icon[data-service-family="${familyKey}"]{color:${color}}`)
     .join('');
+  return `${accents}${desktopAppointmentCardDensityCss()}`;
 }
 
 function withServiceFamily(service = {}) {
@@ -124,6 +157,7 @@ module.exports = {
   resolveServiceFamily,
   renderServiceFamilyIcon,
   serviceFamilyAccentCss,
+  desktopAppointmentCardDensityCss,
   withServiceFamily,
   externalKey,
 };
