@@ -46,16 +46,40 @@ function intentLabel(value) {
 }
 
 function messageDeliveryEntry(row) {
-  const status = String(row?.status || '').toLowerCase() === 'sent' ? 'sent' : 'pending';
-  const occurredAt = status === 'sent' ? row?.sent_at : row?.claimed_at;
+  let status = null;
+  let statusLabel = null;
+  let occurredAt = null;
+
+  if (row?.provider_read_at) {
+    status = 'read'; statusLabel = 'Read on WhatsApp'; occurredAt = row.provider_read_at;
+  } else if (row?.provider_delivered_at) {
+    status = 'delivered'; statusLabel = 'Delivered on WhatsApp'; occurredAt = row.provider_delivered_at;
+  } else if (row?.provider_failed_at) {
+    status = 'failed'; statusLabel = 'WhatsApp delivery failed'; occurredAt = row.provider_failed_at;
+  } else if (row?.provider_sent_at) {
+    status = 'provider_sent'; statusLabel = 'Sent to WhatsApp'; occurredAt = row.provider_sent_at;
+  } else {
+    const deliveryStatus = String(row?.status || '').trim().toLowerCase();
+    if (deliveryStatus === 'sent') {
+      status = 'sent'; statusLabel = 'Sent by Shiloh'; occurredAt = row?.sent_at;
+    } else if (deliveryStatus === 'failed') {
+      status = 'failed'; statusLabel = 'Send attempt failed'; occurredAt = row?.last_attempt_at || row?.claimed_at;
+    } else if (deliveryStatus === 'uncertain') {
+      status = 'uncertain'; statusLabel = 'Delivery uncertain'; occurredAt = row?.last_attempt_at || row?.claimed_at;
+    } else {
+      status = 'pending'; statusLabel = 'Pending'; occurredAt = row?.claimed_at;
+    }
+  }
+
   if (!occurredAt) return null;
   return {
     intent: String(row?.message_kind || 'notification'),
     label: intentLabel(row?.message_kind),
     status,
-    statusLabel: status === 'sent' ? 'Sent by Shiloh' : 'Pending',
+    statusLabel,
     occurredAt,
     appointmentId: positiveId(row?.appointment_id),
+    templateName: String(row?.template_name || '').trim() || null,
   };
 }
 
@@ -68,6 +92,7 @@ function careDeliveryEntry(row) {
     statusLabel: 'Sent by Shiloh',
     occurredAt: row.sent_at,
     appointmentId: null,
+    templateName: null,
   };
 }
 
@@ -92,6 +117,7 @@ function rescheduleEntry(row) {
     statusLabel,
     occurredAt,
     appointmentId: positiveId(row?.appointment_id),
+    templateName: null,
   };
 }
 
@@ -121,10 +147,13 @@ function createWorkspaceCommunicationEvidenceService({ db = pool } = {}) {
 
     const deliveries = await db.query(
       `/* workspaceCommunicationEvidence:messageDeliveries */
-       SELECT appointment_id, message_kind, status, claimed_at, sent_at
+       SELECT appointment_id, message_kind, status, claimed_at, sent_at, last_attempt_at,
+              template_name, provider_sent_at, provider_delivered_at,
+              provider_read_at, provider_failed_at
          FROM customer_message_deliveries
         WHERE crm_v2_client_id=$1
-        ORDER BY COALESCE(sent_at, claimed_at) DESC
+        ORDER BY COALESCE(provider_read_at, provider_delivered_at, provider_failed_at,
+                          provider_sent_at, sent_at, last_attempt_at, claimed_at) DESC
         LIMIT $2`,
       [id, safeLimit]
     );
