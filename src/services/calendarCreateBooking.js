@@ -2,7 +2,6 @@ const { pool } = require('../db/pool');
 const crmV2ClientService = require('./crmV2ClientService');
 const {
   prepareCalendarV2Booking,
-  acknowledgeCalendarV2Mobile,
   confirmCalendarV2Booking,
   cancelPendingBooking,
 } = require('./adminBooking');
@@ -55,6 +54,11 @@ function maskContact(value = '') {
   return digits.length >= 4 ? `ending in ${digits.slice(-4)}` : null;
 }
 
+function displayMobile(value = '') {
+  const normalized = String(value || '').trim();
+  return /^27[678][0-9]{8}$/.test(normalized) ? `+${normalized}` : null;
+}
+
 function serializeClient(client) {
   return {
     id: String(client.id),
@@ -91,7 +95,6 @@ function createCalendarCreateBookingService({
   env = process.env,
   crmV2Service = crmV2ClientService,
   prepareBooking = prepareCalendarV2Booking,
-  acknowledgeBooking = acknowledgeCalendarV2Mobile,
   confirmBooking = confirmCalendarV2Booking,
   cancelBooking = cancelPendingBooking,
 } = {}) {
@@ -215,7 +218,6 @@ function createCalendarCreateBookingService({
   async function pendingBooking(adminId) {
     const result = await db.query(
       `SELECT abs.crm_v2_client_id, abs.source_client_name, abs.client_mobile_snapshot,
-              abs.acknowledged_mobile, abs.mobile_acknowledged_at,
               abs.staff_id, abs.service_id, abs.location_id,
               abs.starts_at, abs.ends_at, abs.state,
               client.name AS current_client_name,
@@ -298,6 +300,7 @@ function createCalendarCreateBookingService({
           matchedExisting: resolved.resolution === 'existing_exact_mobile',
           profileStatus: result.client.profileStatus,
           contactHint: maskContact(result.client.normalizedMobile),
+          mobile: displayMobile(result.client.normalizedMobile),
         },
         service: {
           id: Number(result.service.id),
@@ -311,34 +314,7 @@ function createCalendarCreateBookingService({
         endsAt: result.endsAt,
         durationMinutes,
         price,
-        mobileAcknowledgementRequired: true,
       },
-    };
-  }
-
-  async function acknowledgeMobile({ adminId } = {}) {
-    const admin = await resolveOperator(adminId);
-    const pending = await pendingBooking(Number(admin.id));
-    if (!pending) throw bookingError('CALENDAR_BOOKING_NO_PENDING', 'There is no pending CRM V2 Calendar booking to acknowledge.');
-    await resolveEligibleSelection(admin, pending.staff_id, pending.service_id);
-    const result = await acknowledgeBooking(Number(admin.id));
-    if (result.status !== 'acknowledged') {
-      throw bookingError(
-        result.status === 'client_mobile_changed' ? 'CALENDAR_BOOKING_CLIENT_MOBILE_CHANGED' : 'CALENDAR_BOOKING_NO_PENDING',
-        result.status === 'client_mobile_changed'
-          ? 'The active CRM V2 client/mobile changed. Prepare the booking again.'
-          : 'There is no pending CRM V2 Calendar booking to acknowledge.'
-      );
-    }
-    if (String(result.client?.id) !== String(pending.crm_v2_client_id)) {
-      throw bookingError('CALENDAR_BOOKING_CLIENT_MOBILE_CHANGED', 'The CRM V2 client changed during acknowledgement.');
-    }
-    return {
-      status: 'acknowledged',
-      clientId: String(result.client.id),
-      clientName: result.client.name,
-      mobileHint: maskContact(result.client.normalizedMobile),
-      confirmationSafe: true,
     };
   }
 
@@ -354,11 +330,12 @@ function createCalendarCreateBookingService({
     if (!pending) throw bookingError('CALENDAR_BOOKING_NO_PENDING', 'There is no pending CRM V2 Calendar booking to confirm.');
     await resolveEligibleSelection(admin, pending.staff_id, pending.service_id);
     if (
-      !pending.mobile_acknowledged_at
-      || !pending.acknowledged_mobile
-      || pending.acknowledged_mobile !== pending.client_mobile_snapshot
+      pending.state !== 'confirm'
+      || pending.current_client_status !== 'active'
+      || !/^27[678][0-9]{8}$/.test(String(pending.current_client_mobile || ''))
+      || pending.current_client_mobile !== pending.client_mobile_snapshot
     ) {
-      throw bookingError('CALENDAR_BOOKING_CONFIRMATION_UNSAFE', 'Acknowledge the server-derived final CRM V2 mobile before creating this booking.');
+      throw bookingError('CALENDAR_BOOKING_CLIENT_MOBILE_CHANGED', 'The current canonical CRM V2 client/mobile changed. Prepare the booking again.');
     }
     return confirmBooking(admin, { source: 'shiloh_calendar' });
   }
@@ -368,7 +345,6 @@ function createCalendarCreateBookingService({
     listBookableOptions,
     searchClients,
     prepare,
-    acknowledgeMobile,
     discard,
     confirm,
   };

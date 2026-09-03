@@ -1,6 +1,7 @@
 const express = require('express');
 const { pool } = require('../db/pool');
 const { createCalendarCreateBookingService } = require('../services/calendarCreateBooking');
+const { confirmCalendarV2BookingDirect } = require('../services/calendarDirectBookingConfirmation');
 const { createCalendarBookingClientDirectory } = require('../services/calendarBookingClientDirectory');
 const {
   requireStaffSession,
@@ -72,7 +73,7 @@ function customerConfirmationState(result) {
 function createCalendarCreateBookingRouter({
   env = process.env,
   sessionService,
-  bookingService = createCalendarCreateBookingService({ db: pool, env }),
+  bookingService = createCalendarCreateBookingService({ db: pool, env, confirmBooking: confirmCalendarV2BookingDirect }),
   clientDirectory = createCalendarBookingClientDirectory(),
   renderPage = renderCalendarCreateBookingPage,
   renderClient = calendarCreateBookingClientScript,
@@ -150,20 +151,6 @@ function createCalendarCreateBookingRouter({
       if (result.status !== 'pending_confirmation') {
         return res.status(409).json({ status: result.status, reply: result.reply || 'Booking cannot be prepared.' });
       }
-      return res.status(200).json(result);
-    } catch (error) {
-      const status = statusForError(error);
-      if (status !== 503) return res.status(status).json({ error: error.message, code: error.code, requestId: req.id });
-      return next(error);
-    }
-  });
-
-  // The request is the deliberate operator acknowledgement. The client id and
-  // exact mobile are read from the authenticated server-side pending session;
-  // no browser-submitted identity/mobile value is accepted.
-  router.post('/mobile-acknowledgement', sameOrigin, requireSession, requireCsrf, async (req, res, next) => {
-    try {
-      const result = await bookingService.acknowledgeMobile({ adminId: req.staffBrowserSession.adminId });
       return res.status(200).json(result);
     } catch (error) {
       const status = statusForError(error);

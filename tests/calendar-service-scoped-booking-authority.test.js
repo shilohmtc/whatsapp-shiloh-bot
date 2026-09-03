@@ -50,7 +50,7 @@ function crmV2() {
 }
 
 function pending(overrides = {}) {
-  return { crm_v2_client_id: 123, source_client_name: 'Jane Doe', client_mobile_snapshot: '27821234567', acknowledged_mobile: '27821234567', mobile_acknowledged_at: '2026-08-28T07:00:00.000Z', staff_id: 20, service_id: 44, location_id: 1, starts_at: '2026-08-28T08:15:00.000Z', ends_at: '2026-08-28T09:15:00.000Z', state: 'confirm', current_client_name: 'Jane Doe', current_client_mobile: '27821234567', current_client_status: 'active', ...overrides };
+  return { crm_v2_client_id: 123, source_client_name: 'Jane Doe', client_mobile_snapshot: '27821234567', staff_id: 20, service_id: 44, location_id: 1, starts_at: '2026-08-28T08:15:00.000Z', ends_at: '2026-08-28T09:15:00.000Z', state: 'confirm', current_client_name: 'Jane Doe', current_client_mobile: '27821234567', current_client_status: 'active', ...overrides };
 }
 
 test('Calendar booking authority is capability/scope data, not a named-person policy', () => {
@@ -108,39 +108,38 @@ test('out-of-scope service is rejected before CRM V2 lookup or booking preparati
   assert.equal(prepares, 0);
 });
 
-test('mobile acknowledgement and final confirmation are bound to session actor, scope and V2 pending state', async () => {
+test('direct final confirmation is bound to session actor, scope and V2 pending state', async () => {
   const db = bookingDb({ admin: principals.marietjie, pending: pending() });
-  const ackCalls = []; const confirmCalls = [];
+  const confirmCalls = [];
   const service = createCalendarCreateBookingService({
     db,
     env: enabledEnv,
     crmV2Service: crmV2(),
-    acknowledgeBooking: async (adminId) => { ackCalls.push(adminId); return { status: 'acknowledged', client: client() }; },
     confirmBooking: async (...args) => { confirmCalls.push(args); return { status: 'created', appointmentId: 777 }; },
   });
-  const acknowledgement = await service.acknowledgeMobile({ adminId: principals.marietjie.id, actorAdminId: 99, clientId: 999 });
-  const result = await service.confirm({ adminId: principals.marietjie.id, actorAdminId: 99, clientId: 999 });
-  assert.equal(acknowledgement.confirmationSafe, true);
-  assert.deepEqual(ackCalls, [principals.marietjie.id]);
+  const result = await service.confirm({ adminId: principals.marietjie.id, actorAdminId: 99, clientId: 999, mobile: '27829999999' });
+  assert.equal(confirmCalls.length, 1);
   assert.equal(confirmCalls[0][0].id, principals.marietjie.id);
   assert.deepEqual(confirmCalls[0][1], { source: 'shiloh_calendar' });
   assert.equal(result.appointmentId, 777);
+  const pendingRead = db.calls.find((call) => call.sql.includes('FROM admin_booking_sessions abs'));
+  assert.deepEqual(pendingRead.params, [principals.marietjie.id]);
 });
 
-test('Calendar endpoints never accept browser identity for acknowledgement or confirmation', () => {
+test('Calendar confirm accepts no browser identity and acknowledgement ceremony endpoint is retired', () => {
   const routeSource = fs.readFileSync(path.join(__dirname, '../src/routes/calendarCreateBooking.js'), 'utf8');
-  const ack = routeSource.slice(routeSource.indexOf("router.post('/mobile-acknowledgement'"), routeSource.indexOf("router.post('/discard'"));
   const confirm = routeSource.slice(routeSource.indexOf("router.post('/confirm'"));
-  assert.match(ack, /sameOrigin, requireSession, requireCsrf/);
-  assert.match(ack, /adminId: req\.staffBrowserSession\.adminId/);
-  assert.doesNotMatch(ack, /req\.body/);
+  assert.doesNotMatch(routeSource, /router\.post\('\/mobile-acknowledgement'/);
+  assert.match(confirm, /sameOrigin, requireSession, requireCsrf/);
+  assert.match(confirm, /adminId: req\.staffBrowserSession\.adminId/);
   assert.doesNotMatch(confirm, /req\.body|clientId|mobile|actorAdminId/);
 });
 
-test('Calendar layer delegates V2 appointment writes and never writes legacy identity', () => {
+test('Calendar layer delegates V2 appointment writes and carries only canonical mobile snapshot state', () => {
   const source = fs.readFileSync(path.join(__dirname, '../src/services/calendarCreateBooking.js'), 'utf8');
   assert.doesNotMatch(source, /INSERT INTO appointments|INSERT INTO clients|INSERT INTO client_contacts/);
   assert.match(source, /confirmBooking\(admin, \{ source: 'shiloh_calendar' \}\)/);
-  assert.match(source, /mobile_acknowledged_at/);
+  assert.match(source, /client_mobile_snapshot/);
+  assert.doesNotMatch(source, /mobile_acknowledged_at|acknowledged_mobile|acknowledgeMobile/);
   assert.doesNotMatch(source, /operatorContactAuthority|client_identity_verifications/);
 });

@@ -163,7 +163,7 @@ test('Create Booking keeps native controls and validates/readbacks local inputs 
   assert.match(localInputSource, /WEEKDAY_NAMES\[weekdayIndex\(date\)\]\+' '\+date\.day\+' '\+MONTH_NAMES/);
 
   const prepareStart = script.indexOf('async function prepare()');
-  const prepareEnd = script.indexOf('async function acknowledge()');
+  const prepareEnd = script.indexOf('async function discardPrepared');
   const prepareSource = script.slice(prepareStart, prepareEnd);
   assert.ok(prepareStart >= 0 && prepareEnd > prepareStart);
   assert.ok(prepareSource.indexOf('startInputState(true)') < prepareSource.indexOf("post(API+'/prepare'"));
