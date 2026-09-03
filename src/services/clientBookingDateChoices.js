@@ -35,17 +35,21 @@ function dateChoiceButtons(choices = []) {
   return buttons.slice(0, 3);
 }
 
-async function availableDateChoicesForIntent(
-  intent,
-  { now = new Date(), count = DEFAULT_DATE_CHOICE_COUNT, maxDays = DEFAULT_DATE_SEARCH_DAYS } = {}
-) {
+async function availableDateChoicesForIntent(intent, options = {}) {
   if (!isDateSelectionIntent(intent)) return [];
+  const {
+    now = new Date(),
+    count = DEFAULT_DATE_CHOICE_COUNT,
+    maxDays = DEFAULT_DATE_SEARCH_DAYS,
+    clinicDateStatus = getClinicDateStatus,
+    slotsForIntent = authoritativeSlotsForIntent,
+  } = options;
   const fromDate = localIsoDate(now);
   const choices = [];
 
   for (let offset = 0; offset <= maxDays && choices.length < count; offset += 1) {
     const date = addIsoDays(fromDate, offset);
-    const clinicDate = await getClinicDateStatus({ date });
+    const clinicDate = await clinicDateStatus({ date });
     if (!clinicDate.covered) continue;
 
     const candidateIntent = {
@@ -53,7 +57,7 @@ async function availableDateChoicesForIntent(
       preferred_date: date,
       preferred_time: null,
     };
-    const availability = await authoritativeSlotsForIntent(candidateIntent, { now });
+    const availability = await slotsForIntent(candidateIntent, { now });
     if (!availability.slots.length) continue;
 
     choices.push({
