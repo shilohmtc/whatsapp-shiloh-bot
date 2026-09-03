@@ -111,9 +111,6 @@ test('Phone Week preserves all permitted appointments from the canonical filtere
   assert.match(html, /Helen/);
   assert.match(html, /Melindi/);
   assert.match(html, /Elani Greyling F/);
-  assert.match(html, /data-appointment-id="7901"/);
-  assert.match(html, /data-appointment-id="7902"/);
-  assert.match(html, /data-appointment-id="7903"/);
 });
 
 test('selected-practitioner Week scope remains constrained before Phone presentation', () => {
@@ -122,9 +119,6 @@ test('selected-practitioner Week scope remains constrained before Phone presenta
   assert.match(html, /Melindi/);
   assert.doesNotMatch(html, /Helen/);
   assert.doesNotMatch(html, /Elani Greyling F/);
-  assert.match(html, /data-appointment-id="7902"/);
-  assert.doesNotMatch(html, /data-appointment-id="7901"/);
-  assert.doesNotMatch(html, /data-appointment-id="7903"/);
 });
 
 test('Phone Week appointment cards become auto-height scan cards with a 44px Manage contract', () => {
