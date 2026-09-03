@@ -7,6 +7,7 @@ const { processBookingPolicyMessage, sanitizeBookingReply } = require("../servic
 const { processClientBookingApprovalMessage } = require("../services/clientBookingApproval");
 const { commandForClientBookingButton, decorateClientBookingResult } = require("../services/clientBookingInteractive");
 const { processClientAvailabilityMessage } = require("../services/clientBookingAvailability");
+const { applyAvailabilityAwareDateChoices } = require("../services/clientBookingDateChoices");
 const { guardBookingConfirmationIdentity, ensureBookingIdentity } = require("../services/clientBookingIdentityGate");
 const { guardClientFreelancerBooking } = require("../services/clientBookingStaffGuard");
 const { guardEnglishOnly } = require("../services/englishLanguageGuard");
@@ -42,6 +43,7 @@ function inboundText(message){
   return null;
 }
 async function sendAdminResult(to,result){
+  result = await applyAvailabilityAwareDateChoices(result);
   if (result?.interactive) {
     result = { ...result, interactive: hybridizeChoiceInteractive(result.interactive) };
   }
