@@ -138,6 +138,12 @@ function createCalendarCreateBookingService({
          LEFT JOIN service_categories sc ON sc.id = sv.category_id
         WHERE st.status = 'active'
           AND sv.status = 'active'
+          AND NOT EXISTS (
+                SELECT 1
+                  FROM service_packages sp
+                 WHERE sp.session_service_id = sv.id
+                   AND sp.status = 'active'
+              )
         ORDER BY sv.name, st.display_name, sv.id, st.id`,
       []
     );
@@ -202,6 +208,12 @@ function createCalendarCreateBookingService({
           AND sv.id = $2
           AND st.status = 'active'
           AND sv.status = 'active'
+          AND NOT EXISTS (
+                SELECT 1
+                  FROM service_packages sp
+                 WHERE sp.session_service_id = sv.id
+                   AND sp.status = 'active'
+              )
         LIMIT 1`,
       [staff, service]
     );
