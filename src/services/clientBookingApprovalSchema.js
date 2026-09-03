@@ -82,25 +82,16 @@ async function ensureBookingApprovalInfrastructure(db = pool) {
     AS $$
     DECLARE
       booking_source TEXT;
-      booking_client_id BIGINT;
       booking_client_name TEXT;
-      booking_client_status TEXT;
       observer_id BIGINT;
       required_approver_id BIGINT;
       required_approver_admin_id BIGINT;
       required_approval_mode TEXT;
-      controlled_client_id BIGINT;
-      controlled_phone TEXT;
-      policy_client_id BIGINT;
-      targeted_policy_admin_id BIGINT;
-      anchored_contact_count INTEGER;
-      shared_active_contact_count INTEGER;
-      primary_admin_count INTEGER;
       dummy_count INTEGER;
       jp_count INTEGER;
     BEGIN
-      SELECT a.source, a.client_id, c.display_name, c.status
-        INTO booking_source, booking_client_id, booking_client_name, booking_client_status
+      SELECT a.source, c.display_name
+        INTO booking_source, booking_client_name
         FROM appointments a
         JOIN clients c ON c.id = a.client_id
        WHERE a.id = NEW.appointment_id;
@@ -113,82 +104,8 @@ async function ensureBookingApprovalInfrastructure(db = pool) {
       required_approver_id := NEW.staff_id;
       required_approver_admin_id := NULL;
       required_approval_mode := 'standard';
-      controlled_client_id := NULL;
-      controlled_phone := NULL;
-      policy_client_id := NULL;
-      targeted_policy_admin_id := NULL;
 
-      SELECT d.current_client_id, d.normalized_phone
-        INTO controlled_client_id, controlled_phone
-        FROM controlled_demo_identities d
-       WHERE d.demo_key = 'juvan_botha'
-         AND d.active = TRUE
-       LIMIT 1;
-
-      IF controlled_client_id IS NOT NULL AND booking_client_id = controlled_client_id THEN
-        SELECT p.client_id, p.approver_admin_id
-          INTO policy_client_id, targeted_policy_admin_id
-          FROM client_booking_approval_policies p
-         WHERE p.policy_key = 'juvan_botha_jp_booking_approval'
-           AND p.active = TRUE
-         LIMIT 1;
-
-        IF targeted_policy_admin_id IS NULL OR policy_client_id IS DISTINCT FROM controlled_client_id THEN
-          RAISE EXCEPTION 'Controlled Juvan booking approval blocked: policy pointer does not match the current demo client';
-        END IF;
-        IF booking_client_status IS DISTINCT FROM 'active' THEN
-          RAISE EXCEPTION 'Controlled Juvan booking approval blocked: current demo client is not active';
-        END IF;
-
-        SELECT COUNT(*)::int
-          INTO anchored_contact_count
-          FROM client_contacts cc
-         WHERE cc.client_id = booking_client_id
-           AND cc.contact_type IN ('whatsapp','mobile')
-           AND regexp_replace(COALESCE(cc.normalized_value, cc.value, ''), '[^0-9]', '', 'g') = controlled_phone;
-        IF anchored_contact_count < 1 THEN
-          RAISE EXCEPTION 'Controlled Juvan booking approval blocked: exact demo phone is not attached to the current canonical client';
-        END IF;
-
-        SELECT COUNT(DISTINCT other.id)::int
-          INTO shared_active_contact_count
-          FROM client_contacts other_cc
-          JOIN clients other ON other.id = other_cc.client_id AND other.status = 'active'
-         WHERE regexp_replace(COALESCE(other_cc.normalized_value, other_cc.value, ''), '[^0-9]', '', 'g') = controlled_phone
-           AND other_cc.contact_type IN ('whatsapp','mobile')
-           AND other.id <> booking_client_id;
-        IF shared_active_contact_count <> 0 THEN
-          RAISE EXCEPTION 'Controlled Juvan booking approval blocked: exact demo phone is shared with another active CRM client';
-        END IF;
-
-        SELECT COUNT(*)::int
-          INTO jp_count
-          FROM staff_admin_accounts saa
-         WHERE saa.id = targeted_policy_admin_id
-           AND LOWER(TRIM(saa.display_name)) = 'jean-pierre'
-           AND saa.active = TRUE
-           AND saa.business_role = 'business_admin'
-           AND saa.calendar_scope = 'all_business'
-           AND saa.service_scope = 'all_services'
-           AND saa.normalized_whatsapp IS NOT NULL;
-        IF jp_count <> 1 THEN
-          RAISE EXCEPTION 'Controlled Juvan booking approval blocked: Jean-Pierre backup approver no longer satisfies the guarded admin contract';
-        END IF;
-
-        SELECT COUNT(*)::int
-          INTO primary_admin_count
-          FROM staff_admin_accounts saa
-         WHERE saa.staff_id = NEW.staff_id
-           AND saa.active = TRUE
-           AND saa.normalized_whatsapp IS NOT NULL;
-        IF primary_admin_count < 1 THEN
-          RAISE EXCEPTION 'Controlled Juvan booking approval blocked: assigned Primary practitioner has no active Admin WhatsApp identity';
-        END IF;
-
-        required_approver_id := NEW.staff_id;
-        required_approver_admin_id := targeted_policy_admin_id;
-        required_approval_mode := 'controlled_juvan_primary_backup';
-      ELSIF LOWER(TRIM(COALESCE(booking_client_name, ''))) = 'dummy test' THEN
+      IF LOWER(TRIM(COALESCE(booking_client_name, ''))) = 'dummy test' THEN
         SELECT COUNT(*)::int INTO dummy_count
           FROM clients c
          WHERE LOWER(TRIM(c.display_name)) = 'dummy test' AND c.status = 'active';

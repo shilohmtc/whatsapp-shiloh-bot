@@ -8,6 +8,7 @@ const migration065 = fs.readFileSync(path.join(root, 'migrations', '065_juvan_bo
 const migration066 = fs.readFileSync(path.join(root, 'migrations', '066_controlled_juvan_demo_identity.sql'), 'utf8');
 const migration067 = fs.readFileSync(path.join(root, 'migrations', '067_controlled_juvan_registration_rebind.sql'), 'utf8');
 const migration068 = fs.readFileSync(path.join(root, 'migrations', '068_juvan_primary_backup_booking_approval.sql'), 'utf8');
+const migration095 = fs.readFileSync(path.join(root, 'migrations', '095_retire_juvan_primary_backup_booking_approval.sql'), 'utf8');
 const approval = fs.readFileSync(path.join(root, 'src', 'services', 'clientBookingApproval.js'), 'utf8');
 const schema = fs.readFileSync(path.join(root, 'src', 'services', 'clientBookingApprovalSchema.js'), 'utf8');
 const controlled = fs.readFileSync(path.join(root, 'src', 'services', 'controlledDemoIdentity.js'), 'utf8');
@@ -59,7 +60,7 @@ test('read-only downstream resolver returns only the current phone-anchored cont
   assert.doesNotMatch(controlled, /INSERT INTO clients|UPDATE clients SET|DELETE FROM clients/);
 });
 
-test('Primary Backup migration supersedes JP-only holds only for pending current-controlled bookings', () => {
+test('migration 068 remains immutable historical Primary Backup authority', () => {
   assert.match(migration068, /approval_mode TEXT NOT NULL DEFAULT 'standard'/);
   assert.match(migration068, /backup_notified_at TIMESTAMPTZ/);
   assert.match(migration068, /controlled_juvan_primary_backup/);
@@ -71,21 +72,29 @@ test('Primary Backup migration supersedes JP-only holds only for pending current
   assert.doesNotMatch(migration068, /UPDATE appointment_booking_approvals[\s\S]*status IN \('approved','declined'\)/);
 });
 
-test('database hold and runtime ensure both use current controlled client with assigned practitioner Primary and JP Backup', () => {
-  for (const source of [migration068, schema]) {
-    assert.match(source, /FROM controlled_demo_identities d/);
-    assert.match(source, /controlled_client_id IS NOT NULL AND booking_client_id = controlled_client_id/);
-    assert.match(source, /policy_client_id IS DISTINCT FROM controlled_client_id/);
-    assert.match(source, /exact demo phone is not attached to the current canonical client/);
-    assert.match(source, /assigned Primary practitioner has no active Admin WhatsApp identity/);
+test('future booking holds retire the Juvan special case and keep normal practitioner authority', () => {
+  for (const source of [migration095, schema]) {
+    assert.match(source, /CREATE OR REPLACE FUNCTION create_client_booking_approval_hold\(\)/);
     assert.match(source, /required_approver_id := NEW\.staff_id/);
-    assert.match(source, /required_approver_admin_id := targeted_policy_admin_id/);
-    assert.match(source, /controlled_juvan_primary_backup/);
-    assert.doesNotMatch(source, /ELSIF LOWER\(TRIM\(COALESCE\(booking_client_name, ''\)\)\) = 'juvan botha'/);
+    assert.match(source, /required_approver_admin_id := NULL/);
+    assert.match(source, /required_approval_mode := 'standard'/);
+    assert.match(source, /dummy test/i);
+    assert.match(source, /LOWER\(COALESCE\(NEW\.staff_name_snapshot, ''\)\) = 'abigail'/);
+    assert.doesNotMatch(source, /controlled_client_id IS NOT NULL AND booking_client_id = controlled_client_id/);
+    assert.doesNotMatch(source, /required_approver_admin_id := targeted_policy_admin_id/);
+    assert.doesNotMatch(source, /required_approval_mode := 'controlled_juvan_primary_backup'/);
   }
+  assert.doesNotMatch(migration095, /UPDATE appointment_booking_approvals/);
 });
 
-test('runtime Juvan resolver consumes current phone-anchored identity instead of a historical client id or display-name shortcut', () => {
+test('new approval policy selection excludes Juvan while preserving the historical resolver', () => {
+  assert.match(approval, /async function resolveClientApprovalPolicy\(db, appointmentId\) \{\s*return resolveDummyTestApprovalPolicy\(db, appointmentId\);\s*\}/);
+  assert.match(approval, /async function resolveJuvanApprovalPolicy\(db, appointmentId\)/);
+  assert.match(approval, /if \(context\.approval_mode === CONTROLLED_JUVAN_MODE\) return requestControlledJuvanApproval\(context\)/);
+  assert.match(approval, /if \(locked\.approval_mode === CONTROLLED_JUVAN_MODE\)/);
+});
+
+test('historical Juvan resolver consumes current phone-anchored identity instead of a historical client id or display-name shortcut', () => {
   assert.match(approval, /resolveCurrentControlledDemoClient\(db\)/);
   assert.match(approval, /Number\(row\.client_id\) !== currentId/);
   assert.match(approval, /approverStaffId: Number\(primary\.staff_id\)/);
@@ -95,7 +104,7 @@ test('runtime Juvan resolver consumes current phone-anchored identity instead of
   assert.doesNotMatch(approval, /LOWER\(TRIM\([^)]*display_name[^)]*\)\)\s*=\s*.*juvan botha/i);
 });
 
-test('staff approval delivery identifies Primary Backup role and tracks each delivery independently', () => {
+test('historical controlled approval delivery identifies Primary Backup role and tracks each delivery independently', () => {
   assert.match(approval, /backup_notified_at/);
   assert.match(approval, /Your role: \$\{role\}/);
   assert.match(approval, /'Primary'/);
@@ -105,7 +114,7 @@ test('staff approval delivery identifies Primary Backup role and tracks each del
   assert.match(approval, /WHERE appointment_id=\$1 AND status='pending' AND approval_mode=\$2/);
 });
 
-test('controlled decision revalidates current identity and appointment truth under locks and first terminal decision wins', () => {
+test('historical controlled decisions revalidate current identity and appointment truth under locks', () => {
   assert.match(approval, /getControlledDemoIdentity\(db, true\)/);
   assert.match(approval, /FOR UPDATE OF aba,a/);
   assert.match(approval, /resolveCurrentControlledDemoClient\(db\)/);
@@ -130,16 +139,16 @@ test('Reset Juvan remains internal and is absent from ordinary staff routing', (
   assert.match(menu, /processAdminRetiredAuthorityMessage/);
 });
 
-test('existing Dummy Test historical compatibility and ordinary practitioner observer behavior remain present', () => {
+test('Dummy Test compatibility and ordinary practitioner observer behavior remain present', () => {
   assert.match(approval, /resolveDummyTestApprovalPolicy/);
   assert.match(schema, /dummy test/i);
   assert.match(schema, /observer_id/);
   assert.match(schema, /LOWER\(COALESCE\(NEW\.staff_name_snapshot, ''\)\) = 'abigail'/);
   assert.match(approval, /resolveObserverStaffId/);
-  assert.match(approval, /controlledJuvan \? specialPolicy\.approverStaffId : \(specialPolicy \? null : Number\(staffId\)\)/);
+  assert.match(approval, /return resolveDummyTestApprovalPolicy\(db, appointmentId\)/);
 });
 
-test('Juvan compatibility path verifies ordered migrations without becoming startup authority', () => {
+test('Juvan compatibility path verifies historical migrations without becoming startup authority', () => {
   assert.match(bootstrap, /065_juvan_botha_jp_booking_approval\.sql/);
   assert.match(bootstrap, /066_controlled_juvan_demo_identity\.sql/);
   assert.match(bootstrap, /067_controlled_juvan_registration_rebind\.sql/);
