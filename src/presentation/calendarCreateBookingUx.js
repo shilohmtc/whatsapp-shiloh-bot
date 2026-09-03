@@ -45,7 +45,7 @@ function renderCalendarCreateBookingPage({ options = { staff: [], services: [] }
       <p class="guard-note">Search helps you find the right client. Shiloh rechecks the selected client, current mobile, treatment eligibility and availability before booking.</p>
       </section>
       <section class="panel" data-review-panel hidden><h2>Review booking</h2><div class="review" data-review></div>
-        <p class="guard-note">Verify the exact client and mobile above. Shiloh rechecks the current canonical client/mobile again immediately before creation and blocks if it changed.</p>
+        <p class="guard-note">Verify the exact client and mobile above. Shiloh checks the current client and mobile again immediately before creation and blocks the booking if either changed.</p>
         <div class="actions"><button class="button" type="button" data-create-booking disabled>Create booking</button><button class="button secondary" type="button" data-discard-booking disabled>Edit / discard review</button></div><p class="guard-note">Final creation rechecks clinic hours, practitioner schedule, blocks and appointment conflicts transactionally. Initial confirmation is queued durably before commit.</p></section>
     </main>
     <script type="application/json" id="calendar-booking-options">${safeJson(visualOptions)}</script>
