@@ -158,20 +158,6 @@ function createCalendarCreateBookingRouter({
     }
   });
 
-  // The request is the deliberate operator acknowledgement. The client id and
-  // exact mobile are read from the authenticated server-side pending session;
-  // no browser-submitted identity/mobile value is accepted.
-  router.post('/mobile-acknowledgement', sameOrigin, requireSession, requireCsrf, async (req, res, next) => {
-    try {
-      const result = await bookingService.acknowledgeMobile({ adminId: req.staffBrowserSession.adminId });
-      return res.status(200).json(result);
-    } catch (error) {
-      const status = statusForError(error);
-      if (status !== 503) return res.status(status).json({ error: error.message, code: error.code, requestId: req.id });
-      return next(error);
-    }
-  });
-
   router.post('/discard', sameOrigin, requireSession, requireCsrf, async (req, res, next) => {
     try {
       const result = await bookingService.discard({ adminId: req.staffBrowserSession.adminId });
