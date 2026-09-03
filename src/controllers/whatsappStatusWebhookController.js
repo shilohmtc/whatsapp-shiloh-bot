@@ -14,7 +14,7 @@ function logSanitizedStatus(log, status) {
 }
 
 function createWhatsAppStatusWebhookController({ persistStatuses = persistWhatsAppStatuses } = {}) {
-  return async function processWhatsAppStatusWebhook(req, res, next) {
+  return function processWhatsAppStatusWebhook(req, res, next) {
     const log = req.log || logger;
     try {
       const value = req.body?.entry?.[0]?.changes?.[0]?.value;
@@ -26,23 +26,29 @@ function createWhatsAppStatusWebhookController({ persistStatuses = persistWhatsA
         log.warn({ invalidStatusCount: invalidCount }, 'Ignored malformed WhatsApp delivery status callback');
       }
 
-      if (records.length > 0) {
-        try {
-          const persisted = await persistStatuses(records);
-          const unmatchedStatusCount = persisted.filter(item => Number(item?.matched || 0) === 0).length;
-          if (unmatchedStatusCount > 0) {
-            log.info({ unmatchedStatusCount }, 'WhatsApp delivery status had no Shiloh delivery match');
-          }
-        } catch (error) {
-          log.warn(
-            { errorType: String(error?.name || 'Error').slice(0, 60) },
-            'WhatsApp delivery status evidence persistence failed safely'
-          );
-        }
-      }
+      const hasInboundMessages = Array.isArray(value.messages) && value.messages.length > 0;
+      if (hasInboundMessages) next();
+      else if (res && typeof res.statusCode === 'number') res.statusCode = 200;
 
-      if (Array.isArray(value.messages) && value.messages.length > 0) return next();
-      return res.sendStatus(200);
+      const persistence = records.length > 0
+        ? Promise.resolve()
+          .then(() => persistStatuses(records))
+          .then((persisted = []) => {
+            const unmatchedStatusCount = persisted.filter(item => Number(item?.matched || 0) === 0).length;
+            if (unmatchedStatusCount > 0) {
+              log.info({ unmatchedStatusCount }, 'WhatsApp delivery status had no Shiloh delivery match');
+            }
+          })
+          .catch((error) => {
+            log.warn(
+              { errorType: String(error?.name || 'Error').slice(0, 60) },
+              'WhatsApp delivery status evidence persistence failed safely'
+            );
+          })
+        : Promise.resolve();
+
+      if (hasInboundMessages) return persistence;
+      return persistence.then(() => res.sendStatus(200));
     } catch (error) {
       log.warn({ errorType: String(error?.name || 'Error').slice(0, 60) }, 'Ignored malformed WhatsApp delivery status callback');
       return res.sendStatus(200);
