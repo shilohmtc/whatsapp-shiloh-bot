@@ -94,7 +94,7 @@ test('Desktop density leaves Manage/detail mutation semantics unchanged', () => 
   assert.match(html, /data-service-name="Full Body Swedish"/);
   assert.match(html, /data-allowed-operations="appointment:reschedule,appointment:cancel,appointment:reassign"/);
   assert.match(html, /data-calendar-operation="manage-appointment">Manage<\/button>/);
-  assert.match(html, /08:00–09:30/);
+  assert.match(html, /10:00–11:30/);
   assert.match(html, /Desktop Client/);
   assert.match(html, /\+27 82 123 4567/);
   assert.match(html, /Full Body Swedish/);
