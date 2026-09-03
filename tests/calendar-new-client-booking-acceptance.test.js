@@ -102,8 +102,6 @@ function pending(overrides = {}) {
     crm_v2_client_id: 701,
     source_client_name: 'Jane Doe',
     client_mobile_snapshot: '27821234567',
-    acknowledged_mobile: null,
-    mobile_acknowledged_at: null,
     staff_id: 9,
     service_id: 44,
     location_id: 1,
@@ -180,7 +178,7 @@ test('out-of-scope service is rejected before createClient can mutate CRM V2', a
   assert.equal(creates, 0);
 });
 
-test('New client uses createClient, exact actor provenance, server reread and the V2 pending owner', async () => {
+test('New client uses createClient, exact actor provenance, server reread and exposes exact reviewed mobile', async () => {
   const createCalls = [];
   const getCalls = [];
   const prepareCalls = [];
@@ -200,7 +198,8 @@ test('New client uses createClient, exact actor provenance, server reread and th
   assert.equal(prepareCalls[0].adminId, TEST_ADMIN_ID);
   assert.equal(result.review.client.created, true);
   assert.equal(result.review.client.contactHint, 'ending in 4567');
-  assert.equal(result.review.mobileAcknowledgementRequired, true);
+  assert.equal(result.review.client.mobile, '+27821234567');
+  assert.equal(Object.hasOwn(result.review, 'mobileAcknowledgementRequired'), false);
 });
 
 test('exact-mobile existing result resolves the same canonical CRM V2 client', async () => {
@@ -217,6 +216,7 @@ test('exact-mobile existing result resolves the same canonical CRM V2 client', a
   assert.equal(result.review.client.id, '333');
   assert.equal(result.review.client.matchedExisting, true);
   assert.equal(result.review.client.created, false);
+  assert.equal(result.review.client.mobile, '+27821234567');
 });
 
 test('CRM V2 exact-mobile conflict fails closed before pending booking preparation', async () => {
@@ -263,47 +263,24 @@ test('discard removes only the server pending session and never deletes a CRM V2
   assert.deepEqual(result, { status: 'discarded', crmV2ClientRemoved: false });
 });
 
-test('final mobile acknowledgement is derived from pending server state and accepts no browser identity', async () => {
-  const acknowledgementCalls = [];
-  const service = createCalendarCreateBookingService({
-    db: bookingDb({ pending: pending() }),
-    env: enabledEnv,
-    crmV2Service: crmV2(),
-    acknowledgeBooking: async (adminId) => {
-      acknowledgementCalls.push(adminId);
-      return { status: 'acknowledged', client: v2Client() };
-    },
-  });
-  const result = await service.acknowledgeMobile({ adminId: TEST_ADMIN_ID, clientId: 999, mobile: '27829999999' });
-  assert.deepEqual(acknowledgementCalls, [TEST_ADMIN_ID]);
-  assert.equal(result.clientId, '701');
-  assert.equal(result.mobileHint, 'ending in 4567');
-  const routeSegment = routeSource.slice(routeSource.indexOf("router.post('/mobile-acknowledgement'"), routeSource.indexOf("router.post('/discard'"));
-  assert.doesNotMatch(routeSegment, /req\.body/);
+test('booking review and route contain no final-mobile acknowledgement ceremony', () => {
+  assert.doesNotMatch(uxSource, /Final mobile acknowledgement|Acknowledge final mobile|data-mobile-ack|mobileAcknowledged/);
+  assert.doesNotMatch(routeSource, /router\.post\('\/mobile-acknowledgement'/);
+  assert.match(uxSource, /data-create-booking/);
+  assert.match(uxSource, /Create booking/);
 });
 
-test('final confirmation fails closed until server-side acknowledgement is present', async () => {
-  let confirmations = 0;
-  const service = createCalendarCreateBookingService({
-    db: bookingDb({ pending: pending() }),
-    env: enabledEnv,
-    crmV2Service: crmV2(),
-    confirmBooking: async () => { confirmations += 1; },
-  });
-  await assert.rejects(service.confirm({ adminId: TEST_ADMIN_ID }), (error) => error?.code === 'CALENDAR_BOOKING_CONFIRMATION_UNSAFE');
-  assert.equal(confirmations, 0);
-});
-
-test('acknowledged confirmation delegates once with authenticated operator and bounded source', async () => {
+test('direct confirmation delegates once with authenticated operator and bounded source without acknowledgement state', async () => {
   const calls = [];
   const service = createCalendarCreateBookingService({
-    db: bookingDb({ pending: pending({ acknowledged_mobile: '27821234567', mobile_acknowledged_at: '2026-08-28T07:00:00.000Z' }) }),
+    db: bookingDb({ pending: pending() }),
     env: enabledEnv,
     crmV2Service: crmV2(),
     confirmBooking: async (...args) => { calls.push(args); return { status: 'created', appointmentId: 9001 }; },
   });
-  const result = await service.confirm({ adminId: TEST_ADMIN_ID, clientId: 999 });
+  const result = await service.confirm({ adminId: TEST_ADMIN_ID, clientId: 999, mobile: '27829999999' });
   assert.equal(result.appointmentId, 9001);
+  assert.equal(calls.length, 1);
   assert.equal(calls[0][0].id, TEST_ADMIN_ID);
   assert.deepEqual(calls[0][1], { source: 'shiloh_calendar' });
 });
