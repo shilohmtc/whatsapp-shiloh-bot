@@ -131,11 +131,15 @@ function createCalendarCreateBookingService({
               sv.id AS service_id, sv.name AS service_name,
               sv.external_source, sv.external_id, sc.name AS category_name,
               sv.duration_minutes, sv.processing_time_minutes, sv.extra_time_minutes,
-              sv.price, sv.variable_price
+              sv.price, sv.variable_price,
+              visibility.owner_staff_id AS private_owner_staff_id
          FROM staff st
          JOIN staff_services ss ON ss.staff_id = st.id
          JOIN services sv ON sv.id = ss.service_id
          LEFT JOIN service_categories sc ON sc.id = sv.category_id
+         LEFT JOIN service_visibility_policies visibility
+           ON visibility.service_id = sv.id
+          AND visibility.visibility_scope = 'tenant_private'
         WHERE st.status = 'active'
           AND sv.status = 'active'
           AND NOT EXISTS (
@@ -152,7 +156,11 @@ function createCalendarCreateBookingService({
     for (const row of result.rows) {
       const staffId = Number(row.staff_id);
       const serviceId = Number(row.service_id);
-      if (!allowsBookingTarget(admin.calendarAuthority, { staffId, serviceId })) continue;
+      if (!allowsBookingTarget(admin.calendarAuthority, {
+        staffId,
+        serviceId,
+        privateOwnerStaffId: row.private_owner_staff_id,
+      })) continue;
       if (!staffById.has(staffId)) staffById.set(staffId, { id: staffId, displayName: row.staff_name, serviceIds: [] });
       staffById.get(staffId).serviceIds.push(serviceId);
       if (!servicesById.has(serviceId)) {
@@ -199,11 +207,15 @@ function createCalendarCreateBookingService({
               sv.id AS service_id, sv.name AS service_name,
               sv.external_source, sv.external_id, sc.name AS category_name,
               sv.duration_minutes, sv.processing_time_minutes, sv.extra_time_minutes,
-              sv.price, sv.variable_price
+              sv.price, sv.variable_price,
+              visibility.owner_staff_id AS private_owner_staff_id
          FROM staff st
          JOIN staff_services ss ON ss.staff_id = st.id
          JOIN services sv ON sv.id = ss.service_id
          LEFT JOIN service_categories sc ON sc.id = sv.category_id
+         LEFT JOIN service_visibility_policies visibility
+           ON visibility.service_id = sv.id
+          AND visibility.visibility_scope = 'tenant_private'
         WHERE st.id = $1
           AND sv.id = $2
           AND st.status = 'active'
@@ -218,7 +230,11 @@ function createCalendarCreateBookingService({
       [staff, service]
     );
     const row = result.rows[0];
-    if (!row || !allowsBookingTarget(admin.calendarAuthority, { staffId: staff, serviceId: service })) {
+    if (!row || !allowsBookingTarget(admin.calendarAuthority, {
+      staffId: staff,
+      serviceId: service,
+      privateOwnerStaffId: row.private_owner_staff_id,
+    })) {
       throw bookingError(
         'CALENDAR_BOOKING_INELIGIBLE_SELECTION',
         'That treatment/practitioner selection is outside the authenticated operator’s current service authority or is not bookable.'
