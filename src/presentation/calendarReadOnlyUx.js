@@ -63,6 +63,12 @@ function formatRange(item) {
   return '';
 }
 
+function formatClientMobile(value) {
+  const digits = String(value || '').replace(/[^0-9]/g, '');
+  if (/^27\d{9}$/.test(digits)) return `+27 ${digits.slice(2, 4)} ${digits.slice(4, 7)} ${digits.slice(7)}`;
+  return 'Contact unavailable';
+}
+
 function eventStaffIds(item) {
   if (Array.isArray(item?.staffIds)) return item.staffIds.map(Number).filter(Number.isSafeInteger);
   if (Number.isSafeInteger(Number(item?.staffId))) return [Number(item.staffId)];
@@ -205,6 +211,7 @@ function renderEventCard(item, model) {
   return `<article class="event-card event-canonical ${shared ? 'event-shared' : ''}" data-event-id="${escapeHtml(id)}" data-kind="${escapeHtml(item.kind || '')}" data-canonical="true"${mutationAttributes(item, model)}>
     <div class="event-card-top"><div class="event-time">${escapeHtml(formatRange(item))}</div><span class="kind-pill">${escapeHtml(eventKindLabel(item))}</span></div>
     <h4>${escapeHtml(eventTitle(item))}</h4>
+    ${item.kind === 'appointment' ? `<p class="event-client-mobile">${escapeHtml(formatClientMobile(item.clientMobile))}</p>` : ''}
     ${meta ? `<p class="event-meta">${meta}</p>` : ''}
     ${item.kind === 'appointment' ? `<div class="appointment-reference">Appointment #${escapeHtml(item.id)}</div>` : ''}
     <div class="event-card-actions">${renderProvenance(item)}${renderMutationButton(item, model)}</div>
@@ -442,4 +449,5 @@ module.exports = {
   staffOperationEnabled,
   eventsForDate,
   workingContext,
+  formatClientMobile,
 };
