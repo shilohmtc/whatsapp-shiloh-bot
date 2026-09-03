@@ -144,7 +144,7 @@ test('mobile hierarchy remains present inside existing narrow-screen Calendar co
   assert.match(html, /\.positioned-event \.event-card p\{font-size:\.68rem;padding-right:48px\}/);
 });
 
-test('mobile positioned cards fit their duration rectangle by collapsing lowest-priority detail first', () => {
+test('mobile positioned cards fit their duration rectangle by collapsing practitioner/status before treatment', () => {
   const html = renderCalendarPage(baseModel());
   assert.match(html, /\.workspace-main \.positioned-event\{container-type:size\}/);
   assert.match(html, /\.workspace-main \.positioned-event \.event-card\{padding:4px 5px!important\}/);
@@ -152,6 +152,9 @@ test('mobile positioned cards fit their duration rectangle by collapsing lowest-
   assert.match(html, /\.workspace-main \.positioned-event \.event-card-actions\{top:3px!important;right:3px!important;bottom:auto!important;margin:0!important\}/);
   assert.match(html, /\.workspace-main \.positioned-event \.event-operation\{min-width:44px!important;min-height:44px!important/);
   assert.doesNotMatch(html, /@container \(max-height:60px\)[\s\S]*?\.event-operation\{min-height:(?:30|34)px!important/);
-  assert.match(html, /@container \(max-height:60px\)\{[^}]*\.event-card\[data-kind="appointment"\] \.event-meta\{display:none!important\}/);
+  assert.match(html, /@container \(max-height:60px\)\{[\s\S]*?\.event-card\[data-kind="appointment"\] \.event-meta\{display:block!important/);
+  assert.match(html, /@container \(max-height:60px\)\{[\s\S]*?\.event-meta>span:not\(\.event-service-context\)\{display:none!important\}/);
+  assert.match(html, /@container \(max-height:60px\)\{[\s\S]*?\.event-service-context>span:last-child\{display:block!important;min-width:0;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important/);
+  assert.doesNotMatch(html, /@container \(max-height:60px\)\{[^}]*\.event-meta\{display:none!important\}/);
   assert.match(html, /@container \(min-height:61px\) and \(max-height:82px\)\{[^}]*\.event-service-context>span:last-child\{-webkit-line-clamp:1\}[^}]*\.event-detail-separator\+span\{display:none!important\}/);
 });
