@@ -20,18 +20,15 @@ test('085 is the smallest expand-only compatibility seam and performs no data mu
   assert.doesNotMatch(read('app.js'), /applyMigrationFile/);
 });
 
-test('V2 final commit orders all canonical checks, last identity reread, appointment write, durable queue and commit', () => {
-  const source = read('src/services/adminBooking.js');
-  const start = source.indexOf('async function confirmCalendarV2Booking');
-  const end = source.indexOf('\nmodule.exports', start);
-  const cutover = source.slice(start, end);
+test('V2 final commit orders canonical checks, last locked identity reread, appointment write, durable queue and commit', () => {
+  const cutover = read('src/services/calendarDirectBookingConfirmation.js');
   const conflict = cutover.indexOf('await getConflicts');
   const finalRead = cutover.indexOf('FROM crm_v2_clients');
   const appointmentWrite = cutover.indexOf('INSERT INTO appointments');
   const durableQueue = cutover.indexOf('queueCustomerBookingConfirmation(appointment.id, { db })');
-  const commit = cutover.indexOf('await db.query("COMMIT")', durableQueue);
+  const commit = cutover.indexOf("await db.query('COMMIT')", durableQueue);
   const providerAttempt = cutover.indexOf('sendCustomerBookingConfirmationForAppointment(appointment.id)');
-  assert.ok(start >= 0 && conflict >= 0);
+  assert.ok(conflict >= 0);
   assert.ok(finalRead > conflict);
   assert.ok(appointmentWrite > finalRead);
   assert.ok(durableQueue > appointmentWrite);
@@ -39,18 +36,20 @@ test('V2 final commit orders all canonical checks, last identity reread, appoint
   assert.ok(providerAttempt > commit);
   assert.match(cutover, /FROM crm_v2_clients[\s\S]*FOR UPDATE/);
   assert.match(cutover, /finalClient\.name\.trim\(\)/);
-  assert.match(cutover, /finalClient\.normalized_mobile !== session\.acknowledged_mobile/);
+  assert.match(cutover, /isCanonicalMobile\(finalClient\.normalized_mobile\)/);
+  assert.match(cutover, /finalClient\.normalized_mobile !== session\.client_mobile_snapshot/);
+  assert.doesNotMatch(cutover, /acknowledged_mobile|mobile_acknowledged_at/);
   assert.match(cutover, /\(client_id, crm_v2_client_id, source_client_name/);
   assert.match(cutover, /VALUES \(NULL, \$1, \$2/);
   assert.doesNotMatch(cutover, /INSERT INTO (?:clients|client_contacts|client_identity_verifications)/);
 });
 
-test('a changed CRM V2 mobile after acknowledgement fails closed before appointment insertion', async () => {
+test('a changed CRM V2 mobile after review fails closed before appointment insertion', async () => {
   const poolModulePath = require.resolve('../src/db/pool');
   const availabilityPath = require.resolve('../src/services/adminAvailability');
   const clinicPath = require.resolve('../src/services/clinicHours');
   const confirmationPath = require.resolve('../src/services/customerBookingConfirmation');
-  const adminBookingPath = require.resolve('../src/services/adminBooking');
+  const directPath = require.resolve('../src/services/calendarDirectBookingConfirmation');
   const poolModule = require(poolModulePath);
   const oldConnect = poolModule.pool.connect;
   const oldAvailability = require.cache[availabilityPath]?.exports || require(availabilityPath);
@@ -59,7 +58,7 @@ test('a changed CRM V2 mobile after acknowledgement fails closed before appointm
   const calls = [];
   const pending = {
     admin_id: 7, client_id: null, crm_v2_client_id: 912, source_client_name: 'Synthetic Client',
-    client_mobile_snapshot: '27821234567', acknowledged_mobile: '27821234567', mobile_acknowledged_at: '2099-01-01T00:00:00.000Z',
+    client_mobile_snapshot: '27821234567',
     staff_id: 9, service_id: 44, location_id: 1, starts_at: '2099-08-28T08:15:00.000Z', ends_at: '2099-08-28T09:15:00.000Z', state: 'confirm',
     staff_name: 'Christel', staff_status: 'active', service_name: 'Synthetic Massage', service_status: 'active',
     duration_minutes: 60, processing_time_minutes: 0, extra_time_minutes: 0, price: '500.00', variable_price: false,
@@ -90,9 +89,9 @@ test('a changed CRM V2 mobile after acknowledgement fails closed before appointm
       queueCustomerBookingConfirmation: async () => { throw new Error('must not queue after mobile drift'); },
       sendCustomerBookingConfirmationForAppointment: async () => { throw new Error('must not send after mobile drift'); },
     };
-    delete require.cache[adminBookingPath];
-    const { confirmCalendarV2Booking } = require(adminBookingPath);
-    const result = await confirmCalendarV2Booking({ id: 7, display_name: 'Synthetic Operator' });
+    delete require.cache[directPath];
+    const { confirmCalendarV2BookingDirect } = require(directPath);
+    const result = await confirmCalendarV2BookingDirect({ id: 7, display_name: 'Synthetic Operator' });
     assert.equal(result.status, 'client_mobile_changed');
     assert.equal(calls.some((sql) => sql.startsWith('INSERT INTO appointments')), false);
     assert.equal(calls.some((sql) => sql.startsWith('DELETE FROM admin_booking_sessions')), true);
@@ -103,26 +102,24 @@ test('a changed CRM V2 mobile after acknowledgement fails closed before appointm
     require.cache[availabilityPath].exports = oldAvailability;
     require.cache[clinicPath].exports = oldClinic;
     require.cache[confirmationPath].exports = oldConfirmation;
-    delete require.cache[adminBookingPath];
+    delete require.cache[directPath];
   }
 });
 
-test('final-mobile acknowledgement is entirely server-derived and the browser cannot submit identity evidence', () => {
-  const booking = read('src/services/adminBooking.js');
+test('Calendar browser submits no final-mobile acknowledgement identity evidence', () => {
+  const booking = read('src/services/calendarDirectBookingConfirmation.js');
   const route = read('src/routes/calendarCreateBooking.js');
-  const start = booking.indexOf('async function acknowledgeCalendarV2Mobile');
-  const end = booking.indexOf('async function confirmAdminBooking', start);
-  const acknowledgement = booking.slice(start, end);
-  const routeStart = route.indexOf("router.post('/mobile-acknowledgement'");
-  const routeEnd = route.indexOf("router.post('/discard'", routeStart);
-  const endpoint = route.slice(routeStart, routeEnd);
-  assert.match(acknowledgement, /JOIN crm_v2_clients client ON client\.id = abs\.crm_v2_client_id/);
-  assert.match(acknowledgement, /FOR UPDATE OF abs, client/);
-  assert.match(acknowledgement, /acknowledged_mobile = \$2/);
-  assert.match(acknowledgement, /\[adminId, pending\.normalized_mobile\]/);
-  assert.match(endpoint, /sameOrigin, requireSession, requireCsrf/);
-  assert.match(endpoint, /adminId: req\.staffBrowserSession\.adminId/);
-  assert.doesNotMatch(endpoint, /req\.body|clientId|actorAdminId|body\.(?:mobile|normalizedMobile)/);
+  const ux = read('src/presentation/calendarCreateBookingUx.js');
+  const confirmStart = route.indexOf("router.post('/confirm'");
+  const confirm = route.slice(confirmStart);
+  assert.match(booking, /client_mobile_snapshot/);
+  assert.match(booking, /FROM crm_v2_clients[\s\S]*FOR UPDATE/);
+  assert.doesNotMatch(booking, /acknowledged_mobile|mobile_acknowledged_at/);
+  assert.doesNotMatch(route, /router\.post\('\/mobile-acknowledgement'/);
+  assert.match(confirm, /sameOrigin, requireSession, requireCsrf/);
+  assert.match(confirm, /adminId: req\.staffBrowserSession\.adminId/);
+  assert.doesNotMatch(confirm, /req\.body|clientId|actorAdminId|normalizedMobile/);
+  assert.doesNotMatch(ux, /Final mobile acknowledgement|Acknowledge final mobile|data-mobile-ack/);
 });
 
 test('existing legacy appointments remain readable and are never rewritten or backfilled', () => {
