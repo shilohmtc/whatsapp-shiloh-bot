@@ -113,7 +113,7 @@ async function resolveDummyTestApprovalPolicy(db, appointmentId) {
 }
 
 async function resolveClientApprovalPolicy(db, appointmentId) {
-  return (await resolveJuvanApprovalPolicy(db, appointmentId)) || resolveDummyTestApprovalPolicy(db, appointmentId);
+  return resolveDummyTestApprovalPolicy(db, appointmentId);
 }
 
 async function createPendingBookingApproval(db, { appointmentId, staffId, staffName }) {
