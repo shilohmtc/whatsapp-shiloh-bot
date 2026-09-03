@@ -19,8 +19,32 @@ function dbForEvidence() {
       this.calls.push({ sql, values });
       if (/messageDeliveries/.test(sql)) {
         return { rows: [
-          { appointment_id: 71, message_kind: 'booking_confirmation', status: 'sent', claimed_at: '2026-09-01T08:00:00.000Z', sent_at: '2026-09-01T08:00:04.000Z' },
-          { appointment_id: 72, message_kind: 'appointment_reminder_actions', status: 'sending', claimed_at: '2026-09-02T07:00:00.000Z', sent_at: null },
+          {
+            appointment_id: 71,
+            message_kind: 'booking_confirmation',
+            status: 'sent',
+            claimed_at: '2026-09-01T08:00:00.000Z',
+            sent_at: '2026-09-01T08:00:04.000Z',
+            last_attempt_at: '2026-09-01T08:00:03.000Z',
+            template_name: 'shiloh_booking_confirmation_v2',
+            provider_sent_at: '2026-09-01T08:00:05.000Z',
+            provider_delivered_at: '2026-09-01T08:00:08.000Z',
+            provider_read_at: '2026-09-01T08:01:00.000Z',
+            provider_failed_at: null,
+          },
+          {
+            appointment_id: 72,
+            message_kind: 'appointment_reminder_actions',
+            status: 'sending',
+            claimed_at: '2026-09-02T07:00:00.000Z',
+            sent_at: null,
+            last_attempt_at: null,
+            template_name: 'shiloh_appointment_reminder_actions_v1',
+            provider_sent_at: null,
+            provider_delivered_at: null,
+            provider_read_at: null,
+            provider_failed_at: null,
+          },
         ] };
       }
       if (/reschedules/.test(sql)) {
@@ -59,7 +83,7 @@ function clientDetailModel(overrides = {}) {
   };
 }
 
-test('communication evidence reads canonical CRM V2 delivery state and never selects provider identifiers', async () => {
+test('communication evidence reads provider lifecycle and exact template without exposing provider identifiers', async () => {
   const db = dbForEvidence();
   const service = createWorkspaceCommunicationEvidenceService({ db });
   const evidence = await service.listForClient({ clientId: 912, waId: '+27 82 123 4567', limit: 30 });
@@ -67,7 +91,12 @@ test('communication evidence reads canonical CRM V2 delivery state and never sel
   assert.equal(db.calls.length, 3);
   assert.match(db.calls[0].sql, /FROM customer_message_deliveries/);
   assert.match(db.calls[0].sql, /WHERE crm_v2_client_id=\$1/);
-  assert.doesNotMatch(db.calls[0].sql, /template_name|provider_message_id/);
+  assert.match(db.calls[0].sql, /template_name/);
+  assert.match(db.calls[0].sql, /provider_sent_at/);
+  assert.match(db.calls[0].sql, /provider_delivered_at/);
+  assert.match(db.calls[0].sql, /provider_read_at/);
+  assert.match(db.calls[0].sql, /provider_failed_at/);
+  assert.doesNotMatch(db.calls[0].sql, /provider_message_id/);
   assert.deepEqual(db.calls[0].values, [912, 30]);
   assert.match(db.calls[1].sql, /appointment_reschedule_requests/);
   assert.match(db.calls[1].sql, /crm_v2_client_id=\$1/);
@@ -75,37 +104,52 @@ test('communication evidence reads canonical CRM V2 delivery state and never sel
 
   assert.equal(evidence[0].label, 'Appointment reminder');
   assert.equal(evidence[0].statusLabel, 'Pending');
-  assert.ok(evidence.some(item => item.label === 'Booking confirmation' && item.statusLabel === 'Sent by Shiloh'));
+  const booking = evidence.find(item => item.appointmentId === 71);
+  assert.equal(booking.statusLabel, 'Read on WhatsApp');
+  assert.equal(booking.templateName, 'shiloh_booking_confirmation_v2');
   assert.ok(evidence.some(item => item.label === 'Reschedule confirmation' && item.statusLabel === 'Send attempt failed'));
   assert.ok(evidence.some(item => item.label === 'Birthday message' && item.statusLabel === 'Sent by Shiloh'));
-  assert.ok(evidence.every(item => !('providerMessageId' in item) && !('templateName' in item)));
+  assert.ok(evidence.every(item => !('providerMessageId' in item)));
 });
 
-test('status semantics do not overclaim WhatsApp delivery', () => {
-  assert.deepEqual(messageDeliveryEntry({ appointment_id: 1, message_kind: 'booking_confirmation', status: 'sent', sent_at: '2026-09-01T10:00:00Z' }).statusLabel, 'Sent by Shiloh');
-  assert.deepEqual(messageDeliveryEntry({ appointment_id: 1, message_kind: 'booking_confirmation', status: 'sending', claimed_at: '2026-09-01T10:00:00Z' }).statusLabel, 'Pending');
+test('provider evidence uses strongest truthful lifecycle state and never downgrades delivery/read', () => {
+  const base = {
+    appointment_id: 1,
+    message_kind: 'booking_confirmation',
+    status: 'sent',
+    claimed_at: '2026-09-01T09:59:59Z',
+    sent_at: '2026-09-01T10:00:00Z',
+    template_name: 'shiloh_booking_confirmation_v2',
+  };
+  assert.equal(messageDeliveryEntry({ ...base, provider_sent_at: '2026-09-01T10:00:01Z' }).statusLabel, 'Sent to WhatsApp');
+  assert.equal(messageDeliveryEntry({ ...base, provider_failed_at: '2026-09-01T10:00:02Z' }).statusLabel, 'WhatsApp delivery failed');
+  assert.equal(messageDeliveryEntry({ ...base, provider_failed_at: '2026-09-01T10:00:02Z', provider_delivered_at: '2026-09-01T10:00:03Z' }).statusLabel, 'Delivered on WhatsApp');
+  assert.equal(messageDeliveryEntry({ ...base, provider_failed_at: '2026-09-01T10:00:04Z', provider_delivered_at: '2026-09-01T10:00:03Z', provider_read_at: '2026-09-01T10:00:05Z' }).statusLabel, 'Read on WhatsApp');
+  assert.equal(messageDeliveryEntry({ ...base, status: 'uncertain', sent_at: null, last_attempt_at: '2026-09-01T10:00:00Z' }).statusLabel, 'Delivery uncertain');
   assert.equal(rescheduleEntry({ appointment_id: 2, client_notification_suppressed_at: '2026-09-01T10:00:00Z' }).statusLabel, 'Suppressed');
   assert.equal(intentLabel('booking_update'), 'Booking update');
 });
 
-test('Client Communications UX is Shiloh-owned, read-only and hides Meta/provider internals', () => {
+test('Client Communications UX shows Shiloh template and provider outcome but hides provider identifiers', () => {
   const html = renderClientDetailPageWithCommunications(clientDetailModel({
     communications: [{
       intent: 'booking_confirmation',
       label: 'Booking confirmation',
-      status: 'sent',
-      statusLabel: 'Sent by Shiloh',
-      occurredAt: '2026-09-01T08:00:04.000Z',
+      status: 'delivered',
+      statusLabel: 'Delivered on WhatsApp',
+      occurredAt: '2026-09-01T08:00:08.000Z',
       appointmentId: 71,
+      templateName: 'shiloh_booking_confirmation_v2',
     }],
   }), { calendarNavigationAllowed: true });
 
   assert.match(html, /data-client-communications/);
   assert.match(html, /Shiloh notification history/);
   assert.match(html, /Booking confirmation/);
-  assert.match(html, /Sent by Shiloh/);
+  assert.match(html, /Delivered on WhatsApp/);
   assert.match(html, /Appointment #71/);
-  assert.doesNotMatch(html, /provider_message_id|template_name|Meta template|Graph API/i);
+  assert.match(html, /Template: shiloh_booking_confirmation_v2/);
+  assert.doesNotMatch(html, /provider_message_id|Graph API/i);
   assert.doesNotMatch(html, /Send message|Reply|Compose/);
 });
 
