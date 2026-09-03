@@ -60,6 +60,10 @@ function timelineFixture() {
   };
 }
 
+async function canonicalMobileQuery() {
+  return { rows: [{ appointment_id: '880', client_mobile: '27821234567' }] };
+}
+
 function fakeResponse() {
   return {
     statusCode: null,
@@ -77,7 +81,7 @@ function fakeResponse() {
 const viewer = { staffId: 99, calendarScope: 'all_business' };
 
 async function buildDayModel() {
-  const service = createCalendarReadOnlyUxService({ listTimeline: async () => timelineFixture() });
+  const service = createCalendarReadOnlyUxService({ listTimeline: async () => timelineFixture(), query: canonicalMobileQuery });
   return service.buildModel({ view: 'day', date: '2026-08-24', viewer, now: new Date('2026-08-24T10:00:00Z') });
 }
 
@@ -85,6 +89,7 @@ test('Day, Week and Agenda all consume the same SchedulingTimeline contract thro
   const calls = [];
   const service = createCalendarReadOnlyUxService({
     listTimeline: async input => { calls.push(input); return timelineFixture(); },
+    query: canonicalMobileQuery,
   });
   const models = [];
   for (const view of ['day', 'week', 'agenda']) {
@@ -178,7 +183,10 @@ test('provider or SchedulingTimeline failure renders explicit unavailable state 
 });
 
 test('practitioner filtering is display-only and rejects staff outside server-permitted SchedulingTimeline scope', async () => {
-  const service = createCalendarReadOnlyUxService({ listTimeline: async () => ({ ...timelineFixture(), staff: [timelineFixture().staff[0]] }) });
+  const service = createCalendarReadOnlyUxService({
+    listTimeline: async () => ({ ...timelineFixture(), staff: [timelineFixture().staff[0]] }),
+    query: canonicalMobileQuery,
+  });
   await assert.rejects(
     service.buildModel({ view: 'day', date: '2026-08-24', staff: '2', viewer }),
     error => error.code === 'CALENDAR_UX_STAFF_FILTER_FORBIDDEN',
