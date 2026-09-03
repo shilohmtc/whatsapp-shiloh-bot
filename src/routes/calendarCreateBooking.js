@@ -1,6 +1,7 @@
 const express = require('express');
 const { pool } = require('../db/pool');
 const { createCalendarCreateBookingService } = require('../services/calendarCreateBooking');
+const { confirmCalendarV2BookingDirect } = require('../services/calendarDirectBookingConfirmation');
 const { createCalendarBookingClientDirectory } = require('../services/calendarBookingClientDirectory');
 const {
   requireStaffSession,
@@ -72,7 +73,7 @@ function customerConfirmationState(result) {
 function createCalendarCreateBookingRouter({
   env = process.env,
   sessionService,
-  bookingService = createCalendarCreateBookingService({ db: pool, env }),
+  bookingService = createCalendarCreateBookingService({ db: pool, env, confirmBooking: confirmCalendarV2BookingDirect }),
   clientDirectory = createCalendarBookingClientDirectory(),
   renderPage = renderCalendarCreateBookingPage,
   renderClient = calendarCreateBookingClientScript,
