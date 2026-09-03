@@ -77,13 +77,17 @@ test('very short Desktop density preserves treatment and collapses practitioner/
   assert.match(css, /@container \(max-width:260px\) and \(min-height:61px\) and \(max-height:82px\)[\s\S]*?\.event-detail-separator\+span\{display:none!important\}/);
 });
 
-test('accepted Phone appointment-card touch contract remains unchanged', () => {
+test('Phone touch contract keeps 44px Manage while very short cards preserve treatment before practitioner/status', () => {
   const phoneCss = workspaceShellStyles();
+  const shortRule = phoneCss.match(/@container \(max-height:60px\)\{([\s\S]*?)\}@container \(min-height:61px\)/)?.[1] || '';
 
   assert.match(phoneCss, /@media\(max-width:700px\)/);
   assert.match(phoneCss, /\.workspace-main \.positioned-event\{container-type:size\}/);
   assert.match(phoneCss, /\.workspace-main \.positioned-event \.event-operation\{min-width:44px!important;min-height:44px!important/);
-  assert.match(phoneCss, /@container \(max-height:60px\)[\s\S]*?\.event-card\[data-kind="appointment"\] \.event-meta\{display:none!important\}/);
+  assert.match(shortRule, /\.event-card\[data-kind="appointment"\] \.event-meta\{display:block!important/);
+  assert.match(shortRule, /\.event-meta>span:not\(\.event-service-context\)\{display:none!important\}/);
+  assert.match(shortRule, /\.event-service-context>span:last-child\{display:block!important;min-width:0;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important/);
+  assert.doesNotMatch(shortRule, /\.event-meta\{display:none!important\}/);
 });
 
 test('Desktop density leaves Manage/detail mutation semantics unchanged', () => {
