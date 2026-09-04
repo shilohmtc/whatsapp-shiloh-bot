@@ -99,6 +99,18 @@ function safeJson(response){return response.json().catch(function(){return {};})
 function viewerPermitsWorkspace(viewer){return !!(viewer&&typeof viewer==='object'&&(viewer.calendarScope==='own_staff'||viewer.calendarScope==='business_all_staff'));}
 function normalizeStaffAccountNumber(value){var raw=String(value||'').trim();var digits=raw.replace(/\\D/g,'');if(/^0\\d{9}$/.test(digits))return '27'+digits.slice(1);return raw;}
 
+function installPractitionerVisibility(){
+  var form=select('[data-practitioner-visibility-form]');if(!form)return;
+  var checkboxes=Array.prototype.slice.call(form.querySelectorAll('input[name="staff"]'));
+  var status=select('[data-people-selection-status]');
+  function checked(){return checkboxes.filter(function(input){return input.checked;});}
+  function update(){var count=checked().length;if(status)status.textContent=count+' of '+checkboxes.length+' visible';}
+  form.addEventListener('change',update);
+  form.addEventListener('submit',function(event){if(checked().length)return;event.preventDefault();if(status)status.textContent='Keep at least one practitioner visible.';var first=checkboxes[0];if(first){first.checked=true;first.focus();}});
+  document.addEventListener('click',function(event){var picker=select('[data-people-picker]');if(picker&&picker.open&&!picker.contains(event.target))picker.open=false;});
+  update();
+}
+
 function resetWeekOverlapLayout(){
   var grid=select('.week-view .week-grid');
   if(!grid)return;
@@ -256,6 +268,7 @@ var logoutButton=select('[data-shiloh-logout]');if(logoutButton)logoutButton.add
 if(select('[data-shiloh-staff-calendar-access]'))exchangeStaffRecoveryFragment();
 if(select('[data-shiloh-staff-calendar-access]'))probeSession();
 applyWeekOverlapLayout();
+installPractitionerVisibility();
 if(window.matchMedia){var weekDesktopMedia=window.matchMedia('(min-width: 701px)');if(weekDesktopMedia.addEventListener)weekDesktopMedia.addEventListener('change',applyWeekOverlapLayout);else if(weekDesktopMedia.addListener)weekDesktopMedia.addListener(applyWeekOverlapLayout);}
 })();`;
 }

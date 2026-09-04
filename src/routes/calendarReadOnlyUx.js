@@ -155,13 +155,19 @@ function staffFilterHref(basePath, model, staffId) {
 }
 
 function renderMobileStaffOverview(model, basePath = '/calendar/read-only') {
-  if (model?.view !== 'day' || model?.selectedStaffId != null) return '';
-  const staff = Array.isArray(model?.permittedStaff) ? model.permittedStaff : [];
+  if (model?.view !== 'day') return '';
+  const usesImplicitDesktopFocus = model?.visibleStaffSelectionExplicit === false;
+  if (!usesImplicitDesktopFocus && model?.selectedStaffId != null) return '';
+  const sourceTimeline = usesImplicitDesktopFocus && model?.authorizedTimeline
+    ? model.authorizedTimeline
+    : model?.timeline;
+  const staff = Array.isArray(sourceTimeline?.staff) ? sourceTimeline.staff : [];
   if (staff.length <= 1) return '';
+  const mobileModel = { ...model, timeline: sourceTimeline };
   const day = model.period?.dateKeys?.[0] || model.dateKey;
   const cards = staff.map(person => {
-    const items = eventsForStaffOnDay(model, person.id, day);
-    const context = staffWorkingContext(model, person.id, day);
+    const items = eventsForStaffOnDay(mobileModel, person.id, day);
+    const context = staffWorkingContext(mobileModel, person.id, day);
     const unavailable = context === 'Not scheduled' || context === 'No working window';
     const next = mobileEventSummary(items[0]);
     const countLabel = `${items.length} item${items.length === 1 ? '' : 's'}`;
@@ -196,7 +202,7 @@ function applyCalendarResponsivePolish(html, model = null, basePath = '/calendar
     output = output
       .replace('<body data-calendar-readonly=', '<body data-calendar-mobile-overview="true" data-calendar-readonly=')
       .replace('<main class="calendar-view day-view" data-view="day">', '<main class="calendar-view day-view mobile-all-staff-overview" data-view="day">')
-      .replace('<div class="time-grid day-time-grid">', `${overview}<div class="time-grid day-time-grid">`);
+      .replace('<div class="time-grid day-time-grid"', `${overview}<div class="time-grid day-time-grid"`);
   }
   return output;
 }
