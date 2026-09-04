@@ -310,7 +310,7 @@ async function prepareBookingConfirmationRecovery(appointmentId,{db=pool,operato
            delivery.provider_read_at,delivery.provider_failed_at,
            EXISTS(SELECT 1 FROM crm_audit_events audit
                    WHERE audit.action='customer.booking_confirmation_sent'
-                     AND audit.entity_type='appointment' AND audit.entity_id=a.id::text) AS sent_audit
+                     AND audit.entity_type='appointment' AND audit.entity_id=a.id) AS sent_audit
       FROM appointments a
       LEFT JOIN customer_message_deliveries delivery
         ON delivery.appointment_id=a.id AND delivery.message_kind='booking_confirmation'
