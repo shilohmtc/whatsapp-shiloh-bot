@@ -47,12 +47,8 @@ async function pageOptions(req, clientAccessService, staffAccessService, staffAc
   let clientsNavigationAllowed = false;
   let staffNavigationAllowed = false;
   const adminId = req.staffBrowserSession?.adminId;
-  try {
-    clientsNavigationAllowed = Boolean(await clientAccessService.resolveAccess(adminId));
-  } catch (_error) {}
-  try {
-    staffNavigationAllowed = Boolean(await staffAccessService.resolveAccess(adminId));
-  } catch (_error) {}
+  try { clientsNavigationAllowed = Boolean(await clientAccessService.resolveAccess(adminId)); } catch (_error) {}
+  try { staffNavigationAllowed = Boolean(await staffAccessService.resolveAccess(adminId)); } catch (_error) {}
   return {
     staffAccessScriptPath: `${staffAccessPath}/client.js`,
     calendarNavigationAllowed: Boolean(req.staffBrowserSession?.viewer),
@@ -63,11 +59,8 @@ async function pageOptions(req, clientAccessService, staffAccessService, staffAc
 
 async function detailPageOptions(req, service, clientAccessService, staffAccessService, staffAccessPath) {
   const options = await pageOptions(req, clientAccessService, staffAccessService, staffAccessPath);
-  try {
-    options.manageAllowed = Boolean(await service.resolveManageAccess(req.staffBrowserSession?.adminId));
-  } catch (_error) {
-    options.manageAllowed = false;
-  }
+  try { options.manageAllowed = Boolean(await service.resolveManageAccess(req.staffBrowserSession?.adminId)); }
+  catch (_error) { options.manageAllowed = false; }
   return options;
 }
 
@@ -92,13 +85,9 @@ function createWorkspaceServicesListHandler({
         status: req.query?.status,
         offset: req.query?.offset,
       });
-      let html = renderPage(
-        model,
-        await pageOptions(req, clientAccessService, staffAccessService, staffAccessPath)
-      );
-      try {
-        if (await creationService.resolveCreateAccess(req.staffBrowserSession?.adminId)) html = injectCreateAction(html);
-      } catch (_error) {}
+      let html = renderPage(model, await pageOptions(req, clientAccessService, staffAccessService, staffAccessPath));
+      try { if (await creationService.resolveCreateAccess(req.staffBrowserSession?.adminId)) html = injectCreateAction(html); }
+      catch (_error) {}
       return res.status(200).type('html').send(html);
     } catch (error) {
       const safe = safeError(error);
@@ -120,10 +109,7 @@ function createWorkspaceServiceDetailHandler({
     setWorkspaceServicesSecurityHeaders(res);
     if (!isWorkspaceServicesEnabled(env)) return res.status(404).type('text/plain').send('Not Found');
     try {
-      const model = await service.getServiceDetail({
-        adminId: req.staffBrowserSession?.adminId,
-        serviceId: req.params?.id,
-      });
+      const model = await service.getServiceDetail({ adminId: req.staffBrowserSession?.adminId, serviceId: req.params?.id });
       return res.status(200).type('html').send(renderPage(
         model,
         await detailPageOptions(req, service, clientAccessService, staffAccessService, staffAccessPath)
@@ -149,33 +135,32 @@ function createWorkspaceServicesRouter({ sessionService, ...options } = {}) {
   router.get('/access', async (req, res) => {
     res.setHeader('Cache-Control', 'private, no-store, max-age=0');
     if (!isWorkspaceServicesEnabled(options.env || process.env)) return res.sendStatus(404);
-    try {
-      const authority = await service.resolveAccess(req.staffBrowserSession?.adminId);
-      return authority ? res.sendStatus(204) : res.sendStatus(403);
-    } catch (_error) {
-      return res.sendStatus(403);
-    }
+    try { return (await service.resolveAccess(req.staffBrowserSession?.adminId)) ? res.sendStatus(204) : res.sendStatus(403); }
+    catch (_error) { return res.sendStatus(403); }
   });
   router.get('/manage.js', async (req, res) => {
     setWorkspaceServicesSecurityHeaders(res);
     if (!isWorkspaceServicesEnabled(options.env || process.env)) return res.sendStatus(404);
     try {
-      const authority = await service.resolveManageAccess(req.staffBrowserSession?.adminId);
-      if (!authority) return res.sendStatus(403);
+      if (!(await service.resolveManageAccess(req.staffBrowserSession?.adminId))) return res.sendStatus(403);
       return res.status(200).type('application/javascript').send(workspaceServicesManageClientScript());
-    } catch (_error) {
-      return res.sendStatus(403);
-    }
+    } catch (_error) { return res.sendStatus(403); }
   });
   router.get('/create.js', async (req, res) => {
     setWorkspaceServicesSecurityHeaders(res);
     if (!isWorkspaceServicesEnabled(options.env || process.env)) return res.sendStatus(404);
     try {
-      const authority = await creationService.resolveCreateAccess(req.staffBrowserSession?.adminId);
-      if (!authority) return res.sendStatus(403);
+      if (!(await creationService.resolveCreateAccess(req.staffBrowserSession?.adminId))) return res.sendStatus(403);
       return res.status(200).type('application/javascript').send(serviceCreationClientScript());
-    } catch (_error) {
-      return res.sendStatus(403);
+    } catch (_error) { return res.sendStatus(403); }
+  });
+  router.get('/create-options', async (req, res) => {
+    setWorkspaceServicesSecurityHeaders(res);
+    if (!isWorkspaceServicesEnabled(options.env || process.env)) return res.sendStatus(404);
+    try { return res.status(200).json(await creationService.listCreateOptions(req.staffBrowserSession?.adminId)); }
+    catch (error) {
+      const safe = safeError(error);
+      return res.status(safe.status).json({ error: safe.message, code: error?.code });
     }
   });
   router.get('/new', async (req, res) => {
@@ -189,7 +174,6 @@ function createWorkspaceServicesRouter({ sessionService, ...options } = {}) {
       return res.status(safe.status).type('text/plain').send(safe.message);
     }
   });
-
   router.get('/', createWorkspaceServicesListHandler({ ...options, service, creationService }));
   router.get('/:id', createWorkspaceServiceDetailHandler({ ...options, service }));
   return router;
