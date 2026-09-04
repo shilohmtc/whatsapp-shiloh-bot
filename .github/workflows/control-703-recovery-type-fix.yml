@@ -1,0 +1,35 @@
+name: control-703-recovery-type-fix
+on:
+  push:
+    branches:
+      - control/703-recovery-audit-type-fix
+permissions:
+  contents: write
+jobs:
+  patch-and-verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.14.1
+      - run: npm ci
+      - name: Apply bounded patch
+        run: python3 scripts/control_703_recovery_type_fix.py
+      - name: Focused verification
+        run: node --test tests/workspace-booking-confirmation-postgres-type.test.js tests/booking-confirmation-async-provider-retry.test.js tests/workspace-booking-confirmation-recovery.test.js
+      - name: Full regression
+        run: npm test
+      - name: Commit verified patch
+        run: |
+          if git diff --quiet -- src/services/customerBookingConfirmation.js tests/workspace-booking-confirmation-postgres-type.test.js; then
+            echo "Patch already committed; verification only."
+            exit 0
+          fi
+          git config user.name "shiloh-control"
+          git config user.email "shilohmtc@gmail.com"
+          git add src/services/customerBookingConfirmation.js tests/workspace-booking-confirmation-postgres-type.test.js
+          git commit -m "#703 — Fix booking-confirmation recovery audit identity type"
+          git push origin HEAD:control/703-recovery-audit-type-fix
