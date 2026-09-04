@@ -46,6 +46,10 @@ test('automatic async-provider retry is capped and routed through canonical reco
   const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'services', 'customerBookingConfirmation.js'), 'utf8');
   assert.match(source, /attempt_count<\$\{MAX_AUTOMATIC_ASYNC_PROVIDER_ATTEMPTS\}/);
   assert.match(source, /automaticProviderRecovery\?\{recovery:true\}:\{\}/);
+  const scanner = source.slice(source.indexOf('async function flushCustomerBookingConfirmations'), source.indexOf('function startCustomerBookingConfirmationScheduler'));
+  assert.match(scanner, /provider_delivered_at IS NULL/);
+  assert.match(scanner, /provider_read_at IS NULL/);
+  assert.match(scanner, /provider_failed_at>provider_sent_at/);
 });
 
 test('Manage Appointment loads sanitized confirmation evidence and reuses the canonical recovery endpoint', () => {

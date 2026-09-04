@@ -548,6 +548,10 @@ async function flushCustomerBookingConfirmations(){
      WHERE message_kind='booking_confirmation'
        AND status IN ('pending','failed')
        AND next_attempt_at<=NOW()
+       AND provider_delivered_at IS NULL
+       AND provider_read_at IS NULL
+       AND (provider_sent_at IS NULL
+         OR (provider_failed_at IS NOT NULL AND provider_failed_at>provider_sent_at))
        AND (COALESCE(last_error,'')<>'provider_async_failed'
          OR attempt_count<${MAX_AUTOMATIC_ASYNC_PROVIDER_ATTEMPTS})
      ORDER BY next_attempt_at,appointment_id
