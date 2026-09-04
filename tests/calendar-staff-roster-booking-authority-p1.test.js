@@ -52,8 +52,11 @@ test('stable vocabulary and evaluator derive authority only from canonical data 
     SCHEDULE_MANAGE: 'schedule:manage',
   });
   const first = evaluateCalendarAuthority(principal());
-  const renamed = evaluateCalendarAuthority(principal({ display_name: 'Entirely different operator', business_role: 'receptionist' }));
+  const renamed = evaluateCalendarAuthority(principal({ display_name: 'Entirely different operator' }));
   assert.deepEqual(renamed, first);
+  const roleChanged = evaluateCalendarAuthority(principal({ business_role: 'receptionist' }));
+  assert.equal(roleChanged.businessRole, 'receptionist');
+  assert.notDeepEqual(roleChanged, first);
   assert.deepEqual(operationsForAuthority(first), ['appointment:reschedule', 'appointment:cancel', 'appointment:reassign']);
   assert.deepEqual(CALENDAR_OPERATIONS.slice(3), ['calendar_block:manage', 'operational_leave:manage', 'working_schedule:manage']);
 });
