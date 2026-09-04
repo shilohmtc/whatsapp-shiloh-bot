@@ -48,6 +48,7 @@ function evaluateCalendarAuthority(admin = {}, { allowedServiceIds = [] } = {}) 
   if (!operatorAdminId || admin.admin_active !== true) return null;
   const calendarScope = String(admin.calendar_scope || '').trim().toLowerCase();
   const serviceScope = String(admin.service_scope || '').trim().toLowerCase();
+  const businessRole = String(admin.business_role || '').trim().toLowerCase();
   if (!CALENDAR_SCOPES.has(calendarScope) || !SERVICE_SCOPES.has(serviceScope)) return null;
   if (calendarScope !== 'all_business' && serviceScope !== 'own_services') return null;
 
@@ -66,6 +67,7 @@ function evaluateCalendarAuthority(admin = {}, { allowedServiceIds = [] } = {}) 
     key: 'calendar_capability_scope_v1',
     operatorAdminId,
     linkedStaffId,
+    businessRole,
     calendarScope,
     serviceScope,
     capabilities,
@@ -87,6 +89,15 @@ function serviceScopeAllows(authority, serviceIds = []) {
   return ids.every((id) => allowed.has(id));
 }
 
+function serviceVisibilityAllows(authority, privateOwnerStaffId) {
+  if (!authority) return false;
+  const ownerStaffId = positiveId(privateOwnerStaffId);
+  if (!ownerStaffId) return true;
+  if (authority.businessRole === 'booking_operator') return true;
+  return authority.businessRole === 'tenant_practitioner'
+    && positiveId(authority.linkedStaffId) === ownerStaffId;
+}
+
 function calendarScopeAllowsBookingTarget(authority, staffId) {
   const targetStaffId = positiveId(staffId);
   if (!authority || !targetStaffId) return false;
@@ -97,11 +108,12 @@ function calendarScopeAllowsBookingTarget(authority, staffId) {
   return false;
 }
 
-function allowsBookingTarget(authority, { staffId, serviceId } = {}) {
+function allowsBookingTarget(authority, { staffId, serviceId, privateOwnerStaffId = null } = {}) {
   return hasCapability(authority, CALENDAR_CAPABILITIES.BOOKING_CREATE)
     && hasCapability(authority, CALENDAR_CAPABILITIES.CLIENT_LOOKUP)
     && calendarScopeAllowsBookingTarget(authority, staffId)
-    && serviceScopeAllows(authority, [serviceId]);
+    && serviceScopeAllows(authority, [serviceId])
+    && serviceVisibilityAllows(authority, privateOwnerStaffId);
 }
 
 function allowsAppointmentTarget(authority, { staffIds = [], serviceIds = [] } = {}) {
@@ -177,6 +189,7 @@ module.exports = {
   hasCapability,
   operationsForAuthority,
   serviceScopeAllows,
+  serviceVisibilityAllows,
   allowsBookingTarget,
   allowsAppointmentTarget,
   allowsStaffTarget,
