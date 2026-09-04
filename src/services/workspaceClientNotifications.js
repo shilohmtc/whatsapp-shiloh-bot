@@ -198,7 +198,7 @@ function createWorkspaceClientNotificationService({
                 SELECT 1 FROM crm_audit_events e
                  WHERE e.action='customer.booking_confirmation_sent'
                    AND e.entity_type='appointment'
-                   AND e.entity_id=a.id::text
+                   AND e.entity_id=a.id
               ) END AS already_sent
          FROM crm_v2_clients c
          LEFT JOIN LATERAL (
@@ -296,7 +296,7 @@ function createWorkspaceClientNotificationService({
               delivery.provider_read_at,delivery.provider_failed_at,
               EXISTS(SELECT 1 FROM crm_audit_events audit
                       WHERE audit.action='customer.booking_confirmation_sent'
-                        AND audit.entity_type='appointment' AND audit.entity_id=a.id::text) AS already_sent
+                        AND audit.entity_type='appointment' AND audit.entity_id=a.id) AS already_sent
          FROM appointments a
          JOIN crm_v2_clients c ON c.id=a.crm_v2_client_id
          LEFT JOIN locations l ON l.id=a.location_id
@@ -372,7 +372,7 @@ function createWorkspaceClientNotificationService({
               delivery.provider_read_at,delivery.provider_failed_at,
               EXISTS(SELECT 1 FROM crm_audit_events audit
                       WHERE audit.action='customer.booking_confirmation_sent'
-                        AND audit.entity_type='appointment' AND audit.entity_id=a.id::text) AS already_sent
+                        AND audit.entity_type='appointment' AND audit.entity_id=a.id) AS already_sent
          FROM appointments a
          JOIN crm_v2_clients c ON c.id=a.crm_v2_client_id
          LEFT JOIN locations l ON l.id=a.location_id
