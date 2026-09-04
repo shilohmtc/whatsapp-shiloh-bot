@@ -6,6 +6,7 @@ const { isCalendarBridgeEnabled } = require('../middleware/staffBrowserSession')
 const { createCalendarCreateBookingService } = require('../services/calendarCreateBooking');
 const { createCalendarOperationalMutationService } = require('../services/calendarOperationalMutations');
 const workspaceClients = require('../services/workspaceClients');
+const workspaceClientNotifications = require('../services/workspaceClientNotifications');
 
 const CALENDAR_VIEWER_CONTEXT = Symbol.for('shiloh.calendar.server.viewer');
 const CALENDAR_TIMEZONE = calendarReadOnlyUx.BUSINESS_TIMEZONE || 'Africa/Johannesburg';
@@ -220,6 +221,7 @@ function createCalendarReadOnlyHandler({
   bookingService = createCalendarCreateBookingService({ db: pool, env }),
   mutationService = createCalendarOperationalMutationService({ db: pool }),
   clientAccessService = workspaceClients,
+  notificationService = workspaceClientNotifications,
   clientsPath = '/calendar/clients',
   operationalMutationsScriptPath = '/calendar/operations/client.js',
 } = {}) {
@@ -277,6 +279,15 @@ function createCalendarReadOnlyHandler({
         }
       }
 
+      let notificationAllowed = false;
+      if (req.staffBrowserSession?.adminId != null) {
+        try {
+          notificationAllowed = Boolean(await notificationService.resolveAccess(req.staffBrowserSession.adminId));
+        } catch (_notificationAuthorityError) {
+          // Exception recovery remains hidden unless current client:notify authority resolves.
+        }
+      }
+
       const renderedModel = {
         ...model,
         mutationCapability: mutationCapability ? { ...mutationCapability, enabled: true } : { enabled: false },
@@ -290,7 +301,10 @@ function createCalendarReadOnlyHandler({
         operationalMutationsScriptPath,
         clientNavigationAllowed,
         clientsPath,
-        operationalActions: bookingAllowed ? bookingOperationalActions(model.dateKey, bookingPath) : [],
+        operationalActions: [
+          ...(bookingAllowed ? bookingOperationalActions(model.dateKey, bookingPath) : []),
+          ...(notificationAllowed ? [{ label: 'Confirmation exceptions', href: '/calendar/operations/booking-confirmation-exceptions' }] : []),
+        ],
         timelineReadOnlyMessage: mutationCapability
           ? 'Calendar operations update Shiloh canonical state only. Every save revalidates current authority, revision, schedules and conflicts; no client message is sent by these controls.'
           : bookingAllowed

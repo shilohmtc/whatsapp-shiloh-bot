@@ -11,6 +11,8 @@ const {
 const {
   calendarOperationalMutationsClientScript,
 } = require('../presentation/calendarOperationalMutationsUx');
+const workspaceClientNotifications = require('../services/workspaceClientNotifications');
+const { renderBookingConfirmationExceptionsPage } = require('../presentation/workspaceBookingConfirmationExceptionsUx');
 
 function setOperationalSecurityHeaders(res) {
   res.setHeader('Cache-Control', 'private, no-store, max-age=0');
@@ -23,7 +25,12 @@ function setOperationalSecurityHeaders(res) {
 
 function statusForOperationalError(error) {
   const code = String(error?.code || '');
+  if (Number.isInteger(error?.httpStatus) && error.httpStatus >= 400 && error.httpStatus <= 503) return error.httpStatus;
   if (code === 'CALENDAR_OPERATION_FORBIDDEN') return 403;
+  if (code === 'WORKSPACE_CLIENT_NOTIFY_FORBIDDEN') return 403;
+  if (code.startsWith('WORKSPACE_CLIENT_NOTIFY_') && code.endsWith('_NOT_FOUND')) return 404;
+  if (code.startsWith('WORKSPACE_CLIENT_NOTIFY_') && (code.includes('ALREADY') || code.includes('NOT_SENDABLE'))) return 409;
+  if (code.startsWith('WORKSPACE_CLIENT_NOTIFY_')) return 400;
   if (code.endsWith('_NOT_FOUND')) return 404;
   if (
     code.includes('STALE')
@@ -54,7 +61,9 @@ function createCalendarOperationalMutationRouter({
   env = process.env,
   sessionService,
   mutationService = createCalendarOperationalMutationService({ db: pool }),
+  notificationService = workspaceClientNotifications,
   renderClient = calendarOperationalMutationsClientScript,
+  renderExceptions = renderBookingConfirmationExceptionsPage,
 } = {}) {
   if (!sessionService) throw new Error('Calendar operational mutations require the staff session service.');
   const router = express.Router();
@@ -69,6 +78,22 @@ function createCalendarOperationalMutationRouter({
       return sendOperationalError(error, req, res, next);
     }
   };
+  const requireNotificationCapability = async (req, res, next) => {
+    try {
+      req.clientNotificationOperator = await notificationService.requireAccess(req.staffBrowserSession.adminId);
+      return next();
+    } catch (error) {
+      return sendOperationalError(error, req, res, next);
+    }
+  };
+  const requireAnyActionCapability = async (req, res, next) => {
+    try {
+      req.calendarMutationOperator = await mutationService.resolveOperator(req.staffBrowserSession.adminId);
+      return next();
+    } catch (_mutationError) {
+      return requireNotificationCapability(req, res, next);
+    }
+  };
   const mutationChain = [sameOrigin, requireSession, requireCsrf, requireCapability];
 
   router.use((_req, res, next) => {
@@ -80,8 +105,43 @@ function createCalendarOperationalMutationRouter({
     capability: req.calendarMutationOperator.mutationCapability,
   }));
 
-  router.get('/client.js', requireSession, requireCapability, (_req, res) => {
+  router.get('/client.js', requireSession, requireAnyActionCapability, (_req, res) => {
     return res.status(200).type('application/javascript').send(renderClient());
+  });
+
+  router.get('/booking-confirmation-exceptions', requireSession, requireNotificationCapability, async (req, res, next) => {
+    try {
+      const model = await notificationService.listBookingConfirmationExceptions({
+        adminId: req.staffBrowserSession.adminId,
+      });
+      return res.status(200).type('html').send(renderExceptions(model));
+    } catch (error) {
+      return sendOperationalError(error, req, res, next);
+    }
+  });
+
+  router.get('/appointments/:appointmentId/booking-confirmation', requireSession, requireNotificationCapability, async (req, res, next) => {
+    try {
+      const result = await notificationService.getAppointmentConfirmation({
+        adminId: req.staffBrowserSession.adminId,
+        appointmentId: req.params.appointmentId,
+      });
+      return res.status(200).json(result);
+    } catch (error) {
+      return sendOperationalError(error, req, res, next);
+    }
+  });
+
+  router.post('/appointments/:appointmentId/booking-confirmation/recover', sameOrigin, requireSession, requireCsrf, requireNotificationCapability, async (req, res, next) => {
+    try {
+      const result = await notificationService.sendBookingConfirmation({
+        adminId: req.staffBrowserSession.adminId,
+        appointmentId: req.params.appointmentId,
+      });
+      return res.status(200).json(result);
+    } catch (error) {
+      return sendOperationalError(error, req, res, next);
+    }
   });
 
   router.get('/staff/:staffId/schedule/:dayOfWeek', requireSession, requireCapability, async (req, res, next) => {
