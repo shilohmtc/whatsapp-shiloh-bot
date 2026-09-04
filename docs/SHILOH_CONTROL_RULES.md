@@ -153,6 +153,7 @@ At minimum each active-unit entry records:
 - current implementation head;
 - last completed verification/release gate;
 - exact next executable action;
+- compact **Clean Change** record for meaningful implementation units: existing authority reused; why the change is the smallest practical solution; permanent vs temporary artifacts; duplicate-authority judgment; one-year maintenance judgment; replacement/retirement disposition;
 - completed/do-not-redo state;
 - any separate authorization/release gate;
 - whether any owner action is actually required.
@@ -241,6 +242,29 @@ When two approaches are viable, prefer fewer moving parts, clearer authority, lo
 Do not create generic Settings, generic RBAC or broad workflow abstractions merely to solve one bounded gap. Extend the smallest existing canonical domain whenever practical.
 
 Stable invariants belong in code. Changeable business policy belongs in canonical data/config. Runtime authority must be capability-driven and data-configured, never person-name hard-coded. Domain scopes/capabilities must not silently grant unrelated domains.
+
+### Clean Change and Complexity Gate
+
+For every meaningful implementation change, Shiloh Control must answer the following before implementation and again before merge/release/reconciliation judgment. `No` or `nothing` are valid answers; do not manufacture cleanup work merely to satisfy the gate.
+
+1. **Reuse** — what existing canonical authority, service, queue, datastore, capability, route or presentation surface can be extended instead of creating another one?
+2. **Smallest change** — is there a materially smaller safe solution that satisfies the authorized acceptance criteria?
+3. **Permanent vs temporary** — which artifacts deliberately belong on `main`, and which exist only to execute, diagnose, migrate or prove the change?
+4. **Authority duplication** — does the change create another sender, queue, scheduler, datastore, permission source, business-rule source, API authority or overlapping operator surface for something Shiloh already owns? If so, consolidate or justify why coexistence is intentional.
+5. **One-year test** — would Shiloh deliberately choose to own and maintain this code or process a year from now, given its operational value and failure surface?
+6. **Retirement** — what existing code, configuration, surface or process can now be removed, consolidated or explicitly scheduled for retirement because the new capability supersedes it?
+
+Temporary Control engineering artifacts must be unmistakable and branch-only. Use `.control-temp/` for temporary directories or `control-temp-*` names for temporary files under `.github/workflows/` and `scripts/`. These artifacts must be removed before a release PR and must never remain on release `main` unless they are deliberately reclassified as permanent with an explicit Clean Change justification and renamed accordingly.
+
+When a new capability overlaps an older one, record exactly one replacement disposition:
+
+- **REPLACES NOW** — remove the superseded path in the same controlled unit;
+- **COEXISTS FOR A REASON** — both remain because they serve distinct, stated operational jobs;
+- **REPLACES LATER** — identify the concrete future unit or event that permits retirement, and reassess at that boundary.
+
+CI may mechanically enforce only facts it can know reliably, such as forbidden temporary-artifact conventions or stable security invariants. Architectural duplication, one-year value and retirement judgment remain Shiloh Control review responsibilities; do not build a generic architecture linter to imitate judgment.
+
+Terminal reconciliation includes a deletion/consolidation pass: remove execution scaffolding, superseded helpers and dead flags/config where safe; record intentionally permanent technical-only tooling; and preserve deferred retirement only when a named dependency justifies it. Leaving Shiloh no more complex than necessary is part of the definition of complete.
 
 ## 9. Project Tracker and Master Status reconciliation
 
