@@ -1,0 +1,39 @@
+name: Control 703 review correction
+
+on:
+  push:
+    branches:
+      - control/703-booking-confirmation-async-failure
+    paths:
+      - .github/workflows/control-703-review.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.14.1
+          cache: npm
+      - run: npm ci
+      - name: Apply review correction
+        run: python3 scripts/control-703-review-fix.py
+      - name: Focused verification
+        run: node --test tests/booking-confirmation-async-provider-retry.test.js tests/workspace-booking-confirmation-recovery.test.js
+      - name: Full regression
+        run: npm test
+      - name: Commit verified correction
+        run: |
+          git config user.name "Shiloh Control"
+          git config user.email "actions@users.noreply.github.com"
+          git add src/services/customerBookingConfirmation.js tests/booking-confirmation-async-provider-retry.test.js
+          git diff --cached --check
+          git commit -m "fix(whatsapp): align retry scan with provider evidence (#703)"
+          git push origin HEAD:control/703-booking-confirmation-async-failure
