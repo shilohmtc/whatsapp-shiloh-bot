@@ -96,10 +96,10 @@ jobs:
             const end = script.indexOf("}});});}", start);
             assert.notEqual(end, -1);
             const cancellationBranch = script.slice(start, end);
-            assert.match(cancellationBranch, /if\(!form\.elements\.confirmed\.checked\)return;/);
-            assert.match(cancellationBranch, /confirmation:\{confirmed:true,appointmentId:data\.id,revision:data\.revision\}/);
-            assert.match(cancellationBranch, /requestId:operationId\(\)/);
-            assert.doesNotMatch(cancellationBranch, /\breason\s*:/);
+            assert.ok(cancellationBranch.includes('if(!form.elements.confirmed.checked)return;'));
+            assert.ok(cancellationBranch.includes('confirmation:{confirmed:true,appointmentId:data.id,revision:data.revision}'));
+            assert.ok(cancellationBranch.includes('requestId:operationId()'));
+            assert.equal(cancellationBranch.includes('reason:'), false);
           });
           `;
           fs.writeFileSync('tests/calendar-cancellation-ui.test.js', test);
