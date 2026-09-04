@@ -1,0 +1,40 @@
+name: Control Temp 708
+
+on:
+  push:
+    branches: [control/708-clean-change-gate]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: ${{ !contains(github.event.head_commit.message, '[708-applied]') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v7
+        with:
+          ref: control/708-clean-change-gate
+      - name: Use Node 24.14.1
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24.14.1
+          cache: npm
+      - name: Apply bounded Clean Change patch
+        run: python3 scripts/control-temp-708-apply.py
+      - name: Install dependencies
+        run: npm ci
+      - name: Run focused Clean Change gate
+        run: node --test tests/control-clean-change-gate.test.js
+      - name: Run repository regression
+        run: npm test
+      - name: Commit verified source and remove temporary executor
+        run: |
+          git config user.name "shiloh-control"
+          git config user.email "shilohmtc@gmail.com"
+          git add -A
+          git diff --cached --quiet && exit 0
+          git commit -m "#708 — Clean Change and complexity gate [708-applied]"
+          git push origin HEAD:control/708-clean-change-gate
