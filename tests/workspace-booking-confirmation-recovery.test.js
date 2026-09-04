@@ -12,6 +12,7 @@ const {
 } = require('../src/services/customerBookingConfirmation');
 const {
   createWorkspaceClientNotificationService,
+  confirmationProjection,
 } = require('../src/services/workspaceClientNotifications');
 const { renderBookingConfirmationExceptionsPage } = require('../src/presentation/workspaceBookingConfirmationExceptionsUx');
 const { calendarOperationalMutationsClientScript } = require('../src/presentation/calendarOperationalMutationsUx');
@@ -53,6 +54,13 @@ test('provider evidence has precedence and only failed, uncertain, or stale obli
   });
   assert.equal(recoveryState({ status: 'sending', last_attempt_at: new Date('2026-09-04T11:55:00Z') }, NOW).reason, 'already_in_progress');
   assert.equal(recoveryState({ status: 'sending', last_attempt_at: new Date('2026-09-04T11:40:00Z') }, NOW).reason, 'pending_too_long');
+});
+
+test('legacy sent audit without a delivery row remains terminal rather than becoming a resend exception', () => {
+  const projection = confirmationProjection({ appointment_id: 501, already_sent: true }, NOW);
+  assert.equal(projection.status, 'sent');
+  assert.equal(projection.recoverable, false);
+  assert.equal(projection.recoveryReason, 'already_sent');
 });
 
 test('recovery revalidates current CRM V2 recipient and conditionally reopens provider-failed local-sent evidence', async () => {

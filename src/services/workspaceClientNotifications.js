@@ -71,7 +71,9 @@ function confirmationProjection(row, now = new Date()) {
     provider_read_at: row.provider_read_at,
     provider_failed_at: row.provider_failed_at,
   });
-  const recovery = recoveryState(row.delivery_status ? {
+  const recovery = row.already_sent === true && !row.delivery_status
+    ? { recoverable: false, reason: 'already_sent' }
+    : recoveryState(row.delivery_status ? {
     status: row.delivery_status,
     claimed_at: row.claimed_at,
     updated_at: row.delivery_updated_at,
