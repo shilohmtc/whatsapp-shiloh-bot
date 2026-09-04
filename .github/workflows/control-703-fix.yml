@@ -21,8 +21,22 @@ jobs:
       - name: Focused verification
         run: node --test tests/workspace-booking-confirmation-recovery.test.js tests/booking-confirmation-async-provider-retry.test.js tests/workspace-booking-confirmation-postgres-type.test.js
       - name: Full regression
-        run: npm test
-      - name: Commit verified patch when needed
+        id: full_regression
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          npm test 2>&1 | tee full-test.log
+      - name: Upload full regression output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: control-703-full-test-log
+          path: full-test.log
+          if-no-files-found: error
+          retention-days: 2
+      - name: Commit verified patch when green
+        if: steps.full_regression.outcome == 'success'
         run: |
           if git diff --quiet -- src/services/workspaceClientNotifications.js tests/workspace-booking-confirmation-postgres-type.test.js; then
             echo "Patch already committed; verification only."
@@ -33,3 +47,6 @@ jobs:
           git add src/services/workspaceClientNotifications.js tests/workspace-booking-confirmation-postgres-type.test.js
           git commit -m "#703 — Fix Workspace confirmation audit identity type"
           git push origin HEAD:control/703-postgres-audit-type-fix
+      - name: Enforce full regression gate
+        if: steps.full_regression.outcome != 'success'
+        run: exit 1
