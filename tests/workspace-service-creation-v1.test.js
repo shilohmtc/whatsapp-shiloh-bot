@@ -106,10 +106,11 @@ test('booking operator can create an ordinary shared service without gaining ser
   assert.deepEqual(result.service.staffIds, [11, 12]);
   assert.equal(calls.some(call => call.sql.includes('INSERT INTO service_visibility_policies')), false);
   const migration = read('migrations/098_workspace_service_create_capability.sql');
-  assert.match(migration, /services:create/);
-  assert.match(migration, /booking_operator/);
-  assert.match(migration, /tenant_practitioner/);
-  assert.doesNotMatch(migration, /services:manage/);
+  const executableSql = migration.split('\n').filter(line => !line.trim().startsWith('--')).join('\n');
+  assert.match(executableSql, /services:create/);
+  assert.match(executableSql, /booking_operator/);
+  assert.match(executableSql, /tenant_practitioner/);
+  assert.doesNotMatch(executableSql, /services:manage/);
 });
 
 test('duplicate canonical service name fails closed before any service write', async () => {
@@ -130,7 +131,9 @@ test('route and UX use one guarded creation endpoint from Workspace and Calendar
   assert.match(mutations, /router\.post\('\/create', \.\.\.mutationChain/);
   assert.match(mutations, /sameOrigin, requireSession, requireCsrf/);
   assert.match(mutations, /creationService\.createService/);
-  assert.match(workspaceRoute, /\/calendar\/services\/new/);
+  assert.match(workspaceRoute, /router\.get\('\/new'/);
+  assert.match(workspaceRoute, /router\.get\('\/create-options'/);
+  assert.match(ux, /\/calendar\/services\/new/);
   assert.match(calendarRoute, /injectCalendarInlineServiceCreation/);
   assert.match(ux, /\/calendar\/services\/create/);
   assert.match(ux, /\/calendar\/services\/create-options/);
