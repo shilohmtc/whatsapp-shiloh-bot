@@ -85,7 +85,7 @@ jobs:
             const end = html.indexOf('</form>', start);
             const cancellationForm = html.slice(start, end);
             assert.match(cancellationForm, /name="confirmed" type="checkbox" required/);
-            assert.match(cancellationForm, />Cancel appointment<\/button>/);
+            assert.ok(cancellationForm.includes('>Cancel appointment</button>'));
             assert.doesNotMatch(cancellationForm, /Cancellation reason|name="reason"/i);
           });
 
