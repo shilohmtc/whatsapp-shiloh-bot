@@ -19,6 +19,7 @@ const LIVE_BOOKING_CONFIRMATION_V2 = 'shiloh_booking_confirmation_v2';
 const CURRENT_BOOKING_CONFIRMATION_TEMPLATES = new Set([LIVE_BOOKING_CONFIRMATION_V1, LIVE_BOOKING_CONFIRMATION_V2]);
 const BOOKING_CONFIRMATION_RETRY_MS = 5 * 60 * 1000;
 const BOOKING_CONFIRMATION_RECOVERY_STALE_MS = 10 * 60 * 1000;
+const MAX_AUTOMATIC_ASYNC_PROVIDER_ATTEMPTS = 3;
 let deliveryTableReady = false;
 let deliveryScheduler = null;
 
@@ -542,16 +543,29 @@ async function sendCustomerBookingConfirmationForAppointment(appointmentId,optio
 async function flushCustomerBookingConfirmations(){
   await ensureDeliveryTable();
   const due=await pool.query(`
-    SELECT appointment_id
+    SELECT appointment_id,last_error,attempt_count
       FROM customer_message_deliveries
      WHERE message_kind='booking_confirmation'
        AND status IN ('pending','failed')
        AND next_attempt_at<=NOW()
+       AND provider_delivered_at IS NULL
+       AND provider_read_at IS NULL
+       AND (provider_sent_at IS NULL
+         OR (provider_failed_at IS NOT NULL AND provider_failed_at>provider_sent_at))
+       AND (COALESCE(last_error,'')<>'provider_async_failed'
+         OR attempt_count<${MAX_AUTOMATIC_ASYNC_PROVIDER_ATTEMPTS})
      ORDER BY next_attempt_at,appointment_id
      LIMIT 25`);
   const results=[];
   for(const row of due.rows){
-    results.push({appointmentId:Number(row.appointment_id),result:await sendCustomerBookingConfirmationForAppointment(row.appointment_id)});
+    const automaticProviderRecovery=String(row.last_error||'')==='provider_async_failed';
+    results.push({
+      appointmentId:Number(row.appointment_id),
+      result:await sendCustomerBookingConfirmationForAppointment(
+        row.appointment_id,
+        automaticProviderRecovery?{recovery:true}:{}
+      ),
+    });
   }
   return {attempted:results.length,results};
 }
@@ -566,4 +580,4 @@ function startCustomerBookingConfirmationScheduler(){
   logger.info({retryMinutes:BOOKING_CONFIRMATION_RETRY_MS/60000},'Initial booking confirmation scheduler started');
 }
 
-module.exports={sendCustomerBookingConfirmation,sendCustomerBookingConfirmationForAppointment,queueCustomerBookingConfirmation,loadBookingConfirmationAuthority,initialDeliveryFailure,flushCustomerBookingConfirmations,startCustomerBookingConfirmationScheduler,googleCalendarUrl,claimBookingConfirmation,releaseBookingConfirmationClaim,markBookingConfirmationSent,markBookingConfirmationFailure,markBookingConfirmationUncertain,prepareBookingConfirmationRecovery,providerOutcome,recoveryState,ensureDeliveryTable,ensureToken,practitionerApprovalStatus,shouldSendLegacyConfirmationSupplements,bookingConfirmationTemplatePayload,providerMessageId,LIVE_BOOKING_CONFIRMATION_V1,LIVE_BOOKING_CONFIRMATION_V2,BOOKING_CONFIRMATION_RETRY_MS,BOOKING_CONFIRMATION_RECOVERY_STALE_MS};
+module.exports={sendCustomerBookingConfirmation,sendCustomerBookingConfirmationForAppointment,queueCustomerBookingConfirmation,loadBookingConfirmationAuthority,initialDeliveryFailure,flushCustomerBookingConfirmations,startCustomerBookingConfirmationScheduler,googleCalendarUrl,claimBookingConfirmation,releaseBookingConfirmationClaim,markBookingConfirmationSent,markBookingConfirmationFailure,markBookingConfirmationUncertain,prepareBookingConfirmationRecovery,providerOutcome,recoveryState,ensureDeliveryTable,ensureToken,practitionerApprovalStatus,shouldSendLegacyConfirmationSupplements,bookingConfirmationTemplatePayload,providerMessageId,LIVE_BOOKING_CONFIRMATION_V1,LIVE_BOOKING_CONFIRMATION_V2,BOOKING_CONFIRMATION_RETRY_MS,BOOKING_CONFIRMATION_RECOVERY_STALE_MS,MAX_AUTOMATIC_ASYNC_PROVIDER_ATTEMPTS};
