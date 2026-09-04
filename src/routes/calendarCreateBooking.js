@@ -3,6 +3,7 @@ const { pool } = require('../db/pool');
 const { createCalendarCreateBookingService } = require('../services/calendarCreateBooking');
 const { confirmCalendarV2BookingDirect } = require('../services/calendarDirectBookingConfirmation');
 const { createCalendarBookingClientDirectory } = require('../services/calendarBookingClientDirectory');
+const workspaceServiceCreation = require('../services/workspaceServiceCreation');
 const {
   requireStaffSession,
   sameOriginGuard,
@@ -15,6 +16,10 @@ const {
 const {
   calendarCreateBookingClientChoiceScript,
 } = require('../presentation/calendarCreateBookingClientChoiceUx');
+const {
+  injectCalendarInlineServiceCreation,
+  serviceCreationClientScript,
+} = require('../presentation/workspaceServiceCreationUx');
 
 const CLIENT_BROWSE_QUERY = '__shiloh_calendar_active_clients_v1__';
 
@@ -75,9 +80,12 @@ function createCalendarCreateBookingRouter({
   sessionService,
   bookingService = createCalendarCreateBookingService({ db: pool, env, confirmBooking: confirmCalendarV2BookingDirect }),
   clientDirectory = createCalendarBookingClientDirectory(),
+  creationService = workspaceServiceCreation,
   renderPage = renderCalendarCreateBookingPage,
   renderClient = calendarCreateBookingClientScript,
   renderClientChoice = calendarCreateBookingClientChoiceScript,
+  injectServiceCreation = injectCalendarInlineServiceCreation,
+  renderServiceCreationClient = serviceCreationClientScript,
 } = {}) {
   if (!sessionService) throw new Error('Calendar Create Booking staff session service is required');
   if (!clientDirectory || typeof clientDirectory.listActiveClients !== 'function') {
@@ -98,11 +106,15 @@ function createCalendarCreateBookingRouter({
       const options = await bookingService.listBookableOptions(req.staffBrowserSession.adminId);
       const rawDate = String(req.query?.date || '').trim();
       const date = /^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? rawDate : '';
-      return res.status(200).type('html').send(renderPage({
+      let html = renderPage({
         options,
         date,
         clientScriptPath: `${req.baseUrl || '/calendar/book'}/client.js`,
-      }));
+      });
+      try {
+        if (await creationService.resolveCreateAccess(req.staffBrowserSession.adminId)) html = injectServiceCreation(html);
+      } catch (_error) {}
+      return res.status(200).type('html').send(html);
     } catch (error) {
       if (statusForError(error) !== 503) return res.status(statusForError(error)).type('text/plain').send('Calendar booking unavailable');
       return next(error);
@@ -112,7 +124,11 @@ function createCalendarCreateBookingRouter({
   router.get('/client.js', requireSession, async (req, res, next) => {
     try {
       await bookingService.resolveOperator(req.staffBrowserSession.adminId);
-      return res.status(200).type('application/javascript').send(`${renderClient()}\n${renderClientChoice()}`);
+      let source = `${renderClient()}\n${renderClientChoice()}`;
+      try {
+        if (await creationService.resolveCreateAccess(req.staffBrowserSession.adminId)) source += `\n${renderServiceCreationClient()}`;
+      } catch (_error) {}
+      return res.status(200).type('application/javascript').send(source);
     } catch (error) {
       if (statusForError(error) !== 503) return res.status(statusForError(error)).type('text/plain').send('Not Found');
       return next(error);
