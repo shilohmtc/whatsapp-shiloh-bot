@@ -76,7 +76,7 @@ jobs:
       - name: Run focused Workspace Staff tests
         run: node --test tests/workspace-staff-access-v1.test.js
       - name: Run focused Workspace Services tests
-        run: node --test tests/workspace-services-v1.test.js tests/workspace-services-stage-b.test.js
+        run: node --test tests/workspace-services-v1.test.js tests/workspace-services-stage-b.test.js tests/workspace-service-creation-v1.test.js
       - name: Run focused Workspace Mobile Polish tests
         run: node --test tests/workspace-mobile-polish-v1.test.js
       - name: Run focused Calendar mobile staff overview tests

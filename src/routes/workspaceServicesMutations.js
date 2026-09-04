@@ -1,5 +1,6 @@
 const express = require('express');
 const workspaceServices = require('../services/workspaceServices');
+const workspaceServiceCreation = require('../services/workspaceServiceCreation');
 const {
   requireStaffSession,
   sameOriginGuard,
@@ -31,6 +32,7 @@ function createWorkspaceServicesMutationRouter({
   env = process.env,
   sessionService,
   service = workspaceServices,
+  creationService = workspaceServiceCreation,
 } = {}) {
   if (!sessionService) throw new Error('Workspace Services mutations require the existing staff browser session service');
   const router = express.Router();
@@ -44,6 +46,32 @@ function createWorkspaceServicesMutationRouter({
     res.setHeader('X-Content-Type-Options', 'nosniff');
     if (!isWorkspaceServicesEnabled(env)) return res.sendStatus(404);
     return next();
+  });
+
+  router.get('/create-options', requireSession, async (req, res, next) => {
+    try {
+      return res.status(200).json(await creationService.listCreateOptions(req.staffBrowserSession?.adminId));
+    } catch (error) {
+      return sendMutationError(error, req, res, next);
+    }
+  });
+
+  router.post('/create', ...mutationChain, async (req, res, next) => {
+    try {
+      const result = await creationService.createService({
+        adminId: req.staffBrowserSession?.adminId,
+        requestId: req.body?.requestId,
+        name: req.body?.name,
+        durationMinutes: req.body?.durationMinutes,
+        price: req.body?.price,
+        displayPrice: req.body?.displayPrice,
+        variablePrice: req.body?.variablePrice,
+        staffIds: req.body?.staffIds,
+      });
+      return res.status(201).json(result);
+    } catch (error) {
+      return sendMutationError(error, req, res, next);
+    }
   });
 
   router.post('/:id/update', ...mutationChain, async (req, res, next) => {
