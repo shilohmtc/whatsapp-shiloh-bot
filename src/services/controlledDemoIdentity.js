@@ -98,6 +98,30 @@ async function resolveCurrentControlledDemoClient(db = pool) {
   };
 }
 
+async function resolveCurrentControlledDemoCrmV2Client(db = pool) {
+  const legacy = await resolveCurrentControlledDemoClient(db);
+  if (legacy.status !== 'bound') return { ...legacy, crmV2Client: null };
+
+  const result = await db.query(
+    `SELECT id,name,normalized_mobile,status
+       FROM crm_v2_clients
+      WHERE normalized_mobile=$1
+        AND status='active'
+      ORDER BY id
+      LIMIT 2`,
+    [legacy.normalizedPhone]
+  );
+  if (result.rowCount !== 1) {
+    return {
+      ...legacy,
+      status: result.rowCount === 0 ? 'crm_v2_unbound' : 'crm_v2_identity_conflict',
+      crmV2Client: null,
+    };
+  }
+
+  return { ...legacy, status: 'bound', crmV2Client: result.rows[0] };
+}
+
 module.exports = {
   DEMO_KEY,
   POLICY_KEY,
@@ -105,4 +129,5 @@ module.exports = {
   normalizeControlledPhone,
   getControlledDemoIdentity,
   resolveCurrentControlledDemoClient,
+  resolveCurrentControlledDemoCrmV2Client,
 };

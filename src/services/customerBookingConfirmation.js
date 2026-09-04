@@ -10,6 +10,7 @@ const { postConfirmationButtons, bookingConfirmationV2QuickReplyPayloads } = req
 const { createAppointment: enrollAppointmentLifecycle } = require('./appointmentLifecycle');
 const { resolveClientFacingName } = require('./clientFacingNameAuthority');
 const { exactPhoneCandidates } = require('./clientVerifiedIdentity');
+const { assertTarget: assertControlledMessagingTestTarget } = require('./controlledMessagingTestLane');
 const { verifyMigrationFiles } = require('./migrations');
 const logger = require('../lib/logger');
 
@@ -17,6 +18,7 @@ const LIVE_BOOKING_CONFIRMATION_V1 = 'shiloh_booking_confirmation_v1';
 const LIVE_BOOKING_CONFIRMATION_V2 = 'shiloh_booking_confirmation_v2';
 const CURRENT_BOOKING_CONFIRMATION_TEMPLATES = new Set([LIVE_BOOKING_CONFIRMATION_V1, LIVE_BOOKING_CONFIRMATION_V2]);
 const BOOKING_CONFIRMATION_RETRY_MS = 5 * 60 * 1000;
+const BOOKING_CONFIRMATION_RECOVERY_STALE_MS = 10 * 60 * 1000;
 let deliveryTableReady = false;
 let deliveryScheduler = null;
 
@@ -84,7 +86,8 @@ async function loadBookingConfirmationAuthority(appointmentId,db=pool){
            END AS identity_model,
            COALESCE(c.status,v2.status) AS client_status,
            contact.id AS contact_id,
-           COALESCE(delivery.recipient_mobile,v2.normalized_mobile,contact.normalized_value) AS client_phone,
+           COALESCE(v2.normalized_mobile,contact.normalized_value) AS client_phone,
+           delivery.recipient_mobile AS delivery_recipient_mobile,
            COALESCE(delivery.client_name_snapshot,a.source_client_name,v2.name) AS client_name_snapshot,
            contact.contact_verified,contact.identity_verification_id,
            contact.verification_client_id,contact.verification_contact_id,
@@ -139,6 +142,8 @@ function initialDeliveryFailure(authority){
     if(authority.client_id!=null||!authority.crm_v2_client_id)return 'crm_v2_identity_invalid';
     if(authority.client_status!=='active')return 'crm_v2_client_inactive';
     if(!/^27[678][0-9]{8}$/.test(String(authority.client_phone||'')))return 'crm_v2_recipient_missing';
+    if(authority.delivery_recipient_mobile
+      &&String(authority.delivery_recipient_mobile)!==String(authority.client_phone))return 'crm_v2_recipient_changed';
     if(!String(authority.client_name_snapshot||'').trim())return 'crm_v2_name_missing';
     return null;
   }
@@ -166,10 +171,12 @@ async function contactOwnershipFailure(authority,db=pool){
   return null;
 }
 
-async function queueCustomerBookingConfirmation(appointmentId,{db=pool}={}){
+async function queueCustomerBookingConfirmation(appointmentId,{db=pool,recovery=false}={}){
   if(db===pool)await ensureDeliveryTable();
-  const legacy=await db.query(`SELECT 1 FROM crm_audit_events WHERE action='customer.booking_confirmation_sent' AND entity_type='appointment' AND entity_id=$1 LIMIT 1`,[appointmentId]);
-  if(legacy.rowCount)return {queued:false,status:'sent',reason:'already_sent'};
+  if(!recovery){
+    const legacy=await db.query(`SELECT 1 FROM crm_audit_events WHERE action='customer.booking_confirmation_sent' AND entity_type='appointment' AND entity_id=$1 LIMIT 1`,[appointmentId]);
+    if(legacy.rowCount)return {queued:false,status:'sent',reason:'already_sent'};
+  }
   const authority=await loadBookingConfirmationAuthority(appointmentId,db);
   if(!authority)return {queued:false,status:'failed',reason:'appointment_not_found'};
   const identityModel=authority.identity_model||(authority.crm_v2_client_id?'crm_v2':'legacy');
@@ -213,12 +220,14 @@ async function queueCustomerBookingConfirmation(appointmentId,{db=pool}={}){
     : {queued:true,status:failure?'failed':'pending',reason:failure,clientId:Number(authority.client_id),contactId:authority.contact_id?Number(authority.contact_id):null,identityVerificationId:authority.identity_verification_id?Number(authority.identity_verification_id):null,nameAuthorityId:authority.name_authority_id?Number(authority.name_authority_id):null,identityModel};
 }
 
-async function claimBookingConfirmation(appointmentId,{clientId=null,contactId=null,nameAuthorityId=null,db=pool}={}){
+async function claimBookingConfirmation(appointmentId,{clientId=null,contactId=null,nameAuthorityId=null,db=pool,recovery=false}={}){
   if(db===pool)await ensureDeliveryTable();
-  const legacy=await db.query(`SELECT 1 FROM crm_audit_events WHERE action='customer.booking_confirmation_sent' AND entity_type='appointment' AND entity_id=$1 LIMIT 1`,[appointmentId]);
-  if(legacy.rowCount){
-    await db.query(`UPDATE customer_message_deliveries SET status='sent',sent_at=COALESCE(sent_at,NOW()),updated_at=NOW(),last_error=NULL WHERE appointment_id=$1 AND message_kind='booking_confirmation'`,[appointmentId]);
-    return false;
+  if(!recovery){
+    const legacy=await db.query(`SELECT 1 FROM crm_audit_events WHERE action='customer.booking_confirmation_sent' AND entity_type='appointment' AND entity_id=$1 LIMIT 1`,[appointmentId]);
+    if(legacy.rowCount){
+      await db.query(`UPDATE customer_message_deliveries SET status='sent',sent_at=COALESCE(sent_at,NOW()),updated_at=NOW(),last_error=NULL WHERE appointment_id=$1 AND message_kind='booking_confirmation'`,[appointmentId]);
+      return false;
+    }
   }
   const claimed=await db.query(`
     UPDATE customer_message_deliveries
@@ -227,6 +236,8 @@ async function claimBookingConfirmation(appointmentId,{clientId=null,contactId=n
            client_id=COALESCE($2,client_id),contact_id=COALESCE($3,contact_id),name_authority_id=COALESCE($4,name_authority_id)
      WHERE appointment_id=$1 AND message_kind='booking_confirmation'
        AND status IN ('pending','failed') AND next_attempt_at<=NOW()
+       AND provider_delivered_at IS NULL AND provider_read_at IS NULL
+       AND (provider_sent_at IS NULL OR (provider_failed_at IS NOT NULL AND provider_failed_at>provider_sent_at))
      RETURNING appointment_id
   `,[appointmentId,clientId,contactId,nameAuthorityId]);
   return claimed.rowCount===1;
@@ -239,8 +250,14 @@ async function releaseBookingConfirmationClaim(appointmentId,reason='send_failed
      WHERE appointment_id=$1 AND message_kind='booking_confirmation' AND status='sending'`,[appointmentId,String(reason||'send_failed').slice(0,1000)]);
 }
 
-async function markBookingConfirmationSent(appointmentId,{templateName=null,providerMessageId=null}={},db=pool){
-  const marked=await db.query(`UPDATE customer_message_deliveries SET status='sent',sent_at=NOW(),updated_at=NOW(),next_attempt_at=NOW(),last_error=NULL,template_name=$2,provider_message_id=$3 WHERE appointment_id=$1 AND message_kind='booking_confirmation' AND status='sending'`,[appointmentId,templateName,providerMessageId]);
+async function markBookingConfirmationSent(appointmentId,{templateName=null,providerMessageId=null,resetProviderEvidence=false}={},db=pool){
+  const marked=await db.query(`UPDATE customer_message_deliveries SET status='sent',sent_at=NOW(),updated_at=NOW(),next_attempt_at=NOW(),last_error=NULL,template_name=$2,provider_message_id=$3,
+    provider_sent_at=CASE WHEN $4 THEN NULL ELSE provider_sent_at END,
+    provider_delivered_at=CASE WHEN $4 THEN NULL ELSE provider_delivered_at END,
+    provider_read_at=CASE WHEN $4 THEN NULL ELSE provider_read_at END,
+    provider_failed_at=CASE WHEN $4 THEN NULL ELSE provider_failed_at END,
+    provider_error=CASE WHEN $4 THEN NULL ELSE provider_error END
+    WHERE appointment_id=$1 AND message_kind='booking_confirmation' AND status='sending'`,[appointmentId,templateName,providerMessageId,resetProviderEvidence]);
   if(marked.rowCount!==1)throw new Error('Booking confirmation accepted but durable sent transition failed');
 }
 
@@ -260,6 +277,72 @@ async function markBookingConfirmationUncertain(appointmentId,db=pool){
     UPDATE customer_message_deliveries
        SET status='uncertain',updated_at=NOW(),next_attempt_at=NOW(),last_error='provider_delivery_unknown'
      WHERE appointment_id=$1 AND message_kind='booking_confirmation' AND status='sending'`,[appointmentId]);
+}
+
+function providerOutcome(row={}){
+  if(row.provider_read_at)return 'read';
+  if(row.provider_delivered_at)return 'delivered';
+  const sentAt=row.provider_sent_at?new Date(row.provider_sent_at).getTime():0;
+  const failedAt=row.provider_failed_at?new Date(row.provider_failed_at).getTime():0;
+  if(sentAt||failedAt)return failedAt>sentAt?'failed':'provider_sent';
+  const status=String(row.status||'').toLowerCase();
+  if(['failed','uncertain','pending','sending','sent'].includes(status))return status;
+  return 'not_sent';
+}
+
+function recoveryState(row,now=new Date()){
+  if(!row)return {recoverable:true,reason:'not_sent'};
+  const outcome=providerOutcome(row);
+  if(['read','delivered','provider_sent','sent'].includes(outcome))return {recoverable:false,reason:'already_sent'};
+  if(outcome==='failed'||outcome==='uncertain')return {recoverable:true,reason:outcome};
+  const last=row.last_attempt_at||row.claimed_at||row.updated_at;
+  const staleAt=last?new Date(last).getTime():0;
+  const stale=Number.isFinite(staleAt)&&staleAt>0&&now.getTime()-staleAt>=BOOKING_CONFIRMATION_RECOVERY_STALE_MS;
+  return stale?{recoverable:true,reason:'pending_too_long'}:{recoverable:false,reason:'already_in_progress'};
+}
+
+async function prepareBookingConfirmationRecovery(appointmentId,{db=pool,operatorAdminId=null,now=new Date()}={}){
+  const result=await db.query(`/* customerBookingConfirmation:recoveryState */
+    SELECT a.id AS appointment_id,a.status AS appointment_status,a.starts_at,
+           delivery.status,delivery.claimed_at,delivery.updated_at,delivery.last_attempt_at,
+           delivery.provider_message_id,delivery.provider_sent_at,delivery.provider_delivered_at,
+           delivery.provider_read_at,delivery.provider_failed_at,
+           EXISTS(SELECT 1 FROM crm_audit_events audit
+                   WHERE audit.action='customer.booking_confirmation_sent'
+                     AND audit.entity_type='appointment' AND audit.entity_id=a.id::text) AS sent_audit
+      FROM appointments a
+      LEFT JOIN customer_message_deliveries delivery
+        ON delivery.appointment_id=a.id AND delivery.message_kind='booking_confirmation'
+     WHERE a.id=$1`,[appointmentId]);
+  const row=result.rows[0];
+  if(!row)return {prepared:false,reason:'appointment_not_found'};
+  if(!['scheduled','confirmed'].includes(String(row.appointment_status||''))||new Date(row.starts_at).getTime()<=now.getTime()){
+    return {prepared:false,reason:'appointment_not_eligible'};
+  }
+  const authority=await loadBookingConfirmationAuthority(appointmentId,db);
+  const authorityFailure=initialDeliveryFailure(authority)||await contactOwnershipFailure(authority,db);
+  if(authorityFailure)return {prepared:false,reason:authorityFailure};
+  const hasDelivery=Boolean(row.status);
+  if(!hasDelivery&&row.sent_audit===true)return {prepared:false,reason:'already_sent'};
+  const state=recoveryState(hasDelivery?row:null,now);
+  if(!state.recoverable)return {prepared:false,reason:state.reason};
+  if(hasDelivery){
+    const prepared=await db.query(`/* customerBookingConfirmation:prepareRecovery */
+      UPDATE customer_message_deliveries
+         SET status='failed',next_attempt_at=NOW(),updated_at=NOW(),last_error='operator_recovery_requested'
+       WHERE appointment_id=$1 AND message_kind='booking_confirmation'
+         AND provider_delivered_at IS NULL AND provider_read_at IS NULL
+         AND (provider_sent_at IS NULL OR (provider_failed_at IS NOT NULL AND provider_failed_at>provider_sent_at))
+         AND (status IN ('failed','uncertain','sent')
+           OR (status IN ('pending','sending') AND COALESCE(last_attempt_at,claimed_at,updated_at)<=NOW()-INTERVAL '10 minutes'))
+       RETURNING appointment_id`,[appointmentId]);
+    if(prepared.rowCount!==1)return {prepared:false,reason:'evidence_changed'};
+  }
+  await db.query(`INSERT INTO crm_audit_events(actor_admin_id,action,entity_type,entity_id,metadata)
+    VALUES($2,'customer.booking_confirmation_recovery_requested','appointment',$1,$3::jsonb)`,[
+    String(appointmentId),operatorAdminId,JSON.stringify({priorState:state.reason,canonicalRecipientRevalidated:true}),
+  ]);
+  return {prepared:true,reason:state.reason};
 }
 
 async function ensureToken(appointmentId,db=pool){
@@ -293,7 +376,10 @@ async function sendCustomerBookingConfirmation(data,{
   sendButtons=sendWhatsAppReplyButtons,
   enrollLifecycle=enrollAppointmentLifecycle,
   resolveName=resolveClientFacingName,
+  assertE2eTarget=assertControlledMessagingTestTarget,
   env=process.env,
+  recovery=false,
+  controlledE2e=false,
 }={}){
   const {appointmentId,clientId,clientName:_suppliedClientName,serviceName,staffName,locationName,startsAt,endsAt,source='shiloh'}=data;
   let claimed=false;
@@ -301,7 +387,7 @@ async function sendCustomerBookingConfirmation(data,{
   let providerAccepted=false;
   let acceptedProviderMessageId=null;
   try{
-    await queueCustomerBookingConfirmation(appointmentId,{db});
+    await queueCustomerBookingConfirmation(appointmentId,{db,recovery});
     const authority=await loadBookingConfirmationAuthority(appointmentId,db);
     const identityModel=authority?.identity_model||(authority?.crm_v2_client_id?'crm_v2':'legacy');
     const authorityFailure=initialDeliveryFailure(authority);
@@ -323,7 +409,7 @@ async function sendCustomerBookingConfirmation(data,{
       await markBookingConfirmationFailure(appointmentId,ownershipFailure,{clientId:authority.client_id,contactId:authority.contact_id,nameAuthorityId:nameResolution.authorityId||authority.name_authority_id,db});
       return {sent:false,reason:ownershipFailure,deliveryStatus:'manual_action_required',retryable:true};
     }
-    claimed=await claimBookingConfirmation(appointmentId,{clientId:authority.client_id,contactId:authority.contact_id,nameAuthorityId:nameResolution.authorityId||authority.name_authority_id,db});
+    claimed=await claimBookingConfirmation(appointmentId,{clientId:authority.client_id,contactId:authority.contact_id,nameAuthorityId:nameResolution.authorityId||authority.name_authority_id,db,recovery});
     if(!claimed){
       const existing=await db.query(`SELECT status,last_error FROM customer_message_deliveries WHERE appointment_id=$1 AND message_kind='booking_confirmation'`,[appointmentId]);
       const state=existing.rows[0];
@@ -334,6 +420,15 @@ async function sendCustomerBookingConfirmation(data,{
     const google=googleCalendarUrl({serviceName,staffName,locationName,startsAt,endsAt});
     const date=fmtDate(startsAt),time=`${fmtTime(startsAt)}–${fmtTime(endsAt)}`;
     const template=env.WHATSAPP_BOOKING_CONFIRMATION_TEMPLATE;
+
+    if(controlledE2e){
+      await assertE2eTarget({
+        clientId:authority.client_id,
+        crmV2ClientId:authority.crm_v2_client_id,
+        phone,
+        env,
+      });
+    }
 
     await enrollLifecycle({
       appointmentId,
@@ -366,7 +461,7 @@ async function sendCustomerBookingConfirmation(data,{
       providerAccepted=true;
     }
 
-    await markBookingConfirmationSent(appointmentId,{templateName:template||null,providerMessageId:acceptedProviderMessageId},db);
+    await markBookingConfirmationSent(appointmentId,{templateName:template||null,providerMessageId:acceptedProviderMessageId,resetProviderEvidence:recovery},db);
 
     const supplementalActionsSuppressed=!shouldSendLegacyConfirmationSupplements(template);
     if(!supplementalActionsSuppressed){
@@ -418,13 +513,28 @@ async function sendCustomerBookingConfirmationForAppointment(appointmentId,optio
       FROM appointments a LEFT JOIN locations l ON l.id=a.location_id
      WHERE a.id=$1 AND a.status<>'cancelled'`,[appointmentId]);
   const a=r.rows[0];if(!a)return {sent:false,reason:'appointment_not_found'};
+  if(options.controlledE2e===true){
+    const authority=await loadBookingConfirmationAuthority(appointmentId,db);
+    await (options.assertE2eTarget||assertControlledMessagingTestTarget)({
+      clientId:authority?.client_id,
+      crmV2ClientId:authority?.crm_v2_client_id,
+      phone:authority?.client_phone,
+      env:options.env||process.env,
+    });
+  }
   if(a.source==='shiloh_client_whatsapp'){
     const approval=await practitionerApprovalStatus(appointmentId,db);
     if(approval!=='approved')return {sent:false,reason:'practitioner_approval_required'};
   }
-  const already=await db.query(`SELECT 1 FROM crm_audit_events WHERE action='customer.booking_confirmation_sent' AND entity_type='appointment' AND entity_id=$1 LIMIT 1`,[appointmentId]);
-  if(already.rowCount)return {sent:false,reason:'already_sent'};
-  const queued=await queueCustomerBookingConfirmation(appointmentId,{db});
+  const recovery=options.recovery===true;
+  if(recovery){
+    const prepared=await prepareBookingConfirmationRecovery(appointmentId,{db,operatorAdminId:options.operatorAdminId||null,now:options.now||new Date()});
+    if(!prepared.prepared)return {sent:false,reason:prepared.reason,deliveryStatus:'not_recovered'};
+  }else{
+    const already=await db.query(`SELECT 1 FROM crm_audit_events WHERE action='customer.booking_confirmation_sent' AND entity_type='appointment' AND entity_id=$1 LIMIT 1`,[appointmentId]);
+    if(already.rowCount)return {sent:false,reason:'already_sent'};
+  }
+  const queued=await queueCustomerBookingConfirmation(appointmentId,{db,recovery});
   if(queued.status==='sent')return {sent:false,reason:'already_sent',deliveryStatus:'sent'};
   return sendCustomerBookingConfirmation({appointmentId:a.id,clientId:a.client_id,serviceName:a.service_name,staffName:a.staff_name,locationName:a.location_name,startsAt:a.starts_at,endsAt:a.ends_at,source:a.source||'shiloh'},{...options,db});
 }
@@ -456,4 +566,4 @@ function startCustomerBookingConfirmationScheduler(){
   logger.info({retryMinutes:BOOKING_CONFIRMATION_RETRY_MS/60000},'Initial booking confirmation scheduler started');
 }
 
-module.exports={sendCustomerBookingConfirmation,sendCustomerBookingConfirmationForAppointment,queueCustomerBookingConfirmation,loadBookingConfirmationAuthority,initialDeliveryFailure,flushCustomerBookingConfirmations,startCustomerBookingConfirmationScheduler,googleCalendarUrl,claimBookingConfirmation,releaseBookingConfirmationClaim,markBookingConfirmationSent,markBookingConfirmationFailure,markBookingConfirmationUncertain,ensureDeliveryTable,ensureToken,practitionerApprovalStatus,shouldSendLegacyConfirmationSupplements,bookingConfirmationTemplatePayload,providerMessageId,LIVE_BOOKING_CONFIRMATION_V1,LIVE_BOOKING_CONFIRMATION_V2,BOOKING_CONFIRMATION_RETRY_MS};
+module.exports={sendCustomerBookingConfirmation,sendCustomerBookingConfirmationForAppointment,queueCustomerBookingConfirmation,loadBookingConfirmationAuthority,initialDeliveryFailure,flushCustomerBookingConfirmations,startCustomerBookingConfirmationScheduler,googleCalendarUrl,claimBookingConfirmation,releaseBookingConfirmationClaim,markBookingConfirmationSent,markBookingConfirmationFailure,markBookingConfirmationUncertain,prepareBookingConfirmationRecovery,providerOutcome,recoveryState,ensureDeliveryTable,ensureToken,practitionerApprovalStatus,shouldSendLegacyConfirmationSupplements,bookingConfirmationTemplatePayload,providerMessageId,LIVE_BOOKING_CONFIRMATION_V1,LIVE_BOOKING_CONFIRMATION_V2,BOOKING_CONFIRMATION_RETRY_MS,BOOKING_CONFIRMATION_RECOVERY_STALE_MS};
