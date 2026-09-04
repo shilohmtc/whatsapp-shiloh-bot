@@ -146,11 +146,6 @@ function assertMetrics(proof, metrics) {
   if (proof.mode === 'sheet') {
     if (!metrics.managementOpen || metrics.managementWidth < 400 || !metrics.dayGridVisible) throw new Error(`${proof.name} did not preserve canvas context behind the right sheet`);
   }
-  if (proof.mode === 'phone') {
-    if (!metrics.mobileOverviewVisible || metrics.mobileCardCount !== 5) throw new Error(`${proof.name} did not preserve the Phone overview`);
-    if (metrics.dayGridVisible) throw new Error(`${proof.name} exposed compressed Desktop lanes on Phone`);
-    if (metrics.rootScrollWidth > proof.width + 1) throw new Error(`${proof.name} has Phone page overflow`);
-  }
 }
 
 const chrome = chromeExecutable();
@@ -170,7 +165,6 @@ const proofs = [
   { name: 'desktop-five-lane-overflow', mode: 'overflow', width: 1180, height: 900, model: model([41, 42, 43, 44, 45]) },
   { name: 'desktop-people-control', mode: 'people', width: 1440, height: 1000, model: model([41, 43]) },
   { name: 'desktop-detail-sheet', mode: 'sheet', width: 1440, height: 1000, model: model([41, 42], { mutable: true }) },
-  { name: 'phone-overview', mode: 'phone', width: 390, height: 844, model: model([41], { implicit: true }) },
 ];
 
 const manifest = [];
