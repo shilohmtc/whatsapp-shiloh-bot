@@ -133,10 +133,12 @@ test('route and UX use one guarded creation endpoint from Workspace and Calendar
   assert.match(mutations, /creationService\.createService/);
   assert.match(workspaceRoute, /router\.get\('\/new'/);
   assert.match(workspaceRoute, /router\.get\('\/create-options'/);
+  assert.ok(workspaceRoute.indexOf("router.get('/create-options'") < workspaceRoute.indexOf("router.get('/:id'"));
   assert.match(ux, /\/calendar\/services\/new/);
   assert.match(calendarRoute, /injectCalendarInlineServiceCreation/);
-  assert.match(ux, /\/calendar\/services\/create/);
-  assert.match(ux, /\/calendar\/services\/create-options/);
+  assert.match(ux, /var API='\/calendar\/services'/);
+  assert.match(ux, /fetch\(API\+'\/create-options'/);
+  assert.match(ux, /fetch\(API\+'\/create'/);
   assert.match(ux, /createdServiceId/);
   assert.doesNotMatch(ux, /localStorage|sessionStorage/);
 });
