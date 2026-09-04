@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const { pool } = require('../db/pool');
+const { serviceVisibilityAllows } = require('./calendarAuthorization');
 
 const SERVICES_VIEW_CAPABILITY = 'services:view';
 const SERVICES_MANAGE_CAPABILITY = 'services:manage';
@@ -35,6 +36,8 @@ function evaluatePrincipal(rows = [], capability, key) {
     key,
     operatorAdminId: adminId,
     displayName: String(principal.display_name || 'Staff').trim() || 'Staff',
+    linkedStaffId: positiveId(principal.staff_id),
+    businessRole: String(principal.business_role || '').trim().toLowerCase(),
     capability,
   };
 }
@@ -176,7 +179,7 @@ function createWorkspaceServicesService({ db = pool } = {}) {
     if (!id) return [];
     const result = await queryable.query(
       `/* workspaceServices:principal */
-       SELECT a.id, a.staff_id, a.display_name, a.permissions,
+       SELECT a.id, a.staff_id, a.display_name, a.permissions, a.business_role,
               a.active AS admin_active, s.status AS staff_status
          FROM staff_admin_accounts a
          LEFT JOIN staff s ON s.id=a.staff_id
@@ -227,6 +230,12 @@ function createWorkspaceServicesService({ db = pool } = {}) {
     const safeOffset = normalizeOffset(offset);
     const values = [];
     const where = [];
+    if (authority.businessRole === 'tenant_practitioner' && authority.linkedStaffId) {
+      values.push(authority.linkedStaffId);
+      where.push(`(visibility.owner_staff_id IS NULL OR visibility.owner_staff_id=$${values.length})`);
+    } else if (authority.businessRole !== 'booking_operator') {
+      where.push('visibility.owner_staff_id IS NULL');
+    }
     if (serviceStatus) {
       values.push(serviceStatus);
       where.push(`svc.status=$${values.length}`);
@@ -244,7 +253,7 @@ function createWorkspaceServicesService({ db = pool } = {}) {
        SELECT svc.id, svc.name, svc.duration_minutes,
               svc.processing_time_minutes, svc.extra_time_minutes,
               svc.variable_price, svc.price, svc.display_price, svc.status,
-              sc.name AS category_name,
+              sc.name AS category_name, visibility.owner_staff_id AS private_owner_staff_id,
               (SELECT COUNT(*)::int
                  FROM staff_services ss
                  JOIN staff st ON st.id=ss.staff_id
@@ -257,6 +266,7 @@ function createWorkspaceServicesService({ db = pool } = {}) {
                   AND st.client_bookable=TRUE) AS client_bookable_staff_count
          FROM services svc
          LEFT JOIN service_categories sc ON sc.id=svc.category_id
+         LEFT JOIN service_visibility_policies visibility ON visibility.service_id=svc.id
          ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
         ORDER BY CASE WHEN svc.status='active' THEN 0 ELSE 1 END,
                  sc.display_order NULLS LAST,
@@ -265,15 +275,19 @@ function createWorkspaceServicesService({ db = pool } = {}) {
         LIMIT ${limitParam} OFFSET ${offsetParam}`,
       values
     );
-    const rows = result.rows.slice(0, SERVICES_LIST_PAGE_SIZE).map(service => ({
-      ...service,
-      total_minutes: totalServiceMinutes(service),
-      booking_eligibility: projectBookingEligibility(service),
-    }));
+    const visibleRows = result.rows.filter(service => serviceVisibilityAllows(authority, service.private_owner_staff_id));
+    const rows = visibleRows.slice(0, SERVICES_LIST_PAGE_SIZE).map(service => {
+      const { private_owner_staff_id: _privateOwnerStaffId, ...publicService } = service;
+      return {
+        ...publicService,
+        total_minutes: totalServiceMinutes(publicService),
+        booking_eligibility: projectBookingEligibility(publicService),
+      };
+    });
     return {
       authority,
       services: rows,
-      hasMore: result.rows.length > SERVICES_LIST_PAGE_SIZE,
+      hasMore: visibleRows.length > SERVICES_LIST_PAGE_SIZE,
       offset: safeOffset,
       pageSize: SERVICES_LIST_PAGE_SIZE,
       query: search,
@@ -307,15 +321,19 @@ function createWorkspaceServicesService({ db = pool } = {}) {
               svc.processing_time_minutes, svc.extra_time_minutes,
               svc.variable_price, svc.price, svc.display_price, svc.status,
               svc.customer_description, svc.booking_note,
-              sc.name AS category_name
+              sc.name AS category_name, visibility.owner_staff_id AS private_owner_staff_id
          FROM services svc
          LEFT JOIN service_categories sc ON sc.id=svc.category_id
+         LEFT JOIN service_visibility_policies visibility ON visibility.service_id=svc.id
         WHERE svc.id=$1
         LIMIT 1`,
       [id]
     );
     const service = serviceResult.rows[0];
-    if (!service) throw new WorkspaceServicesError('WORKSPACE_SERVICE_NOT_FOUND', 'Service was not found.', 404);
+    if (!service || !serviceVisibilityAllows(authority, service.private_owner_staff_id)) {
+      throw new WorkspaceServicesError('WORKSPACE_SERVICE_NOT_FOUND', 'Service was not found.', 404);
+    }
+    delete service.private_owner_staff_id;
 
     const assignedStaff = await readAssignedStaff(db, id);
     const practitionerResult = await db.query(
@@ -347,21 +365,26 @@ function createWorkspaceServicesService({ db = pool } = {}) {
     };
   }
 
-  async function lockServiceState(client, serviceId) {
+  async function lockServiceState(client, serviceId, authority) {
     const id = positiveId(serviceId);
     if (!id) throw new WorkspaceServicesError('WORKSPACE_SERVICES_INVALID_ID', 'Service reference is invalid.', 400);
     await client.query(`SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, [`workspace-service:${id}`]);
     const serviceResult = await client.query(
       `/* workspaceServices:mutation-service */
-       SELECT id, name, duration_minutes, processing_time_minutes, extra_time_minutes,
-              variable_price, price, display_price, status
-         FROM services
-        WHERE id=$1
-        FOR UPDATE`,
+       SELECT svc.id, svc.name, svc.duration_minutes, svc.processing_time_minutes, svc.extra_time_minutes,
+              svc.variable_price, svc.price, svc.display_price, svc.status,
+              visibility.owner_staff_id AS private_owner_staff_id
+         FROM services svc
+         LEFT JOIN service_visibility_policies visibility ON visibility.service_id=svc.id
+        WHERE svc.id=$1
+        FOR UPDATE OF svc`,
       [id]
     );
     const service = serviceResult.rows[0];
-    if (!service) throw new WorkspaceServicesError('WORKSPACE_SERVICE_NOT_FOUND', 'Service was not found.', 404);
+    if (!service || !serviceVisibilityAllows(authority, service.private_owner_staff_id)) {
+      throw new WorkspaceServicesError('WORKSPACE_SERVICE_NOT_FOUND', 'Service was not found.', 404);
+    }
+    delete service.private_owner_staff_id;
     const assignmentResult = await client.query(
       `/* workspaceServices:mutation-assignments */
        SELECT staff_id
@@ -403,7 +426,7 @@ function createWorkspaceServicesService({ db = pool } = {}) {
     try {
       await client.query('BEGIN');
       const operator = await requireManageAccess(adminId, client);
-      const state = await lockServiceState(client, id);
+      const state = await lockServiceState(client, id, operator);
       requireCurrentRevision(state, expectedRevision);
       const result = await execute(client, operator, state);
       await audit(client, operator, action, id, { requestId, ...result.auditMetadata });
