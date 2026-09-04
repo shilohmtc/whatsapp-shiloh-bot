@@ -528,11 +528,11 @@ async function main() {
     await panelOperation('appointment:reassign', `form.elements.destinationStaffId.value='2'`, 'reassign');
 
     const beforeDecline = state.operations.length;
-    await evaluate(cdp, `(()=>{document.querySelector('[data-calendar-operation="manage-appointment"]').click();const form=document.querySelector('[data-panel-action="appointment:cancel"]');form.elements.reason.value='Synthetic cancellation check';form.requestSubmit();return true;})()`);
+    await evaluate(cdp, `(()=>{document.querySelector('[data-calendar-operation="manage-appointment"]').click();const form=document.querySelector('[data-panel-action="appointment:cancel"]');form.requestSubmit();return true;})()`);
     await new Promise((resolve) => setTimeout(resolve, 150));
     assert.equal(state.operations.length, beforeDecline, 'unchecked cancellation confirmation must not submit');
     await evaluate(cdp, `document.querySelector('[data-panel-close]').click();true`);
-    await panelOperation('appointment:cancel', `form.elements.reason.value='Synthetic cancellation check';form.elements.confirmed.checked=true`, 'cancel');
+    await panelOperation('appointment:cancel', `form.elements.confirmed.checked=true`, 'cancel');
     assert.deepEqual(state.operations.at(-1).confirmation, { confirmed: true, appointmentId: 7001, revision: REVISION });
 
     await operation('[data-calendar-operation="add-block"]', [
