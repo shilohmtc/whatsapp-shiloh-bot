@@ -1,20 +1,22 @@
 name: Control 710 temporary exact patch
 
 on:
-  push:
+  pull_request:
     branches:
-      - control/710-retire-cancellation-reason
+      - main
 
 permissions:
   contents: write
 
 jobs:
   apply-exact-patch:
+    if: github.head_ref == 'control/710-retire-cancellation-reason'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: ${{ github.head_ref }}
       - name: Apply bounded #710 patch and focused regression
         shell: bash
         run: |
@@ -114,4 +116,4 @@ jobs:
           git diff --cached --check
           git diff --cached --stat
           git commit -m "#710 — Retire cancellation reason UI and payload"
-          git push origin HEAD:${GITHUB_REF_NAME}
+          git push origin HEAD:${{ github.head_ref }}
