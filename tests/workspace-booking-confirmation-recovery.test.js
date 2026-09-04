@@ -183,3 +183,11 @@ test('Bot and Workspace use the same canonical booking-confirmation payload cont
     'client_postbook_my_appointments',
   ]);
 });
+
+test('client:notify rollout is least-privilege for all-business operational roles only', () => {
+  const migration = fs.readFileSync(path.join(__dirname, '..', 'migrations/099_workspace_booking_confirmation_notify_capability.sql'), 'utf8');
+  assert.match(migration, /permissions[\s\S]*client:notify/);
+  assert.match(migration, /business_role IN \('owner','business_admin','booking_operator'\)/);
+  assert.doesNotMatch(migration, /tenant_practitioner/);
+  assert.doesNotMatch(migration, /Christel|Jean|Naomi|Marietjie|Juvan/i);
+});
