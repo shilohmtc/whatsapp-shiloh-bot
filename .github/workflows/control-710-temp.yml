@@ -33,8 +33,8 @@ jobs:
 
           replaceOnce(
             'src/presentation/calendarReadOnlyUx.js',
-            '<form class=\\"panel-action danger\\" data-panel-action=\\"appointment:cancel\\"><label>Cancellation reason<textarea name=\\"reason\\" required></textarea></label><label><input name=\\"confirmed\\" type=\\"checkbox\\" required> I confirm this exact appointment should be cancelled.</label><button type=\\"submit\\">Cancel appointment</button></form>',
-            '<form class=\\"panel-action danger\\" data-panel-action=\\"appointment:cancel\\"><label><input name=\\"confirmed\\" type=\\"checkbox\\" required> I confirm this exact appointment should be cancelled.</label><button type=\\"submit\\">Cancel appointment</button></form>',
+            '<form class="panel-action danger" data-panel-action="appointment:cancel"><label>Cancellation reason<textarea name="reason" required></textarea></label><label><input name="confirmed" type="checkbox" required> I confirm this exact appointment should be cancelled.</label><button type="submit">Cancel appointment</button></form>',
+            '<form class="panel-action danger" data-panel-action="appointment:cancel"><label><input name="confirmed" type="checkbox" required> I confirm this exact appointment should be cancelled.</label><button type="submit">Cancel appointment</button></form>',
           );
 
           replaceOnce(
@@ -80,13 +80,13 @@ jobs:
 
           test('Manage Appointment cancellation keeps exact confirmation but no reason input', () => {
             const html = renderCalendarPage(mutableCalendarModel());
-            const start = html.indexOf('data-panel-action=\\"appointment:cancel\\"');
+            const start = html.indexOf('data-panel-action="appointment:cancel"');
             assert.notEqual(start, -1);
             const end = html.indexOf('</form>', start);
             const cancellationForm = html.slice(start, end);
-            assert.match(cancellationForm, /name=\\"confirmed\\" type=\\"checkbox\\" required/);
-            assert.match(cancellationForm, />Cancel appointment<\\/button>/);
-            assert.doesNotMatch(cancellationForm, /Cancellation reason|name=\\"reason\\"/i);
+            assert.match(cancellationForm, /name="confirmed" type="checkbox" required/);
+            assert.match(cancellationForm, />Cancel appointment<\/button>/);
+            assert.doesNotMatch(cancellationForm, /Cancellation reason|name="reason"/i);
           });
 
           test('Calendar cancellation client remains confirmation-gated and omits reason from request payload', () => {
@@ -96,10 +96,10 @@ jobs:
             const end = script.indexOf("}});});}", start);
             assert.notEqual(end, -1);
             const cancellationBranch = script.slice(start, end);
-            assert.match(cancellationBranch, /if\\(!form\\.elements\\.confirmed\\.checked\\)return;/);
-            assert.match(cancellationBranch, /confirmation:\\{confirmed:true,appointmentId:data\\.id,revision:data\\.revision\\}/);
-            assert.match(cancellationBranch, /requestId:operationId\\(\\)/);
-            assert.doesNotMatch(cancellationBranch, /\\breason\\s*:/);
+            assert.match(cancellationBranch, /if\(!form\.elements\.confirmed\.checked\)return;/);
+            assert.match(cancellationBranch, /confirmation:\{confirmed:true,appointmentId:data\.id,revision:data\.revision\}/);
+            assert.match(cancellationBranch, /requestId:operationId\(\)/);
+            assert.doesNotMatch(cancellationBranch, /\breason\s*:/);
           });
           `;
           fs.writeFileSync('tests/calendar-cancellation-ui.test.js', test);
