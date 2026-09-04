@@ -1,5 +1,6 @@
 const express = require('express');
 const workspaceServices = require('../services/workspaceServices');
+const workspaceServiceCreation = require('../services/workspaceServiceCreation');
 const workspaceClients = require('../services/workspaceClients');
 const workspaceStaff = require('../services/workspaceStaff');
 const {
@@ -8,6 +9,11 @@ const {
   renderServicesUnavailablePage,
   workspaceServicesManageClientScript,
 } = require('../presentation/workspaceServicesUx');
+const {
+  renderWorkspaceServiceCreationPage,
+  injectWorkspaceServiceCreateAction,
+  serviceCreationClientScript,
+} = require('../presentation/workspaceServiceCreationUx');
 const { requireStaffSession } = require('../middleware/staffBrowserSession');
 
 function isWorkspaceServicesEnabled(env = process.env) {
@@ -43,14 +49,10 @@ async function pageOptions(req, clientAccessService, staffAccessService, staffAc
   const adminId = req.staffBrowserSession?.adminId;
   try {
     clientsNavigationAllowed = Boolean(await clientAccessService.resolveAccess(adminId));
-  } catch (_error) {
-    // Services stays available under its own authority. Client navigation fails closed.
-  }
+  } catch (_error) {}
   try {
     staffNavigationAllowed = Boolean(await staffAccessService.resolveAccess(adminId));
-  } catch (_error) {
-    // Services stays available under its own authority. Staff navigation fails closed.
-  }
+  } catch (_error) {}
   return {
     staffAccessScriptPath: `${staffAccessPath}/client.js`,
     calendarNavigationAllowed: Boolean(req.staffBrowserSession?.viewer),
@@ -72,10 +74,12 @@ async function detailPageOptions(req, service, clientAccessService, staffAccessS
 function createWorkspaceServicesListHandler({
   env = process.env,
   service = workspaceServices,
+  creationService = workspaceServiceCreation,
   clientAccessService = workspaceClients,
   staffAccessService = workspaceStaff,
   renderPage = renderServicesListPage,
   renderUnavailable = renderServicesUnavailablePage,
+  injectCreateAction = injectWorkspaceServiceCreateAction,
   staffAccessPath = '/calendar/staff',
 } = {}) {
   return async function workspaceServicesListHandler(req, res) {
@@ -88,10 +92,14 @@ function createWorkspaceServicesListHandler({
         status: req.query?.status,
         offset: req.query?.offset,
       });
-      return res.status(200).type('html').send(renderPage(
+      let html = renderPage(
         model,
         await pageOptions(req, clientAccessService, staffAccessService, staffAccessPath)
-      ));
+      );
+      try {
+        if (await creationService.resolveCreateAccess(req.staffBrowserSession?.adminId)) html = injectCreateAction(html);
+      } catch (_error) {}
+      return res.status(200).type('html').send(html);
     } catch (error) {
       const safe = safeError(error);
       return res.status(safe.status).type('html').send(renderUnavailable({ code: error?.code, message: safe.message }));
@@ -130,6 +138,7 @@ function createWorkspaceServiceDetailHandler({
 function createWorkspaceServicesRouter({ sessionService, ...options } = {}) {
   if (!sessionService) throw new Error('Workspace Services requires the existing staff browser session service');
   const service = options.service || workspaceServices;
+  const creationService = options.creationService || workspaceServiceCreation;
   const router = express.Router();
   router.get('/nav.js', (_req, res) => {
     res.setHeader('Cache-Control', 'private, no-store, max-age=0');
@@ -158,8 +167,30 @@ function createWorkspaceServicesRouter({ sessionService, ...options } = {}) {
       return res.sendStatus(403);
     }
   });
+  router.get('/create.js', async (req, res) => {
+    setWorkspaceServicesSecurityHeaders(res);
+    if (!isWorkspaceServicesEnabled(options.env || process.env)) return res.sendStatus(404);
+    try {
+      const authority = await creationService.resolveCreateAccess(req.staffBrowserSession?.adminId);
+      if (!authority) return res.sendStatus(403);
+      return res.status(200).type('application/javascript').send(serviceCreationClientScript());
+    } catch (_error) {
+      return res.sendStatus(403);
+    }
+  });
+  router.get('/new', async (req, res) => {
+    setWorkspaceServicesSecurityHeaders(res);
+    if (!isWorkspaceServicesEnabled(options.env || process.env)) return res.sendStatus(404);
+    try {
+      await creationService.requireCreateAccess(req.staffBrowserSession?.adminId);
+      return res.status(200).type('html').send(renderWorkspaceServiceCreationPage());
+    } catch (error) {
+      const safe = safeError(error);
+      return res.status(safe.status).type('text/plain').send(safe.message);
+    }
+  });
 
-  router.get('/', createWorkspaceServicesListHandler({ ...options, service }));
+  router.get('/', createWorkspaceServicesListHandler({ ...options, service, creationService }));
   router.get('/:id', createWorkspaceServiceDetailHandler({ ...options, service }));
   return router;
 }
