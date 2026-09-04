@@ -190,7 +190,8 @@ test('business-wide presentation can switch only among practitioners returned by
   });
   const model = await service.buildModel({ view: 'day', date: '2026-08-24', viewer: businessViewer });
   const html = renderCalendarPage(model, { basePath: '/calendar/read-only' });
-  assert.match(html, /All permitted/);
+  assert.match(html, /data-people-picker/);
+  assert.match(html, /1 of 2 visible/);
   assert.match(html, /staff=44/);
   assert.match(html, /staff=45/);
   assert.doesNotMatch(html, /staff=46/);

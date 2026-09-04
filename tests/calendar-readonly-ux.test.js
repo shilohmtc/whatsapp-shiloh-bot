@@ -195,12 +195,26 @@ test('practitioner filtering is display-only and rejects staff outside server-pe
   assert.deepEqual(allowed.timeline.staff.map(item => item.id), [1]);
   assert.equal(allowed.timeline.appointments.length, 1, 'shared appointment remains one appointment when filtering to one assigned practitioner');
   assert.deepEqual(allowed.timeline.appointments[0].staffIds, [1, 2], 'authoritative multi-staff assignment is not rewritten for display');
+
+  const handler = createCalendarReadOnlyHandler({
+    env: { SHILOH_CALENDAR_READONLY_UX_ENABLED: 'true' },
+    buildModel: input => service.buildModel({ ...input, date: '2026-08-24' }),
+    bookingService: { resolveOperator: async () => { throw new Error('not allowed'); } },
+  });
+  const req = { query: { staff: ['1', '2'] }, baseUrl: '/calendar/read-only' };
+  req[CALENDAR_VIEWER_CONTEXT] = { authenticated: true, source: 'server_staff_session', viewer };
+  const res = fakeResponse();
+  await handler(req, res, () => {});
+  assert.equal(res.statusCode, 403);
+  assert.match(res.body, /outside your authenticated Calendar scope/i);
+  assert.doesNotMatch(res.body, /Taylor Client|Christel|appointment-880/);
 });
 
 test('navigation is GET-only/read-only and existing appointment-share ICS route remains intact', async () => {
   const model = await buildDayModel();
   const html = renderCalendarPage(model, { basePath: '/calendar/read-only' });
-  assert.doesNotMatch(html, /<form|method="post"|fetch\(|XMLHttpRequest|draggable|contenteditable/i);
+  assert.doesNotMatch(html, /method="post"|fetch\(|XMLHttpRequest|draggable|contenteditable/i);
+  assert.match(html, /<form class="people-form" method="get"/);
   assert.match(html, /Today/);
   assert.match(html, />Day<|>Week<|>Agenda</);
 

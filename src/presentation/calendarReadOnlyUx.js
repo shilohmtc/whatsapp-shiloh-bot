@@ -248,32 +248,36 @@ function workingContext(model, staffId, day) {
   return windows.map(item => `${String(item.startsLocal || '').slice(0, 5)}–${String(item.endsLocal || '').slice(0, 5)}`).join(' • ');
 }
 
-function queryHref(basePath, view, date, staff) {
+function visibleStaffIdsForModel(model) {
+  if (Array.isArray(model?.visibleStaffIds)) return model.visibleStaffIds.map(Number).filter(Number.isSafeInteger);
+  if (model?.selectedStaffId != null) return [Number(model.selectedStaffId)].filter(Number.isSafeInteger);
+  return (model?.timeline?.staff || []).map(person => Number(person.id)).filter(Number.isSafeInteger);
+}
+
+function queryHref(basePath, view, date, staffIds) {
   const params = new URLSearchParams({ view, date });
-  if (staff != null) params.set('staff', String(staff));
+  for (const staffId of staffIds || []) params.append('staff', String(staffId));
   return `${basePath}?${params.toString()}`;
 }
 
 function renderControls(model, basePath) {
   const today = dateKey(new Date());
-  const selected = model.selectedStaffId;
   const permittedStaff = model.permittedStaff || [];
+  const visibleStaffIds = visibleStaffIdsForModel(model);
+  const visible = new Set(visibleStaffIds);
   const canSwitchPractitioner = permittedStaff.length > 1;
   const filterContent = canSwitchPractitioner
-    ? [
-        `<a class="filter ${selected == null ? 'active' : ''}" ${selected == null ? 'aria-current="true"' : ''} href="${escapeHtml(queryHref(basePath, model.view, model.dateKey, null))}">All permitted</a>`,
-        ...permittedStaff.map(person => `<a class="filter ${Number(selected) === Number(person.id) ? 'active' : ''}" ${Number(selected) === Number(person.id) ? 'aria-current="true"' : ''} href="${escapeHtml(queryHref(basePath, model.view, model.dateKey, person.id))}">${escapeHtml(person.displayName)}</a>`),
-      ].join('')
+    ? `<details class="people-picker" data-people-picker><summary><span>People</span><strong>${visibleStaffIds.length}</strong></summary><form class="people-form" method="get" action="${escapeHtml(basePath)}" data-practitioner-visibility-form><input type="hidden" name="view" value="${escapeHtml(model.view)}"><input type="hidden" name="date" value="${escapeHtml(model.dateKey)}"><fieldset><legend class="sr-only">Visible practitioners</legend>${permittedStaff.map(person => `<label><input type="checkbox" name="staff" value="${escapeHtml(person.id)}"${visible.has(Number(person.id)) ? ' checked' : ''}><span>${escapeHtml(person.displayName)}</span></label>`).join('')}</fieldset><div class="people-actions"><button type="submit">Apply</button><a href="${escapeHtml(queryHref(basePath, model.view, model.dateKey, permittedStaff.map(person => person.id)))}">Show all</a></div><p data-people-selection-status>${visibleStaffIds.length} of ${permittedStaff.length} visible</p></form></details>`
     : `<span class="scope-pill">${escapeHtml(permittedStaff[0]?.displayName || 'Permitted practitioner')} • your permitted timeline</span>`;
-  const viewLinks = ['day', 'week', 'agenda'].map(view => `<a class="view-tab ${model.view === view ? 'active' : ''}" ${model.view === view ? 'aria-current="page"' : ''} href="${escapeHtml(queryHref(basePath, view, model.dateKey, selected))}">${view[0].toUpperCase()}${view.slice(1)}</a>`).join('');
+  const viewLinks = ['day', 'week', 'agenda'].map(view => `<a class="view-tab ${model.view === view ? 'active' : ''}" ${model.view === view ? 'aria-current="page"' : ''} href="${escapeHtml(queryHref(basePath, view, model.dateKey, visibleStaffIds))}">${view[0].toUpperCase()}${view.slice(1)}</a>`).join('');
   return `<section class="controls" aria-label="Calendar controls">
     <div class="control-group"><span class="control-label">Date</span><div class="period-nav">
-      <a class="nav-button" href="${escapeHtml(queryHref(basePath, model.view, model.period.previousAnchor, selected))}" aria-label="Previous period"><span aria-hidden="true">←</span><span class="nav-word">Previous</span></a>
-      <a class="nav-button today" href="${escapeHtml(queryHref(basePath, model.view, today, selected))}">Today</a>
-      <a class="nav-button" href="${escapeHtml(queryHref(basePath, model.view, model.period.nextAnchor, selected))}" aria-label="Next period"><span class="nav-word">Next</span><span aria-hidden="true">→</span></a>
+      <a class="nav-button" href="${escapeHtml(queryHref(basePath, model.view, model.period.previousAnchor, visibleStaffIds))}" aria-label="Previous period"><span aria-hidden="true">←</span><span class="nav-word">Previous</span></a>
+      <a class="nav-button today" href="${escapeHtml(queryHref(basePath, model.view, today, visibleStaffIds))}">Today</a>
+      <a class="nav-button" href="${escapeHtml(queryHref(basePath, model.view, model.period.nextAnchor, visibleStaffIds))}" aria-label="Next period"><span class="nav-word">Next</span><span aria-hidden="true">→</span></a>
     </div></div>
     <div class="control-group"><span class="control-label">View</span><nav class="view-tabs" aria-label="Calendar view">${viewLinks}</nav></div>
-    <div class="control-group practitioner-control"><span class="control-label">Practitioner</span><div class="filters" aria-label="Practitioner scope">${filterContent}</div></div>
+    <div class="control-group practitioner-control"><span class="control-label">Practitioners</span><div class="filters" style="overflow:visible" aria-label="Practitioner visibility">${filterContent}</div></div>
   </section>`;
 }
 
@@ -332,10 +336,14 @@ function renderDay(model) {
   const day = model.period.dateKeys[0];
   const sharedAppointments = (model.timeline.appointments || []).filter(item => dateKey(item.startsAt) === day && eventStaffIds(item).length > 1);
   const staff = model.timeline.staff || [];
+  const visibleStaffIds = staff.map(person => Number(person.id));
   const lanes = staff.map((person, index) => {
     const items = eventsForDate(model, day).filter(item => {
       if (item.kind === 'clinic_closure') return false;
-      if (item.kind === 'appointment' && eventStaffIds(item).length > 1) return index === 0;
+      if (item.kind === 'appointment' && eventStaffIds(item).length > 1) {
+        const firstVisibleAssignedStaffId = visibleStaffIds.find(staffId => eventStaffIds(item).includes(staffId));
+        return Number(person.id) === firstVisibleAssignedStaffId;
+      }
       return eventStaffIds(item).includes(Number(person.id));
     });
     const context = workingContext(model, person.id, day);
@@ -346,7 +354,7 @@ function renderDay(model) {
       person.schedulingType !== 'regular' && staffOperationEnabled(model, 'working_schedule:manage', person.id) ? `<button type="button" data-calendar-operation="manage-schedule" data-staff-id="${escapeHtml(person.id)}" data-date="${escapeHtml(day)}">Schedule</button>` : '',
     ].filter(Boolean).join('');
     const mutationActions = laneOperations ? `<div class="lane-actions">${laneOperations}</div>` : '';
-    return `<section class="lane" data-staff-id="${escapeHtml(person.id)}" data-date="${escapeHtml(day)}" ${operationEnabled(model, 'appointment:reschedule') ? 'data-calendar-drop-target="true"' : ''}>
+    return `<section class="lane" style="overflow:visible" data-staff-id="${escapeHtml(person.id)}" data-lane-index="${index}" data-date="${escapeHtml(day)}" ${operationEnabled(model, 'appointment:reschedule') ? 'data-calendar-drop-target="true"' : ''}>
       <header><div><h3>${escapeHtml(person.displayName)}</h3><p><span class="status-dot ${unavailable ? 'off' : ''}"></span>${escapeHtml(context)}</p></div><div class="lane-heading-actions"><span class="lane-count">${items.length} item${items.length === 1 ? '' : 's'}</span>${mutationActions}</div></header>
       <div class="time-column">${items.map(item => renderPositionedEvent(item, model)).join('')}</div>
     </section>`;
@@ -356,7 +364,7 @@ function renderDay(model) {
     <div class="view-heading"><div><span class="eyebrow">Day</span><h2>${escapeHtml(formatDay(day, { weekday: 'long', month: 'long', year: 'numeric' }))}</h2></div><span class="read-only-badge">${mutationEnabled(model) ? 'Canonical operations' : 'Read-only'}</span></div>
     ${renderClosureStrip(model, day)}
     ${sharedAppointments.length ? '<div class="shared-note">Shared appointments appear once as one canonical booking and retain all assigned practitioners.</div>' : ''}
-    <div class="time-grid day-time-grid">${renderTimeRail()}<div class="lanes" style="--lane-count:${Math.max(staff.length, 1)}">${lanes || '<div class="empty large">No permitted practitioner lanes</div>'}</div></div>
+    <div class="time-grid day-time-grid" data-visible-lane-count="${staff.length}">${renderTimeRail()}<div class="lanes" style="--lane-count:${Math.max(staff.length, 1)}">${lanes || '<div class="empty large">No permitted practitioner lanes</div>'}</div></div>
   </main>`;
 }
 
@@ -407,6 +415,10 @@ function workspaceV1Styles() {
   return `.time-grid{display:grid;grid-template-columns:58px minmax(0,1fr);overflow:auto;border:1px solid var(--line);border-radius:13px;background:#fff}.time-rail{position:relative;height:${((GRID_END_MINUTES - GRID_START_MINUTES) / 60) * GRID_PIXELS_PER_HOUR}px;border-right:1px solid var(--line);background:#fafbf8}.time-rail span{position:absolute;top:var(--grid-top);right:8px;transform:translateY(-50%);font-size:.66rem;color:var(--muted)}.time-column{position:relative;height:${((GRID_END_MINUTES - GRID_START_MINUTES) / 60) * GRID_PIXELS_PER_HOUR}px;background:repeating-linear-gradient(to bottom,transparent 0,transparent ${GRID_PIXELS_PER_HOUR - 1}px,var(--line) ${GRID_PIXELS_PER_HOUR - 1}px,var(--line) ${GRID_PIXELS_PER_HOUR}px)}.positioned-event{position:absolute;z-index:2;top:var(--event-top);height:var(--event-height);left:4px;right:4px;min-height:44px}.positioned-event .event-card{position:relative;height:100%;overflow:hidden;padding:6px 7px;box-shadow:0 2px 7px rgba(32,50,43,.08)}.positioned-event .appointment-reference,.positioned-event .provenance{display:none}.positioned-event .event-card-actions{position:absolute;right:3px;bottom:3px}.positioned-event .event-operation{min-width:44px;min-height:44px;background:rgba(255,255,255,.94)}.positioned-event .event-card h4{font-size:.78rem;padding-right:48px}.positioned-event .event-card p{font-size:.68rem;padding-right:48px}.day-time-grid .lanes{display:grid;grid-template-columns:repeat(var(--lane-count),minmax(210px,1fr));gap:0;min-width:max-content}.day-time-grid .lane{border:0;border-right:1px solid var(--line);border-radius:0;min-width:230px}.day-time-grid .lane>header{height:73px;position:sticky;top:0;z-index:4}.day-time-grid .time-rail{margin-top:73px}.week-grid{display:grid;grid-template-columns:repeat(7,minmax(154px,1fr));gap:0;overflow:visible;padding:0;min-width:1078px}.week-day{border:0;border-right:1px solid var(--line);border-radius:0;min-width:154px}.week-day>header{height:45px}.week-time-grid .time-rail{margin-top:45px}.week-events{padding:0}.shared-note{margin:-3px 0 10px;color:var(--muted);font-size:.73rem}.management-panel{border:0;padding:0;background:transparent;max-width:none;max-height:none;width:100%;height:100%;margin:0}.management-panel::backdrop{background:rgba(13,31,24,.42)}.management-card{position:absolute;right:0;top:0;height:100%;width:min(430px,100%);overflow:auto;background:var(--panel);padding:22px;box-shadow:-12px 0 40px rgba(20,45,35,.2)}.panel-head{display:flex;justify-content:space-between;gap:12px;align-items:start;border-bottom:1px solid var(--line);padding-bottom:14px}.panel-head h2{margin:3px 0;font-size:1.25rem}.panel-close{border:1px solid var(--line);background:#fff;border-radius:999px;width:44px;height:44px;font-size:1.15rem}.panel-summary{margin:16px 0;padding:12px;border-radius:12px;background:var(--leaf-soft);display:grid;gap:4px}.panel-actions{display:grid;gap:14px}.panel-action{display:none;border-top:1px solid var(--line);padding-top:14px}.panel-action.visible{display:grid;gap:9px}.panel-action label{display:grid;gap:5px;font-size:.76rem;font-weight:750}.panel-action input,.panel-action select,.panel-action textarea{width:100%;min-height:44px;border:1px solid var(--line-strong);border-radius:9px;padding:9px;font:inherit;background:#fff}.panel-action button{min-height:44px;border:0;border-radius:9px;padding:10px 13px;background:var(--leaf-deep);color:#fff;font:inherit;font-weight:800}.panel-action.danger button{background:#843f35}.panel-hint{font-size:.72rem;color:var(--muted)}@media(max-width:900px){.shell{padding-top:12px}}@media(max-width:700px){.time-grid{margin-left:-6px;margin-right:-6px;grid-template-columns:48px minmax(0,1fr)}.day-time-grid .lanes{grid-template-columns:repeat(var(--lane-count),minmax(78vw,1fr))}.day-time-grid .lane{min-width:78vw}.week-grid{grid-template-columns:repeat(7,minmax(78vw,1fr));min-width:max-content}.week-day{min-width:78vw}.positioned-event .event-card{min-height:44px}.management-card{padding:16px}}`;
 }
 
+function desktopSpatialLaneStyles() {
+  return `.people-picker{position:relative;margin-left:auto}.people-picker>summary{list-style:none;display:inline-flex;align-items:center;gap:8px;min-height:38px;padding:7px 10px;border:1px solid var(--line);border-radius:999px;background:#fff;font-size:.82rem;font-weight:800;cursor:pointer}.people-picker>summary::-webkit-details-marker{display:none}.people-picker>summary strong{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:22px;padding:0 6px;border-radius:999px;background:var(--leaf-soft);color:var(--leaf);font-size:.7rem}.people-picker[open]>summary{border-color:var(--leaf);box-shadow:0 0 0 2px var(--leaf-soft)}.people-form{position:absolute;right:0;top:calc(100% + 7px);z-index:12;display:grid;gap:8px;width:min(260px,calc(100vw - 28px));padding:9px;border:1px solid var(--line);border-radius:12px;background:#fff;box-shadow:0 16px 34px rgba(32,50,43,.18)}.people-form fieldset{display:grid;gap:2px;max-height:260px;overflow:auto;margin:0;padding:0;border:0}.people-form label{display:flex;align-items:center;gap:9px;min-height:39px;padding:7px 8px;border-radius:8px;font-size:.78rem;font-weight:720;cursor:pointer}.people-form label:hover{background:var(--leaf-soft)}.people-form input[type="checkbox"]{width:17px;height:17px;accent-color:var(--leaf)}.people-actions{display:flex;align-items:center;gap:6px;padding-top:4px;border-top:1px solid var(--line)}.people-actions button,.people-actions a{display:inline-flex;align-items:center;justify-content:center;min-height:34px;padding:6px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);font:inherit;font-size:.72rem;font-weight:800;cursor:pointer}.people-actions button{background:var(--leaf-deep);border-color:var(--leaf-deep);color:#fff}.people-form p{margin:0;color:var(--muted);font-size:.68rem}@media(min-width:701px){.workspace-main .shell{max-width:none}.day-time-grid{max-height:max(520px,calc(100vh - 330px));overscroll-behavior:contain;scrollbar-gutter:stable}.day-time-grid .lanes{grid-template-columns:repeat(var(--lane-count),minmax(300px,1fr));min-width:max-content;width:100%}.day-time-grid .lane{min-width:300px}.day-time-grid .lane>header{position:sticky;top:0;z-index:4;box-shadow:0 1px 0 var(--line)}}@media(max-width:700px){.people-picker{margin-left:0}.people-form{position:static;width:100%;margin-top:7px;box-shadow:none}.people-picker>summary{min-height:44px}.people-form label{min-height:44px}}`;
+}
+
 function renderManagementPanel(model) {
   if (!mutationEnabled(model)) return '';
   const options = (model.permittedStaff || []).map(person => `<option value="${escapeHtml(person.id)}">${escapeHtml(person.displayName)}</option>`).join('');
@@ -425,7 +437,7 @@ function renderCalendarPage(model, {
   const content = model.view === 'week' ? renderWeek(model) : model.view === 'agenda' ? renderAgenda(model) : renderDay(model);
   const canMutate = mutationEnabled(model);
   const operationScript = canMutate ? `<script src="${escapeHtml(operationalMutationsScriptPath)}" defer></script>` : '';
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Calendar — Shiloh Workspace</title><style>${serviceFamilyAccentCss()}${styles()}${workspaceShellStyles()}${workspaceV1Styles()}${canMutate ? operationalStyles() : ''}</style><script src="${escapeHtml(staffAccessScriptPath)}" defer></script>${operationScript}</head><body data-calendar-readonly="${canMutate ? 'false' : 'true'}"><div class="workspace-frame">${renderWorkspaceNavigation({ active: 'calendar', clientsHref: clientNavigationAllowed ? clientsPath : null })}<div class="workspace-main"><div class="shell">
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Calendar — Shiloh Workspace</title><style>${serviceFamilyAccentCss()}${styles()}${workspaceShellStyles()}${workspaceV1Styles()}${desktopSpatialLaneStyles()}${canMutate ? operationalStyles() : ''}</style><script src="${escapeHtml(staffAccessScriptPath)}" defer></script>${operationScript}</head><body data-calendar-readonly="${canMutate ? 'false' : 'true'}"><div class="workspace-frame">${renderWorkspaceNavigation({ active: 'calendar', clientsHref: clientNavigationAllowed ? clientsPath : null })}<div class="workspace-main"><div class="shell">
     <header class="topbar"><div class="brand"><h1>Calendar</h1><p>Your clinic day, at a glance.</p></div><div class="topbar-side">${renderOperationalActions(operationalActions)}<div class="truth-note">Africa/Johannesburg • Shiloh is the scheduling authority</div><div class="access-controls"><button class="signout-button" type="button" data-shiloh-logout>Sign out</button><span class="access-status" role="status" aria-live="polite" data-shiloh-calendar-access-status></span></div></div></header>
     ${renderControls(model, basePath)}${renderOperationalSummary(model)}${canMutate ? '<span class="operation-status" role="status" aria-live="polite" data-calendar-operation-status>Canonical changes are revalidated when saved.</span>' : ''}${content}
     <div class="footer-note">${escapeHtml(timelineReadOnlyMessage)}</div>${renderManagementPanel(model)}
@@ -450,4 +462,7 @@ module.exports = {
   eventsForDate,
   workingContext,
   formatClientMobile,
+  visibleStaffIdsForModel,
+  queryHref,
+  desktopSpatialLaneStyles,
 };

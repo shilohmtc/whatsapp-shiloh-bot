@@ -87,6 +87,37 @@ function normalizeStaffFilter(value) {
   return id;
 }
 
+function normalizeVisibleStaffSelection(value) {
+  if (value == null || (Array.isArray(value) && value.length === 0)) {
+    return { explicit: false, all: false, requestedIds: [] };
+  }
+
+  const tokens = (Array.isArray(value) ? value : [value])
+    .flatMap(item => String(item).split(','))
+    .map(item => item.trim().toLowerCase())
+    .filter(Boolean);
+  if (!tokens.length) return { explicit: false, all: false, requestedIds: [] };
+  if (tokens.includes('all')) {
+    if (tokens.length !== 1) {
+      throw uxError('CALENDAR_UX_INVALID_STAFF_FILTER', 'Calendar practitioner selection is invalid.');
+    }
+    return { explicit: true, all: true, requestedIds: [] };
+  }
+
+  const requestedIds = [];
+  for (const token of tokens) {
+    if (!/^\d+$/.test(token)) {
+      throw uxError('CALENDAR_UX_INVALID_STAFF_FILTER', 'Calendar practitioner selection is invalid.');
+    }
+    const id = Number(token);
+    if (!Number.isSafeInteger(id) || id <= 0) {
+      throw uxError('CALENDAR_UX_INVALID_STAFF_FILTER', 'Calendar practitioner selection is invalid.');
+    }
+    if (!requestedIds.includes(id)) requestedIds.push(id);
+  }
+  return { explicit: true, all: false, requestedIds };
+}
+
 function periodFor(view, dateKey) {
   const startKey = view === 'week' ? mondayFor(dateKey) : dateKey;
   const lengthDays = view === 'day' ? 1 : 7;
@@ -111,32 +142,50 @@ function eventStaffIds(item) {
 }
 
 function filterTimelineForDisplay(timeline, requestedStaffId) {
+  const filtered = filterTimelineForVisibleStaff(timeline, requestedStaffId == null
+    ? { explicit: true, all: true, requestedIds: [] }
+    : { explicit: true, all: false, requestedIds: [requestedStaffId] });
+  return requestedStaffId == null ? { ...filtered, selectedStaffId: null } : filtered;
+}
+
+function filterTimelineForVisibleStaff(timeline, selection) {
   const permittedStaff = Array.isArray(timeline?.staff) ? timeline.staff : [];
-  if (requestedStaffId == null) {
-    return { selectedStaffId: null, permittedStaff, timeline };
+  const permittedIds = permittedStaff.map(item => Number(item.id)).filter(Number.isSafeInteger);
+  const permitted = new Set(permittedIds);
+  const requested = selection || { explicit: false, all: false, requestedIds: [] };
+
+  for (const id of requested.requestedIds || []) {
+    if (!permitted.has(id)) {
+      throw uxError('CALENDAR_UX_STAFF_FILTER_FORBIDDEN', 'The requested practitioner is outside the authenticated Calendar viewer scope.');
+    }
   }
 
-  const permitted = new Set(permittedStaff.map(item => Number(item.id)).filter(Number.isSafeInteger));
-  if (!permitted.has(requestedStaffId)) {
-    throw uxError('CALENDAR_UX_STAFF_FILTER_FORBIDDEN', 'The requested practitioner is outside the authenticated Calendar viewer scope.');
-  }
-
-  const includesStaff = item => eventStaffIds(item).includes(requestedStaffId);
-  const appointments = (timeline.appointments || []).filter(includesStaff);
-  const blocks = (timeline.blocks || []).filter(includesStaff);
-  const leave = (timeline.leave || []).filter(includesStaff);
-  const externalBusy = (timeline.externalBusy || []).filter(includesStaff);
+  const visibleStaffIds = requested.all
+    ? permittedIds
+    : requested.explicit
+      ? permittedIds.filter(id => requested.requestedIds.includes(id))
+      : permittedIds.slice(0, 1);
+  if (!visibleStaffIds.length && permittedIds.length) visibleStaffIds.push(permittedIds[0]);
+  const visible = new Set(visibleStaffIds);
+  const includesVisibleStaff = item => eventStaffIds(item).some(id => visible.has(id));
+  const appointments = (timeline.appointments || []).filter(includesVisibleStaff);
+  const blocks = (timeline.blocks || []).filter(includesVisibleStaff);
+  const leave = (timeline.leave || []).filter(includesVisibleStaff);
+  const externalBusy = (timeline.externalBusy || []).filter(includesVisibleStaff);
   const closures = timeline.closures || [];
 
   return {
-    selectedStaffId: requestedStaffId,
+    selectedStaffId: visibleStaffIds.length === 1 ? visibleStaffIds[0] : null,
+    visibleStaffIds,
+    visibleStaffSelectionExplicit: requested.explicit,
     permittedStaff,
+    authorizedTimeline: timeline,
     timeline: {
       ...timeline,
-      staff: permittedStaff.filter(item => Number(item.id) === requestedStaffId),
-      workingWindows: (timeline.workingWindows || []).filter(item => Number(item.staffId) === requestedStaffId),
-      scheduleExceptions: (timeline.scheduleExceptions || []).filter(item => Number(item.staffId) === requestedStaffId),
-      recurringClosures: (timeline.recurringClosures || []).filter(item => Number(item.staffId) === requestedStaffId),
+      staff: permittedStaff.filter(item => visible.has(Number(item.id))),
+      workingWindows: (timeline.workingWindows || []).filter(item => visible.has(Number(item.staffId))),
+      scheduleExceptions: (timeline.scheduleExceptions || []).filter(item => visible.has(Number(item.staffId))),
+      recurringClosures: (timeline.recurringClosures || []).filter(item => visible.has(Number(item.staffId))),
       appointments,
       blocks,
       leave,
@@ -202,7 +251,7 @@ function createCalendarReadOnlyUxService({
     const timelineViewer = normalizeViewerForTimeline(viewer);
     const view = normalizeView(rawView);
     const dateKey = parseDateKey(rawDate, now);
-    const requestedStaffId = normalizeStaffFilter(rawStaff);
+    const visibleStaffSelection = normalizeVisibleStaffSelection(rawStaff);
     const period = periodFor(view, dateKey);
 
     const timeline = await listTimeline({
@@ -212,13 +261,16 @@ function createCalendarReadOnlyUxService({
     });
     const timelineWithMobiles = await attachCanonicalClientMobiles(timeline, query);
 
-    const filtered = filterTimelineForDisplay(timelineWithMobiles, requestedStaffId);
+    const filtered = filterTimelineForVisibleStaff(timelineWithMobiles, visibleStaffSelection);
     return {
       view,
       dateKey,
       period,
       selectedStaffId: filtered.selectedStaffId,
+      visibleStaffIds: filtered.visibleStaffIds,
+      visibleStaffSelectionExplicit: filtered.visibleStaffSelectionExplicit,
       permittedStaff: filtered.permittedStaff,
+      authorizedTimeline: filtered.authorizedTimeline,
       timeline: filtered.timeline,
       readOnly: true,
       timezone: BUSINESS_TIMEZONE,
@@ -240,8 +292,10 @@ module.exports = {
   normalizeView,
   parseDateKey,
   normalizeStaffFilter,
+  normalizeVisibleStaffSelection,
   periodFor,
   filterTimelineForDisplay,
+  filterTimelineForVisibleStaff,
   attachCanonicalClientMobiles,
   uxError,
 };
