@@ -27,6 +27,8 @@ const {
 const OUT_DIR = path.join(process.cwd(), 'artifacts', 'workspace-client-notifications-browser-proof');
 const CLIENT_ID = 901;
 const APPOINTMENT_ID = 7001;
+const FUTURE_START = new Date(Date.now() + (7 * 24 * 60 * 60 * 1000));
+const FUTURE_END = new Date(FUTURE_START.getTime() + (60 * 60 * 1000));
 
 function chromeExecutable() {
   const candidates = [
@@ -151,8 +153,8 @@ function createFixture() {
           mobile_verified_at: new Date('2026-09-01T08:00:00Z'),
           client_status: 'active',
           appointment_id: APPOINTMENT_ID,
-          starts_at: new Date('2026-09-03T08:00:00Z'),
-          ends_at: new Date('2026-09-03T09:00:00Z'),
+          starts_at: FUTURE_START,
+          ends_at: FUTURE_END,
           appointment_status: 'confirmed',
           source: 'shiloh',
           location_name: 'Synthetic Shiloh',
@@ -215,8 +217,8 @@ function createFixture() {
         },
         appointments: [{
           id: APPOINTMENT_ID,
-          starts_at: '2026-09-03T08:00:00.000Z',
-          ends_at: '2026-09-03T09:00:00.000Z',
+          starts_at: FUTURE_START.toISOString(),
+          ends_at: FUTURE_END.toISOString(),
           status: 'confirmed',
           title: 'Synthetic Treatment',
           services: [{ name: 'Synthetic Treatment' }],
