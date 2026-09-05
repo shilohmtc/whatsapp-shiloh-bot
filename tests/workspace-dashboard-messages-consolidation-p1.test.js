@@ -198,6 +198,8 @@ test('Desktop and Phone shell use the canonical seven/five destination grammar w
   assert.ok(html.indexOf('Services') < html.indexOf('Reports'));
   assert.match(html, /data-workspace-more-toggle>More<\/button>/);
   assert.match(workspaceShellStyles(), /grid-template-columns:repeat\(5,minmax\(0,1fr\)\)/);
+  assert.match(workspaceShellStyles(), /workspace-links \.workspace-more-toggle,[^{]+\{display:none/);
+  assert.match(workspaceShellStyles(), /workspace-links \.workspace-more-toggle\{display:flex/);
   assert.match(workspaceShellStyles(), /bottom:calc\(68px \+ env\(safe-area-inset-bottom\)\)/);
   assert.match(workspaceNavigationClientScript(), /\/calendar\/workspace\/navigation/);
   assert.doesNotMatch(workspaceNavigationClientScript(), /permissions|client:lookup|appointment:view/);
