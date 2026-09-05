@@ -102,7 +102,7 @@ test('compact People control exposes only permitted choices and preserves multi-
   const html = renderCalendarPage(modelFor(timelineFixture(), [11, 13]));
 
   assert.match(html, /data-people-picker/);
-  assert.match(html, /<summary><span>People<\/span><strong>2<\/strong><\/summary>/);
+  assert.match(html, /<summary><span>People<\/span><strong data-people-selection-summary>2 staff<\/strong><\/summary>/);
   assert.equal((html.match(/input type="checkbox" name="staff"/g) || []).length, 4);
   assert.equal((html.match(/input type="checkbox" name="staff" value="(?:11|13)" checked/g) || []).length, 2);
   assert.match(html, /staff=11&amp;staff=13/);

@@ -169,6 +169,15 @@ jobs:
           path: artifacts/calendar-view-parity-month-v1
           if-no-files-found: error
           retention-days: 14
+      - name: Run authenticated spatial Phone Week browser proof
+        run: node scripts/calendar-spatial-phone-week-browser-proof.js
+      - name: Upload authenticated spatial Phone Week browser proof
+        uses: actions/upload-artifact@v4
+        with:
+          name: calendar-spatial-phone-week-p1
+          path: artifacts/calendar-spatial-phone-week-p1
+          if-no-files-found: error
+          retention-days: 14
       - name: Generate Calendar cockpit visual proof
         run: node scripts/calendar-cockpit-visual-proof.js
       - name: Upload Calendar cockpit visual proof

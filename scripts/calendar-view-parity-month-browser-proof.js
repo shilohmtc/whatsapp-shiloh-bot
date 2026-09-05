@@ -188,6 +188,7 @@ const METRICS_EXPRESSION = `(() => {
   const visibleAll = selector => Array.from(document.querySelectorAll(selector)).filter(visible);
   const view = document.querySelector('.calendar-view');
   const context = document.querySelector('[data-view-practitioner-context]');
+  const peopleSummary = document.querySelector('[data-people-selection-summary]');
   const monthGrid = document.querySelector('.month-days');
   const monthLinks = visibleAll('.month-day-link');
   const touchTargets = visibleAll('a,button,summary');
@@ -199,6 +200,7 @@ const METRICS_EXPRESSION = `(() => {
     view: view && view.dataset.view,
     viewVisible: visible(view),
     contextVisible: visible(context),
+    peopleSummary: peopleSummary ? peopleSummary.textContent.trim() : null,
     practitionerCount: visibleAll('.view-practitioner').length,
     ownerLabelCount: visibleAll('.event-practitioners').length,
     sharedCopies: document.querySelectorAll('[data-event-id="appointment-9503"]').length,
@@ -226,7 +228,11 @@ function assertMetrics(proof, metrics) {
   }
   if (metrics.rootScrollWidth > proof.width + 1) throw new Error(`${proof.name} leaked horizontal overflow to the page`);
   if (!metrics.viewVisible || metrics.view !== proof.view) throw new Error(`${proof.name} did not render the requested view`);
-  if (!metrics.contextVisible || metrics.practitionerCount !== proof.staffCount) {
+  if (proof.view === 'week') {
+    if (metrics.contextVisible || metrics.practitionerCount !== 0 || !metrics.peopleSummary) {
+      throw new Error(`${proof.name} retained redundant Week context or lost the top People summary: ${JSON.stringify(metrics)}`);
+    }
+  } else if (!metrics.contextVisible || metrics.practitionerCount !== proof.staffCount) {
     throw new Error(`${proof.name} lost selected practitioner context: ${JSON.stringify(metrics)}`);
   }
   if (metrics.ownerLabelCount < 1 && !(proof.view === 'month' && proof.phone && metrics.visibleMonthOwners > 0)) {
@@ -234,8 +240,8 @@ function assertMetrics(proof, metrics) {
   }
   if (proof.expectShared && metrics.sharedCopies !== 1) throw new Error(`${proof.name} did not retain one shared canonical booking`);
   if (proof.view === 'week') {
-    if (proof.phone && (metrics.weekColumnCount !== 1 || metrics.weekEventPosition !== 'static')) {
-      throw new Error(`${proof.name} did not retain the Phone vertical Week treatment`);
+    if (proof.phone && (metrics.weekColumnCount !== 6 || metrics.weekEventPosition !== 'absolute')) {
+      throw new Error(`${proof.name} did not render the spatial Phone Week treatment`);
     }
     if (!proof.phone && metrics.weekColumnCount !== 6) throw new Error(`${proof.name} did not retain the Desktop Monday-Saturday Week model`);
   }

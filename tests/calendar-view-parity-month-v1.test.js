@@ -254,14 +254,17 @@ test('Day, Week, Agenda and Month navigation preserve the complete selected Peop
   }
 });
 
-test('Week and Agenda make the selected practitioners and event ownership explicit', () => {
-  for (const view of ['week', 'agenda']) {
-    const html = renderCalendarPage(model(view, [21, 22, 23]));
-    assert.match(html, /data-view-practitioner-context/);
-    assert.equal((html.match(/class="view-practitioner"/g) || []).length, 3);
-    assert.match(html, /class="event-practitioners"/);
-    assert.match(html, /Amber Studio \+ Birch Studio/);
-  }
+test('Week uses only the top People selector while Agenda retains selected-practitioner context', () => {
+  const week = renderCalendarPage(model('week', [21, 22, 23]));
+  assert.doesNotMatch(week, /data-view-practitioner-context|People in view/);
+  assert.match(week, /data-people-selection-summary>All staff<\/strong>/);
+  assert.match(week, /class="event-practitioners"/);
+  assert.match(week, /Amber Studio \+ Birch Studio/);
+
+  const agenda = renderCalendarPage(model('agenda', [21, 22, 23]));
+  assert.match(agenda, /data-view-practitioner-context/);
+  assert.equal((agenda.match(/class="view-practitioner"/g) || []).length, 3);
+  assert.match(agenda, /Amber Studio \+ Birch Studio/);
 });
 
 test('A shared appointment remains one canonical booking in Week, Agenda and Month', () => {
@@ -330,7 +333,13 @@ test('Phone Week, Agenda and Month retain scan-first layouts and touch-safe Mont
     const source = renderCalendarPage(model(view));
     const html = applyCalendarResponsivePolish(source, model(view));
     assert.match(html, new RegExp(`data-calendar-view="${view}"`));
-    assert.match(html, /data-view-practitioner-context/);
+    if (view === 'week') {
+      assert.doesNotMatch(html, /data-view-practitioner-context|People in view/);
+      assert.match(html, /data-spatial-week="true"/);
+      assert.match(html, /grid-template-columns:repeat\(6,minmax\(0,1fr\)\)!important/);
+    } else {
+      assert.match(html, /data-view-practitioner-context/);
+    }
     assert.match(html, /\.view-tabs\{grid-template-columns:repeat\(4,minmax\(0,1fr\)\)/);
   }
   const monthHtml = renderCalendarPage(model('month'));

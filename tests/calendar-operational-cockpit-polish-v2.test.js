@@ -110,7 +110,8 @@ test('Week uses one shared vertical time rail and six Monday-Saturday day column
   assert.equal((html.match(/class="week-day"/g) || []).length, 6);
   assert.match(html, /class="time-rail"/);
   assert.match(html, /grid-template-columns:repeat\(6,minmax\(154px,1fr\)\)/);
-  assert.match(html, /@media\(max-width:700px\).*minmax\(78vw,1fr\)/s);
+  assert.match(html, /data-spatial-week="true"/);
+  assert.match(html, /@media\(max-width:700px\)[\s\S]*grid-template-columns:repeat\(6,minmax\(0,1fr\)\)!important/);
 });
 
 test('appointment management surface exposes only server-granted operations', () => {
@@ -158,8 +159,8 @@ test('narrow-screen contract keeps all control groups inside one mobile column',
   assert.match(html, /\.nav-button,\.view-tab,\.filter,\.scope-pill\{min-height:44px/);
   assert.match(html, /\.controls\{position:sticky;top:0;z-index:5;grid-template-columns:1fr;/);
   assert.doesNotMatch(html, /\.controls\{position:sticky;top:0;z-index:5;grid-template-columns:1fr 1fr;/);
-  assert.match(html, /minmax\(82vw,1fr\)/);
-  assert.match(html, /scroll-snap-type:x proximity/);
+  assert.match(html, /body\[data-calendar-view="week"\][\s\S]*\.week-grid\{display:grid!important;grid-template-columns:repeat\(6,minmax\(0,1fr\)\)!important/);
+  assert.match(html, /\.positioned-event\{position:absolute!important;[^}]*top:var\(--event-top\)!important/);
 });
 
 test('event card renderer escapes operational fields', () => {

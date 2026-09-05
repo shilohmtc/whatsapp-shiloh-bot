@@ -1,8 +1,11 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { workspaceShellStyles } = require('../src/presentation/workspaceShell');
-const { renderCalendarPage, renderEventCard } = require('../src/presentation/calendarReadOnlyUx');
+const {
+  renderCalendarPage,
+  renderEventCard,
+  spatialPhoneWeekStyles,
+} = require('../src/presentation/calendarReadOnlyUx');
 const { desktopAppointmentCardDensityCss } = require('../src/presentation/calendarServiceFamilyVisuals');
 const { staffCalendarAccessClientScript } = require('../src/presentation/staffCalendarAccessUx');
 
@@ -74,7 +77,7 @@ function weekModel({ selectedStaffId = null } = {}) {
       nextAnchor: '2026-09-14',
       dateKeys: [
         '2026-09-07', '2026-09-08', '2026-09-09', '2026-09-10',
-        '2026-09-11', '2026-09-12', '2026-09-13',
+        '2026-09-11', '2026-09-12',
       ],
     },
     timeline: {
@@ -93,24 +96,29 @@ function weekModel({ selectedStaffId = null } = {}) {
   };
 }
 
-test('Phone Week transforms the existing authorized Week DOM into a vertical day-grouped agenda', () => {
-  const css = workspaceShellStyles();
-
+test('Phone Week preserves a six-column spatial time grid instead of a stacked-card feed', () => {
+  const css = spatialPhoneWeekStyles();
   assert.match(css, /@media\(max-width:700px\)/);
-  assert.match(css, /\.workspace-main \.week-view \.time-rail\{display:none!important\}/);
-  assert.match(css, /\.workspace-main \.week-view \.week-grid\{display:grid!important;grid-template-columns:minmax\(0,1fr\)!important;min-width:0!important;width:100%!important/);
-  assert.match(css, /\.workspace-main \.week-view \.week-day:not\(:has\(\.positioned-event\)\):not\(:has\(\.closure-strip\)\):not\(:has\(\.all-day-row\)\)\{display:none!important\}/);
-  assert.match(css, /\.workspace-main \.week-view \.time-column\{position:static!important;height:auto!important;min-height:0!important;background:none!important;padding:8px!important;display:grid!important;gap:7px!important\}/);
-  assert.match(css, /\.workspace-main \.week-view \.positioned-event\{position:static!important;top:auto!important;left:auto!important;right:auto!important;width:auto!important;height:auto!important;min-height:0!important;overflow:visible!important;container-type:normal!important\}/);
+  assert.match(css, /\.week-time-grid\{display:grid!important;grid-template-columns:38px minmax\(0,1fr\)!important/);
+  assert.match(css, /\.time-rail\{display:block!important/);
+  assert.match(css, /\.week-grid\{display:grid!important;grid-template-columns:repeat\(6,minmax\(0,1fr\)\)!important/);
+  assert.match(css, /\.time-column\{position:relative!important;display:block!important;height:936px!important/);
+  assert.match(css, /\.positioned-event\{position:absolute!important;[^}]*top:var\(--event-top\)!important;[^}]*height:var\(--event-height\)!important/);
+  assert.doesNotMatch(css, /grid-template-columns:minmax\(0,1fr\)!important;min-width:0!important;width:100%!important;gap:10px/);
 });
 
 test('Phone Week preserves all permitted appointments from the canonical filtered Week model', () => {
   const html = renderCalendarPage(weekModel(), { clientNavigationAllowed: true });
 
   assert.match(html, /data-view="week"/);
+  assert.match(html, /data-spatial-week="true"/);
+  assert.equal((html.match(/class="week-day"/g) || []).length, 6);
+  assert.doesNotMatch(html, /data-date="2026-09-13"/);
+  assert.doesNotMatch(html, /data-view-practitioner-context|People in view/);
   assert.match(html, /Helen/);
   assert.match(html, /Melindi/);
   assert.match(html, /Elani Greyling F/);
+  assert.match(html, /class="positioned-event" style="--event-top:144px;--event-height:105px"/);
 });
 
 test('selected-practitioner Week scope remains constrained before Phone presentation', () => {
@@ -121,23 +129,20 @@ test('selected-practitioner Week scope remains constrained before Phone presenta
   assert.doesNotMatch(html, /Elani Greyling F/);
 });
 
-test('Phone Week appointment cards become auto-height scan cards with a 44px Manage contract', () => {
-  const css = workspaceShellStyles();
-
-  assert.match(css, /\.workspace-main \.week-view \.positioned-event \.event-card\{height:auto!important;min-height:0!important;padding:9px 10px!important\}/);
-  assert.match(css, /\.workspace-main \.week-view \.positioned-event \.event-meta\{display:flex!important;flex-wrap:wrap!important/);
-  assert.match(css, /\.workspace-main \.week-view \.positioned-event \.event-card-actions\{position:static!important;margin-top:7px!important;display:flex!important;align-items:center!important;justify-content:flex-end!important\}/);
-  assert.match(css, /\.workspace-main \.week-view \.positioned-event \.event-operation\{min-width:44px!important;min-height:44px!important\}/);
+test('Phone Week uses compact adaptive event content and the whole block as the touch-safe management target', () => {
+  const css = spatialPhoneWeekStyles();
+  assert.match(css, /\.positioned-event \.event-card\{position:relative!important;height:100%!important;min-height:44px!important;padding:3px 2px!important/);
+  assert.match(css, /\.event-time-range\{display:none!important\}/);
+  assert.match(css, /\.event-time-start\{display:inline!important\}/);
+  assert.match(css, /\.event-practitioner-full[^}]*\{display:none!important\}/);
+  assert.match(css, /\.event-practitioner-compact\{display:block!important/);
+  assert.match(css, /\.event-operation\{position:absolute!important;inset:0!important;[^}]*min-width:44px!important;min-height:44px!important;[^}]*opacity:0!important/);
 });
 
-test('very short Phone cards keep one treatment line and collapse practitioner/status first', () => {
-  const css = workspaceShellStyles();
-  const shortRule = css.match(/@container \(max-height:60px\)\{([\s\S]*?)\}@container \(min-height:61px\)/)?.[1] || '';
-
-  assert.match(shortRule, /\.event-meta\{display:block!important/);
-  assert.match(shortRule, /\.event-meta>span:not\(\.event-service-context\)\{display:none!important\}/);
-  assert.match(shortRule, /\.event-service-context>span:last-child\{display:block!important;min-width:0;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important/);
-  assert.doesNotMatch(shortRule, /\.event-meta\{display:none!important\}/);
+test('taller Phone Week appointments progressively reveal service context', () => {
+  const css = spatialPhoneWeekStyles();
+  assert.match(css, /@container \(min-height:84px\)/);
+  assert.match(css, /\.event-service-context\{display:flex!important/);
 });
 
 test('Manage/detail data contract remains unchanged for Phone cards', () => {
@@ -178,5 +183,8 @@ test('Desktop Week overlap and Desktop density remain explicitly desktop-gated',
 
   assert.match(desktopCss, /@media\(min-width:701px\)/);
   assert.match(clientScript, /matchMedia\('\(min-width: 701px\)'\)/);
+  assert.match(clientScript, /grid\.setAttribute\('data-week-overlap-layout','phone'\)/);
+  assert.match(clientScript, /--week-event-left/);
+  assert.match(clientScript, /--week-event-width/);
   assert.match(clientScript, /data-week-overlap-layout/);
 });

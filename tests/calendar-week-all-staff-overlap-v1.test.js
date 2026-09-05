@@ -6,8 +6,7 @@ const {
   allocateWeekOverlapLanes,
   staffCalendarAccessClientScript,
 } = require('../src/presentation/staffCalendarAccessUx');
-const { workspaceShellStyles } = require('../src/presentation/workspaceShell');
-const { renderEventCard } = require('../src/presentation/calendarReadOnlyUx');
+const { renderEventCard, spatialPhoneWeekStyles } = require('../src/presentation/calendarReadOnlyUx');
 
 function rectangle(id, top, height) {
   return { id, top, height };
@@ -85,7 +84,7 @@ test('Week overlap allocator handles partial visual overlaps and reuses the firs
   );
 });
 
-test('Week client layout is Desktop-only and expands only rendered day tracks', () => {
+test('Week client layout uses one allocator and expands tracks only on Desktop', () => {
   const script = staffCalendarAccessClientScript();
   assert.doesNotThrow(() => new vm.Script(script));
   assert.match(script, /\.week-view \.week-grid/);
@@ -96,12 +95,16 @@ test('Week client layout is Desktop-only and expands only rendered day tracks', 
   assert.match(script, /\.time-column > \.positioned-event/);
   assert.match(script, /removeProperty\('left'\)/);
   assert.match(script, /removeProperty\('width'\)/);
+  assert.match(script, /--week-event-left/);
+  assert.match(script, /--week-event-width/);
+  assert.match(script, /data-week-overlap-layout','phone/);
 });
 
-test('accepted Phone appointment-card touch contract remains protected', () => {
-  const phoneCss = workspaceShellStyles();
+test('spatial Phone appointments remain whole-card touch targets', () => {
+  const phoneCss = spatialPhoneWeekStyles();
   assert.match(phoneCss, /@media\(max-width:700px\)/);
-  assert.match(phoneCss, /\.workspace-main \.positioned-event \.event-operation\{min-width:44px!important;min-height:44px!important/);
+  assert.match(phoneCss, /\.positioned-event \.event-operation\{position:absolute!important;inset:0!important/);
+  assert.match(phoneCss, /min-width:44px!important;min-height:44px!important/);
 });
 
 test('Week visibility layout leaves Manage/detail mutation semantics unchanged', () => {
