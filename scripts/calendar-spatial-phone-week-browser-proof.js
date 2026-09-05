@@ -535,7 +535,11 @@ async function main() {
     console.log(`Authenticated Calendar-first Phone booking proof passed: ${screenshots.length} screenshots at ${exactHead}`);
   } finally {
     if (cdp) cdp.close();
-    if (chrome && !chrome.killed) chrome.kill('SIGTERM');
+    if (chrome && !chrome.killed) {
+      chrome.kill('SIGTERM');
+      await Promise.race([once(chrome, 'exit'), new Promise(resolve => setTimeout(resolve, 2_000))]);
+      if (chrome.exitCode == null) chrome.kill('SIGKILL');
+    }
     if (server) await new Promise(resolve => server.close(() => resolve()));
     fs.rmSync(directory, { recursive: true, force: true });
   }
