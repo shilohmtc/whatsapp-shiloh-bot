@@ -91,7 +91,7 @@ test('Week client layout uses one allocator and expands tracks only on Desktop',
   assert.match(script, /\(min-width: 701px\)/);
   assert.match(script, /data-week-overlap-layout/);
   assert.match(script, /gridTemplateColumns/);
-  assert.match(script, /baseLaneWidth=154/);
+  assert.match(script, /baseLaneWidth=190/);
   assert.match(script, /\.time-column > \.positioned-event/);
   assert.match(script, /removeProperty\('left'\)/);
   assert.match(script, /removeProperty\('width'\)/);

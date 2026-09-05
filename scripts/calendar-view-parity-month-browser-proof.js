@@ -205,6 +205,7 @@ const METRICS_EXPRESSION = `(() => {
     ownerLabelCount: visibleAll('.event-practitioners').length,
     sharedCopies: document.querySelectorAll('[data-event-id="appointment-9503"]').length,
     weekColumnCount: weekGrid ? getComputedStyle(weekGrid).gridTemplateColumns.split(' ').filter(Boolean).length : 0,
+    weekPractitionerHeaderCount: visibleAll('[data-week-practitioner-name]').length,
     weekEventPosition: firstWeekEvent ? getComputedStyle(firstWeekEvent).position : null,
     agendaCardCount: visibleAll('.agenda-view .event-card').length,
     monthCellCount: document.querySelectorAll('.month-day').length,
@@ -228,7 +229,7 @@ function assertMetrics(proof, metrics) {
   }
   if (metrics.rootScrollWidth > proof.width + 1) throw new Error(`${proof.name} leaked horizontal overflow to the page`);
   if (!metrics.viewVisible || metrics.view !== proof.view) throw new Error(`${proof.name} did not render the requested view`);
-  if (proof.view === 'week' || (proof.view === 'month' && proof.phone)) {
+  if (proof.view === 'month' && proof.phone) {
     if (metrics.contextVisible || metrics.practitionerCount !== 0 || !metrics.peopleSummary) {
       throw new Error(`${proof.name} retained redundant Phone calendar context or lost the top People summary: ${JSON.stringify(metrics)}`);
     }
@@ -240,10 +241,12 @@ function assertMetrics(proof, metrics) {
   }
   if (proof.expectShared && metrics.sharedCopies !== 1) throw new Error(`${proof.name} did not retain one shared canonical booking`);
   if (proof.view === 'week') {
-    if (proof.phone && (metrics.weekColumnCount !== 6 || metrics.weekEventPosition !== 'absolute')) {
+    const expectedWeekLanes = proof.staffCount * 6;
+    if (proof.phone && (metrics.weekColumnCount !== expectedWeekLanes || metrics.weekEventPosition !== 'absolute')) {
       throw new Error(`${proof.name} did not render the spatial Phone Week treatment`);
     }
-    if (!proof.phone && metrics.weekColumnCount !== 6) throw new Error(`${proof.name} did not retain the Desktop Monday-Saturday Week model`);
+    if (!proof.phone && metrics.weekColumnCount !== expectedWeekLanes) throw new Error(`${proof.name} did not retain the Desktop Monday-Saturday practitioner Week model`);
+    if (metrics.weekPractitionerHeaderCount !== expectedWeekLanes) throw new Error(`${proof.name} lost persistent Week practitioner headers`);
   }
   if (proof.view === 'agenda' && metrics.agendaCardCount < 2) throw new Error(`${proof.name} Agenda is missing canonical items`);
   if (proof.view === 'month') {

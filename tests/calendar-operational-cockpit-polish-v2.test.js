@@ -104,14 +104,15 @@ test('cockpit exposes labelled controls, scan summary and lane state', () => {
   assert.match(html, /class="positioned-event" style="--event-top:72px;--event-height:69px"/);
 });
 
-test('Week uses one shared vertical time rail and six readable Monday-Saturday day columns', () => {
+test('Week uses one shared vertical time rail and readable Monday-Saturday practitioner lanes', () => {
   const html = renderCalendarPage(model('week'));
   assert.match(html, /class="time-grid week-time-grid"/);
-  assert.equal((html.match(/class="week-day"/g) || []).length, 6);
+  assert.equal((html.match(/data-week-practitioner-lane/g) || []).length, 12);
+  assert.equal((html.match(/data-week-practitioner-name/g) || []).length, 12);
   assert.match(html, /class="time-rail"/);
-  assert.match(html, /grid-template-columns:repeat\(6,minmax\(154px,1fr\)\)/);
+  assert.match(html, /grid-template-columns:repeat\(var\(--week-lane-count\),minmax\(190px,1fr\)\)/);
   assert.match(html, /data-spatial-week="true"/);
-  assert.match(html, /@media\(max-width:700px\)[\s\S]*grid-template-columns:repeat\(6,220px\)!important;min-width:1320px!important/);
+  assert.match(html, /@media\(max-width:700px\)[\s\S]*grid-template-columns:repeat\(var\(--week-lane-count\),220px\)!important;min-width:calc\(var\(--week-lane-count\) \* 220px\)!important/);
 });
 
 test('appointment management surface exposes only server-granted operations', () => {
@@ -165,7 +166,7 @@ test('narrow-screen contract keeps the compact Phone controls and spatial Week s
   assert.match(html, /\.controls\{position:sticky;top:0;z-index:5;grid-template-columns:1fr;/);
   assert.doesNotMatch(html, /\.controls\{position:sticky;top:0;z-index:5;grid-template-columns:1fr 1fr;/);
   assert.match(html, /body\[data-calendar-view="week"\][\s\S]*\.week-time-grid\{display:grid!important;grid-template-columns:44px max-content!important;overflow-x:auto!important/);
-  assert.match(html, /body\[data-calendar-view="week"\][\s\S]*\.week-grid\{display:grid!important;grid-template-columns:repeat\(6,220px\)!important;min-width:1320px!important/);
+  assert.match(html, /body\[data-calendar-view="week"\][\s\S]*\.week-grid\{display:grid!important;grid-template-columns:repeat\(var\(--week-lane-count\),220px\)!important;min-width:calc\(var\(--week-lane-count\) \* 220px\)!important/);
   assert.match(html, /\.positioned-event\{position:absolute!important;[^}]*top:var\(--event-top\)!important/);
 });
 

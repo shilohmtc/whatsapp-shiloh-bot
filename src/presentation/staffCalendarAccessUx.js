@@ -172,7 +172,7 @@ function applyWeekOverlapLayout(){
     return;
   }
 
-  var baseLaneWidth=154;
+  var baseLaneWidth=190;
   grid.style.gridTemplateColumns=laneCounts.map(function(count){
     return 'minmax('+(baseLaneWidth*count)+'px,'+count+'fr)';
   }).join(' ');

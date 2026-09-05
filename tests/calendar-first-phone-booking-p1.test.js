@@ -90,14 +90,16 @@ test('Day and Week expose touch-safe empty-time links into the existing Create B
   assert.doesNotMatch(render('day', [31], false), /data-calendar-booking-slot/);
 });
 
-test('multi-practitioner calendar slots omit practitioner prefill while preserving selected People in view links', () => {
+test('multi-practitioner Week slots preserve People and identify practitioner date and time', () => {
   const html = render('week', [31, 33]);
   assert.match(html, /data-people-selection-summary>2 staff/);
   assert.match(html, /data-calendar-view-option="day"[^>]*staff=31&amp;staff=33/);
   assert.match(html, /data-calendar-view-option="month"[^>]*staff=31&amp;staff=33/);
-  const slotHref = html.match(/data-calendar-booking-slot[^>]*href="([^"]+)"/)?.[1] || '';
-  assert.match(slotHref, /date=2026-09-07&amp;time=07%3A00/);
-  assert.doesNotMatch(slotHref, /staff=/);
+  assert.equal((html.match(/data-week-practitioner-lane/g) || []).length, 12);
+  assert.equal((html.match(/data-calendar-booking-slot data-date/g) || []).length, 156);
+  assert.match(html, /data-date="2026-09-07" data-staff-id="31"[\s\S]*?data-calendar-booking-slot[^>]*href="\/calendar\/book\?date=2026-09-07&amp;time=07%3A00&amp;staff=31"/);
+  assert.match(html, /data-date="2026-09-07" data-staff-id="33"[\s\S]*?data-calendar-booking-slot[^>]*href="\/calendar\/book\?date=2026-09-07&amp;time=07%3A00&amp;staff=33"/);
+  assert.match(html, /aria-label="Create booking on Monday, 07 September 2026 at 07:00 for Amber Room"/);
 
   const day = render('day', [31, 33]);
   assert.match(day, /data-staff-id="31"[\s\S]*?data-calendar-booking-slot[^>]*href="\/calendar\/book\?date=2026-09-07&amp;time=07%3A00&amp;staff=31"/);
@@ -107,8 +109,9 @@ test('multi-practitioner calendar slots omit practitioner prefill while preservi
 test('Phone Week uses an intentional calendar scroller and readable day width instead of six crushed columns', () => {
   const css = calendarFirstPhoneStyles();
   assert.match(css, /week-time-grid\{display:grid!important;grid-template-columns:44px max-content!important;overflow-x:auto!important/);
-  assert.match(css, /week-grid\{display:grid!important;grid-template-columns:repeat\(6,220px\)!important;min-width:1320px!important/);
+  assert.match(css, /week-grid\{display:grid!important;grid-template-columns:repeat\(var\(--week-lane-count\),220px\)!important;min-width:calc\(var\(--week-lane-count\) \* 220px\)!important/);
   assert.match(css, /week-day\{[^}]*min-width:220px!important;width:220px!important/);
+  assert.match(css, /week-practitioner-name\{[^}]*font-size:\.82rem!important/);
   assert.match(css, /event-card h4[^}]*white-space:nowrap!important[^}]*overflow-wrap:normal!important;word-break:normal!important/);
   assert.doesNotMatch(render('week'), /grid-template-columns:repeat\(6,minmax\(0,1fr\)\)!important/);
 });

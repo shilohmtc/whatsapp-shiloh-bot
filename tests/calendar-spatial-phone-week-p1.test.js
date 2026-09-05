@@ -99,9 +99,10 @@ test('People summary and controls never disclose a crafted unauthorized practiti
   assert.doesNotMatch(html, /Staff 999|Outside Scope|value="999"/);
 });
 
-test('Week retires internal People context while Agenda and Month retain attribution context', () => {
+test('Week retains practitioner context and lane headers while Agenda and Month retain attribution context', () => {
   const week = renderCalendarPage(model('week'));
-  assert.doesNotMatch(week, /data-view-practitioner-context|People in view/);
+  assert.match(week, /data-view-practitioner-context|People in view/);
+  assert.equal((week.match(/data-week-practitioner-name/g) || []).length, 18);
   assert.match(week, /class="event-practitioners"/);
   for (const view of ['agenda', 'month']) {
     assert.match(renderCalendarPage(model(view)), /data-view-practitioner-context/);
@@ -110,7 +111,8 @@ test('Week retires internal People context while Agenda and Month retain attribu
 
 test('Week stays Monday-Saturday even when handed a crafted Sunday display key', () => {
   const html = renderCalendarPage(model('week', [31, 32, 33], { includeSundayInCraftedPeriod: true }));
-  assert.equal((html.match(/class="week-day"/g) || []).length, 6);
+  assert.equal((html.match(/data-week-practitioner-lane/g) || []).length, 18);
+  assert.equal(new Set(Array.from(html.matchAll(/data-week-practitioner-lane data-date="([^"]+)"/g), match => match[1])).size, 6);
   assert.match(html, /data-date="2026-09-07"/);
   assert.match(html, /data-date="2026-09-12"/);
   assert.doesNotMatch(html, /data-date="2026-09-13"|Crafted Sunday Client/);
@@ -160,6 +162,8 @@ test('authenticated browser proof mounts canonical Calendar and Create Booking r
   assert.match(source, /createCalendarReadOnlyRouter\(\{/);
   assert.match(source, /createCalendarCreateBookingRouter\(\{/);
   assert.match(source, /phone-empty-slot-create-booking-prefill/);
+  assert.match(source, /phone-week-practitioner-slot-booking-prefill/);
+  assert.match(source, /data-week-practitioner-lane/);
   assert.match(source, /phone-month-overview-navigation/);
   assert.doesNotMatch(source, /calendarReadOnlyRoutes\(\{/);
 });

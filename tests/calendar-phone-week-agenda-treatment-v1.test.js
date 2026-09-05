@@ -100,7 +100,7 @@ test('Phone Week preserves a legible horizontally pannable spatial time grid ins
   const css = calendarFirstPhoneStyles();
   assert.match(css, /@media\(max-width:700px\)/);
   assert.match(css, /\.week-time-grid\{display:grid!important;grid-template-columns:44px max-content!important;overflow-x:auto!important/);
-  assert.match(css, /\.week-grid\{display:grid!important;grid-template-columns:repeat\(6,220px\)!important;min-width:1320px!important/);
+  assert.match(css, /\.week-grid\{display:grid!important;grid-template-columns:repeat\(var\(--week-lane-count\),220px\)!important;min-width:calc\(var\(--week-lane-count\) \* 220px\)!important/);
   assert.match(css, /\.week-day\{position:relative!important;display:block!important;min-width:220px!important;width:220px!important/);
   assert.match(css, /\.time-column\{height:936px!important;min-height:936px!important/);
   assert.match(css, /\.positioned-event\{position:absolute!important;[^}]*top:var\(--event-top\)!important;[^}]*height:var\(--event-height\)!important/);
@@ -112,9 +112,11 @@ test('Phone Week preserves all permitted appointments from the canonical filtere
 
   assert.match(html, /data-view="week"/);
   assert.match(html, /data-spatial-week="true"/);
-  assert.equal((html.match(/class="week-day"/g) || []).length, 6);
+  assert.equal((html.match(/data-week-practitioner-lane/g) || []).length, 12);
   assert.doesNotMatch(html, /data-date="2026-09-13"/);
-  assert.doesNotMatch(html, /data-view-practitioner-context|People in view/);
+  assert.match(html, /data-view-practitioner-context|People in view/);
+  assert.match(html, /data-week-practitioner-name>Abigail</);
+  assert.match(html, /data-week-practitioner-name>ILince</);
   assert.match(html, /Helen/);
   assert.match(html, /Melindi/);
   assert.match(html, /Elani Greyling F/);

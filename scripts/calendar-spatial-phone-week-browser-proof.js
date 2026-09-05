@@ -276,6 +276,8 @@ const METRICS = `(() => {
   const nav=document.querySelector('.workspace-nav');
   const frame=document.querySelector('.workspace-frame');
   const navTargets=Array.from(document.querySelectorAll('.workspace-nav a,.workspace-nav button')).filter(visible);
+  const weekLanes=Array.from(document.querySelectorAll('[data-week-practitioner-lane]'));
+  const practitionerHeaders=Array.from(document.querySelectorAll('[data-week-practitioner-name]')).filter(visible);
   return {
     viewport:{width:innerWidth,height:innerHeight,screenWidth:screen.width,screenHeight:screen.height},
     rootScrollWidth:document.documentElement.scrollWidth,
@@ -285,6 +287,10 @@ const METRICS = `(() => {
     firstDayWidth:document.querySelector('.week-day')?.getBoundingClientRect().width||0,
     weekColumns:weekGrid?getComputedStyle(weekGrid).gridTemplateColumns.split(' ').filter(Boolean).length:0,
     dayColumns:document.querySelectorAll('.week-day').length,
+    uniqueWeekDates:Array.from(new Set(weekLanes.map(node=>node.dataset.date))).length,
+    weekPractitionerHeaderCount:practitionerHeaders.length,
+    weekPractitionerHeaders:practitionerHeaders.map(node=>node.textContent.trim()),
+    weekLaneStaffIds:Array.from(new Set(weekLanes.map(node=>node.dataset.staffId))),
     sundayColumns:Array.from(document.querySelectorAll('.week-day')).filter(node=>new Date(node.dataset.date+'T12:00:00Z').getUTCDay()===0).length,
     timeRailVisible:visible(rail),
     firstEventPosition:events.length?getComputedStyle(events[0]).position:null,
@@ -373,15 +379,18 @@ async function main() {
     await poll(() => evaluate(cdp, 'location.pathname'), value => value === '/calendar/read-only');
     await poll(() => evaluate(cdp, `document.querySelector('.week-grid')?.getAttribute('data-week-overlap-layout')`), value => value === 'desktop');
     const desktopMetrics = await evaluate(cdp, METRICS);
-    assert.equal(desktopMetrics.weekColumns, 6);
-    assert.equal(desktopMetrics.dayColumns, 6);
+    assert.equal(desktopMetrics.weekColumns, 18);
+    assert.equal(desktopMetrics.dayColumns, 18);
+    assert.equal(desktopMetrics.uniqueWeekDates, 6);
+    assert.equal(desktopMetrics.weekPractitionerHeaderCount, 18);
+    assert.deepEqual(desktopMetrics.weekLaneStaffIds, ['51', '52', '53']);
     assert.equal(desktopMetrics.sundayColumns, 0);
-    assert.equal(desktopMetrics.peopleContextPresent, false);
+    assert.equal(desktopMetrics.peopleContextPresent, true);
     assert.equal(desktopMetrics.peopleSummary, 'All staff');
     assert.equal(desktopMetrics.sharedCopies, 1);
     assert.match(desktopMetrics.practitionerOwnership, /Amber Room \+ Birch Room/);
     assert.equal(desktopMetrics.firstEventPosition, 'absolute');
-    assert.equal(desktopMetrics.bookingSlots, 78);
+    assert.equal(desktopMetrics.bookingSlots, 234);
     const screenshots = [{ ...(await capture('desktop-week-multiple-practitioners')), viewport: { width: 1440, height: 1000 }, metrics: desktopMetrics }];
 
     await cdp.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true, screenWidth: 390, screenHeight: 844 });
@@ -435,23 +444,29 @@ async function main() {
     const phoneMetrics = await evaluate(cdp, METRICS);
     assert.deepEqual(phoneMetrics.viewport, { width: 390, height: 844, screenWidth: 390, screenHeight: 844 });
     assert.ok(phoneMetrics.rootScrollWidth <= 391, 'Phone Week leaked horizontal overflow to the page');
-    assert.equal(phoneMetrics.weekColumns, 6);
+    assert.equal(phoneMetrics.weekColumns, 18);
     assert.ok(phoneMetrics.firstDayWidth >= 220, 'Phone Week day column is not readable');
     assert.ok(phoneMetrics.weekScrollerScrollWidth > phoneMetrics.weekScrollerClientWidth * 2, 'Phone Week is not an intentional horizontal calendar scroller');
-    assert.equal(phoneMetrics.dayColumns, 6);
+    assert.equal(phoneMetrics.dayColumns, 18);
+    assert.equal(phoneMetrics.uniqueWeekDates, 6);
+    assert.equal(phoneMetrics.weekPractitionerHeaderCount, 18);
+    assert.deepEqual(phoneMetrics.weekLaneStaffIds, ['51', '52', '53']);
+    assert.ok(phoneMetrics.weekPractitionerHeaders.includes('Amber Room'));
+    assert.ok(phoneMetrics.weekPractitionerHeaders.includes('Birch Room'));
+    assert.ok(phoneMetrics.weekPractitionerHeaders.includes('Cedar Room'));
     assert.equal(phoneMetrics.sundayColumns, 0);
     assert.equal(phoneMetrics.timeRailVisible, true);
     assert.equal(phoneMetrics.firstEventPosition, 'absolute');
     assert.equal(phoneMetrics.firstEventTop, 72);
     assert.ok(phoneMetrics.twoHourHeight > phoneMetrics.oneHourHeight * 1.7, 'Phone event height did not preserve canonical duration');
-    assert.equal(phoneMetrics.peopleContextPresent, false);
+    assert.equal(phoneMetrics.peopleContextPresent, true);
     assert.equal(phoneMetrics.peopleSummary, 'All staff');
     assert.equal(phoneMetrics.sharedCopies, 1);
     assert.match(phoneMetrics.practitionerOwnership, /Amber Room \+ Birch Room/);
     assert.equal(phoneMetrics.overlapLayout, 'phone');
     assert.deepEqual(phoneMetrics.visibleViewOptions, ['day', 'week', 'month']);
     assert.ok(phoneMetrics.viewLinks.every(href => href.includes('staff=51') && href.includes('staff=52') && href.includes('staff=53')), 'People state was not preserved from Week to other views');
-    assert.equal(phoneMetrics.bookingSlots, 78);
+    assert.equal(phoneMetrics.bookingSlots, 234);
     assert.equal(phoneMetrics.manageOpacity, 0);
     assert.ok(phoneMetrics.manageWidth >= 44 && phoneMetrics.manageHeight >= 44, 'Phone event management target is below 44px');
     assert.ok(phoneMetrics.minNavTargetHeight >= 44, 'Phone bottom navigation has a target below 44px');
@@ -471,6 +486,25 @@ async function main() {
     screenshots.push({ ...(await capture('phone-people-selector-open')), viewport: { width: 390, height: 844 }, metrics: peopleOpenMetrics });
     await evaluate(cdp, `document.querySelector('[data-people-picker] summary').click();true`);
 
+    await evaluate(cdp, `document.querySelector('.week-time-grid').scrollLeft=0;true`);
+    await evaluate(cdp, `document.querySelector('[data-week-practitioner-lane][data-date="2026-09-07"][data-staff-id="52"] [data-calendar-booking-slot][data-time="11:00"]').click();true`);
+    await poll(() => evaluate(cdp, 'location.pathname'), value => value === '/calendar/book');
+    await poll(() => evaluate(cdp, 'document.readyState'), value => value === 'complete');
+    const weekBookingPrefillMetrics = await evaluate(cdp, `(() => ({
+      viewport:{width:innerWidth,height:innerHeight,screenWidth:screen.width,screenHeight:screen.height},
+      date:document.querySelector('#booking-date')?.value||'',
+      time:document.querySelector('#booking-time')?.value||'',
+      prefill:JSON.parse(document.querySelector('#calendar-booking-options')?.textContent||'{}').prefill,
+      backHref:document.querySelector('[data-back-calendar]')?.getAttribute('href')||'',
+    }))()`);
+    assert.equal(weekBookingPrefillMetrics.date, '2026-09-07');
+    assert.equal(weekBookingPrefillMetrics.time, '11:00');
+    assert.deepEqual(weekBookingPrefillMetrics.prefill, { date: '2026-09-07', time: '11:00', staffId: 52 });
+    assert.match(weekBookingPrefillMetrics.backHref, /staff=52/);
+    screenshots.push({ ...(await capture('phone-week-practitioner-slot-booking-prefill')), viewport: { width: 390, height: 844 }, metrics: weekBookingPrefillMetrics });
+
+    await navigate(`${origin}/calendar/read-only?view=week&date=${DATE_KEY}&staff=51&staff=52&staff=53`, '.week-grid');
+    await poll(() => evaluate(cdp, `document.querySelector('.week-grid')?.getAttribute('data-week-overlap-layout')`), Boolean);
     await evaluate(cdp, `document.querySelector('.week-time-grid').scrollLeft=0;true`);
     await evaluate(cdp, `document.querySelector('[data-event-id="appointment-9804"] [data-calendar-operation="manage-appointment"]').click();true`);
     await poll(() => evaluate(cdp, `document.querySelector('[data-calendar-management-panel]').open`), Boolean);
