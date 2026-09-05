@@ -41,6 +41,7 @@ test('shared Workspace shell replaces the Phone bottom bar with a hidden left dr
   assert.match(css, /\.workspace-nav\.open\{transform:translateX\(0\)\}/);
   assert.match(css, /\.workspace-nav-backdrop\.open\{opacity:1;pointer-events:auto\}/);
   assert.match(css, /env\(safe-area-inset-bottom\)/);
+  assert.match(css, /\.workspace-links\{display:grid;grid-template-columns:minmax\(0,1fr\);align-content:start/);
   assert.match(css, /\.workspace-link\{min-width:0;min-height:44px/);
   assert.match(css, /\.workspace-secondary-links\{display:none;position:static/);
   assert.match(css, /\.workspace-secondary-links\.open\{display:grid/);
