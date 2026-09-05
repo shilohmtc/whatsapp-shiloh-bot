@@ -202,6 +202,16 @@ function decorateBookingEntry(html, dateKey, bookingPath = '/calendar/book') {
     .replace('Read-only operational view. Booking, reschedule, cancellation, block, leave and schedule mutations are not available here.', 'Timeline remains read-only. Use Create booking to add an appointment. Reschedule, cancellation, drag/drop, reassignment, block, leave and schedule changes are not available here.');
 }
 
+function resolveActiveWeekStaffId(requested, model) {
+  const visibleStaffIds = (model?.timeline?.staff || [])
+    .map(person => Number(person.id))
+    .filter(id => Number.isSafeInteger(id) && id > 0);
+  const fallback = visibleStaffIds[0] || null;
+  if (Array.isArray(requested) || !/^\d+$/.test(String(requested || ''))) return fallback;
+  const requestedId = Number(requested);
+  return visibleStaffIds.includes(requestedId) ? requestedId : fallback;
+}
+
 function createCalendarReadOnlyHandler({
   env = process.env,
   buildModel = calendarReadOnlyUx.buildModel,
@@ -272,6 +282,7 @@ function createCalendarReadOnlyHandler({
 
       const renderedModel = {
         ...model,
+        activeStaffId: resolveActiveWeekStaffId(req.query?.activeStaff, model),
         mutationCapability: mutationCapability ? { ...mutationCapability, enabled: true } : { enabled: false },
       };
       const basePath = req.baseUrl || '/calendar/read-only';
@@ -329,3 +340,4 @@ module.exports.bookingOperationalActions = bookingOperationalActions;
 module.exports.renderMobileStaffOverview = renderMobileStaffOverview;
 module.exports.mobileStaffOverviewStyles = mobileStaffOverviewStyles;
 module.exports.applyCalendarResponsivePolish = applyCalendarResponsivePolish;
+module.exports.resolveActiveWeekStaffId = resolveActiveWeekStaffId;

@@ -185,10 +185,12 @@ function stripExternalScripts(html) {
 
 function instrument(html) {
   const probe = `<pre id="mobile-proof-metrics" hidden></pre><script>(function(){
-    function visible(el){if(!el)return false;var s=getComputedStyle(el);var r=el.getBoundingClientRect();return s.display!=='none'&&s.visibility!=='hidden'&&r.width>0&&r.height>0;}
+    function visible(el){if(!el)return false;var s=getComputedStyle(el);var r=el.getBoundingClientRect();return s.display!=='none'&&s.visibility!=='hidden'&&r.width>0&&r.height>0&&r.right>0&&r.left<window.innerWidth&&r.bottom>0&&r.top<window.innerHeight;}
     function rect(el){var r=el.getBoundingClientRect();return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,width:r.width,height:r.height};}
     var root=document.documentElement;
     var nav=document.querySelector('.workspace-nav');
+    var menuToggle=document.querySelector('[data-workspace-drawer-toggle]');
+    var frame=document.querySelector('.workspace-frame');
     var navLinks=Array.from(document.querySelectorAll('.workspace-link')).filter(visible);
     var targets=Array.from(document.querySelectorAll('.workspace-link,button,.button,.pager-link,.nav-button,.view-tab,.filter,.action-link')).filter(visible);
     var primary=Array.from(document.querySelectorAll('.client-row,.staff-row,.service-row,.panel,.profile-panel,.history-panel,.calendar-view,.controls,.scan-summary')).filter(visible);
@@ -202,9 +204,11 @@ function instrument(html) {
       rootScrollWidth:root.scrollWidth,
       noPageOverflow:root.scrollWidth <= window.innerWidth + 1,
       navPosition:nav?getComputedStyle(nav).position:null,
-      navBottomGap:nav?Math.abs(window.innerHeight-nav.getBoundingClientRect().bottom):null,
+      navRight:nav?nav.getBoundingClientRect().right:null,
       visibleNavLinks:navLinks.length,
       minNavHeight:navLinks.length?Math.min.apply(null,navLinks.map(function(el){return rect(el).height;})):0,
+      menuHeight:menuToggle?rect(menuToggle).height:0,
+      framePaddingBottom:frame?parseFloat(getComputedStyle(frame).paddingBottom)||0:0,
       minTouchHeight:targets.length?Math.min.apply(null,targets.map(function(el){return rect(el).height;})):0,
       overflowingPrimary:overflowingPrimary,
       controlsPosition:controls?getComputedStyle(controls).position:null,
@@ -268,8 +272,8 @@ for (const proof of cases) {
   }
   const metrics = parseMetrics(dump.stdout, proof.name);
   if (!metrics.noPageOverflow) throw new Error(`${proof.name} has page overflow: ${metrics.rootScrollWidth}px > ${metrics.innerWidth}px`);
-  if (metrics.navPosition !== 'fixed' || metrics.navBottomGap > 2) throw new Error(`${proof.name} does not use the fixed phone navigation`);
-  if (metrics.visibleNavLinks < 3 || metrics.minNavHeight < 47) throw new Error(`${proof.name} mobile navigation is too small or incomplete`);
+  if (metrics.navPosition !== 'fixed' || metrics.navRight > 1) throw new Error(`${proof.name} does not keep Phone navigation hidden off-canvas`);
+  if (metrics.visibleNavLinks !== 0 || metrics.menuHeight < 44 || metrics.framePaddingBottom !== 0) throw new Error(`${proof.name} still reserves persistent Phone navigation space`);
   if (metrics.minTouchHeight < 43) throw new Error(`${proof.name} has a touch target below 43px (${metrics.minTouchHeight})`);
   if (metrics.overflowingPrimary.length) throw new Error(`${proof.name} primary content exceeds viewport: ${metrics.overflowingPrimary.join(', ')}`);
   if (proof.controlLayout === 'calendar-first' && (metrics.controlsPosition !== 'relative' || String(metrics.controlsColumns).trim().split(/\s+/).length !== 2)) {
@@ -303,7 +307,7 @@ fs.writeFileSync(path.join(outDir, 'manifest.json'), `${JSON.stringify({
   providerNetworkCalls: 0,
   permissionMutations: 0,
   assertions: {
-    fixedPhoneNavigation: true,
+    hiddenPhoneNavigationDrawer: true,
     noRootPageOverflow: true,
     minimumTouchTargetPx: 43,
     calendarControlsSingleColumn: true,

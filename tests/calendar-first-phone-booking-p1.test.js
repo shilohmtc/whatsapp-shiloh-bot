@@ -5,6 +5,7 @@ const {
   renderCalendarPage,
   renderOperationalActions,
   calendarFirstPhoneStyles,
+  goldieDensityPhoneStyles,
 } = require('../src/presentation/calendarReadOnlyUx');
 const { periodFor } = require('../src/services/calendarReadOnlyUx');
 const { bookingOperationalActions, applyCalendarResponsivePolish } = require('../src/routes/calendarReadOnlyUx');
@@ -106,14 +107,17 @@ test('multi-practitioner Week slots preserve People and identify practitioner da
   assert.match(day, /data-staff-id="33"[\s\S]*?data-calendar-booking-slot[^>]*href="\/calendar\/book\?date=2026-09-07&amp;time=07%3A00&amp;staff=33"/);
 });
 
-test('Phone Week uses an intentional calendar scroller and readable day width instead of six crushed columns', () => {
-  const css = calendarFirstPhoneStyles();
-  assert.match(css, /week-time-grid\{display:grid!important;grid-template-columns:44px max-content!important;overflow-x:auto!important/);
-  assert.match(css, /week-grid\{display:grid!important;grid-template-columns:repeat\(var\(--week-lane-count\),220px\)!important;min-width:calc\(var\(--week-lane-count\) \* 220px\)!important/);
-  assert.match(css, /week-day\{[^}]*min-width:220px!important;width:220px!important/);
-  assert.match(css, /week-practitioner-name\{[^}]*font-size:\.82rem!important/);
-  assert.match(css, /event-card h4[^}]*white-space:nowrap!important[^}]*overflow-wrap:normal!important;word-break:normal!important/);
-  assert.doesNotMatch(render('week'), /grid-template-columns:repeat\(6,minmax\(0,1fr\)\)!important/);
+test('Phone Week uses one active practitioner with six readable spatial day columns', () => {
+  const css = goldieDensityPhoneStyles();
+  assert.match(css, /week-time-grid\{grid-template-columns:42px max-content!important;max-height:calc\(100dvh - 158px\)!important/);
+  assert.match(css, /week-grid\{grid-template-columns:repeat\(6,170px\)!important;min-width:1020px!important/);
+  assert.match(css, /data-active-practitioner="false"\]\{display:none!important\}/);
+  assert.match(css, /week-day\{min-width:170px!important;width:170px!important/);
+  assert.match(css, /compact-week-practitioner-picker\{position:relative;display:block/);
+  assert.match(calendarFirstPhoneStyles(), /event-card h4[^}]*white-space:nowrap!important[^}]*overflow-wrap:normal!important;word-break:normal!important/);
+  const html = render('week', [31, 33]);
+  assert.equal((html.match(/<section class="week-day week-practitioner-lane"[^>]*data-active-practitioner="true"/g) || []).length, 6);
+  assert.equal((html.match(/<section class="week-day week-practitioner-lane"[^>]*data-active-practitioner="false"/g) || []).length, 6);
 });
 
 test('Phone Calendar keeps Day Week Month primary and Month remains overview navigation only', () => {

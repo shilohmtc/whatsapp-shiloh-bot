@@ -264,9 +264,11 @@ function visibleStaffIdsForModel(model) {
   return (model?.timeline?.staff || []).map(person => Number(person.id)).filter(Number.isSafeInteger);
 }
 
-function queryHref(basePath, view, date, staffIds) {
+function queryHref(basePath, view, date, staffIds, { activeStaffId = null } = {}) {
   const params = new URLSearchParams({ view, date });
   for (const staffId of staffIds || []) params.append('staff', String(staffId));
+  const normalizedActiveStaffId = Number(activeStaffId);
+  if (Number.isSafeInteger(normalizedActiveStaffId) && normalizedActiveStaffId > 0) params.set('activeStaff', String(normalizedActiveStaffId));
   return `${basePath}?${params.toString()}`;
 }
 
@@ -295,14 +297,14 @@ function renderControls(model, basePath) {
         : 'No staff';
   const canSwitchPractitioner = permittedStaff.length > 1;
   const filterContent = canSwitchPractitioner
-    ? `<details class="people-picker" data-people-picker><summary><span>People</span><strong data-people-selection-summary>${escapeHtml(peopleSummary)}</strong></summary><form class="people-form" method="get" action="${escapeHtml(basePath)}" data-practitioner-visibility-form><input type="hidden" name="view" value="${escapeHtml(model.view)}"><input type="hidden" name="date" value="${escapeHtml(model.dateKey)}"><fieldset><legend class="sr-only">Visible practitioners</legend>${permittedStaff.map(person => `<label><input type="checkbox" name="staff" value="${escapeHtml(person.id)}"${visible.has(Number(person.id)) ? ' checked' : ''}><span>${escapeHtml(person.displayName)}</span></label>`).join('')}</fieldset><div class="people-actions"><button class="filter" type="submit">Apply</button><a class="filter" href="${escapeHtml(queryHref(basePath, model.view, model.dateKey, permittedStaff.map(person => person.id)))}">Show all</a></div><p data-people-selection-status>${selectedPermittedStaff.length} of ${permittedStaff.length} visible</p></form></details>`
+    ? `<details class="people-picker" data-people-picker><summary><span>People</span><strong data-people-selection-summary>${escapeHtml(peopleSummary)}</strong></summary><form class="people-form" method="get" action="${escapeHtml(basePath)}" data-practitioner-visibility-form><input type="hidden" name="view" value="${escapeHtml(model.view)}"><input type="hidden" name="date" value="${escapeHtml(model.dateKey)}">${model.activeStaffId ? `<input type="hidden" name="activeStaff" value="${escapeHtml(model.activeStaffId)}">` : ''}<fieldset><legend class="sr-only">Visible practitioners</legend>${permittedStaff.map(person => `<label><input type="checkbox" name="staff" value="${escapeHtml(person.id)}"${visible.has(Number(person.id)) ? ' checked' : ''}><span>${escapeHtml(person.displayName)}</span></label>`).join('')}</fieldset><div class="people-actions"><button class="filter" type="submit">Apply</button><a class="filter" href="${escapeHtml(queryHref(basePath, model.view, model.dateKey, permittedStaff.map(person => person.id), { activeStaffId: model.activeStaffId }))}">Show all</a></div><p data-people-selection-status>${selectedPermittedStaff.length} of ${permittedStaff.length} visible</p></form></details>`
     : `<span class="scope-pill">${escapeHtml(permittedStaff[0]?.displayName || 'Permitted practitioner')} • your permitted timeline</span>`;
-  const viewLinks = ['day', 'week', 'agenda', 'month'].map(view => `<a class="view-tab ${model.view === view ? 'active' : ''}" data-calendar-view-option="${view}" ${model.view === view ? 'aria-current="page"' : ''} href="${escapeHtml(queryHref(basePath, view, model.dateKey, visibleStaffIds))}">${view[0].toUpperCase()}${view.slice(1)}</a>`).join('');
+  const viewLinks = ['day', 'week', 'agenda', 'month'].map(view => `<a class="view-tab ${model.view === view ? 'active' : ''}" data-calendar-view-option="${view}" ${model.view === view ? 'aria-current="page"' : ''} href="${escapeHtml(queryHref(basePath, view, model.dateKey, visibleStaffIds, { activeStaffId: model.activeStaffId }))}">${view[0].toUpperCase()}${view.slice(1)}</a>`).join('');
   return `<section class="controls" aria-label="Calendar controls">
     <div class="control-group"><span class="control-label">Date</span><div class="period-nav">
-      <a class="nav-button" href="${escapeHtml(queryHref(basePath, model.view, model.period.previousAnchor, visibleStaffIds))}" aria-label="Previous period"><span aria-hidden="true">←</span><span class="nav-word">Previous</span></a>
-      <a class="nav-button today" href="${escapeHtml(queryHref(basePath, model.view, today, visibleStaffIds))}">Today</a>
-      <a class="nav-button" href="${escapeHtml(queryHref(basePath, model.view, model.period.nextAnchor, visibleStaffIds))}" aria-label="Next period"><span class="nav-word">Next</span><span aria-hidden="true">→</span></a>
+      <a class="nav-button" href="${escapeHtml(queryHref(basePath, model.view, model.period.previousAnchor, visibleStaffIds, { activeStaffId: model.activeStaffId }))}" aria-label="Previous period"><span aria-hidden="true">←</span><span class="nav-word">Previous</span></a>
+      <a class="nav-button today" href="${escapeHtml(queryHref(basePath, model.view, today, visibleStaffIds, { activeStaffId: model.activeStaffId }))}">Today</a>
+      <a class="nav-button" href="${escapeHtml(queryHref(basePath, model.view, model.period.nextAnchor, visibleStaffIds, { activeStaffId: model.activeStaffId }))}" aria-label="Next period"><span class="nav-word">Next</span><span aria-hidden="true">→</span></a>
     </div></div>
     <div class="control-group"><span class="control-label">View</span><nav class="view-tabs" aria-label="Calendar view">${viewLinks}</nav></div>
     <div class="control-group practitioner-control"><span class="control-label">Practitioners</span><div class="filters" style="overflow:visible" aria-label="Practitioner visibility">${filterContent}</div></div>
@@ -425,8 +427,25 @@ function renderViewPractitionerContext(model) {
   return `<section class="view-practitioner-context" data-view-practitioner-context aria-label="Practitioners in this ${escapeHtml(model.view)} view"><span class="section-label">People in view</span><div class="view-practitioner-list">${staff.map(person => `<span class="view-practitioner" data-staff-id="${escapeHtml(person.id)}"><span class="status-dot" aria-hidden="true"></span>${escapeHtml(person.displayName || `Staff ${person.id}`)}</span>`).join('')}</div></section>`;
 }
 
-function renderWeek(model, booking = {}) {
-  const staff = model.timeline.staff || [];
+function renderPhoneWeekPractitionerPicker(model, basePath = '/calendar/read-only') {
+  const staff = model.timeline?.staff || [];
+  if (!staff.length) return '';
+  const activeStaffId = staff.some(person => Number(person.id) === Number(model.activeStaffId))
+    ? Number(model.activeStaffId)
+    : Number(staff[0].id);
+  const active = staff.find(person => Number(person.id) === activeStaffId) || staff[0];
+  if (staff.length === 1) return `<span class="compact-week-active-practitioner" data-compact-week-active-staff="${escapeHtml(active.id)}"><span class="status-dot" aria-hidden="true"></span>${escapeHtml(active.displayName)}</span>`;
+  const visibleStaffIds = staff.map(person => Number(person.id));
+  const options = staff.map(person => `<a class="compact-week-practitioner-option${Number(person.id) === activeStaffId ? ' active' : ''}" data-compact-week-practitioner-option="${escapeHtml(person.id)}" ${Number(person.id) === activeStaffId ? 'aria-current="true"' : ''} href="${escapeHtml(queryHref(basePath, 'week', model.dateKey, visibleStaffIds, { activeStaffId: person.id }))}">${escapeHtml(person.displayName)}</a>`).join('');
+  return `<details class="compact-week-practitioner-picker" data-compact-week-practitioner-picker><summary><span class="status-dot" aria-hidden="true"></span><span>Practitioner</span><strong data-compact-week-active-staff="${escapeHtml(active.id)}">${escapeHtml(active.displayName)}</strong></summary><div class="compact-week-practitioner-options">${options}</div></details>`;
+}
+
+function renderWeek(model, booking = {}, basePath = '/calendar/read-only') {
+  const sourceStaff = model.timeline.staff || [];
+  const activeStaffId = sourceStaff.some(person => Number(person.id) === Number(model.activeStaffId))
+    ? Number(model.activeStaffId)
+    : Number(sourceStaff[0]?.id);
+  const staff = [...sourceStaff].sort((a, b) => Number(b.id) === activeStaffId ? 1 : Number(a.id) === activeStaffId ? -1 : 0);
   const visibleStaffIds = staff.map(person => Number(person.id));
   const operationalDays = model.period.dateKeys.filter(day => new Date(`${day}T12:00:00+02:00`).getUTCDay() !== 0);
   const lanes = operationalDays.flatMap((day, dayIndex) => staff.map((person, practitionerIndex) => {
@@ -434,7 +453,7 @@ function renderWeek(model, booking = {}) {
     const context = workingContext(model, person.id, day);
     const unavailable = context === 'Not scheduled' || context === 'No working window';
     const month = new Intl.DateTimeFormat('en-ZA', { timeZone: BUSINESS_TIMEZONE, month: 'short' }).format(new Date(`${day}T12:00:00+02:00`));
-    return `<section class="week-day week-practitioner-lane" data-week-practitioner-lane data-date="${escapeHtml(day)}" data-staff-id="${escapeHtml(person.id)}" data-day-index="${dayIndex}" data-practitioner-index="${practitionerIndex}" ${operationEnabled(model, 'appointment:reschedule') ? 'data-calendar-drop-target="true"' : ''}>
+    return `<section class="week-day week-practitioner-lane" data-week-practitioner-lane data-date="${escapeHtml(day)}" data-staff-id="${escapeHtml(person.id)}" data-active-practitioner="${Number(person.id) === activeStaffId ? 'true' : 'false'}" data-day-index="${dayIndex}" data-practitioner-index="${practitionerIndex}" ${operationEnabled(model, 'appointment:reschedule') ? 'data-calendar-drop-target="true"' : ''}>
       <header><div class="week-lane-heading"><span class="week-day-date"><span class="week-day-weekday">${escapeHtml(formatDay(day, { weekday: 'short', month: undefined }).split(',')[0])}</span><strong class="week-day-number">${Number(day.slice(-2))}</strong><span class="week-day-month">${escapeHtml(month)}</span></span><strong class="week-practitioner-name" data-week-practitioner-name>${escapeHtml(person.displayName)}</strong><span class="week-practitioner-hours"><span class="status-dot ${unavailable ? 'off' : ''}" aria-hidden="true"></span>${escapeHtml(context)}</span></div><small>${items.length} item${items.length === 1 ? '' : 's'}</small></header>
       ${renderClosureStrip(model, day)}
       <div class="time-column">${renderBookingSlotLayer({ date: day, staffId: person.id, staffName: person.displayName, bookingPath: booking.path, enabled: booking.enabled })}${items.map(item => renderPositionedEvent(item, model)).join('')}</div>
@@ -442,9 +461,9 @@ function renderWeek(model, booking = {}) {
   })).join('');
   const laneCount = operationalDays.length * staff.length;
   return `<main class="calendar-view week-view" data-view="week" data-spatial-week="true">
-    <div class="view-heading"><div><span class="eyebrow">Week</span><h2>${escapeHtml(formatDay(model.period.startKey, { weekday: 'short', month: 'long' }))} – ${escapeHtml(formatDay(model.period.dateKeys.at(-1), { weekday: 'short', month: 'long', year: 'numeric' }))}</h2></div><span class="read-only-badge">${mutationEnabled(model) ? 'Canonical operations' : 'Read-only'}</span></div>
+    <div class="view-heading"><div><span class="eyebrow">Week</span><h2>${escapeHtml(formatDay(operationalDays[0] || model.period.startKey, { weekday: 'short', month: 'long' }))} – ${escapeHtml(formatDay(operationalDays.at(-1) || model.period.startKey, { weekday: 'short', month: 'long', year: 'numeric' }))}</h2></div>${renderPhoneWeekPractitionerPicker({ ...model, timeline: { ...model.timeline, staff } }, basePath)}<span class="read-only-badge">${mutationEnabled(model) ? 'Canonical operations' : 'Read-only'}</span></div>
     ${renderViewPractitionerContext(model)}
-    ${booking.enabled ? '<p class="calendar-booking-hint">Tap within a practitioner lane to start an appointment. Swipe sideways for more days and people.</p>' : ''}
+    ${booking.enabled ? '<p class="calendar-booking-hint">Tap an empty time to start an appointment.</p>' : ''}
     <div class="time-grid week-time-grid">${renderTimeRail()}<div class="week-grid" style="--week-lane-count:${Math.max(laneCount, 1)}">${lanes || '<div class="empty large">No permitted practitioner lanes</div>'}</div></div>
   </main>`;
 }
@@ -503,7 +522,7 @@ function renderMonth(model, basePath) {
     const outside = !day.startsWith(targetMonth);
     const visibleItems = items.slice(0, 3);
     const remaining = items.length - visibleItems.length;
-    const dayHref = queryHref(basePath, 'day', day, visibleStaffIds);
+    const dayHref = queryHref(basePath, 'day', day, visibleStaffIds, { activeStaffId: model.activeStaffId });
     return `<section class="month-day${outside ? ' outside-month' : ''}" data-date="${escapeHtml(day)}" data-item-count="${items.length}">
       <header class="month-day-head"><a class="month-day-link" href="${escapeHtml(dayHref)}" aria-label="Open ${escapeHtml(formatDay(day, { weekday: 'long', month: 'long', year: 'numeric' }))}, ${items.length} item${items.length === 1 ? '' : 's'}"><span>${Number(day.slice(-2))}</span><small>${items.length || ''}</small>${monthOwnershipSummary(items, model)}</a></header>
       <div class="month-events">${visibleItems.map(item => `<div class="month-event">${renderEventCard(item, model)}</div>`).join('')}</div>
@@ -682,6 +701,52 @@ body[data-calendar-view="day"] .workspace-main .footer-note,body[data-calendar-v
 }`;
 }
 
+function goldieDensityPhoneStyles() {
+  const gridHeight = ((GRID_END_MINUTES - GRID_START_MINUTES) / 60) * GRID_PIXELS_PER_HOUR;
+  return `.compact-week-practitioner-picker,.compact-week-active-practitioner{display:none}
+@media(max-width:700px){
+body[data-calendar-view="day"] .workspace-main .shell,body[data-calendar-view="week"] .workspace-main .shell,body[data-calendar-view="month"] .workspace-main .shell{padding:6px 6px 10px!important}
+body[data-calendar-view="day"] .workspace-main .topbar,body[data-calendar-view="week"] .workspace-main .topbar,body[data-calendar-view="month"] .workspace-main .topbar{min-height:44px!important;margin:0 2px 4px!important;padding-left:52px!important}
+body[data-calendar-view="day"] .workspace-main .brand h1,body[data-calendar-view="week"] .workspace-main .brand h1,body[data-calendar-view="month"] .workspace-main .brand h1{font-size:1rem!important;letter-spacing:-.01em}
+body[data-calendar-view="day"] .workspace-main .topbar-side,body[data-calendar-view="week"] .workspace-main .topbar-side,body[data-calendar-view="month"] .workspace-main .topbar-side{margin-left:auto!important}
+body[data-calendar-view="day"] .workspace-main .access-controls,body[data-calendar-view="week"] .workspace-main .access-controls,body[data-calendar-view="month"] .workspace-main .access-controls{display:none!important}
+body[data-calendar-view="day"] .workspace-main .operational-actions .action-link,body[data-calendar-view="week"] .workspace-main .operational-actions .action-link,body[data-calendar-view="month"] .workspace-main .operational-actions .action-link{min-height:44px!important;padding:7px 11px!important;font-size:.75rem!important}
+body[data-calendar-view="day"] .workspace-main .controls,body[data-calendar-view="week"] .workspace-main .controls,body[data-calendar-view="month"] .workspace-main .controls{gap:4px!important;padding:4px!important;margin-bottom:4px!important;border-radius:11px!important;box-shadow:none!important}
+body[data-calendar-view="day"] .workspace-main .controls .control-group:nth-child(2),body[data-calendar-view="week"] .workspace-main .controls .control-group:nth-child(2),body[data-calendar-view="month"] .workspace-main .controls .control-group:nth-child(2){grid-column:1/-1!important}
+body[data-calendar-view="day"] .workspace-main .period-nav,body[data-calendar-view="week"] .workspace-main .period-nav,body[data-calendar-view="month"] .workspace-main .period-nav{grid-template-columns:44px minmax(64px,1fr) 44px!important;gap:3px!important}
+body[data-calendar-view="day"] .workspace-main .view-tabs,body[data-calendar-view="week"] .workspace-main .view-tabs,body[data-calendar-view="month"] .workspace-main .view-tabs{gap:3px!important}
+body[data-calendar-view="day"] .workspace-main .nav-button,body[data-calendar-view="week"] .workspace-main .nav-button,body[data-calendar-view="month"] .workspace-main .nav-button,body[data-calendar-view="day"] .workspace-main .view-tab,body[data-calendar-view="week"] .workspace-main .view-tab,body[data-calendar-view="month"] .workspace-main .view-tab{padding:5px 4px!important;font-size:.72rem!important}
+body[data-calendar-view="day"] .workspace-main .people-picker>summary,body[data-calendar-view="week"] .workspace-main .people-picker>summary,body[data-calendar-view="month"] .workspace-main .people-picker>summary{max-width:120px!important;padding:6px 8px!important;font-size:.72rem!important}
+body[data-calendar-view="day"] .workspace-main .people-picker>summary strong,body[data-calendar-view="week"] .workspace-main .people-picker>summary strong,body[data-calendar-view="month"] .workspace-main .people-picker>summary strong{max-width:62px!important;font-size:.62rem!important}
+body[data-calendar-view="day"] .workspace-main .calendar-view,body[data-calendar-view="week"] .workspace-main .calendar-view,body[data-calendar-view="month"] .workspace-main .calendar-view{padding:3px!important;border-radius:9px!important;box-shadow:none!important}
+body[data-calendar-view="day"] .workspace-main .view-heading,body[data-calendar-view="week"] .workspace-main .view-heading,body[data-calendar-view="month"] .workspace-main .view-heading{min-height:40px!important;margin:0 2px 3px!important}
+body[data-calendar-view="day"] .workspace-main .view-heading h2,body[data-calendar-view="week"] .workspace-main .view-heading h2,body[data-calendar-view="month"] .workspace-main .view-heading h2{font-size:.82rem!important}
+body[data-calendar-view="day"] .workspace-main .calendar-booking-hint,body[data-calendar-view="week"] .workspace-main .calendar-booking-hint,body[data-calendar-view="day"] .workspace-main .shared-note,body[data-calendar-view="week"] .workspace-main .view-practitioner-context{display:none!important}
+body[data-calendar-view="week"] .workspace-main .view-heading>div{min-width:0;flex:1 1 auto}
+body[data-calendar-view="week"] .workspace-main .compact-week-practitioner-picker{position:relative;display:block;flex:0 0 auto}
+body[data-calendar-view="week"] .workspace-main .compact-week-practitioner-picker>summary,body[data-calendar-view="week"] .workspace-main .compact-week-active-practitioner{display:flex;align-items:center;gap:5px;min-height:44px;max-width:154px;padding:6px 8px;border:1px solid var(--line);border-radius:10px;background:#fff;font-size:.64rem;font-weight:750;list-style:none;cursor:pointer}
+body[data-calendar-view="week"] .workspace-main .compact-week-practitioner-picker>summary::-webkit-details-marker{display:none}
+body[data-calendar-view="week"] .workspace-main .compact-week-practitioner-picker>summary>span:not(.status-dot){display:none}
+body[data-calendar-view="week"] .workspace-main .compact-week-practitioner-picker>summary strong{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.72rem}
+body[data-calendar-view="week"] .workspace-main .compact-week-practitioner-options{position:absolute;top:calc(100% + 4px);right:0;z-index:18;display:grid;gap:3px;width:min(250px,calc(100vw - 20px));padding:6px;border:1px solid var(--line);border-radius:11px;background:#fff;box-shadow:0 14px 30px rgba(32,50,43,.18)}
+body[data-calendar-view="week"] .workspace-main .compact-week-practitioner-option{display:flex;align-items:center;min-height:44px;padding:8px 10px;border-radius:8px;font-size:.76rem;font-weight:750}
+body[data-calendar-view="week"] .workspace-main .compact-week-practitioner-option.active{background:var(--leaf-soft);color:var(--leaf-deep)}
+body[data-calendar-view="week"] .workspace-main .week-time-grid{grid-template-columns:42px max-content!important;max-height:calc(100dvh - 158px)!important}
+body[data-calendar-view="week"] .workspace-main .week-time-grid .time-rail{width:42px!important;margin-top:44px!important;height:${gridHeight}px!important}
+body[data-calendar-view="week"] .workspace-main .week-grid{grid-template-columns:repeat(6,170px)!important;min-width:1020px!important;width:1020px!important}
+body[data-calendar-view="week"] .workspace-main .week-practitioner-lane[data-active-practitioner="false"]{display:none!important}
+body[data-calendar-view="week"] .workspace-main .week-day{min-width:170px!important;width:170px!important}
+body[data-calendar-view="week"] .workspace-main .week-day>header{height:44px!important;min-height:44px!important;padding:5px 7px!important;align-items:center!important}
+body[data-calendar-view="week"] .workspace-main .week-practitioner-name,body[data-calendar-view="week"] .workspace-main .week-practitioner-hours{display:none!important}
+body[data-calendar-view="week"] .workspace-main .week-day>.closure-strip{top:44px!important}
+body[data-calendar-view="day"] .workspace-main .day-time-grid{max-height:calc(100dvh - 158px)!important}
+body[data-calendar-view="month"] .workspace-main .view-heading{min-height:34px!important}
+body[data-calendar-view="month"] .workspace-main .month-weekdays span{padding:4px 1px!important}
+body[data-calendar-view="month"] .workspace-main .month-day,body[data-calendar-view="month"] .workspace-main .month-day-link{min-height:52px!important}
+body[data-calendar-view="day"] .workspace-main .footer-note,body[data-calendar-view="week"] .workspace-main .footer-note,body[data-calendar-view="month"] .workspace-main .footer-note{display:none!important}
+}`;
+}
+
 function workspaceV1Styles() {
   return `.time-grid{display:grid;grid-template-columns:58px minmax(0,1fr);overflow:auto;border:1px solid var(--line);border-radius:13px;background:#fff}.time-rail{position:relative;height:${((GRID_END_MINUTES - GRID_START_MINUTES) / 60) * GRID_PIXELS_PER_HOUR}px;border-right:1px solid var(--line);background:#fafbf8}.time-rail span{position:absolute;top:var(--grid-top);right:8px;transform:translateY(-50%);font-size:.66rem;color:var(--muted)}.time-column{position:relative;height:${((GRID_END_MINUTES - GRID_START_MINUTES) / 60) * GRID_PIXELS_PER_HOUR}px;background:repeating-linear-gradient(to bottom,transparent 0,transparent ${GRID_PIXELS_PER_HOUR - 1}px,var(--line) ${GRID_PIXELS_PER_HOUR - 1}px,var(--line) ${GRID_PIXELS_PER_HOUR}px)}.positioned-event{position:absolute;z-index:2;top:var(--event-top);height:var(--event-height);left:4px;right:4px;min-height:44px}.positioned-event .event-card{position:relative;height:100%;overflow:hidden;padding:6px 7px;box-shadow:0 2px 7px rgba(32,50,43,.08)}.positioned-event .appointment-reference,.positioned-event .provenance{display:none}.positioned-event .event-card-actions{position:absolute;right:3px;bottom:3px}.positioned-event .event-operation{min-width:44px;min-height:44px;background:rgba(255,255,255,.94)}.positioned-event .event-card h4{font-size:.78rem;padding-right:48px}.positioned-event .event-card p{font-size:.68rem;padding-right:48px}.day-time-grid .lanes{display:grid;grid-template-columns:repeat(var(--lane-count),minmax(210px,1fr));gap:0;min-width:max-content}.day-time-grid .lane{border:0;border-right:1px solid var(--line);border-radius:0;min-width:230px}.day-time-grid .lane>header{height:73px;position:sticky;top:0;z-index:4}.day-time-grid .time-rail{margin-top:73px}.week-grid{display:grid;grid-template-columns:repeat(var(--week-lane-count),minmax(190px,1fr));gap:0;overflow:visible;padding:0;min-width:calc(var(--week-lane-count) * 190px)}.week-day{border:0;border-right:1px solid var(--line);border-radius:0;min-width:190px}.week-day>header{height:72px}.week-lane-heading{display:grid;gap:3px;min-width:0}.week-practitioner-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.8rem}.week-practitioner-hours{display:flex;align-items:center;gap:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted);font-size:.62rem}.week-time-grid .time-rail{margin-top:72px}.week-events{padding:0}.shared-note{margin:-3px 0 10px;color:var(--muted);font-size:.73rem}.management-panel{border:0;padding:0;background:transparent;max-width:none;max-height:none;width:100%;height:100%;margin:0}.management-panel::backdrop{background:rgba(13,31,24,.42)}.management-card{position:absolute;right:0;top:0;height:100%;width:min(430px,100%);overflow:auto;background:var(--panel);padding:22px;box-shadow:-12px 0 40px rgba(20,45,35,.2)}.panel-head{display:flex;justify-content:space-between;gap:12px;align-items:start;border-bottom:1px solid var(--line);padding-bottom:14px}.panel-head h2{margin:3px 0;font-size:1.25rem}.panel-close{border:1px solid var(--line);background:#fff;border-radius:999px;width:44px;height:44px;font-size:1.15rem}.panel-summary{margin:16px 0;padding:12px;border-radius:12px;background:var(--leaf-soft);display:grid;gap:4px}.panel-actions{display:grid;gap:14px}.panel-action{display:none;border-top:1px solid var(--line);padding-top:14px}.panel-action.visible{display:grid;gap:9px}.panel-action label{display:grid;gap:5px;font-size:.76rem;font-weight:750}.panel-action input,.panel-action select,.panel-action textarea{width:100%;min-height:44px;border:1px solid var(--line-strong);border-radius:9px;padding:9px;font:inherit;background:#fff}.panel-action button{min-height:44px;border:0;border-radius:9px;padding:10px 13px;background:var(--leaf-deep);color:#fff;font:inherit;font-weight:800}.panel-action.danger button{background:#843f35}.panel-hint{font-size:.72rem;color:var(--muted)}@media(max-width:900px){.shell{padding-top:12px}}@media(max-width:700px){.time-grid{margin-left:-6px;margin-right:-6px;grid-template-columns:48px minmax(0,1fr)}.day-time-grid .lanes{grid-template-columns:repeat(var(--lane-count),minmax(78vw,1fr))}.day-time-grid .lane{min-width:78vw}.week-grid{grid-template-columns:repeat(6,minmax(78vw,1fr));min-width:max-content}.week-day{min-width:78vw}.positioned-event .event-card{min-height:44px}.management-card{padding:16px}}`;
 }
@@ -709,7 +774,7 @@ function renderCalendarPage(model, {
 } = {}) {
   const booking = { enabled: bookingEnabled === true, path: bookingPath };
   const content = model.view === 'week'
-    ? renderWeek(model, booking)
+    ? renderWeek(model, booking, basePath)
     : model.view === 'agenda'
       ? renderAgenda(model)
       : model.view === 'month'
@@ -717,7 +782,7 @@ function renderCalendarPage(model, {
         : renderDay(model, booking);
   const canMutate = mutationEnabled(model);
   const operationScript = canMutate ? `<script src="${escapeHtml(operationalMutationsScriptPath)}" defer></script>` : '';
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Calendar — Shiloh Workspace</title><style>${serviceFamilyAccentCss()}${styles()}${workspaceShellStyles()}${workspaceV1Styles()}${desktopSpatialLaneStyles()}${calendarViewParityStyles()}${calendarViewParityResponsiveStyles()}${canMutate ? operationalStyles() : ''}${calendarFirstPhoneStyles()}</style><script src="${escapeHtml(staffAccessScriptPath)}" defer></script>${operationScript}</head><body data-calendar-view="${escapeHtml(model.view)}" data-calendar-readonly="${canMutate ? 'false' : 'true'}"><div class="workspace-frame">${renderWorkspaceNavigation({ active: 'calendar', clientsHref: clientNavigationAllowed ? clientsPath : null })}<div class="workspace-main"><div class="shell">
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Calendar — Shiloh Workspace</title><style>${serviceFamilyAccentCss()}${styles()}${workspaceShellStyles()}${workspaceV1Styles()}${desktopSpatialLaneStyles()}${calendarViewParityStyles()}${calendarViewParityResponsiveStyles()}${canMutate ? operationalStyles() : ''}${calendarFirstPhoneStyles()}${goldieDensityPhoneStyles()}</style><script src="${escapeHtml(staffAccessScriptPath)}" defer></script>${operationScript}</head><body data-calendar-view="${escapeHtml(model.view)}" data-calendar-readonly="${canMutate ? 'false' : 'true'}"><div class="workspace-frame">${renderWorkspaceNavigation({ active: 'calendar', clientsHref: clientNavigationAllowed ? clientsPath : null })}<div class="workspace-main"><div class="shell">
     <header class="topbar"><div class="brand"><h1>Calendar</h1><p>Your clinic schedule, at a glance.</p></div><div class="topbar-side">${renderOperationalActions(operationalActions)}<div class="truth-note">Africa/Johannesburg • Shiloh is the scheduling authority</div><div class="access-controls"><button class="signout-button" type="button" data-shiloh-logout>Sign out</button><span class="access-status" role="status" aria-live="polite" data-shiloh-calendar-access-status></span></div></div></header>
     ${renderControls(model, basePath)}${renderOperationalSummary(model)}${canMutate ? '<span class="operation-status" role="status" aria-live="polite" data-calendar-operation-status>Canonical changes are revalidated when saved.</span>' : ''}${content}
     <div class="footer-note">${escapeHtml(timelineReadOnlyMessage)}</div>${renderManagementPanel(model)}
@@ -749,4 +814,5 @@ module.exports = {
   desktopSpatialLaneStyles,
   spatialPhoneWeekStyles,
   calendarFirstPhoneStyles,
+  goldieDensityPhoneStyles,
 };

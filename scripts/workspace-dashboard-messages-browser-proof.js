@@ -232,12 +232,13 @@ function createFixture() {
 }
 
 const METRICS_EXPRESSION = `(() => {
-  const visible = node => { if (!node) return false; const s=getComputedStyle(node),r=node.getBoundingClientRect(); return s.display!=='none'&&s.visibility!=='hidden'&&r.width>0&&r.height>0; };
+  const visible = node => { if (!node) return false; const s=getComputedStyle(node),r=node.getBoundingClientRect(); return s.display!=='none'&&s.visibility!=='hidden'&&r.width>0&&r.height>0&&r.right>0&&r.left<innerWidth&&r.bottom>0&&r.top<innerHeight; };
   const text = selector => Array.from(document.querySelectorAll(selector)).filter(visible).map(node=>node.textContent.trim());
   const targets = Array.from(document.querySelectorAll('.workspace-nav a,.workspace-nav button')).filter(visible);
   const nav = document.querySelector('.workspace-nav');
   const frame = document.querySelector('.workspace-frame');
   const active = document.querySelector('.workspace-link.active');
+  const menuToggle = document.querySelector('[data-workspace-drawer-toggle]');
   return {
     viewport:{width:innerWidth,height:innerHeight,screenWidth:screen.width,screenHeight:screen.height},
     rootScrollWidth:document.documentElement.scrollWidth,
@@ -248,6 +249,9 @@ const METRICS_EXPRESSION = `(() => {
     active:active?.textContent.trim()||'',
     minNavTargetHeight:targets.length?Math.min(...targets.map(node=>node.getBoundingClientRect().height)):0,
     navHeight:nav?.getBoundingClientRect().height||0,
+    navRight:nav?.getBoundingClientRect().right||0,
+    drawerOpen:Boolean(nav?.classList.contains('open')),
+    menuHeight:menuToggle?.getBoundingClientRect().height||0,
     framePaddingBottom:frame?parseFloat(getComputedStyle(frame).paddingBottom)||0:0,
     signoutHeight:document.querySelector('[data-shiloh-logout]')?.getBoundingClientRect().height||0,
     signoutText:document.querySelector('[data-shiloh-logout]')?.textContent.trim()||'',
@@ -318,6 +322,8 @@ async function main() {
       });
       await navigate(`${origin}${urlPath}`);
       if (openMore) {
+        await evaluate(cdp, `document.querySelector('[data-workspace-drawer-toggle]').click();true`);
+        await poll(() => evaluate(cdp, `document.querySelector('[data-workspace-navigation-drawer]').classList.contains('open')`), Boolean);
         await evaluate(cdp, `document.querySelector('[data-workspace-more-toggle]').click();true`);
         await poll(() => evaluate(cdp, `document.querySelector('[data-workspace-more-menu]').classList.contains('open')`), Boolean);
       }
@@ -326,17 +332,25 @@ async function main() {
       assert.ok(metrics.rootScrollWidth <= width + 1, `${name} leaked horizontal page overflow`);
       assert.ok(metrics.active, `${name} has no active destination`);
       if (phone) {
-        assert.deepEqual(metrics.primary, ['Dashboard', 'Calendar', 'Clients', 'Messages']);
-        assert.equal(metrics.moreVisible, true);
-        assert.ok(metrics.minNavTargetHeight >= 44, `${name} has a nav touch target below 44px`);
-        assert.ok(metrics.signoutHeight >= 44, `${name} has a collapsed sign-out control`);
-        assert.equal(metrics.signoutText, 'Sign out');
-        if (metrics.signoutToTabsGap != null) assert.ok(metrics.signoutToTabsGap >= 8, `${name} overlays its sign-out control with Messages tabs`);
-        assert.ok(metrics.framePaddingBottom >= metrics.navHeight - 2, `${name} content is not protected from fixed navigation`);
+        assert.ok(metrics.menuHeight >= 44, `${name} has a menu touch target below 44px`);
+        if (!urlPath.startsWith('/calendar/read-only')) {
+          assert.ok(metrics.signoutHeight >= 44, `${name} has a collapsed sign-out control`);
+          assert.equal(metrics.signoutText, 'Sign out');
+          if (metrics.signoutToTabsGap != null) assert.ok(metrics.signoutToTabsGap >= 8, `${name} overlays its sign-out control with Messages tabs`);
+        }
+        assert.equal(metrics.framePaddingBottom, 0, `${name} still reserves bottom-navigation space`);
         if (openMore) {
+          assert.equal(metrics.drawerOpen, true);
+          assert.deepEqual(metrics.primary, ['Dashboard', 'Calendar', 'Clients', 'Messages']);
+          assert.equal(metrics.moreVisible, true);
+          assert.ok(metrics.minNavTargetHeight >= 44, `${name} has a drawer target below 44px`);
           assert.equal(metrics.moreOpen, true);
           assert.deepEqual(metrics.secondary, ['Staff', 'Services', 'Reports']);
         } else {
+          assert.equal(metrics.drawerOpen, false);
+          assert.ok(metrics.navRight <= 1, `${name} leaves the closed drawer on-screen`);
+          assert.deepEqual(metrics.primary, []);
+          assert.equal(metrics.moreVisible, false);
           assert.deepEqual(metrics.secondary, []);
         }
       } else {
