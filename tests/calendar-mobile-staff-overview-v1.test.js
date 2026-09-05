@@ -82,7 +82,7 @@ test('phone all-staff Day keeps the canonical spatial lane canvas instead of rep
   assert.match(html, /Naledi Mokoena/);
   assert.match(html, /Bamboo Sports Massage/);
   assert.match(html, /data-people-picker/);
-  assert.match(html, /grid-template-columns:repeat\(var\(--lane-count\),minmax\(270px,calc\(100vw - 76px\)\)\)!important/);
+  assert.match(html, /grid-template-columns:repeat\(var\(--lane-count\),210px\)!important/);
   assert.match(html, /class="time-grid day-time-grid"/);
   assert.match(html, /style="--lane-count:5"/);
 });
@@ -97,8 +97,8 @@ test('selected practitioner keeps one readable detailed mobile lane and no overv
   assert.equal((html.match(/class="lane"/g) || []).length, 1);
   assert.match(html, /Marietjie/);
   assert.match(html, /Shared Client/);
-  assert.match(html, /day-time-grid \.lanes\{display:grid!important;grid-template-columns:repeat\(var\(--lane-count\),minmax\(270px,calc\(100vw - 76px\)\)\)!important/);
-  assert.match(html, /day-time-grid \.lane\{min-width:270px!important/);
+  assert.match(html, /day-time-grid \.lanes\{display:grid!important;grid-template-columns:repeat\(var\(--lane-count\),210px\)!important/);
+  assert.match(html, /day-time-grid \.lane\{min-width:210px!important;width:210px!important/);
 });
 
 test('mobile overview escapes staff and event text and reuses existing staff filter URLs', () => {
