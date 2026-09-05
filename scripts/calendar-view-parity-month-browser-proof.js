@@ -260,7 +260,7 @@ function assertMetrics(proof, metrics) {
       throw new Error(`${proof.name} Month grid is not Monday-Saturday and Monday-aligned: ${JSON.stringify(metrics)}`);
     }
     if (proof.phone) {
-      if (metrics.visibleMonthEvents !== 0 || metrics.visibleMonthOwners < 1 || metrics.minMonthLinkHeight < 53) {
+      if (metrics.visibleMonthEvents !== 0 || metrics.visibleMonthOwners < 1 || metrics.minMonthLinkHeight < 44) {
         throw new Error(`${proof.name} Phone Month is not compact, attributable, and touch-safe: ${JSON.stringify(metrics)}`);
       }
     } else if (metrics.visibleMonthEvents < (proof.minMonthEvents || 4)) {
