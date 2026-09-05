@@ -165,14 +165,14 @@ function renderPhoneCalendarDock(model, {
   const date = String(model?.dateKey || '');
   const todayHref = calendarHref(basePath, { view: ['day', 'week', 'month'].includes(model?.view) ? model.view : 'day', date: businessToday(), staffId });
   const actions = [];
-  if (staffId && staffOperationEnabled(model, 'operational_leave:manage', staffId)) {
-    actions.push(`<span class="phone-plus-lane-context lane"><h3 class="sr-only">${escapeHtml(active.displayName || `Staff ${staffId}`)}</h3><button type="button" data-calendar-operation="add-leave" data-staff-id="${staffId}" data-date="${escapeHtml(date)}">Time off</button></span>`);
+  if (bookingAllowed) {
+    actions.push(`<a href="${escapeHtml(bookingHref(bookingPath, { date, staffId }))}" aria-label="Create appointment">Appointment</a>`);
   }
   if (staffId && staffOperationEnabled(model, 'calendar_block:manage', staffId)) {
     actions.push(`<span class="phone-plus-lane-context lane"><h3 class="sr-only">${escapeHtml(active.displayName || `Staff ${staffId}`)}</h3><button type="button" data-calendar-operation="add-block" data-staff-id="${staffId}" data-date="${escapeHtml(date)}">Block time</button></span>`);
   }
-  if (bookingAllowed) {
-    actions.push(`<a href="${escapeHtml(bookingHref(bookingPath, { date, staffId }))}" aria-label="Create appointment">Appointment</a>`);
+  if (staffId && staffOperationEnabled(model, 'operational_leave:manage', staffId)) {
+    actions.push(`<span class="phone-plus-lane-context lane"><h3 class="sr-only">${escapeHtml(active.displayName || `Staff ${staffId}`)}</h3><button type="button" data-calendar-operation="add-leave" data-staff-id="${staffId}" data-date="${escapeHtml(date)}">Time off</button></span>`);
   }
   return `<div class="phone-calendar-v2-dock" data-phone-calendar-v2-dock>
     <a class="phone-today-fab" href="${escapeHtml(todayHref)}">Today</a>
@@ -198,7 +198,8 @@ body[data-phone-calendar-v2="true"] .workspace-main>.shell{padding:5px 4px 7px!i
 .phone-date-popover{left:-50px;width:min(326px,calc(100vw - 10px));gap:6px;padding:7px}.phone-date-popover header{display:grid;grid-template-columns:42px 1fr 42px;align-items:center;text-align:center}.phone-date-popover header a{display:grid;place-items:center;min-height:40px;border-radius:8px;font-size:1.2rem}.phone-date-weekdays,.phone-date-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:2px}.phone-date-weekdays span{padding:2px 0;text-align:center;color:var(--muted);font-size:.56rem;font-weight:800}.phone-date-cell,.phone-date-blank{display:grid;place-items:center;min-height:40px;border-radius:8px;font-size:.72rem}.phone-date-cell.current{background:var(--leaf-deep);color:#fff;font-weight:850}
 body[data-phone-calendar-v2="true"] .calendar-view{padding:0!important;border-radius:7px!important;box-shadow:none!important;overflow:hidden!important}
 body[data-phone-calendar-v2="true"] .view-heading{display:none!important}
-body[data-phone-calendar-v2="true"] .day-time-grid,body[data-phone-calendar-v2="true"] .week-time-grid{margin:0!important;max-height:calc(100dvh - 53px)!important;border:0!important;border-radius:0!important}
+body[data-phone-calendar-v2="true"] .day-time-grid{margin:0!important;max-height:calc(100dvh - 53px)!important;border:0!important;border-radius:0!important}
+body[data-phone-calendar-v2="true"] .week-time-grid{margin:0!important;max-height:calc(100dvh - 81px)!important;border:0!important;border-radius:0!important}
 body[data-phone-calendar-v2="true"] .day-time-grid{grid-template-columns:34px minmax(0,1fr)!important;overflow:auto!important}
 body[data-phone-calendar-v2="true"] .day-time-grid .time-rail{width:34px!important;margin-top:32px!important}
 body[data-phone-calendar-v2="true"] .time-rail{height:${gridHeight}px!important}
@@ -209,7 +210,8 @@ body[data-phone-calendar-v2="true"] .day-time-grid .lanes{display:block!importan
 body[data-phone-calendar-v2="true"] .day-view .lane{display:none!important;min-width:0!important;width:100%!important;border:0!important;border-radius:0!important}
 body[data-phone-calendar-v2="true"] .day-view .lane[data-phone-active-practitioner="true"]{display:block!important}
 body[data-phone-calendar-v2="true"] .day-view .lane>header{height:32px!important;min-height:32px!important;padding:3px 7px!important;align-items:center!important}
-body[data-phone-calendar-v2="true"] .day-view .lane h3{font-size:.72rem!important}body[data-phone-calendar-v2="true"] .day-view .lane header p,body[data-phone-calendar-v2="true"] .day-view .lane-count,body[data-phone-calendar-v2="true"] .day-view .lane-actions{display:none!important}
+body[data-phone-calendar-v2="true"] .day-view .lane h3{font-size:.72rem!important}body[data-phone-calendar-v2="true"] .day-view .lane header p,body[data-phone-calendar-v2="true"] .day-view .lane-count{display:none!important}
+body[data-phone-calendar-v2="true"] .day-view .lane-actions{position:absolute!important;width:1px!important;height:44px!important;overflow:hidden!important;clip-path:inset(50%)!important;visibility:hidden!important;pointer-events:none!important}
 .phone-week-practitioner-strip{display:flex;align-items:center;gap:5px;min-height:28px;padding:4px 7px;border-bottom:1px solid var(--line);background:#fafbf8;font-size:.66rem;font-weight:800}.phone-week-practitioner-strip .status-dot{flex:0 0 7px;width:7px;height:7px}
 body[data-phone-calendar-v2="true"] .week-time-grid{grid-template-columns:32px minmax(0,1fr)!important;overflow:auto!important}
 body[data-phone-calendar-v2="true"] .week-time-grid .time-rail{width:32px!important;margin-top:38px!important}
@@ -220,19 +222,20 @@ body[data-phone-calendar-v2="true"] .week-day:last-child{border-right:0!importan
 body[data-phone-calendar-v2="true"] .week-day>header{height:38px!important;min-height:38px!important;padding:3px 1px!important;display:grid!important;place-items:center!important}
 body[data-phone-calendar-v2="true"] .week-practitioner-name,body[data-phone-calendar-v2="true"] .week-practitioner-hours,body[data-phone-calendar-v2="true"] .week-day>header small,body[data-phone-calendar-v2="true"] .week-day-month{display:none!important}
 body[data-phone-calendar-v2="true"] .week-day-date{display:grid!important;place-items:center!important;gap:0!important;line-height:1!important}body[data-phone-calendar-v2="true"] .week-day-weekday{font-size:.45rem!important}body[data-phone-calendar-v2="true"] .week-day-number{font-size:.68rem!important}
-body[data-phone-calendar-v2="true"] .positioned-event{top:var(--phone-event-top,var(--event-top))!important;height:var(--phone-event-height,var(--event-height))!important;min-height:28px!important;left:2px!important;right:2px!important;width:auto!important;overflow:visible!important}
+body[data-phone-calendar-v2="true"] .positioned-event{top:var(--phone-event-top,var(--event-top))!important;height:var(--phone-event-height,var(--event-height))!important;min-height:28px!important;overflow:visible!important}
+body[data-phone-calendar-v2="true"] .day-view .positioned-event{left:2px!important;right:2px!important;width:auto!important}
 body[data-phone-calendar-v2="true"] .positioned-event .event-card{height:100%!important;min-height:28px!important;padding:2px 4px!important;border-left-width:2px!important;border-radius:4px!important;box-shadow:none!important}
 body[data-phone-calendar-v2="true"] .positioned-event .event-card-top{min-height:0!important;padding:0!important}body[data-phone-calendar-v2="true"] .positioned-event .event-time{font-size:.5rem!important;line-height:1!important}body[data-phone-calendar-v2="true"] .positioned-event .event-time-range{display:none!important}body[data-phone-calendar-v2="true"] .positioned-event .event-time-start{display:inline!important}
 body[data-phone-calendar-v2="true"] .positioned-event .event-card h4{margin:1px 0 0!important;padding:0!important;font-size:.61rem!important;line-height:1.02!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important}
 body[data-phone-calendar-v2="true"] .positioned-event .kind-pill,body[data-phone-calendar-v2="true"] .positioned-event .event-client-mobile,body[data-phone-calendar-v2="true"] .positioned-event .appointment-reference,body[data-phone-calendar-v2="true"] .positioned-event .provenance{display:none!important}
 body[data-phone-calendar-v2="true"] .positioned-event .event-meta{margin:1px 0 0!important;padding:0!important;font-size:.48rem!important;line-height:1!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important}
 body[data-phone-calendar-v2="true"] .positioned-event .event-card-actions{position:static!important;margin:0!important}body[data-phone-calendar-v2="true"] .positioned-event .event-operation{position:absolute!important;inset:0!important;width:100%!important;height:100%!important;min-width:0!important;min-height:0!important;margin:0!important;padding:0!important;border:0!important;opacity:0!important}
-body[data-phone-calendar-v2="true"] .lane-actions,body[data-phone-calendar-v2="true"] .availability-menu{display:none!important}
+body[data-phone-calendar-v2="true"] .lane-actions,body[data-phone-calendar-v2="true"] .availability-menu{position:absolute!important;width:1px!important;height:44px!important;overflow:hidden!important;clip-path:inset(50%)!important;visibility:hidden!important;pointer-events:none!important}
 body[data-phone-calendar-v2="true"] .month-events,body[data-phone-calendar-v2="true"] .month-more,body[data-phone-calendar-v2="true"] .month-day-owners{display:none!important}
 body[data-phone-calendar-v2="true"] .month-grid{border:0!important;border-radius:0!important;overflow:hidden!important}body[data-phone-calendar-v2="true"] .month-weekdays span{padding:6px 1px!important;text-align:center!important;font-size:.56rem!important}body[data-phone-calendar-v2="true"] .month-day{position:relative;min-height:64px!important;padding:0!important}body[data-phone-calendar-v2="true"] .month-day-link{display:grid!important;grid-template-rows:auto 1fr;align-items:start;justify-items:center;gap:5px;min-height:64px!important;padding:7px 2px!important;font-size:.74rem!important}body[data-phone-calendar-v2="true"] .month-day-link>small{display:none!important}.phone-month-density{display:flex;align-items:center;justify-content:center;gap:2px;min-height:12px}.phone-month-density i{display:block;width:4px;height:4px;border-radius:50%;background:var(--leaf)}.phone-month-density strong{margin-left:2px;font-size:.5rem;color:var(--muted)}
 .phone-calendar-v2-dock{position:fixed;left:0;right:0;bottom:max(10px,env(safe-area-inset-bottom));z-index:65;display:flex;align-items:flex-end;justify-content:center;pointer-events:none}.phone-today-fab,.phone-plus-menu{pointer-events:auto}.phone-today-fab{display:grid;place-items:center;min-height:36px;padding:5px 13px;border:1px solid var(--line-strong);border-radius:999px;background:rgba(255,255,255,.96);box-shadow:0 6px 18px rgba(20,45,35,.16);font-size:.69rem;font-weight:800}.phone-plus-menu{position:absolute;right:12px;bottom:0}.phone-plus-menu>summary{display:grid;place-items:center;width:46px;height:46px;border-radius:50%;background:var(--leaf-deep);color:#fff;box-shadow:0 8px 20px rgba(20,45,35,.24);font-size:1.45rem;font-weight:500;list-style:none;cursor:pointer}.phone-plus-popover{position:absolute;right:0;bottom:54px;display:grid;gap:3px;width:154px;padding:5px;border:1px solid var(--line);border-radius:11px;background:#fff;box-shadow:0 14px 30px rgba(20,45,35,.22)}.phone-plus-popover>a,.phone-plus-popover button{display:flex!important;align-items:center!important;justify-content:flex-start!important;width:100%!important;min-height:44px!important;padding:8px 10px!important;border:0!important;border-radius:8px!important;background:transparent!important;color:var(--ink)!important;font:inherit!important;font-size:.74rem!important;font-weight:800!important;text-align:left!important}.phone-plus-popover>a:hover,.phone-plus-popover button:hover{background:var(--leaf-soft)!important}.phone-plus-lane-context{display:contents!important}
-}
 @container (max-height:44px){body[data-phone-calendar-v2="true"] .positioned-event .event-meta{display:none!important}body[data-phone-calendar-v2="true"] .positioned-event .event-time{display:none!important}body[data-phone-calendar-v2="true"] .positioned-event .event-card h4{margin:0!important}}
+}
 `;
 }
 
