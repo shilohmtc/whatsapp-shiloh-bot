@@ -1,0 +1,49 @@
+name: control-temp-723-proof-fix
+
+on:
+  push:
+    branches:
+      - control/723-phone-calendar-density-copy-polish
+
+permissions:
+  contents: write
+
+jobs:
+  fix-proof:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.14.1'
+          cache: npm
+      - run: npm ci
+      - name: Align mobile staff browser proof with #723 density
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('scripts/calendar-mobile-staff-overview-browser-proof.js')
+          s = p.read_text()
+          old = "    if (metrics.minLaneWidth < 270) throw new Error(`${proof.name} practitioner lanes are cramped (${metrics.minLaneWidth}px)`);"
+          new = "    if (metrics.minLaneWidth < 200 || metrics.minLaneWidth > 220) throw new Error(`${proof.name} practitioner lanes are outside compact density (${metrics.minLaneWidth}px)`);"
+          if s.count(old) != 1:
+              raise SystemExit(f'expected one old mobile lane proof assertion, found {s.count(old)}')
+          p.write_text(s.replace(old, new, 1))
+          PY
+      - name: Run focused #723 mobile regressions
+        run: node --test tests/calendar-mobile-staff-overview-v1.test.js tests/calendar-phone-density-copy-polish-p1.test.js
+      - name: Run mobile staff exact-browser proof
+        run: node scripts/calendar-mobile-staff-overview-browser-proof.js
+      - name: Commit proof correction
+        shell: bash
+        run: |
+          git diff --check
+          git config user.name "shiloh-control"
+          git config user.email "shiloh-control@users.noreply.github.com"
+          git add scripts/calendar-mobile-staff-overview-browser-proof.js
+          git commit -m "test(#723): enforce compact Phone Day lane proof"
+          git push origin HEAD:${GITHUB_REF_NAME}
