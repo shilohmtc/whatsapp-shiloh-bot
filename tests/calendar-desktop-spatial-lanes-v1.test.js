@@ -154,14 +154,15 @@ test('right-side management sheet preserves lane markup and canonical mutation a
   assert.match(html, /data-calendar-operation="manage-appointment"/);
 });
 
-test('Phone default remains the all-permitted card overview instead of compressed Desktop lanes', async () => {
+test('Phone default remains the canonical focused single practitioner lane', async () => {
   const model = await build(undefined);
   const html = applyCalendarResponsivePolish(renderCalendarPage(model), model);
 
-  assert.match(html, /data-calendar-mobile-overview="true"/);
-  assert.equal((html.match(/class="mobile-staff-card"/g) || []).length, 4);
+  assert.doesNotMatch(html, /data-calendar-mobile-overview|class="mobile-staff-card"/);
+  assert.equal((html.match(/class="lane"/g) || []).length, 1);
   assert.match(html, /style="--lane-count:1"/);
-  assert.match(html, /\.day-view\.mobile-all-staff-overview \.day-time-grid\{position:absolute!important/);
+  assert.match(html, /data-staff-id="11"/);
+  assert.doesNotMatch(html, /data-staff-id="(?:12|13|14)"/);
 });
 
 test('People control client enhancement is parseable and prevents an empty canvas submission', () => {

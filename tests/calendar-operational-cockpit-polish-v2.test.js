@@ -104,14 +104,14 @@ test('cockpit exposes labelled controls, scan summary and lane state', () => {
   assert.match(html, /class="positioned-event" style="--event-top:72px;--event-height:69px"/);
 });
 
-test('Week uses one shared vertical time rail and six Monday-Saturday day columns', () => {
+test('Week uses one shared vertical time rail and six readable Monday-Saturday day columns', () => {
   const html = renderCalendarPage(model('week'));
   assert.match(html, /class="time-grid week-time-grid"/);
   assert.equal((html.match(/class="week-day"/g) || []).length, 6);
   assert.match(html, /class="time-rail"/);
   assert.match(html, /grid-template-columns:repeat\(6,minmax\(154px,1fr\)\)/);
   assert.match(html, /data-spatial-week="true"/);
-  assert.match(html, /@media\(max-width:700px\)[\s\S]*grid-template-columns:repeat\(6,minmax\(0,1fr\)\)!important/);
+  assert.match(html, /@media\(max-width:700px\)[\s\S]*grid-template-columns:repeat\(6,220px\)!important;min-width:1320px!important/);
 });
 
 test('appointment management surface exposes only server-granted operations', () => {
@@ -142,16 +142,21 @@ test('legacy non-canonical events are excluded from day/week/agenda data project
 
 test('operational action contract exposes only guarded Create booking', () => {
   assert.deepEqual(bookingOperationalActions('2026-08-27'), [
-    { label: 'Create booking', href: '/calendar/book?date=2026-08-27', tone: 'primary' },
+    {
+      label: '+ Appointment',
+      ariaLabel: 'Create booking',
+      href: '/calendar/book?date=2026-08-27',
+      tone: 'primary',
+    },
   ]);
   const html = renderOperationalActions(bookingOperationalActions('2026-08-27'));
-  assert.match(html, /Create booking/);
+  assert.match(html, /aria-label="Create booking"[^>]*>\+ Appointment<\/a>/);
   assert.doesNotMatch(html, /Confirm client contact|client-authority/);
   const routeSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'routes', 'calendarReadOnlyUx.js'), 'utf8');
   assert.doesNotMatch(routeSource, /Confirm client contact|\/calendar\/client-authority/);
 });
 
-test('narrow-screen contract keeps all control groups inside one mobile column', () => {
+test('narrow-screen contract keeps the compact Phone controls and spatial Week scroller bounded', () => {
   const raw = renderCalendarPage(model('week'));
   const html = applyCalendarResponsivePolish(raw);
   assert.match(html, /@media\(max-width:700px\)/);
@@ -159,7 +164,8 @@ test('narrow-screen contract keeps all control groups inside one mobile column',
   assert.match(html, /\.nav-button,\.view-tab,\.filter,\.scope-pill\{min-height:44px/);
   assert.match(html, /\.controls\{position:sticky;top:0;z-index:5;grid-template-columns:1fr;/);
   assert.doesNotMatch(html, /\.controls\{position:sticky;top:0;z-index:5;grid-template-columns:1fr 1fr;/);
-  assert.match(html, /body\[data-calendar-view="week"\][\s\S]*\.week-grid\{display:grid!important;grid-template-columns:repeat\(6,minmax\(0,1fr\)\)!important/);
+  assert.match(html, /body\[data-calendar-view="week"\][\s\S]*\.week-time-grid\{display:grid!important;grid-template-columns:44px max-content!important;overflow-x:auto!important/);
+  assert.match(html, /body\[data-calendar-view="week"\][\s\S]*\.week-grid\{display:grid!important;grid-template-columns:repeat\(6,220px\)!important;min-width:1320px!important/);
   assert.match(html, /\.positioned-event\{position:absolute!important;[^}]*top:var\(--event-top\)!important/);
 });
 

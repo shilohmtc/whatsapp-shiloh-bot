@@ -272,8 +272,8 @@ for (const proof of cases) {
   if (metrics.visibleNavLinks < 3 || metrics.minNavHeight < 47) throw new Error(`${proof.name} mobile navigation is too small or incomplete`);
   if (metrics.minTouchHeight < 43) throw new Error(`${proof.name} has a touch target below 43px (${metrics.minTouchHeight})`);
   if (metrics.overflowingPrimary.length) throw new Error(`${proof.name} primary content exceeds viewport: ${metrics.overflowingPrimary.join(', ')}`);
-  if (proof.expectControls && (metrics.controlsPosition !== 'static' || /\s/.test(String(metrics.controlsColumns).trim()))) {
-    throw new Error(`${proof.name} Calendar controls did not collapse to one static column: ${JSON.stringify(metrics)}`);
+  if (proof.expectControls && (metrics.controlsPosition !== 'relative' || String(metrics.controlsColumns).trim().split(/\s+/).length !== 2)) {
+    throw new Error(`${proof.name} Calendar controls did not use the compact Calendar-first Phone layout: ${JSON.stringify(metrics)}`);
   }
   if (proof.expectStaffOrder && (String(metrics.staffFilterOrder) !== '1' || String(metrics.staffCreateOrder) !== '5')) {
     throw new Error(`${proof.name} staff operational list is not ordered before creation on mobile`);

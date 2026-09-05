@@ -5,7 +5,7 @@ const vm = require('node:vm');
 
 const {
   renderCalendarPage,
-  spatialPhoneWeekStyles,
+  calendarFirstPhoneStyles,
 } = require('../src/presentation/calendarReadOnlyUx');
 const { periodFor } = require('../src/services/calendarReadOnlyUx');
 const { staffCalendarAccessClientScript } = require('../src/presentation/staffCalendarAccessUx');
@@ -138,7 +138,7 @@ test('Day keeps the established practitioner lane model unchanged', () => {
 
 test('spatial Phone Week reuses the canonical management button as a whole-event target', () => {
   const html = renderCalendarPage(model('week', [31, 32], { mutationEnabled: true }));
-  const css = spatialPhoneWeekStyles();
+  const css = calendarFirstPhoneStyles();
   assert.match(html, /data-calendar-operation="manage-appointment">Manage<\/button>/);
   assert.match(html, /data-calendar-management-panel/);
   assert.match(css, /\.event-operation\{position:absolute!important;inset:0!important/);
@@ -155,8 +155,11 @@ test('Week overlap allocation remains one implementation with Phone-specific pre
   assert.match(script, /data-week-overlap-layout','desktop/);
 });
 
-test('authenticated browser proof mounts the configurable Calendar router factory', () => {
+test('authenticated browser proof mounts canonical Calendar and Create Booking router factories', () => {
   const source = fs.readFileSync(require.resolve('../scripts/calendar-spatial-phone-week-browser-proof'), 'utf8');
   assert.match(source, /createCalendarReadOnlyRouter\(\{/);
+  assert.match(source, /createCalendarCreateBookingRouter\(\{/);
+  assert.match(source, /phone-empty-slot-create-booking-prefill/);
+  assert.match(source, /phone-month-overview-navigation/);
   assert.doesNotMatch(source, /calendarReadOnlyRoutes\(\{/);
 });

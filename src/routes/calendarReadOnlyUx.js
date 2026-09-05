@@ -46,7 +46,7 @@ function safeUnavailableMessage(error) {
 
 function bookingOperationalActions(dateKey, bookingPath = '/calendar/book') {
   const href = `${bookingPath}?date=${encodeURIComponent(String(dateKey || ''))}`;
-  return [{ label: 'Create booking', href, tone: 'primary' }];
+  return [{ label: '+ Appointment', ariaLabel: 'Create booking', href, tone: 'primary' }];
 }
 
 function escapeHtml(value = '') {
@@ -186,24 +186,11 @@ function mobileStaffOverviewStyles() {
   return `.mobile-staff-overview{display:none}@media(max-width:700px){body[data-calendar-mobile-overview="true"] .practitioner-control{display:none}.mobile-staff-overview{display:grid;gap:9px;margin-top:2px}.mobile-staff-overview-head{display:flex;align-items:end;justify-content:space-between;gap:10px}.mobile-staff-overview-head h3{margin:2px 0 0;font-size:1rem}.mobile-staff-overview-head>span{max-width:130px;text-align:right;color:var(--muted);font-size:.68rem;line-height:1.25}.mobile-staff-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.mobile-staff-card{display:grid;align-content:start;gap:7px;min-width:0;min-height:118px;padding:11px;border:1px solid var(--line);border-radius:13px;background:#fff;box-shadow:0 3px 12px rgba(32,50,43,.04)}.mobile-staff-card:active{background:var(--leaf-soft)}.mobile-staff-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:6px;min-width:0}.mobile-staff-card-head strong{min-width:0;font-size:.88rem;line-height:1.2;overflow-wrap:anywhere}.mobile-staff-count{display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;min-width:27px;height:27px;border-radius:999px;background:var(--leaf-soft);color:var(--leaf);font-size:.72rem;font-weight:850}.mobile-staff-schedule{display:flex;align-items:flex-start;gap:6px;min-width:0;color:var(--muted);font-size:.68rem;line-height:1.3}.mobile-staff-schedule .status-dot{flex:0 0 8px;margin-top:2px}.mobile-staff-next{display:grid;gap:2px;min-width:0;padding-top:7px;border-top:1px solid var(--line)}.mobile-staff-next-label{color:var(--muted);font-size:.62rem;text-transform:uppercase;letter-spacing:.06em;font-weight:800}.mobile-staff-next strong{min-width:0;font-size:.74rem;line-height:1.28;overflow-wrap:anywhere}.mobile-staff-next small{min-width:0;color:var(--muted);font-size:.66rem;line-height:1.25;overflow-wrap:anywhere}.day-view.mobile-all-staff-overview .day-time-grid{position:absolute!important;width:1px!important;height:1px!important;overflow:hidden!important;clip-path:inset(50%)!important;visibility:hidden!important;pointer-events:none!important}.day-view:not(.mobile-all-staff-overview) .day-time-grid{overflow:hidden}.day-view:not(.mobile-all-staff-overview) .day-time-grid .lanes{grid-template-columns:minmax(0,1fr)!important;min-width:0!important;width:100%}.day-view:not(.mobile-all-staff-overview) .day-time-grid .lane{min-width:0!important;width:100%;border-right:0}}`;
 }
 
-function applyCalendarResponsivePolish(html, model = null, basePath = '/calendar/read-only') {
-  let output = String(html).replace(
+function applyCalendarResponsivePolish(html) {
+  return String(html).replace(
     '.controls{position:sticky;top:0;z-index:5;grid-template-columns:1fr 1fr;',
     '.controls{position:sticky;top:0;z-index:5;grid-template-columns:1fr;',
   );
-
-  if (!output.includes('.mobile-staff-overview{display:none}')) {
-    output = output.replace('</style>', `${mobileStaffOverviewStyles()}</style>`);
-  }
-
-  const overview = renderMobileStaffOverview(model, basePath);
-  if (overview) {
-    output = output
-      .replace('<body data-calendar-view=', '<body data-calendar-mobile-overview="true" data-calendar-view=')
-      .replace('<main class="calendar-view day-view" data-view="day">', '<main class="calendar-view day-view mobile-all-staff-overview" data-view="day">')
-      .replace('<div class="time-grid day-time-grid"', `${overview}<div class="time-grid day-time-grid"`);
-  }
-  return output;
 }
 
 // Compatibility fallback for renderers that do not yet consume operationalActions.
@@ -211,7 +198,7 @@ function applyCalendarResponsivePolish(html, model = null, basePath = '/calendar
 function decorateBookingEntry(html, dateKey, bookingPath = '/calendar/book') {
   const href = `${bookingPath}?date=${encodeURIComponent(String(dateKey || ''))}`;
   return String(html)
-    .replace('<div class="access-controls">', `<div class="access-controls"><a class="nav-button" href="${href}">Create booking</a>`)
+    .replace('<div class="access-controls">', `<div class="access-controls"><a class="nav-button" aria-label="Create booking" href="${href}">+ Appointment</a>`)
     .replace('Read-only operational view. Booking, reschedule, cancellation, block, leave and schedule mutations are not available here.', 'Timeline remains read-only. Use Create booking to add an appointment. Reschedule, cancellation, drag/drop, reassignment, block, leave and schedule changes are not available here.');
 }
 
@@ -296,6 +283,8 @@ function createCalendarReadOnlyHandler({
         operationalMutationsScriptPath,
         clientNavigationAllowed,
         clientsPath,
+        bookingEnabled: bookingAllowed,
+        bookingPath,
         operationalActions: [
           ...(bookingAllowed ? bookingOperationalActions(model.dateKey, bookingPath) : []),
         ],

@@ -69,30 +69,25 @@ function selectedStaffModel() {
   return model;
 }
 
-test('phone all-staff day mode renders a compact overview for every permitted practitioner', () => {
+test('phone all-staff Day keeps the canonical spatial lane canvas instead of replacing it with overview cards', () => {
   const model = allStaffModel();
   const raw = renderCalendarPage(model, { clientNavigationAllowed: true });
   const html = applyCalendarResponsivePolish(raw, model, '/calendar/read-only');
 
-  assert.match(html, /<body[^>]*data-calendar-mobile-overview="true"/);
-  assert.match(html, /data-mobile-staff-overview/);
-  assert.equal((html.match(/class="mobile-staff-card"/g) || []).length, 5);
+  assert.doesNotMatch(html, /<body[^>]*data-calendar-mobile-overview="true"/);
+  assert.doesNotMatch(html, /data-mobile-staff-overview/);
+  assert.equal((html.match(/class="lane"/g) || []).length, 5);
   assert.match(html, /Christel With A Long Display Name/);
   assert.match(html, /08:00–17:00/);
-  assert.match(html, /08:00 • Naledi Mokoena/);
+  assert.match(html, /Naledi Mokoena/);
   assert.match(html, /Bamboo Sports Massage/);
-  assert.match(html, /staff=1/);
-  assert.match(html, /staff=5/);
-  assert.match(html, /\.mobile-staff-grid\{display:grid;grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
-  assert.match(html, /\.day-view\.mobile-all-staff-overview \.day-time-grid\{position:absolute!important;width:1px!important;height:1px!important;overflow:hidden!important;clip-path:inset\(50%\)!important;visibility:hidden!important;pointer-events:none!important\}/);
-  assert.match(html, /body\[data-calendar-mobile-overview="true"\] \.practitioner-control\{display:none\}/);
-
-  // Desktop detail remains in the document; phone CSS removes it from the visible/interactive flow.
+  assert.match(html, /data-people-picker/);
+  assert.match(html, /grid-template-columns:repeat\(var\(--lane-count\),minmax\(270px,calc\(100vw - 66px\)\)\)!important/);
   assert.match(html, /class="time-grid day-time-grid"/);
   assert.match(html, /style="--lane-count:5"/);
 });
 
-test('selected practitioner keeps one full-width detailed mobile lane and no overview', () => {
+test('selected practitioner keeps one readable detailed mobile lane and no overview', () => {
   const model = selectedStaffModel();
   const raw = renderCalendarPage(model, { clientNavigationAllowed: true });
   const html = applyCalendarResponsivePolish(raw, model, '/calendar/read-only');
@@ -102,8 +97,8 @@ test('selected practitioner keeps one full-width detailed mobile lane and no ove
   assert.equal((html.match(/class="lane"/g) || []).length, 1);
   assert.match(html, /Marietjie/);
   assert.match(html, /Shared Client/);
-  assert.match(html, /\.day-view:not\(\.mobile-all-staff-overview\) \.day-time-grid \.lanes\{grid-template-columns:minmax\(0,1fr\)!important;min-width:0!important;width:100%\}/);
-  assert.match(html, /\.day-view:not\(\.mobile-all-staff-overview\) \.day-time-grid \.lane\{min-width:0!important;width:100%;border-right:0\}/);
+  assert.match(html, /day-time-grid \.lanes\{display:grid!important;grid-template-columns:repeat\(var\(--lane-count\),minmax\(270px,calc\(100vw - 66px\)\)\)!important/);
+  assert.match(html, /day-time-grid \.lane\{min-width:270px!important/);
 });
 
 test('mobile overview escapes staff and event text and reuses existing staff filter URLs', () => {

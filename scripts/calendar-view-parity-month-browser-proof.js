@@ -228,9 +228,9 @@ function assertMetrics(proof, metrics) {
   }
   if (metrics.rootScrollWidth > proof.width + 1) throw new Error(`${proof.name} leaked horizontal overflow to the page`);
   if (!metrics.viewVisible || metrics.view !== proof.view) throw new Error(`${proof.name} did not render the requested view`);
-  if (proof.view === 'week') {
+  if (proof.view === 'week' || (proof.view === 'month' && proof.phone)) {
     if (metrics.contextVisible || metrics.practitionerCount !== 0 || !metrics.peopleSummary) {
-      throw new Error(`${proof.name} retained redundant Week context or lost the top People summary: ${JSON.stringify(metrics)}`);
+      throw new Error(`${proof.name} retained redundant Phone calendar context or lost the top People summary: ${JSON.stringify(metrics)}`);
     }
   } else if (!metrics.contextVisible || metrics.practitionerCount !== proof.staffCount) {
     throw new Error(`${proof.name} lost selected practitioner context: ${JSON.stringify(metrics)}`);
