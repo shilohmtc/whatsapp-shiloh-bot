@@ -37,6 +37,7 @@ test('shared Workspace shell replaces the Phone bottom bar with a hidden left dr
   const css = workspaceShellStyles();
   assert.match(css, /@media\(max-width:700px\)/);
   assert.match(css, /\.workspace-nav\{position:fixed;inset:0 auto 0 0/);
+  assert.match(css, /z-index:80;display:flex;align-items:stretch;width:min\(82vw,320px\)/);
   assert.match(css, /transform:translateX\(-105%\)/);
   assert.match(css, /\.workspace-nav\.open\{transform:translateX\(0\)\}/);
   assert.match(css, /\.workspace-nav-backdrop\.open\{opacity:1;pointer-events:auto\}/);
