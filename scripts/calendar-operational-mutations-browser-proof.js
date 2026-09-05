@@ -574,8 +574,23 @@ async function main() {
 
     await cdp.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
     await navigate('jp');
-    const touchProof = await evaluate(cdp, `(()=>{const elements=[...document.querySelectorAll('[data-calendar-operation]')];return{count:elements.length,minHeight:Math.min(...elements.map(e=>e.getBoundingClientRect().height)),overflow:document.documentElement.scrollWidth-document.documentElement.clientWidth};})()`);
-    assert.ok(touchProof.count >= 8);
+    const touchProof = await evaluate(cdp, `(()=>{
+      const operations=[...document.querySelectorAll('[data-calendar-operation]')];
+      const candidates=[...document.querySelectorAll('[data-calendar-operation],.phone-calendar-v2-controls>details>summary,.phone-today-fab,.phone-plus-menu>summary')];
+      const visible=candidates.filter(element=>{
+        const style=getComputedStyle(element),rect=element.getBoundingClientRect();
+        return style.display!=='none'&&style.visibility!=='hidden'&&style.pointerEvents!=='none'&&rect.width>0&&rect.height>0;
+      });
+      return{
+        domOperationCount:operations.length,
+        count:visible.length,
+        minHeight:visible.length?Math.min(...visible.map(element=>element.getBoundingClientRect().height)):0,
+        controls:visible.map(element=>({operation:element.dataset.calendarOperation||null,label:element.getAttribute('aria-label')||element.textContent.trim().slice(0,40),height:element.getBoundingClientRect().height})),
+        overflow:document.documentElement.scrollWidth-document.documentElement.clientWidth
+      };
+    })()`);
+    assert.ok(touchProof.domOperationCount >= 8);
+    assert.ok(touchProof.count >= 5);
     assert.ok(touchProof.minHeight >= 44);
     assert.ok(touchProof.overflow <= 1);
     screenshots.push({ identity: 'jp-mobile', ...(await snapshot('jp-mobile')) });
