@@ -87,14 +87,19 @@ test('Phone V2 decoration is presentation-only and adds Week practitioner contex
   assert.match(html, /canonical footer/);
 });
 
-test('Phone V2 uses a 30-minute visual grid while retaining duration-derived positioned events', () => {
+test('Phone V2 uses a 30-minute visual grid and a clean 44px touch contract while retaining duration-derived events', () => {
   assert.equal(PHONE_GRID_PIXELS_PER_HOUR, 60);
   const css = phoneCalendarV2Styles();
   assert.match(css, /repeating-linear-gradient\(to bottom,transparent 0,transparent 29px,var\(--line\) 29px,var\(--line\) 30px\)/);
   assert.match(css, /--phone-event-top/);
   assert.match(css, /--phone-event-height/);
   assert.match(css, /calendar-booking-slots\{pointer-events:none!important\}/);
-  assert.match(css, /\.lane-actions,body\[data-phone-calendar-v2="true"\] \.availability-menu\{position:absolute!important;width:1px!important;height:44px!important;overflow:hidden!important;clip-path:inset\(50%\)!important;visibility:hidden!important;pointer-events:none!important\}/);
+  assert.match(css, /\.day-view \.lane-actions\{display:none!important\}/);
+  assert.match(css, /\.lane-actions,body\[data-phone-calendar-v2="true"\] \.availability-menu\{display:none!important\}/);
+  assert.match(css, /\.phone-calendar-v2-controls summary\{[^}]*min-height:44px/);
+  assert.match(css, /\.phone-date-popover header a\{[^}]*min-height:44px/);
+  assert.match(css, /\.phone-date-cell,\.phone-date-blank\{[^}]*min-height:44px/);
+  assert.match(css, /\.phone-today-fab\{[^}]*min-height:44px/);
   assert.match(css, /\.week-time-grid\{margin:0!important;max-height:calc\(100dvh - 81px\)!important/);
   assert.match(css, /\.day-view \.positioned-event\{left:2px!important;right:2px!important;width:auto!important\}/);
   const genericPositionedRule = css.match(/body\[data-phone-calendar-v2="true"\] \.positioned-event\{([^}]*)\}/);
