@@ -87,7 +87,7 @@ const METRICS_EXPRESSION = `(() => {
     if (!el) return false;
     const style = getComputedStyle(el);
     const rect = el.getBoundingClientRect();
-    return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0;
+    return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0 && rect.right > 0 && rect.left < window.innerWidth && rect.bottom > 0 && rect.top < window.innerHeight;
   }
   function rect(el) {
     const value = el.getBoundingClientRect();
@@ -95,6 +95,8 @@ const METRICS_EXPRESSION = `(() => {
   }
   const root = document.documentElement;
   const nav = document.querySelector('.workspace-nav');
+  const menuToggle = document.querySelector('[data-workspace-drawer-toggle]');
+  const frame = document.querySelector('.workspace-frame');
   const navLinks = Array.from(document.querySelectorAll('.workspace-link')).filter(visible);
   const targets = Array.from(document.querySelectorAll('.workspace-link,button,.button,.pager-link,.nav-button,.view-tab,.filter,.action-link')).filter(visible);
   const primary = Array.from(document.querySelectorAll('.client-row,.staff-row,.service-row,.panel,.profile-panel,.history-panel,.calendar-view,.controls,.scan-summary')).filter(visible);
@@ -111,9 +113,11 @@ const METRICS_EXPRESSION = `(() => {
     rootScrollWidth: root.scrollWidth,
     noPageOverflow: root.scrollWidth <= window.innerWidth + 1,
     navPosition: nav ? getComputedStyle(nav).position : null,
-    navBottomGap: nav ? Math.abs(window.innerHeight - nav.getBoundingClientRect().bottom) : null,
+    navRight: nav ? nav.getBoundingClientRect().right : null,
     visibleNavLinks: navLinks.length,
     minNavHeight: navLinks.length ? Math.min(...navLinks.map(el => rect(el).height)) : 0,
+    menuHeight: menuToggle ? rect(menuToggle).height : 0,
+    framePaddingBottom: frame ? parseFloat(getComputedStyle(frame).paddingBottom) || 0 : 0,
     minTouchHeight: targets.length ? Math.min(...targets.map(el => rect(el).height)) : 0,
     overflowingPrimary: primary.filter(el => {
       const value = el.getBoundingClientRect();
@@ -138,11 +142,11 @@ function assertMetrics(proof, metrics) {
   if (!metrics.noPageOverflow) {
     throw new Error(`${proof.view} has page overflow: ${metrics.rootScrollWidth}px > ${metrics.innerWidth}px`);
   }
-  if (metrics.navPosition !== 'fixed' || metrics.navBottomGap > 2) {
-    throw new Error(`${proof.view} does not use the fixed phone navigation`);
+  if (metrics.navPosition !== 'fixed' || metrics.navRight > 1) {
+    throw new Error(`${proof.view} does not keep Phone navigation hidden off-canvas`);
   }
-  if (metrics.visibleNavLinks < 3 || metrics.minNavHeight < 47) {
-    throw new Error(`${proof.view} mobile navigation is too small or incomplete`);
+  if (metrics.visibleNavLinks !== 0 || metrics.menuHeight < 44 || metrics.framePaddingBottom !== 0) {
+    throw new Error(`${proof.view} still reserves persistent Phone navigation space`);
   }
   if (metrics.minTouchHeight < 43) {
     throw new Error(`${proof.view} has a touch target below 43px (${metrics.minTouchHeight})`);

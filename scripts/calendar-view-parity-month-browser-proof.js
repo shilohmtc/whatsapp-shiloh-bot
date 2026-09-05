@@ -202,6 +202,8 @@ const METRICS_EXPRESSION = `(() => {
     contextVisible: visible(context),
     peopleSummary: peopleSummary ? peopleSummary.textContent.trim() : null,
     practitionerCount: visibleAll('.view-practitioner').length,
+    activePractitionerVisible: visible(document.querySelector('[data-compact-week-active-staff]')),
+    activePractitionerName: document.querySelector('[data-compact-week-active-staff]')?.textContent.trim() || '',
     ownerLabelCount: visibleAll('.event-practitioners').length,
     sharedCopies: document.querySelectorAll('[data-event-id="appointment-9503"]').length,
     weekColumnCount: weekGrid ? getComputedStyle(weekGrid).gridTemplateColumns.split(' ').filter(Boolean).length : 0,
@@ -233,6 +235,10 @@ function assertMetrics(proof, metrics) {
     if (metrics.contextVisible || metrics.practitionerCount !== 0 || !metrics.peopleSummary) {
       throw new Error(`${proof.name} retained redundant Phone calendar context or lost the top People summary: ${JSON.stringify(metrics)}`);
     }
+  } else if (proof.view === 'week' && proof.phone) {
+    if (metrics.contextVisible || metrics.practitionerCount !== 0 || !metrics.peopleSummary || !metrics.activePractitionerVisible || !metrics.activePractitionerName) {
+      throw new Error(`${proof.name} lost compact active-practitioner context: ${JSON.stringify(metrics)}`);
+    }
   } else if (!metrics.contextVisible || metrics.practitionerCount !== proof.staffCount) {
     throw new Error(`${proof.name} lost selected practitioner context: ${JSON.stringify(metrics)}`);
   }
@@ -242,11 +248,11 @@ function assertMetrics(proof, metrics) {
   if (proof.expectShared && metrics.sharedCopies !== 1) throw new Error(`${proof.name} did not retain one shared canonical booking`);
   if (proof.view === 'week') {
     const expectedWeekLanes = proof.staffCount * 6;
-    if (proof.phone && (metrics.weekColumnCount !== expectedWeekLanes || metrics.weekEventPosition !== 'absolute')) {
+    if (proof.phone && (metrics.weekColumnCount !== 6 || metrics.weekEventPosition !== 'absolute' || metrics.weekPractitionerHeaderCount !== 0)) {
       throw new Error(`${proof.name} did not render the spatial Phone Week treatment`);
     }
     if (!proof.phone && metrics.weekColumnCount !== expectedWeekLanes) throw new Error(`${proof.name} did not retain the Desktop Monday-Saturday practitioner Week model`);
-    if (metrics.weekPractitionerHeaderCount !== expectedWeekLanes) throw new Error(`${proof.name} lost persistent Week practitioner headers`);
+    if (!proof.phone && metrics.weekPractitionerHeaderCount !== expectedWeekLanes) throw new Error(`${proof.name} lost persistent Week practitioner headers`);
   }
   if (proof.view === 'agenda' && metrics.agendaCardCount < 2) throw new Error(`${proof.name} Agenda is missing canonical items`);
   if (proof.view === 'month') {
@@ -254,7 +260,7 @@ function assertMetrics(proof, metrics) {
       throw new Error(`${proof.name} Month grid is not Monday-Saturday and Monday-aligned: ${JSON.stringify(metrics)}`);
     }
     if (proof.phone) {
-      if (metrics.visibleMonthEvents !== 0 || metrics.visibleMonthOwners < 1 || metrics.minMonthLinkHeight < 53) {
+      if (metrics.visibleMonthEvents !== 0 || metrics.visibleMonthOwners < 1 || metrics.minMonthLinkHeight < 44) {
         throw new Error(`${proof.name} Phone Month is not compact, attributable, and touch-safe: ${JSON.stringify(metrics)}`);
       }
     } else if (metrics.visibleMonthEvents < (proof.minMonthEvents || 4)) {

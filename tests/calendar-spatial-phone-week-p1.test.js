@@ -8,6 +8,7 @@ const {
   calendarFirstPhoneStyles,
 } = require('../src/presentation/calendarReadOnlyUx');
 const { periodFor } = require('../src/services/calendarReadOnlyUx');
+const { resolveActiveWeekStaffId } = require('../src/routes/calendarReadOnlyUx');
 const { staffCalendarAccessClientScript } = require('../src/presentation/staffCalendarAccessUx');
 
 const STAFF = [
@@ -41,6 +42,7 @@ function model(view = 'week', visibleStaffIds = STAFF.map(person => person.id), 
   permittedStaff = STAFF,
   includeSundayInCraftedPeriod = false,
   mutationEnabled = false,
+  activeStaffId = visibleStaffIds[0],
 } = {}) {
   const visible = new Set(visibleStaffIds);
   const appointments = [
@@ -58,6 +60,7 @@ function model(view = 'week', visibleStaffIds = STAFF.map(person => person.id), 
     selectedStaffId: visibleStaffIds.length === 1 ? visibleStaffIds[0] : null,
     visibleStaffIds,
     visibleStaffSelectionExplicit: true,
+    activeStaffId,
     permittedStaff,
     timeline: {
       staff: STAFF.filter(person => visible.has(person.id)),
@@ -131,6 +134,25 @@ test('shared Week appointments remain one canonical event with compact practitio
   assert.match(html, /class="event-practitioner-compact" aria-hidden="true">AR\+BR<\/span>/);
 });
 
+test('Phone Week active practitioner is bounded to selected server-permitted People state', () => {
+  const selected = model('week', [31, 32], { activeStaffId: 32 });
+  const html = renderCalendarPage(selected);
+  assert.equal((html.match(/data-active-practitioner="true"/g) || []).length, 6);
+  assert.match(html, /data-compact-week-active-staff="32">Birch Room/);
+  assert.match(html, /data-compact-week-practitioner-option="31"/);
+  assert.match(html, /activeStaff=31/);
+  assert.match(html, /activeStaff=32/);
+  assert.equal((html.match(/data-event-id="appointment-9702"/g) || []).length, 1);
+  assert.match(html, /data-date="2026-09-11" data-staff-id="32" data-active-practitioner="true"[\s\S]*?data-event-id="appointment-9702"/);
+
+  assert.equal(resolveActiveWeekStaffId('32', selected), 32);
+  assert.equal(resolveActiveWeekStaffId('999', selected), 31);
+  assert.equal(resolveActiveWeekStaffId(['31', '32'], selected), 31);
+  const restricted = model('week', [31], { permittedStaff: [STAFF[0]], activeStaffId: 31 });
+  assert.equal(resolveActiveWeekStaffId('999', restricted), 31);
+  assert.doesNotMatch(renderCalendarPage(restricted), /Staff 999|value="999"|activeStaff=999/);
+});
+
 test('Day keeps the established practitioner lane model unchanged', () => {
   const html = renderCalendarPage(model('day', [31, 32]));
   assert.match(html, /class="time-grid day-time-grid" data-visible-lane-count="2"/);
@@ -164,6 +186,10 @@ test('authenticated browser proof mounts canonical Calendar and Create Booking r
   assert.match(source, /phone-empty-slot-create-booking-prefill/);
   assert.match(source, /phone-week-practitioner-slot-booking-prefill/);
   assert.match(source, /phone-week-practitioner-prefill-selected/);
+  assert.match(source, /phone-hidden-left-navigation-drawer/);
+  assert.match(source, /phone-week-active-practitioner-mon-sat/);
+  assert.match(source, /phone-week-switched-practitioner/);
+  assert.match(source, /calendarViewportShare >= 0\.70/);
   assert.match(source, /data-week-practitioner-lane/);
   assert.match(source, /phone-month-overview-navigation/);
   assert.doesNotMatch(source, /calendarReadOnlyRoutes\(\{/);
