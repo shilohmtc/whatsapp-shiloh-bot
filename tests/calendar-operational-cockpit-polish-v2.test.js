@@ -127,7 +127,7 @@ test('appointment management surface exposes only server-granted operations', ()
   const html = renderCalendarPage(m);
   assert.match(html, /data-calendar-management-panel/);
   assert.match(html, /data-panel-action="appointment:reschedule"/);
-  assert.match(html, /Every change is revalidated by canonical Calendar authority/);
+  assert.doesNotMatch(html, /Every change is revalidated by canonical Calendar authority/);
   assert.doesNotMatch(html, /data-allowed-operations="[^"]*appointment:cancel/);
 });
 
