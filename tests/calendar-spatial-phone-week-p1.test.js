@@ -1,5 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
 const vm = require('node:vm');
 
 const {
@@ -152,4 +153,10 @@ test('Week overlap allocation remains one implementation with Phone-specific pre
   assert.match(script, /--week-event-width/);
   assert.match(script, /data-week-overlap-layout','phone/);
   assert.match(script, /data-week-overlap-layout','desktop/);
+});
+
+test('authenticated browser proof mounts the configurable Calendar router factory', () => {
+  const source = fs.readFileSync(require.resolve('../scripts/calendar-spatial-phone-week-browser-proof'), 'utf8');
+  assert.match(source, /createCalendarReadOnlyRouter\(\{/);
+  assert.doesNotMatch(source, /calendarReadOnlyRoutes\(\{/);
 });

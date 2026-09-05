@@ -14,7 +14,7 @@ const {
   createOptionalCalendarSessionMiddleware,
   serializeSessionCookie,
 } = require('../src/middleware/staffBrowserSession');
-const calendarReadOnlyRoutes = require('../src/routes/calendarReadOnlyUx');
+const { createCalendarReadOnlyRouter } = require('../src/routes/calendarReadOnlyUx');
 const { createCalendarReadOnlyUxService } = require('../src/services/calendarReadOnlyUx');
 const { staffCalendarAccessClientScript } = require('../src/presentation/staffCalendarAccessUx');
 const { calendarOperationalMutationsClientScript } = require('../src/presentation/calendarOperationalMutationsUx');
@@ -237,7 +237,7 @@ function createFixture() {
     confirmation: { status: 'delivered', statusLabel: 'Delivered', lastEvidenceAt: '2026-09-05T08:00:00.000Z' },
     canRecover: false,
   }));
-  app.use('/calendar/read-only', createOptionalCalendarSessionMiddleware({ service: sessionService, env: ENV }), calendarReadOnlyRoutes({
+  app.use('/calendar/read-only', createOptionalCalendarSessionMiddleware({ service: sessionService, env: ENV }), createCalendarReadOnlyRouter({
     env: ENV,
     buildModel: input => calendarService.buildModel(input),
     bookingService: { async resolveOperator() { return { adminId: 77 }; } },
