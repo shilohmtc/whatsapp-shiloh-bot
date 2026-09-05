@@ -150,8 +150,11 @@ function assertMetrics(proof, metrics) {
   if (metrics.overflowingPrimary.length) {
     throw new Error(`${proof.view} primary content exceeds viewport: ${metrics.overflowingPrimary.join(', ')}`);
   }
-  if (proof.view.startsWith('calendar-') && (metrics.controlsPosition !== 'static' || /\s/.test(String(metrics.controlsColumns).trim()))) {
-    throw new Error(`${proof.view} Calendar controls did not collapse to one static column`);
+  if (proof.view === 'calendar-day' && (metrics.controlsPosition !== 'relative' || String(metrics.controlsColumns).trim().split(/\s+/).length !== 2)) {
+    throw new Error(`${proof.view} Calendar controls did not use the compact Calendar-first Phone layout`);
+  }
+  if (proof.view === 'calendar-agenda-compact' && (metrics.controlsPosition !== 'static' || /\s/.test(String(metrics.controlsColumns).trim()))) {
+    throw new Error(`${proof.view} Agenda controls did not retain the stacked compact layout`);
   }
   if (proof.view === 'staff-list-manage' && (String(metrics.staffFilterOrder) !== '1' || String(metrics.staffCreateOrder) !== '5')) {
     throw new Error(`${proof.view} staff operational list is not ordered before creation on mobile`);

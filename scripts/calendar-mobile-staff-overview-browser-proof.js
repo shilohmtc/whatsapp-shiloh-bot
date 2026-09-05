@@ -177,7 +177,10 @@ const METRICS_EXPRESSION = `(() => {
     dayGridVisibility: dayGridStyle ? dayGridStyle.visibility : null,
     dayGridPosition: dayGridStyle ? dayGridStyle.position : null,
     dayGridWidth: dayGrid ? dayGrid.getBoundingClientRect().width : 0,
+    dayGridScrollWidth: dayGrid ? dayGrid.scrollWidth : 0,
+    dayGridClientWidth: dayGrid ? dayGrid.clientWidth : 0,
     laneCount: laneEls.length,
+    minLaneWidth: laneEls.length ? Math.min(...laneEls.map(lane => lane.getBoundingClientRect().width)) : 0,
     lanesScrollWidth: lanes ? lanes.scrollWidth : 0,
     lanesClientWidth: lanes ? lanes.clientWidth : 0,
     practitionerDisplay: practitioner ? getComputedStyle(practitioner).display : null,
@@ -193,27 +196,19 @@ function assertCase(proof, metrics) {
   }
   if (!metrics.noPageOverflow) throw new Error(`${proof.name} has root page overflow: ${metrics.rootScrollWidth}px`);
 
-  if (proof.mode === 'overview') {
-    if (!metrics.overviewVisible) throw new Error(`${proof.name} all-staff overview is not visible`);
-    if (metrics.cardCount !== 5) throw new Error(`${proof.name} expected 5 visible staff cards, got ${metrics.cardCount}`);
-    if (metrics.minCardWidth < 150) throw new Error(`${proof.name} staff cards are cramped (${metrics.minCardWidth}px)`);
-    if (!metrics.cardsInsideViewport) throw new Error(`${proof.name} staff cards leave the viewport`);
-    if (!metrics.allCardsUseStaffFilter) throw new Error(`${proof.name} overview does not reuse staff filter URLs`);
-    const gridColumnCount = String(metrics.mobileGridColumns || '').trim().split(' ').filter(Boolean).length;
-    if (gridColumnCount !== 2) {
-      throw new Error(`${proof.name} overview is not a two-column grid: ${metrics.mobileGridColumns}`);
-    }
-    if (metrics.dayGridVisibility !== 'hidden' || metrics.dayGridPosition !== 'absolute' || metrics.dayGridWidth > 2.5) {
-      throw new Error(`${proof.name} multi-staff timeline remains in the visible/interactive phone flow: ${JSON.stringify(metrics)}`);
-    }
-    if (metrics.laneCount !== 0) throw new Error(`${proof.name} hidden multi-staff lanes remain visibly rendered`);
-    if (metrics.practitionerDisplay !== 'none') throw new Error(`${proof.name} duplicates practitioner chips above overview cards`);
+  if (proof.mode === 'lanes') {
+    if (metrics.overviewVisible || metrics.cardCount !== 0) throw new Error(`${proof.name} retained the retired overview-card replacement`);
+    if (metrics.dayGridDisplay === 'none' || metrics.dayGridVisibility === 'hidden') throw new Error(`${proof.name} canonical all-staff Day canvas is hidden`);
+    if (metrics.laneCount !== 5) throw new Error(`${proof.name} expected five permitted practitioner lanes, got ${metrics.laneCount}`);
+    if (metrics.minLaneWidth < 270) throw new Error(`${proof.name} practitioner lanes are cramped (${metrics.minLaneWidth}px)`);
+    if (metrics.dayGridScrollWidth <= metrics.dayGridClientWidth) throw new Error(`${proof.name} multi-staff Day canvas does not pan inside its calendar scroller`);
+    if (metrics.practitionerDisplay === 'none') throw new Error(`${proof.name} lost the canonical People selector`);
   } else {
     if (metrics.overviewVisible) throw new Error(`${proof.name} overview should not be visible after selecting one practitioner`);
     if (metrics.dayGridDisplay === 'none' || metrics.dayGridVisibility === 'hidden') throw new Error(`${proof.name} selected staff timeline is hidden`);
     if (metrics.laneCount !== 1) throw new Error(`${proof.name} expected one visible staff lane, got ${metrics.laneCount}`);
-    if (metrics.lanesScrollWidth > metrics.lanesClientWidth + 1) {
-      throw new Error(`${proof.name} selected staff lane still scrolls horizontally (${metrics.lanesScrollWidth} > ${metrics.lanesClientWidth})`);
+    if (metrics.dayGridScrollWidth > metrics.dayGridClientWidth + 1) {
+      throw new Error(`${proof.name} selected staff lane still scrolls horizontally (${metrics.dayGridScrollWidth} > ${metrics.dayGridClientWidth})`);
     }
   }
 }
@@ -231,8 +226,8 @@ async function main() {
   fs.mkdirSync(outDir, { recursive: true });
 
   const cases = [
-    { name: 'all-staff-390', mode: 'overview', width: 390, height: 844, model: allStaffModel() },
-    { name: 'all-staff-360', mode: 'overview', width: 360, height: 800, model: allStaffModel() },
+    { name: 'all-staff-lanes-390', mode: 'lanes', width: 390, height: 844, model: allStaffModel() },
+    { name: 'all-staff-lanes-360', mode: 'lanes', width: 360, height: 800, model: allStaffModel() },
     { name: 'selected-staff-390', mode: 'selected', width: 390, height: 844, model: selectedStaffModel() },
   ];
   for (const proof of cases) fs.writeFileSync(path.join(outDir, `${proof.name}.html`), pageHtml(proof.model));

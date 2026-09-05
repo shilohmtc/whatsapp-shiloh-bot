@@ -4,6 +4,7 @@ const { createCalendarCreateBookingService } = require('../services/calendarCrea
 const { confirmCalendarV2BookingDirect } = require('../services/calendarDirectBookingConfirmation');
 const { createCalendarBookingClientDirectory } = require('../services/calendarBookingClientDirectory');
 const workspaceServiceCreation = require('../services/workspaceServiceCreation');
+const { isOperationalDateKey } = require('../services/operationalCalendar');
 const {
   requireStaffSession,
   sameOriginGuard,
@@ -75,6 +76,20 @@ function customerConfirmationState(result) {
   };
 }
 
+function bookingPrefillFromQuery(query = {}, options = { staff: [] }) {
+  const rawDate = String(query?.date || '').trim();
+  const date = isOperationalDateKey(rawDate) ? rawDate : '';
+  const rawTime = String(query?.time || '').trim();
+  const timeMatch = rawTime.match(/^([01]\d|2[0-3]):([0-5]\d)$/);
+  const time = date && timeMatch && Number(timeMatch[2]) % 5 === 0 ? rawTime : '';
+  const requestedStaffId = Number(String(query?.staff || '').trim());
+  const staffId = Number.isSafeInteger(requestedStaffId)
+    && (options.staff || []).some(person => Number(person.id) === requestedStaffId)
+    ? requestedStaffId
+    : null;
+  return { date, time, staffId };
+}
+
 function createCalendarCreateBookingRouter({
   env = process.env,
   sessionService,
@@ -104,11 +119,11 @@ function createCalendarCreateBookingRouter({
   router.get('/', requireSession, async (req, res, next) => {
     try {
       const options = await bookingService.listBookableOptions(req.staffBrowserSession.adminId);
-      const rawDate = String(req.query?.date || '').trim();
-      const date = /^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? rawDate : '';
+      const prefill = bookingPrefillFromQuery(req.query, options);
       let html = renderPage({
         options,
-        date,
+        date: prefill.date,
+        prefill,
         clientScriptPath: `${req.baseUrl || '/calendar/book'}/client.js`,
       });
       try {
@@ -213,4 +228,5 @@ module.exports = {
   setBookingSecurityHeaders,
   statusForError,
   customerConfirmationState,
+  bookingPrefillFromQuery,
 };

@@ -6,7 +6,7 @@ const {
   allocateWeekOverlapLanes,
   staffCalendarAccessClientScript,
 } = require('../src/presentation/staffCalendarAccessUx');
-const { renderEventCard, spatialPhoneWeekStyles } = require('../src/presentation/calendarReadOnlyUx');
+const { renderEventCard, calendarFirstPhoneStyles } = require('../src/presentation/calendarReadOnlyUx');
 
 function rectangle(id, top, height) {
   return { id, top, height };
@@ -91,7 +91,7 @@ test('Week client layout uses one allocator and expands tracks only on Desktop',
   assert.match(script, /\(min-width: 701px\)/);
   assert.match(script, /data-week-overlap-layout/);
   assert.match(script, /gridTemplateColumns/);
-  assert.match(script, /baseLaneWidth=154/);
+  assert.match(script, /baseLaneWidth=190/);
   assert.match(script, /\.time-column > \.positioned-event/);
   assert.match(script, /removeProperty\('left'\)/);
   assert.match(script, /removeProperty\('width'\)/);
@@ -101,7 +101,7 @@ test('Week client layout uses one allocator and expands tracks only on Desktop',
 });
 
 test('spatial Phone appointments remain whole-card touch targets', () => {
-  const phoneCss = spatialPhoneWeekStyles();
+  const phoneCss = calendarFirstPhoneStyles();
   assert.match(phoneCss, /@media\(max-width:700px\)/);
   assert.match(phoneCss, /\.positioned-event \.event-operation\{position:absolute!important;inset:0!important/);
   assert.match(phoneCss, /min-width:44px!important;min-height:44px!important/);
