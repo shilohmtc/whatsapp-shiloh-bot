@@ -18,7 +18,10 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: '24.14.1'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
       - name: Apply bounded #723 presentation patch
         shell: bash
         run: |
