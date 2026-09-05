@@ -122,6 +122,8 @@ test('Phone Calendar keeps Day Week Month primary and Month remains overview nav
   assert.match(css, /data-calendar-view-option="agenda"[^}]*display:none!important/);
   assert.match(css, /data-calendar-view="month"[^}]*\.month-events[^}]*display:none!important/);
   assert.match(css, /data-calendar-view="month"[^}]*\.view-practitioner-context[^}]*display:none!important/);
+  assert.match(css, /data-calendar-view="day"[^}]*\.access-controls[^}]*display:flex!important/);
+  assert.match(month, /data-shiloh-logout>Sign out<\/button>/);
 });
 
 test('appointment cards remain canonical and the Phone Day and Week card is the Manage target', () => {
