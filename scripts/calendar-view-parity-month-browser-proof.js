@@ -113,6 +113,7 @@ function canonicalTimeline() {
     appointment(9504, [53], '2026-09-18', 9, 'Cedar Client'),
     appointment(9505, [54], '2026-09-19', 10, 'Dune Client'),
     appointment(9506, [51], '2026-09-25', 6, 'Later Client'),
+    appointment(9507, [51], '2026-08-11', 8, 'Observed Week Client'),
   ];
   const blocks = [{
     id: 9601,
@@ -124,25 +125,30 @@ function canonicalTimeline() {
     blockType: 'admin',
     title: 'Planning block',
   }];
+  const closures = [
+    { id: 'holiday:2026-08-09', kind: 'clinic_closure', canonical: true, date: '2026-08-09', reason: "National Women's Day", observed: false },
+    { id: 'holiday:2026-08-10', kind: 'clinic_closure', canonical: true, date: '2026-08-10', reason: "National Women's Day observed", observed: true },
+  ];
   return {
     staff: STAFF,
     workingWindows: STAFF.flatMap(person => [1, 2, 3, 4, 5].map(dayOfWeek => ({
       staffId: person.id, dayOfWeek, startsLocal: '08:00:00', endsLocal: '17:00:00',
     }))),
-    scheduleExceptions: [], recurringClosures: [], closures: [], leave: [], externalBusy: [],
-    appointments, blocks, events: [...appointments, ...blocks],
+    scheduleExceptions: [], recurringClosures: [], closures, leave: [], externalBusy: [],
+    appointments, blocks, events: [...appointments, ...blocks, ...closures],
   };
 }
 
-function model(view, visibleStaffIds) {
+function model(view, visibleStaffIds, selectedDate = '2026-09-18') {
   const timeline = canonicalTimeline();
   const visible = new Set(visibleStaffIds);
   const appointments = timeline.appointments.filter(item => item.staffIds.some(staffId => visible.has(staffId)));
   const blocks = timeline.blocks.filter(item => item.staffIds.some(staffId => visible.has(staffId)));
+  const closures = timeline.closures.filter(item => new Date(`${item.date}T12:00:00Z`).getUTCDay() !== 0);
   return {
     view,
-    dateKey: '2026-09-18',
-    period: periodFor(view, '2026-09-18'),
+    dateKey: selectedDate,
+    period: periodFor(view, selectedDate),
     selectedStaffId: visibleStaffIds.length === 1 ? visibleStaffIds[0] : null,
     visibleStaffIds,
     visibleStaffSelectionExplicit: true,
@@ -153,7 +159,8 @@ function model(view, visibleStaffIds) {
       workingWindows: timeline.workingWindows.filter(item => visible.has(item.staffId)),
       appointments,
       blocks,
-      events: [...appointments, ...blocks],
+      closures,
+      events: [...appointments, ...blocks, ...closures],
     },
     mutationCapability: { enabled: false },
   };
@@ -200,9 +207,11 @@ const METRICS_EXPRESSION = `(() => {
     agendaCardCount: visibleAll('.agenda-view .event-card').length,
     monthCellCount: document.querySelectorAll('.month-day').length,
     monthColumnCount: monthGrid ? getComputedStyle(monthGrid).gridTemplateColumns.split(' ').filter(Boolean).length : 0,
+    sundayCellCount: Array.from(document.querySelectorAll('.month-day')).filter(node => new Date(node.dataset.date + 'T12:00:00Z').getUTCDay() === 0).length,
     outsideMonthCount: document.querySelectorAll('.month-day.outside-month').length,
     visibleMonthEvents: visibleAll('.month-event').length,
     visibleMonthOwners: visibleAll('.month-day-owners').length,
+    observedHolidayVisible: document.body.textContent.includes("National Women's Day observed"),
     minMonthLinkHeight: monthLinks.length ? Math.min(...monthLinks.map(node => node.getBoundingClientRect().height)) : 0,
     minTouchHeight: touchTargets.length ? Math.min(...touchTargets.map(node => node.getBoundingClientRect().height)) : 0,
   };
@@ -228,19 +237,22 @@ function assertMetrics(proof, metrics) {
     if (proof.phone && (metrics.weekColumnCount !== 1 || metrics.weekEventPosition !== 'static')) {
       throw new Error(`${proof.name} did not retain the Phone vertical Week treatment`);
     }
-    if (!proof.phone && metrics.weekColumnCount !== 7) throw new Error(`${proof.name} did not retain the Desktop seven-day Week model`);
+    if (!proof.phone && metrics.weekColumnCount !== 6) throw new Error(`${proof.name} did not retain the Desktop Monday-Saturday Week model`);
   }
   if (proof.view === 'agenda' && metrics.agendaCardCount < 2) throw new Error(`${proof.name} Agenda is missing canonical items`);
   if (proof.view === 'month') {
-    if (metrics.monthCellCount !== 35 || metrics.monthColumnCount !== 7 || metrics.outsideMonthCount < 1) {
-      throw new Error(`${proof.name} Month grid is not conventional and Monday-aligned: ${JSON.stringify(metrics)}`);
+    if (metrics.monthCellCount !== (proof.monthCellCount || 30) || metrics.monthColumnCount !== 6 || metrics.sundayCellCount !== 0 || metrics.outsideMonthCount < 1) {
+      throw new Error(`${proof.name} Month grid is not Monday-Saturday and Monday-aligned: ${JSON.stringify(metrics)}`);
     }
     if (proof.phone) {
       if (metrics.visibleMonthEvents !== 0 || metrics.visibleMonthOwners < 1 || metrics.minMonthLinkHeight < 53) {
         throw new Error(`${proof.name} Phone Month is not compact, attributable, and touch-safe: ${JSON.stringify(metrics)}`);
       }
-    } else if (metrics.visibleMonthEvents < 4) {
+    } else if (metrics.visibleMonthEvents < (proof.minMonthEvents || 4)) {
       throw new Error(`${proof.name} Desktop Month did not retain visible canonical items`);
+    }
+    if (proof.expectObservedHoliday && !metrics.observedHolidayVisible) {
+      throw new Error(`${proof.name} did not show the observed Monday public holiday`);
     }
   }
   if (proof.phone && metrics.minTouchHeight < 43) throw new Error(`${proof.name} has a touch target below 43px`);
@@ -264,6 +276,7 @@ async function main() {
     { name: 'desktop-agenda-multiple-people', view: 'agenda', width: 1200, height: 1000, staffCount: 4, expectShared: true, model: model('agenda', [51, 52, 53, 54]) },
     { name: 'desktop-month-multiple-people', view: 'month', width: 1440, height: 1200, staffCount: 4, expectShared: true, model: model('month', [51, 52, 53, 54]) },
     { name: 'desktop-month-ownership', view: 'month', width: 1180, height: 1000, staffCount: 2, expectShared: true, model: model('month', [51, 52]) },
+    { name: 'desktop-month-observed-public-holiday', view: 'month', width: 1440, height: 1200, staffCount: 4, monthCellCount: 36, minMonthEvents: 2, expectObservedHoliday: true, model: model('month', [51, 52, 53, 54], '2026-08-10') },
     { name: 'phone-week', view: 'week', width: 390, height: 844, phone: true, staffCount: 4, expectShared: true, model: model('week', [51, 52, 53, 54]) },
     { name: 'phone-agenda', view: 'agenda', width: 390, height: 844, phone: true, staffCount: 4, expectShared: true, model: model('agenda', [51, 52, 53, 54]) },
     { name: 'phone-month', view: 'month', width: 390, height: 844, phone: true, staffCount: 4, expectShared: true, model: model('month', [51, 52, 53, 54]) },

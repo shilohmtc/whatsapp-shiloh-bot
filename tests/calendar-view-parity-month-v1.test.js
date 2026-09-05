@@ -2,7 +2,9 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const {
+  addOperationalDays,
   createCalendarReadOnlyUxService,
+  normalizeOperationalDateKey,
   normalizeView,
   periodFor,
 } = require('../src/services/calendarReadOnlyUx');
@@ -112,7 +114,7 @@ test('Month is a canonical view while unknown views still fail closed', () => {
   assert.throws(() => normalizeView('quarter'), error => error.code === 'CALENDAR_UX_INVALID_VIEW');
 });
 
-test('Month period uses a deterministic Monday-aligned visible grid and calendar-month navigation', () => {
+test('Month period uses a deterministic Monday-aligned Monday-Saturday grid and calendar-month navigation', () => {
   const period = periodFor('month', '2026-09-18');
   assert.equal(period.startKey, '2026-09-01');
   assert.equal(period.endKey, '2026-10-01');
@@ -120,20 +122,41 @@ test('Month period uses a deterministic Monday-aligned visible grid and calendar
   assert.equal(period.displayEndKey, '2026-10-05');
   assert.equal(period.previousAnchor, '2026-08-01');
   assert.equal(period.nextAnchor, '2026-10-01');
-  assert.equal(period.dateKeys.length, 35);
+  assert.equal(period.dateKeys.length, 30);
   assert.equal(period.dateKeys[0], '2026-08-31');
-  assert.equal(period.dateKeys.at(-1), '2026-10-04');
+  assert.equal(period.dateKeys.at(-1), '2026-10-03');
+  assert.equal(period.dateKeys.some(day => new Date(`${day}T12:00:00Z`).getUTCDay() === 0), false);
   assert.equal(period.from, '2026-08-31T22:00:00.000Z');
   assert.equal(period.to, '2026-09-30T22:00:00.000Z');
 
   const sixWeekPeriod = periodFor('month', '2026-08-15');
-  assert.equal(sixWeekPeriod.dateKeys.length, 42);
+  assert.equal(sixWeekPeriod.dateKeys.length, 36);
   assert.equal(sixWeekPeriod.displayStartKey, '2026-07-27');
   assert.equal(sixWeekPeriod.displayEndKey, '2026-09-07');
 
   const yearBoundary = periodFor('month', '2027-01-20');
   assert.equal(yearBoundary.previousAnchor, '2026-12-01');
   assert.equal(yearBoundary.nextAnchor, '2027-02-01');
+});
+
+test('Day, Week and Agenda navigation skips Sunday deterministically', () => {
+  assert.equal(normalizeOperationalDateKey('2026-09-20'), '2026-09-21');
+  assert.equal(addOperationalDays('2026-09-21', -1), '2026-09-19');
+
+  const day = periodFor('day', '2026-09-20');
+  assert.deepEqual(day.dateKeys, ['2026-09-21']);
+  assert.equal(day.previousAnchor, '2026-09-19');
+  assert.equal(day.nextAnchor, '2026-09-22');
+
+  const week = periodFor('week', '2026-09-20');
+  assert.deepEqual(week.dateKeys, ['2026-09-21', '2026-09-22', '2026-09-23', '2026-09-24', '2026-09-25', '2026-09-26']);
+  assert.equal(week.previousAnchor, '2026-09-14');
+  assert.equal(week.nextAnchor, '2026-09-28');
+
+  const agenda = periodFor('agenda', '2026-09-20');
+  assert.deepEqual(agenda.dateKeys, ['2026-09-21', '2026-09-22', '2026-09-23', '2026-09-24', '2026-09-25', '2026-09-26', '2026-09-28']);
+  assert.equal(agenda.previousAnchor, '2026-09-12');
+  assert.equal(agenda.nextAnchor, '2026-09-29');
 });
 
 test('Month resolution follows the Africa/Johannesburg calendar date at the UTC boundary', async () => {
@@ -249,16 +272,41 @@ test('A shared appointment remains one canonical booking in Week, Agenda and Mon
   }
 });
 
-test('Month renders a Monday-aligned grid with subdued outside dates and practitioner ownership', () => {
+test('Month renders a Monday-aligned Monday-Saturday grid with subdued outside dates and practitioner ownership', () => {
   const html = renderCalendarPage(model('month'));
   assert.match(html, /data-view="month" data-month="2026-09"/);
   assert.match(html, /<h2>September 2026<\/h2>/);
   assert.match(html, /Mon<\/span><span>Tue/);
-  assert.equal((html.match(/class="month-day(?: outside-month)?"/g) || []).length, 35);
+  assert.doesNotMatch(html, /<span>Sun<\/span>/);
+  assert.equal((html.match(/class="month-day(?: outside-month)?"/g) || []).length, 30);
+  assert.doesNotMatch(html, /data-date="2026-09-20"/);
   assert.match(html, /class="month-day outside-month" data-date="2026-08-31"/);
   assert.match(html, /class="event-practitioners"/);
   assert.match(html, /Amber Studio \+ Birch Studio/);
   assert.match(html, /view=day&amp;date=2026-09-18&amp;staff=21&amp;staff=22&amp;staff=23/);
+});
+
+test('Sunday public holiday remains canonical while its observed Monday is visible', async () => {
+  const timeline = timelineFixture();
+  timeline.closures = [
+    { id: 'holiday:2026-08-09', kind: 'clinic_closure', canonical: true, date: '2026-08-09', reason: "National Women's Day", observed: false },
+    { id: 'holiday:2026-08-10', kind: 'clinic_closure', canonical: true, date: '2026-08-10', reason: "National Women's Day observed", observed: true },
+  ];
+  timeline.events = [...timeline.appointments, ...timeline.blocks, ...timeline.closures];
+  const service = createCalendarReadOnlyUxService({
+    listTimeline: async () => timeline,
+    query: async () => ({ rows: [] }),
+  });
+  const result = await service.buildModel({
+    view: 'month', date: '2026-08-10', staff: ['21'],
+    viewer: { staffId: 99, calendarScope: 'all_business' },
+  });
+  assert.equal(result.authorizedTimeline.closures.length, 2);
+  assert.deepEqual(result.timeline.closures.map(item => item.date), ['2026-08-10']);
+  const html = renderCalendarPage(result);
+  assert.match(html, /National Women&#39;s Day observed/);
+  assert.match(html, /data-date="2026-08-10"/);
+  assert.doesNotMatch(html, /data-date="2026-08-09"/);
 });
 
 test('Month density is bounded truthfully with a deterministic day drill-in', () => {

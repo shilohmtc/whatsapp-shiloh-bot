@@ -1,5 +1,10 @@
 const { pool } = require('../db/pool');
 const schedulingEngine = require('./schedulingEngine');
+const {
+  dateKeyInBusinessTimezone,
+  isOperationalDateKey,
+  isSundayDateKey,
+} = require('./operationalCalendar');
 
 const BUSINESS_TIMEZONE = 'Africa/Johannesburg';
 const BUSINESS_UTC_OFFSET = '+02:00';
@@ -64,6 +69,22 @@ function addDays(dateKey, days) {
   const date = new Date(`${dateKey}T12:00:00${BUSINESS_UTC_OFFSET}`);
   date.setUTCDate(date.getUTCDate() + days);
   return dateKeyFromDate(date);
+}
+
+function normalizeOperationalDateKey(dateKey) {
+  return isSundayDateKey(dateKey) ? addDays(dateKey, 1) : dateKey;
+}
+
+function addOperationalDays(dateKey, days) {
+  const direction = Number(days) < 0 ? -1 : 1;
+  let remaining = Math.abs(Number(days) || 0);
+  let cursor = normalizeOperationalDateKey(dateKey);
+  while (remaining > 0) {
+    cursor = addDays(cursor, direction);
+    if (!isOperationalDateKey(cursor)) continue;
+    remaining -= 1;
+  }
+  return cursor;
 }
 
 function mondayFor(dateKey) {
@@ -131,6 +152,7 @@ function normalizeVisibleStaffSelection(value) {
 }
 
 function periodFor(view, dateKey) {
+  dateKey = normalizeOperationalDateKey(dateKey);
   if (view === 'month') {
     const startKey = monthStartFor(dateKey);
     const endKey = addMonths(startKey, 1);
@@ -138,8 +160,8 @@ function periodFor(view, dateKey) {
     const displayEndKey = addDays(mondayFor(addDays(endKey, -1)), 7);
     const dateKeys = [];
     for (let cursor = displayStartKey; cursor !== displayEndKey; cursor = addDays(cursor, 1)) {
-      dateKeys.push(cursor);
-      if (dateKeys.length > 42) throw uxError('CALENDAR_UX_INVALID_DATE', 'Calendar month grid is invalid.');
+      if (isOperationalDateKey(cursor)) dateKeys.push(cursor);
+      if (dateKeys.length > 36) throw uxError('CALENDAR_UX_INVALID_DATE', 'Calendar month grid is invalid.');
     }
     return {
       startKey,
@@ -155,10 +177,22 @@ function periodFor(view, dateKey) {
   }
 
   const startKey = view === 'week' ? mondayFor(dateKey) : dateKey;
-  const lengthDays = view === 'day' ? 1 : 7;
-  const endKey = addDays(startKey, lengthDays);
-  const stepDays = lengthDays;
-  const dateKeys = Array.from({ length: lengthDays }, (_, index) => addDays(startKey, index));
+  const dateKeys = view === 'day'
+    ? [startKey]
+    : view === 'week'
+      ? Array.from({ length: 6 }, (_, index) => addDays(startKey, index))
+      : Array.from({ length: 7 }, (_, index) => addOperationalDays(startKey, index));
+  const endKey = addDays(dateKeys.at(-1), 1);
+  const previousAnchor = view === 'day'
+    ? addOperationalDays(startKey, -1)
+    : view === 'week'
+      ? addDays(startKey, -7)
+      : addOperationalDays(startKey, -7);
+  const nextAnchor = view === 'day'
+    ? addOperationalDays(startKey, 1)
+    : view === 'week'
+      ? addDays(startKey, 7)
+      : addOperationalDays(startKey, 7);
   return {
     startKey,
     endKey,
@@ -167,8 +201,8 @@ function periodFor(view, dateKey) {
     dateKeys,
     from: new Date(`${startKey}T00:00:00${BUSINESS_UTC_OFFSET}`).toISOString(),
     to: new Date(`${endKey}T00:00:00${BUSINESS_UTC_OFFSET}`).toISOString(),
-    previousAnchor: addDays(dateKey, -stepDays),
-    nextAnchor: addDays(dateKey, stepDays),
+    previousAnchor,
+    nextAnchor,
   };
 }
 
@@ -204,12 +238,13 @@ function filterTimelineForVisibleStaff(timeline, selection) {
       : permittedIds.slice(0, 1);
   if (!visibleStaffIds.length && permittedIds.length) visibleStaffIds.push(permittedIds[0]);
   const visible = new Set(visibleStaffIds);
-  const includesVisibleStaff = item => eventStaffIds(item).some(id => visible.has(id));
+  const operationalItem = item => isOperationalDateKey(dateKeyInBusinessTimezone(item?.startsAt || item?.date));
+  const includesVisibleStaff = item => operationalItem(item) && eventStaffIds(item).some(id => visible.has(id));
   const appointments = (timeline.appointments || []).filter(includesVisibleStaff);
   const blocks = (timeline.blocks || []).filter(includesVisibleStaff);
   const leave = (timeline.leave || []).filter(includesVisibleStaff);
   const externalBusy = (timeline.externalBusy || []).filter(includesVisibleStaff);
-  const closures = timeline.closures || [];
+  const closures = (timeline.closures || []).filter(operationalItem);
 
   return {
     selectedStaffId: visibleStaffIds.length === 1 ? visibleStaffIds[0] : null,
@@ -287,7 +322,7 @@ function createCalendarReadOnlyUxService({
   async function buildModel({ view: rawView, date: rawDate, staff: rawStaff, viewer, now = new Date() } = {}) {
     const timelineViewer = normalizeViewerForTimeline(viewer);
     const view = normalizeView(rawView);
-    const dateKey = parseDateKey(rawDate, now);
+    const dateKey = normalizeOperationalDateKey(parseDateKey(rawDate, now));
     const visibleStaffSelection = normalizeVisibleStaffSelection(rawStaff);
     const period = periodFor(view, dateKey);
 
@@ -330,6 +365,8 @@ module.exports = {
   parseDateKey,
   normalizeStaffFilter,
   normalizeVisibleStaffSelection,
+  normalizeOperationalDateKey,
+  addOperationalDays,
   periodFor,
   filterTimelineForDisplay,
   filterTimelineForVisibleStaff,
