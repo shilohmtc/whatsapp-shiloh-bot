@@ -478,7 +478,7 @@ async function main() {
         draggable:document.querySelectorAll('[data-appointment-id][draggable="true"]').length,
         readOnly:document.body.dataset.calendarReadonly,
         hasGoogle:/google/i.test(document.body.innerText),
-        hasCreateBooking:[...document.querySelectorAll('a')].some(a=>a.textContent.trim()==='Create booking'),
+        hasCreateBooking:document.querySelector('a[aria-label="Create booking"]')!==null,
         hasApprovedLeaveControl:document.querySelector('[data-leave-id="7202"]')!==null
       })`);
       assert.equal(page.readOnly, 'false');
@@ -587,7 +587,7 @@ async function main() {
       draggable:document.querySelectorAll('[draggable="true"]').length,
       readOnly:document.body.dataset.calendarReadonly,
       operationsScript:[...document.scripts].some(s=>s.src.includes('/calendar/operations/client.js')),
-      hasCreateBooking:[...document.querySelectorAll('a')].some(a=>a.textContent.trim()==='Create booking')
+      hasCreateBooking:document.querySelector('a[aria-label="Create booking"]')!==null
     })`);
     assert.deepEqual(closed, { controls: 0, draggable: 0, readOnly: 'true', operationsScript: false, hasCreateBooking: false });
     const denied = await evaluate(cdp, `(async()=>{const r=await fetch('/calendar/operations/capability',{cache:'no-store'});return{status:r.status,body:await r.json()};})()`);
@@ -609,7 +609,7 @@ async function main() {
       draggable:document.querySelectorAll('[draggable="true"]').length,
       readOnly:document.body.dataset.calendarReadonly,
       operationsScript:[...document.scripts].some(s=>s.src.includes('/calendar/operations/client.js')),
-      hasCreateBooking:[...document.querySelectorAll('a')].some(a=>a.textContent.trim()==='Create booking')
+      hasCreateBooking:document.querySelector('a[aria-label="Create booking"]')!==null
     })`);
     assert.deepEqual(unrelatedClosed, closed);
     screenshots.push({ identity: 'unrelated-denied', ...(await snapshot('unrelated-denied')) });
