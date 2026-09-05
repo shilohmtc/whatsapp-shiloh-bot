@@ -493,6 +493,7 @@ async function main() {
 
     await evaluate(cdp, `document.querySelector('[data-workspace-drawer-toggle]').click();true`);
     await poll(() => evaluate(cdp, `document.querySelector('[data-workspace-navigation-drawer]').classList.contains('open')`), Boolean);
+    await poll(() => evaluate(cdp, `document.querySelector('[data-workspace-navigation-drawer]').getBoundingClientRect().left`), value => value >= -1);
     const drawerMetrics = await evaluate(cdp, `(() => {
       const visible=node=>{if(!node)return false;const style=getComputedStyle(node),rect=node.getBoundingClientRect();return style.display!=='none'&&style.visibility!=='hidden'&&rect.width>0&&rect.height>0&&rect.right>0;};
       return {
@@ -511,6 +512,7 @@ async function main() {
     screenshots.push({ ...(await capture('phone-hidden-left-navigation-drawer')), viewport: { width: 390, height: 844 }, metrics: drawerMetrics });
     await evaluate(cdp, `document.querySelector('[data-workspace-drawer-close]').click();true`);
     await poll(() => evaluate(cdp, `!document.querySelector('[data-workspace-navigation-drawer]').classList.contains('open')`), Boolean);
+    await poll(() => evaluate(cdp, `document.querySelector('[data-workspace-navigation-drawer]').getBoundingClientRect().right`), value => value <= 1);
 
     await evaluate(cdp, `document.querySelector('.week-time-grid').scrollLeft=484;true`);
     await poll(() => evaluate(cdp, `document.querySelector('.week-time-grid').scrollLeft`), value => value >= 400);

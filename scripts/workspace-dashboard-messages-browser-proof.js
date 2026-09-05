@@ -324,6 +324,7 @@ async function main() {
       if (openMore) {
         await evaluate(cdp, `document.querySelector('[data-workspace-drawer-toggle]').click();true`);
         await poll(() => evaluate(cdp, `document.querySelector('[data-workspace-navigation-drawer]').classList.contains('open')`), Boolean);
+        await poll(() => evaluate(cdp, `document.querySelector('[data-workspace-navigation-drawer]').getBoundingClientRect().left`), value => value >= -1);
         await evaluate(cdp, `document.querySelector('[data-workspace-more-toggle]').click();true`);
         await poll(() => evaluate(cdp, `document.querySelector('[data-workspace-more-menu]').classList.contains('open')`), Boolean);
       }
