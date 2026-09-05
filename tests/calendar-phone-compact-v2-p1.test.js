@@ -97,7 +97,9 @@ test('Phone V2 uses a 30-minute visual grid while retaining duration-derived pos
   assert.match(css, /\.lane-actions,body\[data-phone-calendar-v2="true"\] \.availability-menu\{position:absolute!important;width:1px!important;height:44px!important;overflow:hidden!important;clip-path:inset\(50%\)!important;visibility:hidden!important;pointer-events:none!important\}/);
   assert.match(css, /\.week-time-grid\{margin:0!important;max-height:calc\(100dvh - 81px\)!important/);
   assert.match(css, /\.day-view \.positioned-event\{left:2px!important;right:2px!important;width:auto!important\}/);
-  assert.doesNotMatch(css, /\.positioned-event\{[^}]*left:2px!important;right:2px!important;width:auto!important/);
+  const genericPositionedRule = css.match(/body\[data-phone-calendar-v2="true"\] \.positioned-event\{([^}]*)\}/);
+  assert.ok(genericPositionedRule, 'generic Phone event geometry rule must remain present');
+  assert.doesNotMatch(genericPositionedRule[1], /left:2px!important|right:2px!important|width:auto!important/);
   const mediaStart = css.indexOf('@media(max-width:700px){');
   const containerStart = css.indexOf('@container (max-height:44px){');
   const mediaEnd = css.lastIndexOf('\n}\n');
