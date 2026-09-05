@@ -423,13 +423,20 @@ async function main() {
         viewLinks:links,
         bookingSlots:document.querySelectorAll('[data-calendar-booking-slot]').length,
         minBookingSlotHeight:Math.min(...Array.from(document.querySelectorAll('[data-calendar-booking-slot]')).map(node=>node.getBoundingClientRect().height)),
+        operationStatusText:document.querySelector('[data-calendar-operation-status]')?.textContent.trim()||'',
+        operationStatusDisplay:document.querySelector('[data-calendar-operation-status]')?getComputedStyle(document.querySelector('[data-calendar-operation-status]')).display:'',
+        panelHintPresent:Boolean(document.querySelector('.panel-hint')),
       };
     })()`);
     assert.deepEqual(dayMetrics.viewport, { width: 390, height: 844, screenWidth: 390, screenHeight: 844 });
     assert.ok(dayMetrics.rootScrollWidth <= 391, 'Phone Day leaked horizontal overflow to the page');
     assert.equal(dayMetrics.laneCount, 2);
-    assert.ok(dayMetrics.minLaneWidth >= 270, 'Phone Day practitioner lane is not readable');
+    assert.ok(dayMetrics.minLaneWidth >= 200 && dayMetrics.minLaneWidth <= 220, 'Phone Day practitioner lane did not use compact density');
     assert.ok(dayMetrics.scrollerScrollWidth > dayMetrics.scrollerClientWidth, 'Phone Day multi-practitioner lanes do not pan');
+    assert.ok(dayMetrics.scrollerScrollWidth <= 470, 'Phone Day still requires excessive horizontal travel between two practitioner lanes');
+    assert.equal(dayMetrics.operationStatusText, '');
+    assert.equal(dayMetrics.operationStatusDisplay, 'none');
+    assert.equal(dayMetrics.panelHintPresent, false);
     assert.equal(dayMetrics.peopleSummary, '2 staff');
     assert.ok(dayMetrics.viewLinks.every(href => href.includes('staff=51') && href.includes('staff=52')), 'People state was not preserved across Day/Week/Agenda/Month links');
     assert.equal(dayMetrics.bookingSlots, 26);
