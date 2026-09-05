@@ -85,20 +85,20 @@ async function buildDayModel() {
   return service.buildModel({ view: 'day', date: '2026-08-24', viewer, now: new Date('2026-08-24T10:00:00Z') });
 }
 
-test('Day, Week and Agenda all consume the same SchedulingTimeline contract through one server adapter', async () => {
+test('Day, Week, Agenda and Month all consume the same SchedulingTimeline contract through one server adapter', async () => {
   const calls = [];
   const service = createCalendarReadOnlyUxService({
     listTimeline: async input => { calls.push(input); return timelineFixture(); },
     query: canonicalMobileQuery,
   });
   const models = [];
-  for (const view of ['day', 'week', 'agenda']) {
+  for (const view of ['day', 'week', 'agenda', 'month']) {
     models.push(await service.buildModel({ view, date: '2026-08-24', viewer, now: new Date('2026-08-24T10:00:00Z') }));
   }
-  assert.equal(calls.length, 3);
-  assert.deepEqual(calls.map(call => call.viewer), [viewer, viewer, viewer]);
+  assert.equal(calls.length, 4);
+  assert.deepEqual(calls.map(call => call.viewer), [viewer, viewer, viewer, viewer]);
   assert.ok(calls.every(call => !Object.hasOwn(call, 'staffIds')), 'UX adapter must not invent an independent authorization filter');
-  assert.deepEqual(models.map(model => model.view), ['day', 'week', 'agenda']);
+  assert.deepEqual(models.map(model => model.view), ['day', 'week', 'agenda', 'month']);
   assert.ok(models.every(model => model.readOnly === true));
 });
 

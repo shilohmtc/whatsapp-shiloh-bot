@@ -200,7 +200,7 @@ function applyCalendarResponsivePolish(html, model = null, basePath = '/calendar
   const overview = renderMobileStaffOverview(model, basePath);
   if (overview) {
     output = output
-      .replace('<body data-calendar-readonly=', '<body data-calendar-mobile-overview="true" data-calendar-readonly=')
+      .replace('<body data-calendar-view=', '<body data-calendar-mobile-overview="true" data-calendar-view=')
       .replace('<main class="calendar-view day-view" data-view="day">', '<main class="calendar-view day-view mobile-all-staff-overview" data-view="day">')
       .replace('<div class="time-grid day-time-grid"', `${overview}<div class="time-grid day-time-grid"`);
   }

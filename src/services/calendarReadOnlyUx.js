@@ -3,7 +3,7 @@ const schedulingEngine = require('./schedulingEngine');
 
 const BUSINESS_TIMEZONE = 'Africa/Johannesburg';
 const BUSINESS_UTC_OFFSET = '+02:00';
-const ALLOWED_VIEWS = new Set(['day', 'week', 'agenda']);
+const ALLOWED_VIEWS = new Set(['day', 'week', 'agenda', 'month']);
 const DATE_KEY = /^\d{4}-\d{2}-\d{2}$/;
 const TIMELINE_SCOPES = new Set(['all_business', 'own_services', 'own_appointments', 'none']);
 
@@ -73,9 +73,21 @@ function mondayFor(dateKey) {
   return addDays(dateKey, delta);
 }
 
+function monthStartFor(dateKey) {
+  return `${String(dateKey).slice(0, 7)}-01`;
+}
+
+function addMonths(dateKey, months) {
+  const [year, month] = monthStartFor(dateKey).split('-').map(Number);
+  const monthIndex = (year * 12) + (month - 1) + Number(months);
+  const targetYear = Math.floor(monthIndex / 12);
+  const targetMonth = ((monthIndex % 12) + 12) % 12;
+  return `${String(targetYear).padStart(4, '0')}-${String(targetMonth + 1).padStart(2, '0')}-01`;
+}
+
 function normalizeView(value) {
   const view = String(value || 'day').trim().toLowerCase();
-  if (!ALLOWED_VIEWS.has(view)) throw uxError('CALENDAR_UX_INVALID_VIEW', 'Calendar view must be day, week or agenda.');
+  if (!ALLOWED_VIEWS.has(view)) throw uxError('CALENDAR_UX_INVALID_VIEW', 'Calendar view must be day, week, agenda or month.');
   return view;
 }
 
@@ -119,6 +131,29 @@ function normalizeVisibleStaffSelection(value) {
 }
 
 function periodFor(view, dateKey) {
+  if (view === 'month') {
+    const startKey = monthStartFor(dateKey);
+    const endKey = addMonths(startKey, 1);
+    const displayStartKey = mondayFor(startKey);
+    const displayEndKey = addDays(mondayFor(addDays(endKey, -1)), 7);
+    const dateKeys = [];
+    for (let cursor = displayStartKey; cursor !== displayEndKey; cursor = addDays(cursor, 1)) {
+      dateKeys.push(cursor);
+      if (dateKeys.length > 42) throw uxError('CALENDAR_UX_INVALID_DATE', 'Calendar month grid is invalid.');
+    }
+    return {
+      startKey,
+      endKey,
+      displayStartKey,
+      displayEndKey,
+      dateKeys,
+      from: new Date(`${startKey}T00:00:00${BUSINESS_UTC_OFFSET}`).toISOString(),
+      to: new Date(`${endKey}T00:00:00${BUSINESS_UTC_OFFSET}`).toISOString(),
+      previousAnchor: addMonths(startKey, -1),
+      nextAnchor: addMonths(startKey, 1),
+    };
+  }
+
   const startKey = view === 'week' ? mondayFor(dateKey) : dateKey;
   const lengthDays = view === 'day' ? 1 : 7;
   const endKey = addDays(startKey, lengthDays);
@@ -127,6 +162,8 @@ function periodFor(view, dateKey) {
   return {
     startKey,
     endKey,
+    displayStartKey: startKey,
+    displayEndKey: endKey,
     dateKeys,
     from: new Date(`${startKey}T00:00:00${BUSINESS_UTC_OFFSET}`).toISOString(),
     to: new Date(`${endKey}T00:00:00${BUSINESS_UTC_OFFSET}`).toISOString(),

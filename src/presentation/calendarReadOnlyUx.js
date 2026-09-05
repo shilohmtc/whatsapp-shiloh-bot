@@ -80,11 +80,13 @@ function staffMap(model) {
 }
 
 function staffNamesFor(item, model) {
-  if (Array.isArray(item.staff) && item.staff.length) {
-    return item.staff.map(entry => entry.nameSnapshot || staffMap(model).get(Number(entry.staffId)) || `Staff ${entry.staffId}`);
-  }
   const names = staffMap(model);
-  return eventStaffIds(item).map(id => names.get(id) || `Staff ${id}`);
+  if (Array.isArray(item.staff) && item.staff.length) {
+    return item.staff
+      .filter(entry => names.has(Number(entry.staffId)))
+      .map(entry => entry.nameSnapshot || names.get(Number(entry.staffId)) || `Staff ${entry.staffId}`);
+  }
+  return eventStaffIds(item).filter(id => names.has(id)).map(id => names.get(id));
 }
 
 function eventTitle(item) {
@@ -110,17 +112,23 @@ function eventKindLabel(item) {
 }
 
 function eventDetailPieces(item, model) {
-  const names = staffNamesFor(item, model);
   const pieces = [];
-  if (names.length) pieces.push(names.join(' + '));
   if (item.kind === 'appointment' && item.status) pieces.push(String(item.status).replace(/_/g, ' '));
   if (item.kind === 'calendar_block' && item.blockType) pieces.push(String(item.blockType).replace(/_/g, ' '));
   if ((item.kind === 'approved_leave' || item.kind === 'operational_leave') && item.reason) pieces.push(item.reason);
   return pieces.join(' • ');
 }
 
+function renderStaffOwnership(item, model) {
+  const names = staffNamesFor(item, model);
+  if (!names.length) return '';
+  const label = names.join(' + ');
+  return `<span class="event-practitioners" data-practitioner-count="${names.length}" aria-label="Practitioners: ${escapeHtml(label)}"><span class="status-dot" aria-hidden="true"></span><span>${escapeHtml(label)}</span></span>`;
+}
+
 function renderEventMeta(item, model) {
   const details = eventDetailPieces(item, model);
+  const ownership = renderStaffOwnership(item, model);
   if (item.kind !== 'appointment') return details ? escapeHtml(details) : '';
   const contexts = Array.isArray(item.serviceContexts) ? item.serviceContexts : [];
   const families = [];
@@ -135,8 +143,8 @@ function renderEventMeta(item, model) {
   const service = item.serviceName
     ? `<span class="event-service-context">${icons}<span>${escapeHtml(item.serviceName)}</span></span>`
     : '';
-  const separator = service && details ? '<span class="event-detail-separator" aria-hidden="true">•</span>' : '';
-  return `${service}${separator}${details ? `<span>${escapeHtml(details)}</span>` : ''}`;
+  const parts = [ownership, service, details ? `<span class="event-state">${escapeHtml(details)}</span>` : ''].filter(Boolean);
+  return parts.join('<span class="event-detail-separator" aria-hidden="true">•</span>');
 }
 
 function renderProvenance(item) {
@@ -269,7 +277,7 @@ function renderControls(model, basePath) {
   const filterContent = canSwitchPractitioner
     ? `<details class="people-picker" data-people-picker><summary><span>People</span><strong>${visibleStaffIds.length}</strong></summary><form class="people-form" method="get" action="${escapeHtml(basePath)}" data-practitioner-visibility-form><input type="hidden" name="view" value="${escapeHtml(model.view)}"><input type="hidden" name="date" value="${escapeHtml(model.dateKey)}"><fieldset><legend class="sr-only">Visible practitioners</legend>${permittedStaff.map(person => `<label><input type="checkbox" name="staff" value="${escapeHtml(person.id)}"${visible.has(Number(person.id)) ? ' checked' : ''}><span>${escapeHtml(person.displayName)}</span></label>`).join('')}</fieldset><div class="people-actions"><button class="filter" type="submit">Apply</button><a class="filter" href="${escapeHtml(queryHref(basePath, model.view, model.dateKey, permittedStaff.map(person => person.id)))}">Show all</a></div><p data-people-selection-status>${visibleStaffIds.length} of ${permittedStaff.length} visible</p></form></details>`
     : `<span class="scope-pill">${escapeHtml(permittedStaff[0]?.displayName || 'Permitted practitioner')} • your permitted timeline</span>`;
-  const viewLinks = ['day', 'week', 'agenda'].map(view => `<a class="view-tab ${model.view === view ? 'active' : ''}" ${model.view === view ? 'aria-current="page"' : ''} href="${escapeHtml(queryHref(basePath, view, model.dateKey, visibleStaffIds))}">${view[0].toUpperCase()}${view.slice(1)}</a>`).join('');
+  const viewLinks = ['day', 'week', 'agenda', 'month'].map(view => `<a class="view-tab ${model.view === view ? 'active' : ''}" ${model.view === view ? 'aria-current="page"' : ''} href="${escapeHtml(queryHref(basePath, view, model.dateKey, visibleStaffIds))}">${view[0].toUpperCase()}${view.slice(1)}</a>`).join('');
   return `<section class="controls" aria-label="Calendar controls">
     <div class="control-group"><span class="control-label">Date</span><div class="period-nav">
       <a class="nav-button" href="${escapeHtml(queryHref(basePath, model.view, model.period.previousAnchor, visibleStaffIds))}" aria-label="Previous period"><span aria-hidden="true">←</span><span class="nav-word">Previous</span></a>
@@ -368,6 +376,12 @@ function renderDay(model) {
   </main>`;
 }
 
+function renderViewPractitionerContext(model) {
+  const staff = model.timeline?.staff || [];
+  if (!staff.length) return '';
+  return `<section class="view-practitioner-context" data-view-practitioner-context aria-label="Practitioners in this ${escapeHtml(model.view)} view"><span class="section-label">People in view</span><div class="view-practitioner-list">${staff.map(person => `<span class="view-practitioner" data-staff-id="${escapeHtml(person.id)}"><span class="status-dot" aria-hidden="true"></span>${escapeHtml(person.displayName || `Staff ${person.id}`)}</span>`).join('')}</div></section>`;
+}
+
 function renderWeek(model) {
   const days = model.period.dateKeys.map(day => {
     const items = eventsForDate(model, day);
@@ -379,6 +393,7 @@ function renderWeek(model) {
   }).join('');
   return `<main class="calendar-view week-view" data-view="week">
     <div class="view-heading"><div><span class="eyebrow">Week</span><h2>${escapeHtml(formatDay(model.period.startKey, { weekday: 'short', month: 'long' }))} – ${escapeHtml(formatDay(model.period.dateKeys.at(-1), { weekday: 'short', month: 'long', year: 'numeric' }))}</h2></div><span class="read-only-badge">${mutationEnabled(model) ? 'Canonical operations' : 'Read-only'}</span></div>
+    ${renderViewPractitionerContext(model)}
     <div class="time-grid week-time-grid">${renderTimeRail()}<div class="week-grid">${days}</div></div>
   </main>`;
 }
@@ -391,7 +406,63 @@ function renderAgenda(model) {
   }).filter(Boolean).join('');
   return `<main class="calendar-view agenda-view" data-view="agenda">
     <div class="view-heading"><div><span class="eyebrow">Agenda</span><h2>Next 7 days from ${escapeHtml(formatDay(model.dateKey, { weekday: 'long', month: 'long' }))}</h2></div><span class="read-only-badge">${mutationEnabled(model) ? 'Canonical operations' : 'Read-only'}</span></div>
+    ${renderViewPractitionerContext(model)}
     ${sections || '<div class="empty large">No scheduled items in this period</div>'}
+  </main>`;
+}
+
+function formatMonth(value) {
+  const date = new Date(`${value}T12:00:00+02:00`);
+  return new Intl.DateTimeFormat('en-ZA', {
+    timeZone: BUSINESS_TIMEZONE,
+    month: 'long',
+    year: 'numeric',
+  }).format(date);
+}
+
+function practitionerInitials(name) {
+  return String(name || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map(part => part[0]?.toUpperCase() || '')
+    .join('') || 'P';
+}
+
+function monthOwnershipSummary(items, model) {
+  const names = [];
+  for (const item of items) {
+    for (const name of staffNamesFor(item, model)) {
+      if (!names.includes(name)) names.push(name);
+    }
+  }
+  if (!names.length) return '';
+  const visible = names.slice(0, 2).map(practitionerInitials).join(' · ');
+  const remainder = names.length > 2 ? ` +${names.length - 2}` : '';
+  return `<span class="month-day-owners" aria-label="Practitioners: ${escapeHtml(names.join(' + '))}">${escapeHtml(visible)}${remainder}</span>`;
+}
+
+function renderMonth(model, basePath) {
+  const targetMonth = String(model.period.startKey).slice(0, 7);
+  const visibleStaffIds = visibleStaffIdsForModel(model);
+  const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const cells = model.period.dateKeys.map(day => {
+    const items = eventsForDate(model, day);
+    const outside = !day.startsWith(targetMonth);
+    const visibleItems = items.slice(0, 3);
+    const remaining = items.length - visibleItems.length;
+    const dayHref = queryHref(basePath, 'day', day, visibleStaffIds);
+    return `<section class="month-day${outside ? ' outside-month' : ''}" data-date="${escapeHtml(day)}" data-item-count="${items.length}">
+      <header class="month-day-head"><a class="month-day-link" href="${escapeHtml(dayHref)}" aria-label="Open ${escapeHtml(formatDay(day, { weekday: 'long', month: 'long', year: 'numeric' }))}, ${items.length} item${items.length === 1 ? '' : 's'}"><span>${Number(day.slice(-2))}</span><small>${items.length || ''}</small>${monthOwnershipSummary(items, model)}</a></header>
+      <div class="month-events">${visibleItems.map(item => `<div class="month-event">${renderEventCard(item, model)}</div>`).join('')}</div>
+      ${remaining > 0 ? `<a class="month-more" href="${escapeHtml(dayHref)}">+${remaining} more</a>` : ''}
+    </section>`;
+  }).join('');
+  return `<main class="calendar-view month-view" data-view="month" data-month="${escapeHtml(targetMonth)}">
+    <div class="view-heading"><div><span class="eyebrow">Month</span><h2>${escapeHtml(formatMonth(model.period.startKey))}</h2></div><span class="read-only-badge">${mutationEnabled(model) ? 'Canonical operations' : 'Read-only'}</span></div>
+    ${renderViewPractitionerContext(model)}
+    <div class="month-grid" aria-label="${escapeHtml(formatMonth(model.period.startKey))}"><div class="month-weekdays">${weekdays.map(day => `<span>${day}</span>`).join('')}</div><div class="month-days">${cells}</div></div>
   </main>`;
 }
 
@@ -407,8 +478,16 @@ function styles() {
   return `:root{color-scheme:light;--ink:#20322b;--muted:#66776f;--paper:#f4f3ed;--panel:#fffdf9;--line:#dce3dd;--line-strong:#c9d4cc;--leaf:#3f6653;--leaf-deep:#294c3c;--leaf-soft:#e7eee9;--clay:#8b6f5f;--danger-soft:#f5ebe6;--shadow:0 8px 28px rgba(32,50,43,.07)}*{box-sizing:border-box}.sr-only{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}body{margin:0;background:var(--paper);color:var(--ink);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.shell{max-width:1500px;margin:0 auto;padding:22px}.topbar{display:flex;justify-content:space-between;gap:18px;align-items:end;margin-bottom:14px}.topbar-side{display:grid;gap:8px;justify-items:end}.brand h1{font-size:1.55rem;line-height:1.15;margin:0}.brand p{margin:5px 0 0;color:var(--muted);font-size:.9rem}.truth-note{font-size:.78rem;color:var(--muted);text-align:right}.access-controls,.operational-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap}.action-link,.signout-button{display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--line);border-radius:999px;min-height:38px;padding:7px 12px;background:#fff;color:var(--ink);font:inherit;font-size:.78rem;font-weight:750}.action-link.primary{background:var(--leaf-deep);border-color:var(--leaf-deep);color:#fff}.action-link:hover,.signout-button:hover{border-color:var(--leaf)}.signout-button{cursor:pointer}.signout-button:disabled{opacity:.55;cursor:not-allowed}.access-status{font-size:.74rem;color:var(--muted);min-height:1em}.controls{display:grid;grid-template-columns:auto auto minmax(260px,1fr);gap:14px;align-items:end;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:11px 13px;margin-bottom:10px;box-shadow:0 4px 18px rgba(32,50,43,.04)}a{text-decoration:none;color:inherit}.control-group{display:grid;gap:5px;min-width:0}.control-label{font-size:.67rem;text-transform:uppercase;letter-spacing:.1em;font-weight:800;color:var(--muted);padding-left:3px}.period-nav,.view-tabs,.filters{display:flex;gap:6px;align-items:center}.filters{overflow:auto;justify-content:flex-end;scrollbar-width:thin}.nav-button,.view-tab,.filter,.scope-pill{display:inline-flex;align-items:center;justify-content:center;gap:6px;white-space:nowrap;border:1px solid var(--line);border-radius:999px;min-height:38px;padding:7px 11px;font-size:.84rem;background:#fff;font-weight:700}.scope-pill{color:var(--muted);background:var(--leaf-soft)}.view-tab.active,.filter.active{background:var(--leaf);color:#fff;border-color:var(--leaf)}.nav-button:hover,.view-tab:hover,.filter:hover{border-color:var(--leaf)}.scan-summary{display:grid;grid-template-columns:auto 1fr auto;gap:16px;align-items:center;background:#eef2ee;border:1px solid var(--line);border-radius:14px;padding:10px 13px;margin-bottom:10px}.summary-context{display:grid;gap:2px;min-width:150px}.summary-context strong{font-size:.85rem}.summary-metrics{display:grid;grid-template-columns:repeat(3,minmax(92px,1fr));gap:6px}.summary-metric{display:flex;gap:7px;align-items:baseline;border-left:1px solid var(--line-strong);padding-left:10px}.summary-metric strong{font-size:1.05rem}.summary-metric span{font-size:.72rem;color:var(--muted)}.provenance-key{display:flex;align-items:center;gap:6px;white-space:nowrap;font-size:.72rem;color:var(--muted)}.key-dot,.status-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--leaf)}.calendar-view{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:15px;box-shadow:var(--shadow)}.view-heading{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:12px}.view-heading h2{margin:2px 0 0;font-size:1.25rem;line-height:1.2}.eyebrow{font-size:.68rem;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);font-weight:800}.read-only-badge{background:var(--leaf-soft);color:var(--leaf);border-radius:999px;padding:6px 10px;font-size:.76rem;font-weight:750}.closure-strip{display:flex;gap:8px;flex-wrap:wrap;background:var(--danger-soft);border:1px solid #ead6cc;border-radius:10px;padding:8px 10px;margin:0 0 10px;font-size:.82rem;font-weight:700}.shared-band{border:1px dashed var(--leaf);background:var(--leaf-soft);border-radius:14px;padding:10px;margin-bottom:10px}.section-label{font-size:.72rem;color:var(--leaf);font-weight:800;margin-bottom:7px;text-transform:uppercase;letter-spacing:.08em}.lanes{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:9px}.lane{border:1px solid var(--line);border-radius:14px;min-width:0;background:#fff;overflow:hidden}.lane>header{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;padding:10px 11px;border-bottom:1px solid var(--line);background:#fafbf8}.lane h3{margin:0;font-size:.98rem}.lane header p{display:flex;align-items:center;gap:5px;margin:3px 0 0;color:var(--muted);font-size:.76rem}.status-dot.off{background:#b79886}.lane-count{font-size:.68rem;color:var(--muted);white-space:nowrap}.lane-events,.week-events{padding:8px;display:grid;gap:7px}.event-card{border:1px solid var(--line);border-left:4px solid var(--leaf);border-radius:10px;padding:8px 9px;background:#fff;min-width:0}.event-card.event-shared{border-left-color:var(--clay)}.event-card-top{display:flex;align-items:center;justify-content:space-between;gap:8px}.event-time{font-size:.75rem;color:var(--muted);font-weight:750}.kind-pill{font-size:.63rem;text-transform:uppercase;letter-spacing:.055em;font-weight:800;color:var(--muted)}.event-card h4{margin:2px 0 3px;font-size:.88rem;line-height:1.25}.event-card p{margin:0 0 5px;color:var(--muted);font-size:.76rem;line-height:1.35}.event-meta{display:flex;align-items:center;gap:5px;flex-wrap:wrap}.event-service-context{display:inline-flex;align-items:center;gap:5px;min-width:0}.service-family-icon{width:16px;height:16px;flex:0 0 16px}.event-detail-separator{color:var(--line-strong)}.appointment-reference{color:var(--muted);font-size:.68rem;margin:0 0 5px}.provenance{display:inline-block;font-size:.65rem;border-radius:999px;padding:3px 6px}.provenance.canonical{background:var(--leaf-soft);color:var(--leaf)}.week-grid{display:grid;grid-template-columns:repeat(7,minmax(168px,1fr));gap:7px;overflow:auto;padding-bottom:4px;scroll-snap-type:x proximity}.week-day{border:1px solid var(--line);border-radius:12px;min-width:168px;background:#fff;overflow:hidden;scroll-snap-align:start}.week-day>header{position:sticky;top:0;z-index:1;display:flex;justify-content:space-between;gap:6px;padding:8px 9px;border-bottom:1px solid var(--line);font-size:.8rem;font-weight:800;background:#fafbf8}.week-day>header small{font-size:.65rem;color:var(--muted);font-weight:650}.agenda-view{max-width:920px;margin:0 auto}.agenda-day{margin:0 0 16px}.agenda-day>header{position:sticky;top:0;background:var(--panel);padding:6px 0;z-index:2;border-bottom:1px solid var(--line)}.agenda-day h3{font-size:.9rem;margin:0;color:var(--muted)}.agenda-day .event-card{margin-top:7px}.empty{color:var(--muted);font-size:.8rem;padding:13px;text-align:center}.empty.large{padding:40px}.footer-note{margin-top:14px;color:var(--muted);font-size:.74rem;text-align:center;line-height:1.45}@media(max-width:1050px){.controls{grid-template-columns:auto auto}.practitioner-control{grid-column:1/-1}.filters{justify-content:flex-start}.scan-summary{grid-template-columns:1fr auto}.summary-context{display:none}.summary-metrics{grid-template-columns:repeat(3,minmax(80px,1fr))}}@media(max-width:700px){.shell{padding:10px 10px 28px}.topbar{align-items:start;flex-direction:column;margin-bottom:10px}.topbar-side{justify-items:start;width:100%}.truth-note{text-align:left}.access-controls,.operational-actions{justify-content:flex-start;width:100%}.action-link,.signout-button{min-height:44px}.operational-actions{display:grid;grid-template-columns:1fr}.action-link{width:100%}.controls{position:sticky;top:0;z-index:5;grid-template-columns:1fr 1fr;gap:9px;padding:9px}.practitioner-control{grid-column:1/-1}.control-label{font-size:.62rem}.nav-button,.view-tab,.filter,.scope-pill{min-height:44px;padding:8px 12px}.nav-word{display:none}.period-nav,.view-tabs{display:grid;grid-template-columns:repeat(3,1fr)}.scan-summary{grid-template-columns:1fr;margin-bottom:8px;padding:9px;overflow:auto}.summary-metrics{grid-template-columns:repeat(3,minmax(105px,1fr));min-width:350px}.provenance-key{display:none}.calendar-view{border-radius:14px;padding:12px}.view-heading{align-items:flex-start}.view-heading h2{font-size:1.08rem}.read-only-badge{font-size:.7rem}.lanes{grid-template-columns:1fr}.event-card{padding:10px;min-height:44px}.week-grid{grid-template-columns:repeat(7,minmax(82vw,1fr));margin:0 -2px}.week-day{min-width:82vw}.agenda-day>header{top:99px}.footer-note{text-align:left}}`;
 }
 
+function calendarViewParityStyles() {
+  return `.view-practitioner-context{display:flex;align-items:center;gap:10px;margin:-2px 0 11px;padding:8px 10px;border:1px solid var(--line);border-radius:11px;background:#fafbf8}.view-practitioner-context .section-label{flex:0 0 auto;margin:0}.view-practitioner-list{display:flex;align-items:center;gap:5px;min-width:0;overflow:auto;scrollbar-width:thin}.view-practitioner{display:inline-flex;align-items:center;gap:5px;flex:0 0 auto;padding:5px 8px;border:1px solid var(--line);border-radius:999px;background:#fff;font-size:.7rem;font-weight:800}.event-practitioners{display:inline-flex;align-items:center;gap:5px;max-width:100%;padding:2px 6px;border-radius:999px;background:var(--leaf-soft);color:var(--leaf-deep);font-size:.68rem;font-weight:800}.event-practitioners>span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.event-practitioners .status-dot{flex:0 0 7px;width:7px;height:7px}.month-grid{overflow:hidden;border:1px solid var(--line);border-radius:13px;background:#fff}.month-weekdays,.month-days{display:grid;grid-template-columns:repeat(7,minmax(0,1fr))}.month-weekdays{border-bottom:1px solid var(--line);background:#fafbf8}.month-weekdays span{padding:7px 8px;text-align:right;color:var(--muted);font-size:.66rem;font-weight:850;text-transform:uppercase;letter-spacing:.07em}.month-day{min-width:0;min-height:154px;padding:7px;border-right:1px solid var(--line);border-bottom:1px solid var(--line);background:#fff}.month-day:nth-child(7n){border-right:0}.month-day.outside-month{background:#f8f8f4;color:var(--muted)}.month-day-head{margin:-3px -3px 5px}.month-day-link{display:flex;align-items:center;justify-content:flex-end;gap:5px;min-height:30px;padding:3px 5px;border-radius:8px;font-size:.76rem;font-weight:850}.month-day-link:hover,.month-day-link:focus-visible{background:var(--leaf-soft);outline:none}.month-day-link small{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;border-radius:999px;background:var(--leaf-soft);color:var(--leaf);font-size:.6rem}.month-day-owners{display:none}.month-events{display:grid;gap:4px}.month-event{min-width:0}.month-event .event-card{padding:5px 6px;border-left-width:3px;border-radius:7px}.month-event .event-card-top{gap:4px}.month-event .event-time{font-size:.62rem}.month-event .kind-pill,.month-event .event-client-mobile,.month-event .appointment-reference,.month-event .provenance{display:none}.month-event .event-card h4{margin:1px 0;font-size:.7rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.month-event .event-meta{display:grid;gap:2px;margin-top:3px}.month-event .event-service-context,.month-event .event-state,.month-event .event-detail-separator{display:none}.month-event .event-practitioners{max-width:100%;font-size:.58rem}.month-event .event-card-actions{justify-content:flex-end}.month-event .event-operation{min-width:32px;min-height:30px;padding:4px 7px;font-size:.6rem}.month-more{display:block;margin-top:4px;padding:4px;color:var(--leaf-deep);font-size:.65rem;font-weight:850;text-align:right}.month-more:hover,.month-more:focus-visible{text-decoration:underline}.month-view .view-heading{margin-bottom:10px}@media(max-width:700px){.view-practitioner-context{display:grid;gap:6px;padding:8px}.view-practitioner-list{padding-bottom:2px}.view-practitioner{min-height:32px}.event-practitioners{white-space:normal}.month-view{padding:9px!important}.month-view .view-practitioner-context{margin-bottom:9px}.month-grid{border-radius:10px}.month-weekdays span{padding:6px 1px;text-align:center;font-size:.58rem}.month-days{gap:0}.month-day{min-height:54px;padding:0}.month-day-link{position:relative;display:grid;place-items:center;align-content:center;gap:1px;width:100%;min-height:54px;padding:3px 1px;border-radius:0;font-size:.74rem;touch-action:manipulation}.month-day-link small{position:absolute;right:3px;top:3px;min-width:16px;height:16px;font-size:.54rem}.month-day-owners{display:block;max-width:100%;overflow:hidden;color:var(--muted);font-size:.5rem;font-weight:850;line-height:1;white-space:nowrap;text-overflow:ellipsis}.month-events,.month-more{display:none}.month-day.outside-month .month-day-link{opacity:.48}}`;
+}
+
 function operationalStyles() {
   return `.event-card-actions{display:flex;align-items:center;justify-content:space-between;gap:8px}.event-operation,.lane-actions button{border:1px solid var(--line-strong);background:#fff;color:var(--leaf-deep);border-radius:999px;min-height:32px;padding:5px 9px;font:inherit;font-size:.68rem;font-weight:800;cursor:pointer}.event-operation:hover,.lane-actions button:hover{border-color:var(--leaf);background:var(--leaf-soft)}.lane-heading-actions{display:grid;justify-items:end;gap:7px}.lane-actions{display:flex;justify-content:flex-end;gap:5px;flex-wrap:wrap}.lane[data-calendar-drop-target="true"],.week-day[data-calendar-drop-target="true"]{outline:2px solid transparent;outline-offset:-2px}.event-card[draggable="true"]{cursor:grab}.event-card[draggable="true"]:active{cursor:grabbing}.operation-status{display:block;min-height:1.2em;margin:5px 0 10px;color:var(--muted);font-size:.78rem}.operation-status[data-tone="working"]{color:var(--leaf-deep);font-weight:750}.operation-status[data-tone="error"]{color:#8a3128;font-weight:750}@media(max-width:700px){.event-operation,.lane-actions button{min-height:44px;padding:8px 11px}.lane-heading-actions{justify-items:stretch}.lane-actions{display:grid;grid-template-columns:repeat(3,1fr)}.lane-actions button{padding:5px;font-size:.63rem}.event-card-actions{margin-top:7px}}`;
+}
+
+function calendarViewParityResponsiveStyles() {
+  return `@media(max-width:700px){.period-nav{grid-template-columns:repeat(3,1fr)}.view-tabs{grid-template-columns:repeat(4,minmax(0,1fr))}.view-tab{padding-left:5px;padding-right:5px;font-size:.73rem}}`;
 }
 
 function workspaceV1Styles() {
@@ -434,11 +513,17 @@ function renderCalendarPage(model, {
   clientsPath = '/calendar/clients',
   timelineReadOnlyMessage = 'Read-only operational view. Booking, reschedule, cancellation, block, leave and schedule mutations are not available here.',
 } = {}) {
-  const content = model.view === 'week' ? renderWeek(model) : model.view === 'agenda' ? renderAgenda(model) : renderDay(model);
+  const content = model.view === 'week'
+    ? renderWeek(model)
+    : model.view === 'agenda'
+      ? renderAgenda(model)
+      : model.view === 'month'
+        ? renderMonth(model, basePath)
+        : renderDay(model);
   const canMutate = mutationEnabled(model);
   const operationScript = canMutate ? `<script src="${escapeHtml(operationalMutationsScriptPath)}" defer></script>` : '';
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Calendar — Shiloh Workspace</title><style>${serviceFamilyAccentCss()}${styles()}${workspaceShellStyles()}${workspaceV1Styles()}${desktopSpatialLaneStyles()}${canMutate ? operationalStyles() : ''}</style><script src="${escapeHtml(staffAccessScriptPath)}" defer></script>${operationScript}</head><body data-calendar-readonly="${canMutate ? 'false' : 'true'}"><div class="workspace-frame">${renderWorkspaceNavigation({ active: 'calendar', clientsHref: clientNavigationAllowed ? clientsPath : null })}<div class="workspace-main"><div class="shell">
-    <header class="topbar"><div class="brand"><h1>Calendar</h1><p>Your clinic day, at a glance.</p></div><div class="topbar-side">${renderOperationalActions(operationalActions)}<div class="truth-note">Africa/Johannesburg • Shiloh is the scheduling authority</div><div class="access-controls"><button class="signout-button" type="button" data-shiloh-logout>Sign out</button><span class="access-status" role="status" aria-live="polite" data-shiloh-calendar-access-status></span></div></div></header>
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Calendar — Shiloh Workspace</title><style>${serviceFamilyAccentCss()}${styles()}${workspaceShellStyles()}${workspaceV1Styles()}${desktopSpatialLaneStyles()}${calendarViewParityStyles()}${calendarViewParityResponsiveStyles()}${canMutate ? operationalStyles() : ''}</style><script src="${escapeHtml(staffAccessScriptPath)}" defer></script>${operationScript}</head><body data-calendar-view="${escapeHtml(model.view)}" data-calendar-readonly="${canMutate ? 'false' : 'true'}"><div class="workspace-frame">${renderWorkspaceNavigation({ active: 'calendar', clientsHref: clientNavigationAllowed ? clientsPath : null })}<div class="workspace-main"><div class="shell">
+    <header class="topbar"><div class="brand"><h1>Calendar</h1><p>Your clinic schedule, at a glance.</p></div><div class="topbar-side">${renderOperationalActions(operationalActions)}<div class="truth-note">Africa/Johannesburg • Shiloh is the scheduling authority</div><div class="access-controls"><button class="signout-button" type="button" data-shiloh-logout>Sign out</button><span class="access-status" role="status" aria-live="polite" data-shiloh-calendar-access-status></span></div></div></header>
     ${renderControls(model, basePath)}${renderOperationalSummary(model)}${canMutate ? '<span class="operation-status" role="status" aria-live="polite" data-calendar-operation-status>Canonical changes are revalidated when saved.</span>' : ''}${content}
     <div class="footer-note">${escapeHtml(timelineReadOnlyMessage)}</div>${renderManagementPanel(model)}
   </div></div></div></body></html>`;

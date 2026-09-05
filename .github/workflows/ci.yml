@@ -37,6 +37,8 @@ jobs:
         run: node --test tests/calendar-readonly-ux.test.js
       - name: Run focused Desktop spatial lane tests
         run: node --test tests/calendar-desktop-spatial-lanes-v1.test.js
+      - name: Run focused Calendar view parity and Month tests
+        run: node --test tests/calendar-view-parity-month-v1.test.js
       - name: Run focused Shiloh-only cockpit polish tests
         run: node --test tests/calendar-operational-cockpit-polish-v2.test.js tests/shiloh-only-calendar-authority-google-decommission-p0.test.js
       - name: Run focused Christel Calendar viewer-scope bridge tests
@@ -145,6 +147,15 @@ jobs:
         with:
           name: calendar-desktop-spatial-lanes-v1
           path: artifacts/calendar-desktop-spatial-lanes-v1
+          if-no-files-found: error
+          retention-days: 14
+      - name: Run Calendar view parity and Month browser proof
+        run: node scripts/calendar-view-parity-month-browser-proof.js
+      - name: Upload Calendar view parity and Month browser proof
+        uses: actions/upload-artifact@v4
+        with:
+          name: calendar-view-parity-month-v1
+          path: artifacts/calendar-view-parity-month-v1
           if-no-files-found: error
           retention-days: 14
       - name: Generate Calendar cockpit visual proof
