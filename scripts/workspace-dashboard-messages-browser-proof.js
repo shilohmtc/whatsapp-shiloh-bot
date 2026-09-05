@@ -250,6 +250,8 @@ const METRICS_EXPRESSION = `(() => {
     navHeight:nav?.getBoundingClientRect().height||0,
     framePaddingBottom:frame?parseFloat(getComputedStyle(frame).paddingBottom)||0:0,
     signoutHeight:document.querySelector('[data-shiloh-logout]')?.getBoundingClientRect().height||0,
+    signoutText:document.querySelector('[data-shiloh-logout]')?.textContent.trim()||'',
+    signoutToTabsGap:(()=>{const button=document.querySelector('[data-shiloh-logout]'),tabs=document.querySelector('.tabs');return button&&tabs?tabs.getBoundingClientRect().top-button.getBoundingClientRect().bottom:null;})(),
     attentionVisible:visible(document.querySelector('[data-messages-attention]')),
     unknownVisible:Array.from(document.querySelectorAll('[data-message-status="unknown"]')).some(visible),
   };
@@ -328,6 +330,8 @@ async function main() {
         assert.equal(metrics.moreVisible, true);
         assert.ok(metrics.minNavTargetHeight >= 44, `${name} has a nav touch target below 44px`);
         assert.ok(metrics.signoutHeight >= 44, `${name} has a collapsed sign-out control`);
+        assert.equal(metrics.signoutText, 'Sign out');
+        if (metrics.signoutToTabsGap != null) assert.ok(metrics.signoutToTabsGap >= 8, `${name} overlays its sign-out control with Messages tabs`);
         assert.ok(metrics.framePaddingBottom >= metrics.navHeight - 2, `${name} content is not protected from fixed navigation`);
         if (openMore) {
           assert.equal(metrics.moreOpen, true);
