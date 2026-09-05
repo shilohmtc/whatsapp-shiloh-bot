@@ -623,7 +623,7 @@ body[data-calendar-view="day"] .workspace-main .time-grid,body[data-calendar-vie
 body[data-calendar-view="day"] .workspace-main .day-time-grid{grid-template-columns:44px max-content!important;overflow-x:auto!important;overflow-y:auto!important;max-height:calc(100vh - 258px)!important}
 body[data-calendar-view="day"] .workspace-main .day-time-grid .time-rail{position:sticky!important;left:0!important;z-index:7!important;width:44px!important;margin-top:58px!important;height:${gridHeight}px!important}
 body[data-calendar-view="day"] .workspace-main .day-time-grid .time-rail span,body[data-calendar-view="week"] .workspace-main .week-time-grid .time-rail span{right:5px!important;font-size:.57rem!important}
-body[data-calendar-view="day"] .workspace-main .day-time-grid .lanes{display:grid!important;grid-template-columns:repeat(var(--lane-count),minmax(270px,calc(100vw - 66px)))!important;min-width:max-content!important;width:auto!important;gap:0!important}
+body[data-calendar-view="day"] .workspace-main .day-time-grid .lanes{display:grid!important;grid-template-columns:repeat(var(--lane-count),minmax(270px,calc(100vw - 76px)))!important;min-width:max-content!important;width:auto!important;gap:0!important}
 body[data-calendar-view="day"] .workspace-main .day-time-grid .lane{min-width:270px!important;width:auto!important;border-right:1px solid var(--line)!important}
 body[data-calendar-view="day"] .workspace-main .day-time-grid .lane>header{height:58px!important;min-height:58px!important;padding:7px 9px!important}
 body[data-calendar-view="day"] .workspace-main .day-time-grid .lane h3{font-size:.86rem!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
