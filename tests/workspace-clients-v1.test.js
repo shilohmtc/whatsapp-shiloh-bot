@@ -280,7 +280,7 @@ test('Calendar and Clients share capability-driven navigation without making Cal
   const enabled = renderCalendarPage(calendarModel(), { clientNavigationAllowed: true, clientsPath: '/calendar/clients' });
   assert.match(enabled, /href="\/calendar\/clients">Clients/);
   const denied = renderCalendarPage(calendarModel());
-  assert.match(denied, /workspace-link future[^>]*aria-disabled="true">Clients/);
+  assert.match(denied, /workspace-link future[^>]*aria-disabled="true"[^>]*>Clients/);
   assert.doesNotMatch(denied, /href="\/calendar\/clients"/);
 });
 

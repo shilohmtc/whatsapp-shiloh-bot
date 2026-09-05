@@ -14,7 +14,7 @@ const {
   createWorkspaceClientNotificationService,
   confirmationProjection,
 } = require('../src/services/workspaceClientNotifications');
-const { renderBookingConfirmationExceptionsPage } = require('../src/presentation/workspaceBookingConfirmationExceptionsUx');
+const { renderMessagesPage } = require('../src/presentation/workspaceMessagesUx');
 const { calendarOperationalMutationsClientScript } = require('../src/presentation/calendarOperationalMutationsUx');
 
 const NOW = new Date('2026-09-04T12:00:00Z');
@@ -146,12 +146,20 @@ test('Workspace recovery requires client:notify, exposes sanitized evidence, and
   assert.equal(calls[0].options.operatorAdminId, 7);
 });
 
-test('exception page shows truthful recovery state without provider internals or a full mobile', async () => {
+test('Messages attention shows truthful recovery state without provider internals or a full mobile', async () => {
   const service = createWorkspaceClientNotificationService({
     db: workspaceDb(), env: readyEnv, providerGuard: async () => ({ ready: true }), sender: async () => ({ sent: true }),
   });
   const model = await service.listBookingConfirmationExceptions({ adminId: 7, now: NOW });
-  const html = renderBookingConfirmationExceptionsPage(model);
+  const html = renderMessagesPage({
+    ...model,
+    selectedView: 'attention',
+    notificationAuthority: model.authority,
+    attention: model.exceptions,
+    attentionUnavailable: false,
+    activity: [],
+    activityUnavailable: false,
+  });
   assert.match(html, /Failed/);
   assert.match(html, /Re-send booking confirmation/);
   assert.match(html, /WhatsApp ending 4567/);
@@ -163,9 +171,9 @@ test('Calendar exception routes retain session, same-origin, CSRF and client:not
   const route = fs.readFileSync(path.join(__dirname, '..', 'src/routes/calendarOperationalMutations.js'), 'utf8');
   const calendar = fs.readFileSync(path.join(__dirname, '..', 'src/routes/calendarReadOnlyUx.js'), 'utf8');
   assert.match(route, /router\.get\('\/booking-confirmation-exceptions', requireSession, requireNotificationCapability/);
+  assert.match(route, /res\.redirect\(302, '\/calendar\/messages\?view=attention'\)/);
   assert.match(route, /router\.post\('\/appointments\/:appointmentId\/booking-confirmation\/recover', sameOrigin, requireSession, requireCsrf, requireNotificationCapability/);
-  assert.match(calendar, /notificationService\.resolveAccess/);
-  assert.match(calendar, /notificationAllowed \? \[\{ label: 'Confirmation exceptions'/);
+  assert.doesNotMatch(calendar, /Confirmation exceptions/);
 });
 
 test('Bot and Workspace use the same canonical booking-confirmation payload contract', () => {

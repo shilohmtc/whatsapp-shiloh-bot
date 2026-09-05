@@ -66,8 +66,10 @@ function messageDeliveryEntry(row) {
       status = 'failed'; statusLabel = 'Send attempt failed'; occurredAt = row?.last_attempt_at || row?.claimed_at;
     } else if (deliveryStatus === 'uncertain') {
       status = 'uncertain'; statusLabel = 'Delivery uncertain'; occurredAt = row?.last_attempt_at || row?.claimed_at;
+    } else if (['pending', 'queued', 'sending'].includes(deliveryStatus) || (!deliveryStatus && row?.claimed_at)) {
+      status = 'pending'; statusLabel = 'Pending'; occurredAt = row?.claimed_at || row?.updated_at;
     } else {
-      status = 'pending'; statusLabel = 'Pending'; occurredAt = row?.claimed_at;
+      status = 'unknown'; statusLabel = 'Unknown'; occurredAt = row?.updated_at || row?.last_attempt_at || row?.claimed_at;
     }
   }
 
@@ -129,7 +131,7 @@ function timestamp(value) {
 function mergeEvidence(groups, limit) {
   const seen = new Set();
   return groups.flat().filter(Boolean).sort((a, b) => timestamp(b.occurredAt) - timestamp(a.occurredAt)).filter(entry => {
-    const key = `${entry.intent}|${entry.appointmentId || ''}|${entry.status}|${new Date(entry.occurredAt).toISOString()}`;
+    const key = `${entry.clientId || ''}|${entry.intent}|${entry.appointmentId || ''}|${entry.status}|${new Date(entry.occurredAt).toISOString()}`;
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
@@ -147,7 +149,7 @@ function createWorkspaceCommunicationEvidenceService({ db = pool } = {}) {
 
     const deliveries = await db.query(
       `/* workspaceCommunicationEvidence:messageDeliveries */
-       SELECT appointment_id, message_kind, status, claimed_at, sent_at, last_attempt_at,
+       SELECT appointment_id, message_kind, status, claimed_at, sent_at, last_attempt_at, updated_at,
               template_name, provider_sent_at, provider_delivered_at,
               provider_read_at, provider_failed_at
          FROM customer_message_deliveries
@@ -195,7 +197,68 @@ function createWorkspaceCommunicationEvidenceService({ db = pool } = {}) {
     ], safeLimit);
   }
 
-  return { listForClient };
+  function crossClientEntry(entry, row) {
+    if (!entry) return null;
+    const clientId = positiveId(row?.client_id);
+    if (!clientId) return null;
+    return {
+      ...entry,
+      clientId,
+      clientName: String(row?.client_name || 'Unnamed client').trim() || 'Unnamed client',
+      mobileLast4: String(row?.normalized_mobile || '').replace(/[^0-9]/g, '').slice(-4) || null,
+    };
+  }
+
+  async function listRecent({ limit } = {}) {
+    const safeLimit = boundedLimit(limit);
+    const deliveries = await db.query(
+      `/* workspaceCommunicationEvidence:recentMessageDeliveries */
+       SELECT c.id AS client_id,c.name AS client_name,c.normalized_mobile,
+              d.appointment_id,d.message_kind,d.status,d.claimed_at,d.sent_at,
+              d.last_attempt_at,d.updated_at,d.template_name,d.provider_sent_at,
+              d.provider_delivered_at,d.provider_read_at,d.provider_failed_at
+         FROM customer_message_deliveries d
+         JOIN crm_v2_clients c ON c.id=d.crm_v2_client_id
+        WHERE c.status='active'
+        ORDER BY COALESCE(d.provider_read_at,d.provider_delivered_at,d.provider_failed_at,
+                          d.provider_sent_at,d.sent_at,d.last_attempt_at,d.claimed_at,d.updated_at) DESC
+        LIMIT $1`,
+      [safeLimit]
+    );
+    const reschedules = await db.query(
+      `/* workspaceCommunicationEvidence:recentReschedules */
+       SELECT c.id AS client_id,c.name AS client_name,c.normalized_mobile,
+              r.appointment_id,r.client_notified_at,r.client_notification_last_error,
+              r.client_notification_claimed_at,r.client_notification_suppressed_at,r.updated_at
+         FROM appointment_reschedule_requests r
+         JOIN crm_v2_clients c ON c.id=r.crm_v2_client_id
+        WHERE c.status='active'
+          AND (r.client_notified_at IS NOT NULL OR r.client_notification_last_error IS NOT NULL
+            OR r.client_notification_claimed_at IS NOT NULL OR r.client_notification_suppressed_at IS NOT NULL)
+        ORDER BY COALESCE(r.client_notified_at,r.client_notification_suppressed_at,
+                          r.client_notification_claimed_at,r.updated_at) DESC
+        LIMIT $1`,
+      [safeLimit]
+    );
+    const care = await db.query(
+      `/* workspaceCommunicationEvidence:recentCustomerCare */
+       SELECT c.id AS client_id,c.name AS client_name,c.normalized_mobile,
+              care.event_type,care.sent_at
+         FROM customer_care_delivery_log care
+         JOIN crm_v2_clients c ON c.normalized_mobile=care.client_wa_id
+        WHERE c.status='active'
+        ORDER BY care.sent_at DESC
+        LIMIT $1`,
+      [safeLimit]
+    );
+    return mergeEvidence([
+      (deliveries.rows || []).map(row => crossClientEntry(messageDeliveryEntry(row), row)),
+      (reschedules.rows || []).map(row => crossClientEntry(rescheduleEntry(row), row)),
+      (care.rows || []).map(row => crossClientEntry(careDeliveryEntry(row), row)),
+    ], safeLimit);
+  }
+
+  return { listForClient, listRecent };
 }
 
 const service = createWorkspaceCommunicationEvidenceService();
