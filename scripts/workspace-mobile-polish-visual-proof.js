@@ -238,8 +238,8 @@ fs.rmSync(outDir, { recursive: true, force: true });
 fs.mkdirSync(outDir, { recursive: true });
 
 const cases = [
-  { name: 'calendar-day', width: 390, height: 844, html: calendarHtml('day'), expectControls: true },
-  { name: 'calendar-agenda-compact', width: 360, height: 800, html: calendarHtml('agenda'), expectControls: true },
+  { name: 'calendar-day', width: 390, height: 844, html: calendarHtml('day'), controlLayout: 'calendar-first' },
+  { name: 'calendar-agenda-compact', width: 360, height: 800, html: calendarHtml('agenda'), controlLayout: 'stacked' },
   { name: 'clients-list', width: 390, height: 844, html: clientsListHtml() },
   { name: 'client-detail-compact', width: 360, height: 800, html: clientDetailHtml() },
   { name: 'staff-list-manage', width: 390, height: 844, html: staffListHtml(), expectStaffOrder: true },
@@ -272,8 +272,11 @@ for (const proof of cases) {
   if (metrics.visibleNavLinks < 3 || metrics.minNavHeight < 47) throw new Error(`${proof.name} mobile navigation is too small or incomplete`);
   if (metrics.minTouchHeight < 43) throw new Error(`${proof.name} has a touch target below 43px (${metrics.minTouchHeight})`);
   if (metrics.overflowingPrimary.length) throw new Error(`${proof.name} primary content exceeds viewport: ${metrics.overflowingPrimary.join(', ')}`);
-  if (proof.expectControls && (metrics.controlsPosition !== 'relative' || String(metrics.controlsColumns).trim().split(/\s+/).length !== 2)) {
+  if (proof.controlLayout === 'calendar-first' && (metrics.controlsPosition !== 'relative' || String(metrics.controlsColumns).trim().split(/\s+/).length !== 2)) {
     throw new Error(`${proof.name} Calendar controls did not use the compact Calendar-first Phone layout: ${JSON.stringify(metrics)}`);
+  }
+  if (proof.controlLayout === 'stacked' && (metrics.controlsPosition !== 'static' || /\s/.test(String(metrics.controlsColumns).trim()))) {
+    throw new Error(`${proof.name} Agenda controls did not retain the stacked compact layout: ${JSON.stringify(metrics)}`);
   }
   if (proof.expectStaffOrder && (String(metrics.staffFilterOrder) !== '1' || String(metrics.staffCreateOrder) !== '5')) {
     throw new Error(`${proof.name} staff operational list is not ordered before creation on mobile`);
