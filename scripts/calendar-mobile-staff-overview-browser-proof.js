@@ -200,7 +200,7 @@ function assertCase(proof, metrics) {
     if (metrics.overviewVisible || metrics.cardCount !== 0) throw new Error(`${proof.name} retained the retired overview-card replacement`);
     if (metrics.dayGridDisplay === 'none' || metrics.dayGridVisibility === 'hidden') throw new Error(`${proof.name} canonical all-staff Day canvas is hidden`);
     if (metrics.laneCount !== 5) throw new Error(`${proof.name} expected five permitted practitioner lanes, got ${metrics.laneCount}`);
-    if (metrics.minLaneWidth < 270) throw new Error(`${proof.name} practitioner lanes are cramped (${metrics.minLaneWidth}px)`);
+    if (metrics.minLaneWidth < 200 || metrics.minLaneWidth > 220) throw new Error(`${proof.name} practitioner lanes are outside compact density (${metrics.minLaneWidth}px)`);
     if (metrics.dayGridScrollWidth <= metrics.dayGridClientWidth) throw new Error(`${proof.name} multi-staff Day canvas does not pan inside its calendar scroller`);
     if (metrics.practitionerDisplay === 'none') throw new Error(`${proof.name} lost the canonical People selector`);
   } else {
