@@ -249,6 +249,7 @@ const METRICS_EXPRESSION = `(() => {
     minNavTargetHeight:targets.length?Math.min(...targets.map(node=>node.getBoundingClientRect().height)):0,
     navHeight:nav?.getBoundingClientRect().height||0,
     framePaddingBottom:frame?parseFloat(getComputedStyle(frame).paddingBottom)||0:0,
+    signoutHeight:document.querySelector('[data-shiloh-logout]')?.getBoundingClientRect().height||0,
     attentionVisible:visible(document.querySelector('[data-messages-attention]')),
     unknownVisible:Array.from(document.querySelectorAll('[data-message-status="unknown"]')).some(visible),
   };
@@ -326,6 +327,7 @@ async function main() {
         assert.deepEqual(metrics.primary, ['Dashboard', 'Calendar', 'Clients', 'Messages']);
         assert.equal(metrics.moreVisible, true);
         assert.ok(metrics.minNavTargetHeight >= 44, `${name} has a nav touch target below 44px`);
+        assert.ok(metrics.signoutHeight >= 44, `${name} has a collapsed sign-out control`);
         assert.ok(metrics.framePaddingBottom >= metrics.navHeight - 2, `${name} content is not protected from fixed navigation`);
         if (openMore) {
           assert.equal(metrics.moreOpen, true);
