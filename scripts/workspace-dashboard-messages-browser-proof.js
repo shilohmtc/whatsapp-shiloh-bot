@@ -316,17 +316,15 @@ async function main() {
       fs.writeFileSync(target, Buffer.from(result.data, 'base64'));
       return { file, bytes: fs.statSync(target).size, sha256: fileSha256(target) };
     }
-    async function proof({ name, path: urlPath, width, height, phone, openMore = false }) {
+    async function proof({ name, path: urlPath, width, height, phone, openDrawer = false }) {
       await cdp.send('Emulation.setDeviceMetricsOverride', {
         width, height, deviceScaleFactor: 1, mobile: phone, screenWidth: width, screenHeight: height,
       });
       await navigate(`${origin}${urlPath}`);
-      if (openMore) {
+      if (openDrawer) {
         await evaluate(cdp, `document.querySelector('[data-workspace-drawer-toggle]').click();true`);
         await poll(() => evaluate(cdp, `document.querySelector('[data-workspace-navigation-drawer]').classList.contains('open')`), Boolean);
         await poll(() => evaluate(cdp, `document.querySelector('[data-workspace-navigation-drawer]').getBoundingClientRect().left`), value => value >= -1);
-        await evaluate(cdp, `document.querySelector('[data-workspace-more-toggle]').click();true`);
-        await poll(() => evaluate(cdp, `document.querySelector('[data-workspace-more-menu]').classList.contains('open')`), Boolean);
       }
       const metrics = await evaluate(cdp, METRICS_EXPRESSION);
       assert.deepEqual(metrics.viewport, { width, height, screenWidth: width, screenHeight: height });
@@ -340,13 +338,13 @@ async function main() {
           if (metrics.signoutToTabsGap != null) assert.ok(metrics.signoutToTabsGap >= 8, `${name} overlays its sign-out control with Messages tabs`);
         }
         assert.equal(metrics.framePaddingBottom, 0, `${name} still reserves bottom-navigation space`);
-        if (openMore) {
+        if (openDrawer) {
           assert.equal(metrics.drawerOpen, true);
           assert.deepEqual(metrics.primary, ['Dashboard', 'Calendar', 'Clients', 'Messages']);
-          assert.equal(metrics.moreVisible, true);
-          assert.ok(metrics.minNavTargetHeight >= 44, `${name} has a drawer target below 44px`);
-          assert.equal(metrics.moreOpen, true);
           assert.deepEqual(metrics.secondary, ['Staff', 'Services', 'Reports']);
+          assert.equal(metrics.moreVisible, false);
+          assert.equal(metrics.moreOpen, false);
+          assert.ok(metrics.minNavTargetHeight >= 44, `${name} has a drawer target below 44px`);
         } else {
           assert.equal(metrics.drawerOpen, false);
           assert.ok(metrics.navRight <= 1, `${name} leaves the closed drawer on-screen`);
@@ -374,7 +372,7 @@ async function main() {
     ];
     for (const [name, urlPath] of destinations) screenshots.push(await proof({ name: `desktop-${name}`, path: urlPath, width: 1440, height: 1000, phone: false }));
     for (const [name, urlPath] of destinations) screenshots.push(await proof({ name: `phone-${name}`, path: urlPath, width: 390, height: 844, phone: true }));
-    screenshots.push(await proof({ name: 'phone-more-open', path: '/calendar/workspace', width: 390, height: 844, phone: true, openMore: true }));
+    screenshots.push(await proof({ name: 'phone-drawer-open', path: '/calendar/workspace', width: 390, height: 844, phone: true, openDrawer: true }));
 
     assert.deepEqual(browserExceptions, []);
     assert.deepEqual(externalRequests, []);
