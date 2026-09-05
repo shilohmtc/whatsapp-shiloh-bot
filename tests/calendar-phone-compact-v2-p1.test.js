@@ -45,7 +45,7 @@ test('Phone V2 controls collapse Calendar navigation to compact date, view and p
   assert.match(html, /phone-date-weekdays[\s\S]*>M<[\s\S]*>S</);
 });
 
-test('Phone V2 floating plus reuses canonical booking and schedule mutation actions', () => {
+test('Phone V2 floating plus reuses canonical booking and schedule mutation actions in operational order', () => {
   const html = renderPhoneCalendarDock(model(), {
     basePath: '/calendar/read-only',
     bookingPath: '/calendar/book',
@@ -58,6 +58,8 @@ test('Phone V2 floating plus reuses canonical booking and schedule mutation acti
   assert.match(html, />Block time</);
   assert.match(html, /\/calendar\/book\?date=2026-09-05&amp;staff=22/);
   assert.match(html, />Appointment</);
+  assert.ok(html.indexOf('>Appointment</') < html.indexOf('>Block time</'));
+  assert.ok(html.indexOf('>Block time</') < html.indexOf('>Time off</'));
 });
 
 test('Phone V2 action launcher fails closed when mutation and booking authority are absent', () => {
@@ -92,7 +94,14 @@ test('Phone V2 uses a 30-minute visual grid while retaining duration-derived pos
   assert.match(css, /--phone-event-top/);
   assert.match(css, /--phone-event-height/);
   assert.match(css, /calendar-booking-slots\{pointer-events:none!important\}/);
-  assert.match(css, /\.lane-actions,body\[data-phone-calendar-v2="true"\] \.availability-menu\{display:none!important\}/);
+  assert.match(css, /\.lane-actions,body\[data-phone-calendar-v2="true"\] \.availability-menu\{position:absolute!important;width:1px!important;height:44px!important;overflow:hidden!important;clip-path:inset\(50%\)!important;visibility:hidden!important;pointer-events:none!important\}/);
+  assert.match(css, /\.week-time-grid\{margin:0!important;max-height:calc\(100dvh - 81px\)!important/);
+  assert.match(css, /\.day-view \.positioned-event\{left:2px!important;right:2px!important;width:auto!important\}/);
+  assert.doesNotMatch(css, /\.positioned-event\{[^}]*left:2px!important;right:2px!important;width:auto!important/);
+  const mediaStart = css.indexOf('@media(max-width:700px){');
+  const containerStart = css.indexOf('@container (max-height:44px){');
+  const mediaEnd = css.lastIndexOf('\n}\n');
+  assert.ok(mediaStart >= 0 && containerStart > mediaStart && mediaEnd > containerStart, 'short-card container rule must remain inside the Phone media gate');
 });
 
 test('Phone V2 client maps existing canonical event geometry to compact Phone density and snaps empty taps to 30 minutes', () => {
