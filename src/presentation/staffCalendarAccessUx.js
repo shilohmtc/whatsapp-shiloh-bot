@@ -123,6 +123,8 @@ function resetWeekOverlapLayout(){
       node.style.removeProperty('left');
       node.style.removeProperty('right');
       node.style.removeProperty('width');
+      node.style.removeProperty('--week-event-left');
+      node.style.removeProperty('--week-event-width');
       node.removeAttribute('data-week-lane-index');
       node.removeAttribute('data-week-lane-count');
     });
@@ -133,7 +135,7 @@ function applyWeekOverlapLayout(){
   var grid=select('.week-view .week-grid');
   if(!grid)return;
   resetWeekOverlapLayout();
-  if(!window.matchMedia||!window.matchMedia('(min-width: 701px)').matches)return;
+  var desktop=!window.matchMedia||window.matchMedia('(min-width: 701px)').matches;
 
   var days=Array.prototype.slice.call(grid.querySelectorAll('.week-day'));
   if(!days.length)return;
@@ -150,15 +152,25 @@ function applyWeekOverlapLayout(){
     layout.entries.forEach(function(entry){
       var laneCount=layout.laneCount;
       var laneWidth=100/laneCount;
-      entry.node.style.left='calc('+(entry.laneIndex*laneWidth)+'% + 4px)';
-      entry.node.style.right='auto';
-      entry.node.style.width='calc('+laneWidth+'% - 8px)';
+      if(desktop){
+        entry.node.style.left='calc('+(entry.laneIndex*laneWidth)+'% + 4px)';
+        entry.node.style.right='auto';
+        entry.node.style.width='calc('+laneWidth+'% - 8px)';
+      }else{
+        entry.node.style.setProperty('--week-event-left','calc('+(entry.laneIndex*laneWidth)+'% + 1px)');
+        entry.node.style.setProperty('--week-event-width','calc('+laneWidth+'% - 2px)');
+      }
       entry.node.setAttribute('data-week-lane-index',String(entry.laneIndex));
       entry.node.setAttribute('data-week-lane-count',String(laneCount));
     });
     day.setAttribute('data-week-lane-count',String(layout.laneCount));
     return layout.laneCount;
   });
+
+  if(!desktop){
+    grid.setAttribute('data-week-overlap-layout','phone');
+    return;
+  }
 
   var baseLaneWidth=154;
   grid.style.gridTemplateColumns=laneCounts.map(function(count){
