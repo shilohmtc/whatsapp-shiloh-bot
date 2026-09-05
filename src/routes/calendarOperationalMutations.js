@@ -12,7 +12,6 @@ const {
   calendarOperationalMutationsClientScript,
 } = require('../presentation/calendarOperationalMutationsUx');
 const workspaceClientNotifications = require('../services/workspaceClientNotifications');
-const { renderBookingConfirmationExceptionsPage } = require('../presentation/workspaceBookingConfirmationExceptionsUx');
 
 function setOperationalSecurityHeaders(res) {
   res.setHeader('Cache-Control', 'private, no-store, max-age=0');
@@ -63,7 +62,6 @@ function createCalendarOperationalMutationRouter({
   mutationService = createCalendarOperationalMutationService({ db: pool }),
   notificationService = workspaceClientNotifications,
   renderClient = calendarOperationalMutationsClientScript,
-  renderExceptions = renderBookingConfirmationExceptionsPage,
 } = {}) {
   if (!sessionService) throw new Error('Calendar operational mutations require the staff session service.');
   const router = express.Router();
@@ -109,15 +107,8 @@ function createCalendarOperationalMutationRouter({
     return res.status(200).type('application/javascript').send(renderClient());
   });
 
-  router.get('/booking-confirmation-exceptions', requireSession, requireNotificationCapability, async (req, res, next) => {
-    try {
-      const model = await notificationService.listBookingConfirmationExceptions({
-        adminId: req.staffBrowserSession.adminId,
-      });
-      return res.status(200).type('html').send(renderExceptions(model));
-    } catch (error) {
-      return sendOperationalError(error, req, res, next);
-    }
+  router.get('/booking-confirmation-exceptions', requireSession, requireNotificationCapability, (_req, res) => {
+    return res.redirect(302, '/calendar/messages?view=attention');
   });
 
   router.get('/appointments/:appointmentId/booking-confirmation', requireSession, requireNotificationCapability, async (req, res, next) => {

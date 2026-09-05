@@ -37,8 +37,10 @@ test('shared Workspace shell has an intentional phone navigation and safe-area l
   assert.match(css, /@media\(max-width:700px\)/);
   assert.match(css, /\.workspace-nav\{position:fixed;inset:auto 0 0 0/);
   assert.match(css, /env\(safe-area-inset-bottom\)/);
-  assert.match(css, /grid-auto-flow:column/);
+  assert.match(css, /grid-template-columns:repeat\(5,minmax\(0,1fr\)\)/);
   assert.match(css, /\.workspace-link\{min-width:0;min-height:48px/);
+  assert.match(css, /\.workspace-secondary-links\{display:none;position:fixed/);
+  assert.match(css, /\.workspace-secondary-links\.open\{display:grid/);
   assert.match(css, /body\{overflow-x:hidden\}/);
 });
 
@@ -51,9 +53,10 @@ test('mobile polish preserves capability-driven navigation rather than widening 
     servicesHref: null,
   });
   assert.match(html, /aria-current="page">Clients<\/span>/);
-  assert.match(html, /<span class="workspace-link future" aria-disabled="true">Calendar<\/span>/);
-  assert.match(html, /<span class="workspace-link future" aria-disabled="true" data-workspace-staff-link>Staff<\/span>/);
-  assert.match(html, /<span class="workspace-link future" aria-disabled="true" data-workspace-services-link>Services<\/span>/);
+  assert.match(html, /aria-disabled="true" data-workspace-destination="calendar">Calendar<\/span>/);
+  assert.match(html, /aria-disabled="true" data-workspace-destination="staff">Staff<\/span>/);
+  assert.match(html, /aria-disabled="true" data-workspace-destination="services">Services<\/span>/);
+  assert.match(html, /data-workspace-more-toggle>More<\/button>/);
   assert.doesNotMatch(html, /href="\/calendar\/read-only"/);
   assert.doesNotMatch(html, /href="\/calendar\/team"/);
   assert.doesNotMatch(html, /href="\/calendar\/services"/);

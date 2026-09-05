@@ -104,7 +104,7 @@ test('browser client uses only provider-independent staff-auth contracts and nev
   }
   assert.doesNotMatch(client, /AUTH_BASE\+'\/challenge'/);
   assert.doesNotMatch(client, /AUTH_BASE\+'\/verify'/);
-  assert.match(client, /WORKSPACE_PATH='\/calendar\/read-only'/);
+  assert.match(client, /WORKSPACE_PATH='\/calendar\/workspace'/);
   assert.doesNotMatch(client, /localStorage|sessionStorage|document\.cookie|ADMIN_API_KEY|x-admin-key|Bearer\s|jsonwebtoken|\bJWT\b/i);
   assert.doesNotMatch(client, /location\.(?:assign|replace)[^\n]*(?:code|csrf|token)=/i);
   assert.doesNotMatch(client, /\/appointments|\/blocks|\/leave|\/schedule|\/reschedule|\/cancel/i);

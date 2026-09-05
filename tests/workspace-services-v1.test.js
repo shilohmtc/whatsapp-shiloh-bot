@@ -184,9 +184,9 @@ test('no browser session is unauthorized and Calendar/Clients/Staff authority do
 
 test('Services nav stays disabled until same-origin authority check succeeds', () => {
   const html = renderWorkspaceNavigation({ active: 'calendar', calendarHref: '/calendar/read-only', clientsHref: '/calendar/clients', staffHref: '/calendar/team' });
-  assert.match(html, /data-workspace-services-link/);
+  assert.match(html, /data-workspace-destination="services"/);
   assert.match(html, /class="workspace-link future"[^>]*>Services/);
-  assert.match(html, /\/calendar\/services\/nav\.js/);
+  assert.match(html, /\/calendar\/workspace\/nav\.js/);
   const script = navScript();
   assert.match(script, /\/calendar\/services\/access/);
   assert.match(script, /a\.href='\/calendar\/services'/);

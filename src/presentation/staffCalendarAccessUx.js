@@ -85,7 +85,7 @@ function staffCalendarAccessClientScript() {
 'use strict';
 var AUTH_BASE='/calendar/staff-auth';
 var ACCESS_PATH='/calendar/staff';
-var WORKSPACE_PATH='/calendar/read-only';
+var WORKSPACE_PATH='/calendar/workspace';
 var TOTP_ENABLED=document.body&&document.body.getAttribute('data-shiloh-totp-enabled')==='true';
 var allocateWeekOverlapLanes=${allocateWeekOverlapLanes.toString()};
 
