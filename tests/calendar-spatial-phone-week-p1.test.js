@@ -163,6 +163,7 @@ test('authenticated browser proof mounts canonical Calendar and Create Booking r
   assert.match(source, /createCalendarCreateBookingRouter\(\{/);
   assert.match(source, /phone-empty-slot-create-booking-prefill/);
   assert.match(source, /phone-week-practitioner-slot-booking-prefill/);
+  assert.match(source, /phone-week-practitioner-prefill-selected/);
   assert.match(source, /data-week-practitioner-lane/);
   assert.match(source, /phone-month-overview-navigation/);
   assert.doesNotMatch(source, /calendarReadOnlyRoutes\(\{/);

@@ -503,6 +503,26 @@ async function main() {
     assert.match(weekBookingPrefillMetrics.backHref, /staff=52/);
     screenshots.push({ ...(await capture('phone-week-practitioner-slot-booking-prefill')), viewport: { width: 390, height: 844 }, metrics: weekBookingPrefillMetrics });
 
+    await evaluate(cdp, `(() => { const service=document.querySelector('#service-select'); service.value='81'; service.dispatchEvent(new Event('change',{bubbles:true})); return true; })()`);
+    await poll(() => evaluate(cdp, `document.querySelector('#staff-select')?.value`), value => value === '52');
+    const weekPractitionerPrefillMetrics = await evaluate(cdp, `(() => {
+      const staff=document.querySelector('#staff-select');
+      staff.scrollIntoView({block:'center'});
+      return {
+        viewport:{width:innerWidth,height:innerHeight,screenWidth:screen.width,screenHeight:screen.height},
+        date:document.querySelector('#booking-date')?.value||'',
+        time:document.querySelector('#booking-time')?.value||'',
+        staffId:Number(staff?.value||0),
+        staffName:staff?.selectedOptions?.[0]?.textContent.trim()||'',
+        serviceId:Number(document.querySelector('#service-select')?.value||0),
+      };
+    })()`);
+    assert.deepEqual(weekPractitionerPrefillMetrics, {
+      viewport: { width: 390, height: 844, screenWidth: 390, screenHeight: 844 },
+      date: '2026-09-07', time: '11:00', staffId: 52, staffName: 'Birch Room', serviceId: 81,
+    });
+    screenshots.push({ ...(await capture('phone-week-practitioner-prefill-selected')), viewport: { width: 390, height: 844 }, metrics: weekPractitionerPrefillMetrics });
+
     await navigate(`${origin}/calendar/read-only?view=week&date=${DATE_KEY}&staff=51&staff=52&staff=53`, '.week-grid');
     await poll(() => evaluate(cdp, `document.querySelector('.week-grid')?.getAttribute('data-week-overlap-layout')`), Boolean);
     await evaluate(cdp, `document.querySelector('.week-time-grid').scrollLeft=0;true`);
