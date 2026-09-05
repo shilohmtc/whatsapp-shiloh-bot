@@ -130,11 +130,11 @@ function buildWorkingWindows(staff, staffHours, recurringClosures, locationHours
     explicitByStaffDay.get(key).push(row);
   }
   const closed = new Set(recurringClosures.map(row => `${row.staff_id}:${row.day_of_week}`));
-  const activeLocationHours = locationHours.filter(row => row.active !== false);
+  const activeLocationHours = locationHours.filter(row => row.active !== false && Number(row.day_of_week) !== 0);
   const windows = [];
 
   for (const person of staff) {
-    for (let day = 0; day <= 6; day += 1) {
+    for (let day = 1; day <= 6; day += 1) {
       const key = `${person.id}:${day}`;
       if (person.scheduling_type === 'regular') {
         for (const row of activeLocationHours) {

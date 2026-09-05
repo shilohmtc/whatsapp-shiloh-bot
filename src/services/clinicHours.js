@@ -1,4 +1,5 @@
 const { pool } = require('../db/pool');
+const { isSundayDateKey } = require('./operationalCalendar');
 
 async function getDefaultActiveLocation(db = pool) {
   const result = await db.query(`
@@ -45,6 +46,7 @@ async function getClinicWindowForDate({ db = pool, locationId = null, date }) {
        LIMIT 1
     )
     SELECT
+      (SELECT dow FROM requested) AS requested_dow,
       EXISTS(SELECT 1 FROM holiday) AS is_holiday,
       (SELECT name FROM holiday) AS holiday_name,
       (SELECT observed FROM holiday) AS holiday_observed,
@@ -57,6 +59,17 @@ async function getClinicWindowForDate({ db = pool, locationId = null, date }) {
   `, [resolvedLocationId, date]);
 
   const row = result.rows[0] || {};
+  if (isSundayDateKey(date) || Number(row.requested_dow) === 0) {
+    return {
+      covered: false,
+      reason: 'sunday_closed',
+      locationId: resolvedLocationId,
+      isHoliday: row.is_holiday === true,
+      holidayName: row.holiday_name || null,
+      configured: true,
+      permanent: true,
+    };
+  }
   if (row.override_type === 'closed') {
     return { covered: false, reason: 'date_closed', locationId: resolvedLocationId, isHoliday: row.is_holiday, holidayName: row.holiday_name, configured: true };
   }

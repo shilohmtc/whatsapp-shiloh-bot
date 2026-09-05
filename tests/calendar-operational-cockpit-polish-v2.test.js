@@ -10,6 +10,7 @@ const {
   eventsForDate,
 } = require('../src/presentation/calendarReadOnlyUx');
 const { bookingOperationalActions, applyCalendarResponsivePolish } = require('../src/routes/calendarReadOnlyUx');
+const { periodFor } = require('../src/services/calendarReadOnlyUx');
 
 function model(view = 'day') {
   const appointment = {
@@ -46,18 +47,12 @@ function model(view = 'day') {
     endsAt: '2026-08-27T10:30:00.000Z',
     staffIds: [1],
   };
-  const dateKeys = ['2026-08-27','2026-08-28','2026-08-29','2026-08-30','2026-08-31','2026-09-01','2026-09-02'];
   return {
     view,
     dateKey: '2026-08-27',
     selectedStaffId: null,
     permittedStaff: [{ id: 1, displayName: 'Christel' }, { id: 2, displayName: 'Abigail' }],
-    period: {
-      startKey: '2026-08-27',
-      previousAnchor: '2026-08-26',
-      nextAnchor: view === 'day' ? '2026-08-28' : '2026-09-03',
-      dateKeys: view === 'day' ? ['2026-08-27'] : dateKeys,
-    },
+    period: periodFor(view, '2026-08-27'),
     timeline: {
       staff: [{ id: 1, displayName: 'Christel' }, { id: 2, displayName: 'Abigail' }],
       workingWindows: [
@@ -109,12 +104,12 @@ test('cockpit exposes labelled controls, scan summary and lane state', () => {
   assert.match(html, /class="positioned-event" style="--event-top:72px;--event-height:69px"/);
 });
 
-test('Week uses one shared vertical time rail and seven horizontally responsive day columns', () => {
+test('Week uses one shared vertical time rail and six Monday-Saturday day columns', () => {
   const html = renderCalendarPage(model('week'));
   assert.match(html, /class="time-grid week-time-grid"/);
-  assert.equal((html.match(/class="week-day"/g) || []).length, 7);
+  assert.equal((html.match(/class="week-day"/g) || []).length, 6);
   assert.match(html, /class="time-rail"/);
-  assert.match(html, /grid-template-columns:repeat\(7,minmax\(154px,1fr\)\)/);
+  assert.match(html, /grid-template-columns:repeat\(6,minmax\(154px,1fr\)\)/);
   assert.match(html, /@media\(max-width:700px\).*minmax\(78vw,1fr\)/s);
 });
 

@@ -83,12 +83,14 @@ async function listAvailableSlots({
      ),
      clinic_windows AS (
        SELECT co.starts_local, co.ends_local
-         FROM clinic_override co
-        WHERE co.exception_type='open'
+         FROM clinic_override co, requested r
+        WHERE r.dow <> 0
+          AND co.exception_type='open'
        UNION ALL
        SELECT lwh.starts_local, lwh.ends_local
          FROM location_working_hours lwh, requested r
         WHERE lwh.location_id = r.location_id
+          AND r.dow <> 0
           AND lwh.day_of_week = r.dow
           AND lwh.active = TRUE
           AND NOT EXISTS (SELECT 1 FROM clinic_override)
