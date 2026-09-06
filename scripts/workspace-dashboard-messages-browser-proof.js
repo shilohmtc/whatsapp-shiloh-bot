@@ -286,6 +286,7 @@ const METRICS_EXPRESSION = `(() => {
     navRight:nav?.getBoundingClientRect().right||0,
     drawerOpen:Boolean(nav?.classList.contains('open')),
     menuHeight:menuToggle?.getBoundingClientRect().height||0,
+    menuLeft:menuToggle?.getBoundingClientRect().left||0,
     framePaddingBottom:frame?parseFloat(getComputedStyle(frame).paddingBottom)||0:0,
     signoutHeight:document.querySelector('[data-shiloh-logout]')?.getBoundingClientRect().height||0,
     signoutText:document.querySelector('[data-shiloh-logout]')?.textContent.trim()||'',
@@ -363,6 +364,7 @@ async function main() {
         width, height, deviceScaleFactor: 1, mobile: phone, screenWidth: width, screenHeight: height,
       });
       await navigate(`${origin}${urlPath}`);
+      await evaluate(cdp, `new Promise(resolve=>{scrollTo(0,0);setTimeout(resolve,300);})`);
       if (openDrawer) {
         await evaluate(cdp, `document.querySelector('[data-workspace-drawer-toggle]').click();true`);
         await poll(() => evaluate(cdp, `document.querySelector('[data-workspace-navigation-drawer]').classList.contains('open')`), Boolean);
@@ -374,6 +376,7 @@ async function main() {
       assert.ok(metrics.active, `${name} has no active destination`);
       if (phone) {
         assert.ok(metrics.menuHeight >= 44, `${name} has a menu touch target below 44px`);
+        assert.ok(metrics.menuLeft >= 7, `${name} captured the responsive drawer transition before the Phone shell settled`);
         if (!urlPath.startsWith('/calendar/read-only')) {
           assert.ok(metrics.signoutHeight >= 44, `${name} has a collapsed sign-out control`);
           assert.equal(metrics.signoutText, 'Sign out');
