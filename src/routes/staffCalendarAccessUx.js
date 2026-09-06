@@ -36,6 +36,28 @@ function withAuthenticatorSetupGuidance(html) {
   return String(html).replace(marker, `${guidance}${marker}`);
 }
 
+function retireBrowserWhatsAppGuidance(html) {
+  let output = String(html || '');
+  output = output.replace(
+    /\s*<section class="section" data-shiloh-whatsapp-handoff-guidance>[\s\S]*?<\/section>\s*/,
+    '\n',
+  );
+  output = output.replace(
+    /\s*<p class="privacy-note">Authenticator and recovery credentials stay outside WhatsApp\.[\s\S]*?<\/p>\s*/,
+    '\n',
+  );
+  for (const initialMessage of [
+    'Use your authenticator here, or open Workspace from your existing Shiloh WhatsApp conversation.',
+    'Your staff session is missing, expired, or revoked. Sign in again to continue.',
+  ]) {
+    output = output.replace(`>${initialMessage}</div>`, '></div>');
+  }
+  if (!output.includes('[data-shiloh-status]:empty{display:none}')) {
+    output = output.replace('<style>', '<style>[data-shiloh-status]:empty{display:none}');
+  }
+  return output;
+}
+
 function createStaffCalendarAccessPageHandler({
   env = process.env,
   renderPage = renderStaffCalendarAccessPage,
@@ -51,6 +73,7 @@ function createStaffCalendarAccessPageHandler({
       providerIndependentAuthEnabled,
     });
     if (providerIndependentAuthEnabled) html = withAuthenticatorSetupGuidance(html);
+    html = retireBrowserWhatsAppGuidance(html);
     return res.status(200).type('html').send(html);
   };
 }
@@ -107,3 +130,4 @@ module.exports.isStaffCalendarAccessUxEnabled = isStaffCalendarAccessUxEnabled;
 module.exports.setAccessSecurityHeaders = setAccessSecurityHeaders;
 module.exports.normalizeReason = normalizeReason;
 module.exports.withAuthenticatorSetupGuidance = withAuthenticatorSetupGuidance;
+module.exports.retireBrowserWhatsAppGuidance = retireBrowserWhatsAppGuidance;
