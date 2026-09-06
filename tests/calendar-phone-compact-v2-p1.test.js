@@ -94,9 +94,9 @@ test('Phone V2 uses a 30-minute visual grid and a clean 44px touch contract whil
   assert.match(css, /--phone-event-top/);
   assert.match(css, /--phone-event-height/);
   assert.match(css, /calendar-booking-slots\{pointer-events:none!important\}/);
-  assert.match(css, /\.workspace-main \.day-time-grid \.lanes\{display:block!important;min-width:0!important;width:100%!important\}/);
-  assert.match(css, /\.workspace-main \.day-time-grid \.day-view \.lane\{display:none!important;min-width:0!important;width:100%!important/);
-  assert.match(css, /\.workspace-main \.day-time-grid \.day-view \.lane\[data-phone-active-practitioner="true"\]\{display:block!important\}/);
+  assert.match(css, /\.workspace-main \.day-view \.day-time-grid \.lanes\{display:block!important;min-width:0!important;width:100%!important\}/);
+  assert.match(css, /\.workspace-main \.day-view \.day-time-grid \.lane\{display:none!important;min-width:0!important;width:100%!important/);
+  assert.match(css, /\.workspace-main \.day-view \.day-time-grid \.lane\[data-phone-active-practitioner="true"\]\{display:block!important\}/);
   assert.match(css, /\.day-view \.lane-actions\{display:none!important\}/);
   assert.match(css, /\.lane-actions,body\[data-phone-calendar-v2="true"\] \.availability-menu\{display:none!important\}/);
   assert.match(css, /\.phone-calendar-v2-controls summary\{[^}]*min-height:44px/);

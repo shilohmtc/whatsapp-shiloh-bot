@@ -206,9 +206,9 @@ body[data-phone-calendar-v2="true"] .time-rail{height:${gridHeight}px!important}
 body[data-phone-calendar-v2="true"] .time-rail span{top:var(--phone-grid-top,var(--grid-top))!important;right:3px!important;font-size:.49rem!important}
 body[data-phone-calendar-v2="true"] .time-column{height:${gridHeight}px!important;min-height:${gridHeight}px!important;background:repeating-linear-gradient(to bottom,transparent 0,transparent ${halfHour - 1}px,var(--line) ${halfHour - 1}px,var(--line) ${halfHour}px)!important}
 body[data-phone-calendar-v2="true"] .calendar-booking-slots{pointer-events:none!important}body[data-phone-calendar-v2="true"] .calendar-booking-slot{pointer-events:none!important}body[data-phone-calendar-v2="true"] .calendar-booking-slot>span{display:none!important}
-body[data-phone-calendar-v2="true"] .workspace-main .day-time-grid .lanes{display:block!important;min-width:0!important;width:100%!important}
-body[data-phone-calendar-v2="true"] .workspace-main .day-time-grid .day-view .lane{display:none!important;min-width:0!important;width:100%!important;border:0!important;border-radius:0!important}
-body[data-phone-calendar-v2="true"] .workspace-main .day-time-grid .day-view .lane[data-phone-active-practitioner="true"]{display:block!important}
+body[data-phone-calendar-v2="true"] .workspace-main .day-view .day-time-grid .lanes{display:block!important;min-width:0!important;width:100%!important}
+body[data-phone-calendar-v2="true"] .workspace-main .day-view .day-time-grid .lane{display:none!important;min-width:0!important;width:100%!important;border:0!important;border-radius:0!important}
+body[data-phone-calendar-v2="true"] .workspace-main .day-view .day-time-grid .lane[data-phone-active-practitioner="true"]{display:block!important}
 body[data-phone-calendar-v2="true"] .day-view .lane>header{height:32px!important;min-height:32px!important;padding:3px 7px!important;align-items:center!important}
 body[data-phone-calendar-v2="true"] .day-view .lane h3{font-size:.72rem!important}body[data-phone-calendar-v2="true"] .day-view .lane header p,body[data-phone-calendar-v2="true"] .day-view .lane-count{display:none!important}
 body[data-phone-calendar-v2="true"] .day-view .lane-actions{display:none!important}
