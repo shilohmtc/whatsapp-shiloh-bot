@@ -61,13 +61,13 @@ function deriveCalendarViewer(admin) {
   if (calendarScope === 'all_business') {
     return { calendarScope: 'business_all_staff' };
   }
-  if (
-    (calendarScope === 'own_services' || calendarScope === 'own_appointments') &&
-    authority.linkedStaffId
-  ) {
+  if (calendarScope === 'own_services' && authority.linkedStaffId) {
     return { calendarScope: 'business_all_staff' };
   }
-  if (calendarScope === 'own' && authority.linkedStaffId) {
+  if (
+    (calendarScope === 'own_appointments' || calendarScope === 'own') &&
+    authority.linkedStaffId
+  ) {
     return { calendarScope: 'own_staff', staffId: authority.linkedStaffId };
   }
   return null;
