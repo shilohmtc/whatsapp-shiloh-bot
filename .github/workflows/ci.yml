@@ -169,13 +169,13 @@ jobs:
           path: artifacts/calendar-view-parity-month-v1
           if-no-files-found: error
           retention-days: 14
-      - name: Run authenticated Goldie-density Phone Calendar shell browser proof
+      - name: Run authenticated Phone Week Planner V3 browser proof
         run: node scripts/calendar-spatial-phone-week-browser-proof.js
-      - name: Upload authenticated Goldie-density Phone Calendar shell browser proof
+      - name: Upload authenticated Phone Week Planner V3 browser proof
         uses: actions/upload-artifact@v4
         with:
-          name: calendar-goldie-density-phone-shell-p1
-          path: artifacts/calendar-goldie-density-phone-shell-p1
+          name: calendar-phone-week-planner-v3
+          path: artifacts/calendar-phone-week-planner-v3
           if-no-files-found: error
           retention-days: 14
       - name: Generate Calendar cockpit visual proof

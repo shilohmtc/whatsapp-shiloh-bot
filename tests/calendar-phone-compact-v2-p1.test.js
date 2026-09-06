@@ -36,12 +36,12 @@ function model(view = 'day') {
 test('Phone V2 controls collapse Calendar navigation to compact date, view and practitioner menus', () => {
   const html = renderPhoneCalendarControls(model('week'), { basePath: '/calendar/read-only' });
   assert.match(html, /data-phone-calendar-v2-controls/);
-  assert.match(html, /data-phone-calendar-view="day"/);
+  assert.doesNotMatch(html, /data-phone-calendar-view="day"/);
   assert.match(html, /data-phone-calendar-view="week"/);
   assert.match(html, /data-phone-calendar-view="month"/);
   assert.doesNotMatch(html, /agenda/i);
   assert.match(html, /data-phone-active-staff="22">Christel/);
-  assert.match(html, /view=week&amp;date=2026-09-05&amp;staff=11&amp;activeStaff=11/);
+  assert.match(html, /view=week&amp;date=2026-09-05&amp;staff=11&amp;staff=22&amp;activeStaff=11/);
   assert.match(html, /phone-date-weekdays[\s\S]*>M<[\s\S]*>S</);
 });
 
@@ -82,7 +82,8 @@ test('Phone V2 decoration is presentation-only and adds Week practitioner contex
   assert.match(html, /data-phone-calendar-v2="true"/);
   assert.match(html, /data-phone-active-staff-id="22"/);
   assert.match(html, /data-phone-booking-path="\/calendar\/book"/);
-  assert.match(html, /data-phone-week-practitioner="22"[\s\S]*Christel/);
+  assert.match(html, /data-phone-week-planner/);
+  assert.match(html, /data-phone-week-staff-id="22"/);
   assert.match(html, /\/calendar\/read-only\/phone-v2\.js/);
   assert.match(html, /canonical footer/);
 });
@@ -103,7 +104,7 @@ test('Phone V2 uses a 30-minute visual grid and a clean 44px touch contract whil
   assert.match(css, /\.phone-date-popover header a\{[^}]*min-height:44px/);
   assert.match(css, /\.phone-date-cell,\.phone-date-blank\{[^}]*min-height:44px/);
   assert.match(css, /\.phone-today-fab\{[^}]*min-height:44px/);
-  assert.match(css, /\.week-time-grid\{margin:0!important;max-height:calc\(100dvh - 81px\)!important/);
+  assert.match(css, /\.week-time-grid\{margin:0!important;max-height:calc\(100dvh - 137px\)!important/);
   assert.match(css, /\.day-view \.positioned-event\{left:2px!important;right:2px!important;width:auto!important\}/);
   const genericPositionedRule = css.match(/body\[data-phone-calendar-v2="true"\] \.workspace-main \.positioned-event\{([^}]*)\}/);
   assert.ok(genericPositionedRule, 'generic Phone event geometry rule must remain present');

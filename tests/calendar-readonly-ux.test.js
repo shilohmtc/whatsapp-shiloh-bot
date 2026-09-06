@@ -216,7 +216,8 @@ test('navigation is GET-only/read-only and existing appointment-share ICS route 
   assert.doesNotMatch(html, /method="post"|fetch\(|XMLHttpRequest|draggable|contenteditable/i);
   assert.match(html, /<form class="people-form" method="get"/);
   assert.match(html, /Today/);
-  assert.match(html, />Day<|>Week<|>Agenda</);
+  assert.doesNotMatch(html, /data-calendar-view-option="day"/);
+  assert.match(html, />Week<|>Agenda</);
 
   const routeSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'routes', 'calendarReadOnlyUx.js'), 'utf8');
   assert.doesNotMatch(routeSource, /router\.(?:post|put|patch|delete)\s*\(/i);
