@@ -1,7 +1,6 @@
 const express = require('express');
 const workspaceStaff = require('../services/workspaceStaff');
 const workspaceStaffAccess = require('../services/workspaceStaffAccess');
-const workspaceStaffAccessPolicy = require('../services/workspaceStaffAccessPolicy');
 const workspaceClients = require('../services/workspaceClients');
 const {
   renderStaffListPage,
@@ -86,7 +85,6 @@ function createWorkspaceStaffDetailHandler({
   env = process.env,
   service = workspaceStaff,
   accessService = workspaceStaffAccess,
-  accessPolicyService = workspaceStaffAccessPolicy,
   clientAccessService = workspaceClients,
   renderPage = renderStaffDetailPage,
   renderUnavailable = renderStaffUnavailablePage,
@@ -106,18 +104,6 @@ function createWorkspaceStaffDetailHandler({
       } catch (_error) {
         model.accessManageAllowed = false;
       }
-      model.accessPolicy = null;
-      if (model.accessManageAllowed && model.access) {
-        try {
-          model.accessPolicy = await accessPolicyService.getPolicy(adminId, req.params?.id);
-        } catch (error) {
-          if (Number(error?.httpStatus) === 403) model.accessManageAllowed = false;
-          else model.accessPolicy = {
-            supported: false,
-            reason: 'Access policy management is temporarily unavailable. Existing authority was not changed.',
-          };
-        }
-      }
       const html = renderPage(model, await pageOptions(req, clientAccessService, staffAccessPath));
       return res.status(200).type('html').send(decorateStaffDetailAccessHtml(html, model));
     } catch (error) {
@@ -131,7 +117,6 @@ function createWorkspaceStaffRouter({ sessionService, ...options } = {}) {
   if (!sessionService) throw new Error('Workspace Staff requires the existing staff browser session service');
   const service = options.service || workspaceStaff;
   const accessService = options.accessService || workspaceStaffAccess;
-  const accessPolicyService = options.accessPolicyService || workspaceStaffAccessPolicy;
   const router = express.Router();
   router.get('/nav.js', (_req, res) => {
     res.setHeader('Cache-Control', 'private, no-store, max-age=0');
@@ -172,7 +157,7 @@ function createWorkspaceStaffRouter({ sessionService, ...options } = {}) {
     }
   });
   router.get('/', createWorkspaceStaffListHandler({ ...options, service }));
-  router.get('/:id', createWorkspaceStaffDetailHandler({ ...options, service, accessService, accessPolicyService }));
+  router.get('/:id', createWorkspaceStaffDetailHandler({ ...options, service, accessService }));
   return router;
 }
 

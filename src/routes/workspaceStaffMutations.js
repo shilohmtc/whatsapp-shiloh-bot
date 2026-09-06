@@ -2,7 +2,6 @@ const express = require('express');
 const workspaceStaff = require('../services/workspaceStaff');
 const workspaceStaffAccess = require('../services/workspaceStaffAccess');
 const workspaceStaffAccessCompletion = require('../services/workspaceStaffAccessCompletion');
-const workspaceStaffAccessPolicy = require('../services/workspaceStaffAccessPolicy');
 const {
   requireStaffSession,
   sameOriginGuard,
@@ -35,7 +34,6 @@ function createWorkspaceStaffMutationRouter({
   service = workspaceStaff,
   accessService = workspaceStaffAccess,
   accessCompletionService = workspaceStaffAccessCompletion,
-  accessPolicyService = workspaceStaffAccessPolicy,
 } = {}) {
   if (!sessionService) throw new Error('Workspace Staff mutations require the existing staff browser session service');
   const router = express.Router();
@@ -124,21 +122,6 @@ function createWorkspaceStaffMutationRouter({
         requestId: req.body?.requestId,
         whatsappNumber: req.body?.whatsappNumber,
         identityConfirmed: req.body?.identityConfirmed === true,
-      });
-      return res.status(200).json(result);
-    } catch (error) {
-      return sendMutationError(error, req, res, next);
-    }
-  });
-
-  router.post('/:id/access/policy', ...mutationChain, async (req, res, next) => {
-    try {
-      const result = await accessPolicyService.updatePolicy({
-        adminId: req.staffBrowserSession?.adminId,
-        staffId: req.params?.id,
-        expectedAccessRevision: req.body?.expectedAccessRevision,
-        requestId: req.body?.requestId,
-        capabilities: req.body?.capabilities,
       });
       return res.status(200).json(result);
     } catch (error) {
