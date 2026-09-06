@@ -99,6 +99,8 @@ test('Phone Week Planner renders Mon-Sat strip and all permitted practitioner to
   const script = calendarPhoneCompactV2ClientScript();
   assert.match(script, /phoneVisibleStaffCount|--phone-visible-staff-count/);
   assert.match(script, /if\(visibleStaff\.size<=1\)return/);
+  assert.match(script, /body\.dataset\.phoneActiveStaffId/);
+  assert.match(script, /reloadWith\(selectedIds\(\),next\)/);
   assert.doesNotMatch(script, /fetch\(/);
 });
 
@@ -116,6 +118,7 @@ test('Phone Week layout is practitioner-column based and drawer is materially na
   assert.match(css, /data-phone-active-day="true"\]\[data-phone-staff-visible="true"\]/);
   assert.match(css, /phone-week-date-strip/);
   assert.match(css, /phone-week-staff-toggle/);
+  assert.doesNotMatch(css, /\.week-day-date\{display:grid!important/);
   const shellCss = workspaceShellStyles();
   assert.match(shellCss, /width:clamp\(204px,56vw,220px\)/);
   const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'presentation', 'calendarReadOnlyUx.js'), 'utf8');
