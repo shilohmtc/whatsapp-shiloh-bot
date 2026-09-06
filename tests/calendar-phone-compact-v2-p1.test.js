@@ -98,14 +98,14 @@ test('Phone V2 uses a 30-minute visual grid and a clean 44px touch contract whil
   assert.match(css, /\.workspace-main \.day-view \.day-time-grid \.lane\{display:none!important;min-width:0!important;width:100%!important/);
   assert.match(css, /\.workspace-main \.day-view \.day-time-grid \.lane\[data-phone-active-practitioner="true"\]\{display:block!important\}/);
   assert.match(css, /\.day-view \.lane-actions\{display:none!important\}/);
-  assert.match(css, /\.lane-actions,body\[data-phone-calendar-v2="true"\] \.availability-menu\{display:none!important\}/);
+  assert.match(css, /\.workspace-main \.lane-actions,body\[data-phone-calendar-v2="true"\] \.workspace-main \.availability-menu\{display:none!important\}/);
   assert.match(css, /\.phone-calendar-v2-controls summary\{[^}]*min-height:44px/);
   assert.match(css, /\.phone-date-popover header a\{[^}]*min-height:44px/);
   assert.match(css, /\.phone-date-cell,\.phone-date-blank\{[^}]*min-height:44px/);
   assert.match(css, /\.phone-today-fab\{[^}]*min-height:44px/);
   assert.match(css, /\.week-time-grid\{margin:0!important;max-height:calc\(100dvh - 81px\)!important/);
   assert.match(css, /\.day-view \.positioned-event\{left:2px!important;right:2px!important;width:auto!important\}/);
-  const genericPositionedRule = css.match(/body\[data-phone-calendar-v2="true"\] \.positioned-event\{([^}]*)\}/);
+  const genericPositionedRule = css.match(/body\[data-phone-calendar-v2="true"\] \.workspace-main \.positioned-event\{([^}]*)\}/);
   assert.ok(genericPositionedRule, 'generic Phone event geometry rule must remain present');
   assert.doesNotMatch(genericPositionedRule[1], /left:2px!important|right:2px!important|width:auto!important/);
   const mediaStart = css.indexOf('@media(max-width:700px){');
