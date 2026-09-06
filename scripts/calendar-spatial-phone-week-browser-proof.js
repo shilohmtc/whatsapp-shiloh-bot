@@ -503,6 +503,7 @@ async function main() {
 
     await evaluate(cdp, `document.querySelector('[data-workspace-drawer-toggle]').click();true`);
     await poll(() => evaluate(cdp, `document.querySelector('[data-workspace-navigation-drawer]').classList.contains('open')`), Boolean);
+    await poll(() => evaluate(cdp, `document.querySelector('[data-workspace-navigation-drawer]').getBoundingClientRect().left`), value => value >= -1);
     const drawerMetrics = await evaluate(cdp, `(() => {
       const visible=node=>{if(!node)return false;const style=getComputedStyle(node),rect=node.getBoundingClientRect();return style.display!=='none'&&style.visibility!=='hidden'&&rect.width>0&&rect.height>0&&rect.right>0;};
       const drawer=document.querySelector('[data-workspace-navigation-drawer]');
