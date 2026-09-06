@@ -526,6 +526,7 @@ async function main() {
     screenshots.push({ ...(await capture('phone-compact-direct-drawer')), viewport: { width: 390, height: 844 }, metrics: drawerMetrics });
     await evaluate(cdp, `document.querySelector('[data-workspace-drawer-close]').click();true`);
     await poll(() => evaluate(cdp, `!document.querySelector('[data-workspace-navigation-drawer]').classList.contains('open')`), Boolean);
+    await poll(() => evaluate(cdp, `document.querySelector('[data-workspace-navigation-drawer]').getBoundingClientRect().right`), value => value <= 1);
 
     await evaluate(cdp, `document.querySelector('.phone-staff-menu>summary').click();true`);
     await poll(() => evaluate(cdp, `document.querySelector('.phone-staff-menu')?.open`), Boolean);
