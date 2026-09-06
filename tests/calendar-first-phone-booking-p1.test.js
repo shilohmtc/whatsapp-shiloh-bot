@@ -94,7 +94,8 @@ test('Day and Week expose touch-safe empty-time links into the existing Create B
 test('multi-practitioner Week slots preserve People and identify practitioner date and time', () => {
   const html = render('week', [31, 33]);
   assert.match(html, /data-people-selection-summary>2 staff/);
-  assert.match(html, /data-calendar-view-option="day"[^>]*staff=31&amp;staff=33/);
+  assert.doesNotMatch(html, /data-calendar-view-option="day"/);
+  assert.match(html, /data-calendar-view-option="week"[^>]*staff=31&amp;staff=33/);
   assert.match(html, /data-calendar-view-option="month"[^>]*staff=31&amp;staff=33/);
   assert.equal((html.match(/data-week-practitioner-lane/g) || []).length, 12);
   assert.equal((html.match(/data-calendar-booking-slot data-date/g) || []).length, 156);
@@ -120,11 +121,13 @@ test('Phone Week uses one active practitioner with six readable spatial day colu
   assert.equal((html.match(/<section class="week-day week-practitioner-lane"[^>]*data-active-practitioner="false"/g) || []).length, 6);
 });
 
-test('Phone Calendar keeps Day Week Month primary and Month remains overview navigation only', () => {
+test('Phone Calendar keeps Week and Month primary while Month remains overview navigation only', () => {
   const month = render('month', [31, 33]);
   assert.match(month, /data-calendar-view-option="agenda"/);
+  assert.doesNotMatch(month, /data-calendar-view-option="day"/);
+  assert.match(month, /data-calendar-view-option="week"/);
   assert.match(month, /data-calendar-view-option="month"/);
-  assert.match(month, /class="month-day-link"[^>]*view=day[^>]*staff=31&amp;staff=33/);
+  assert.match(month, /class="month-day-link"[^>]*view=week[^>]*staff=31&amp;staff=33/);
   const css = calendarFirstPhoneStyles();
   assert.match(css, /data-calendar-view-option="agenda"[^}]*display:none!important/);
   assert.match(css, /data-calendar-view="month"[^}]*\.month-events[^}]*display:none!important/);

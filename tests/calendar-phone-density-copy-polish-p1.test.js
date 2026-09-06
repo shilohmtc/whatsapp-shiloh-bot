@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const source = fs.readFileSync(require.resolve('../src/presentation/calendarReadOnlyUx'), 'utf8');
 const proof = fs.readFileSync(require.resolve('../scripts/calendar-spatial-phone-week-browser-proof'), 'utf8');
 
-test('Phone Day retains the #723 density base while #725 projects one active full-width lane', () => {
+test('Phone Day compatibility retains the #723 density base while #727 makes Week the normal planner', () => {
   assert.match(
     source,
     /day-time-grid \.lanes\{display:grid!important;grid-template-columns:repeat\(var\(--lane-count\),210px\)!important;min-width:max-content!important;width:auto!important;gap:0!important\}/,
@@ -15,9 +15,9 @@ test('Phone Day retains the #723 density base while #725 projects one active ful
     /day-time-grid \.lane\{min-width:210px!important;width:210px!important;border-right:1px solid var\(--line\)!important\}/,
   );
   assert.doesNotMatch(source, /minmax\(270px,calc\(100vw - 76px\)\)/);
-  assert.match(proof, /dayMetrics\.visibleLaneCount, 1/);
-  assert.match(proof, /dayMetrics\.laneWidth >= 340/);
-  assert.match(proof, /dayMetrics\.scrollerScrollWidth <= dayMetrics\.scrollerClientWidth \+ 2/);
+  assert.match(proof, /weekMetrics\.visibleColumns, 3/);
+  assert.match(proof, /weekMetrics\.firstColumnWidth >= 88/);
+  assert.match(proof, /weekMetrics\.weekScrollerScrollWidth <= weekMetrics\.weekScrollerClientWidth \+ 2/);
 });
 
 test('Calendar removes static canonical-authority helper copy while retaining live mutation status', () => {
@@ -26,6 +26,7 @@ test('Calendar removes static canonical-authority helper copy while retaining li
   assert.match(source, /data-calendar-operation-status><\/span>/);
   assert.match(source, /\.operation-status:empty\{display:none\}/);
   assert.doesNotMatch(source, /class=\"panel-hint\"/);
-  assert.match(proof, /dayMetrics\.legacyControlsVisible, false/);
-  assert.match(proof, /dayMetrics\.legacyAvailabilityVisible, false/);
+  assert.match(proof, /weekMetrics\.plannerVisible, true/);
+  assert.match(proof, /weekMetrics\.normalPhoneViews, \['week', 'month'\]/);
+  assert.match(proof, /weekMetrics\.framePaddingBottom, 0/);
 });
