@@ -5,6 +5,7 @@ const crypto = require('node:crypto');
 const { spawnSync } = require('node:child_process');
 const { pathToFileURL } = require('node:url');
 const { renderStaffListPage, renderStaffDetailPage } = require('../src/presentation/workspaceStaffUx');
+const { decorateStaffDetailAccessHtml } = require('../src/presentation/workspaceStaffAccessUx');
 
 function chromeExecutable() {
   const candidates = [process.env.CHROME_BIN, '/usr/bin/google-chrome', '/usr/bin/google-chrome-stable', '/usr/bin/chromium', '/usr/bin/chromium-browser'];
@@ -18,12 +19,14 @@ const staff = [
   { id: 4, display_name: 'Pieter', resource_type: 'practitioner', status: 'active', scheduling_type: 'regular', client_bookable: false, service_count: 4, active_admin_count: 0, business_role: null },
 ];
 
+const renderOptions = {
+  calendarNavigationAllowed: true,
+  clientsNavigationAllowed: true,
+  staffAccessScriptPath: '/calendar/staff/client.js',
+};
+
 function listHtml() {
-  return renderStaffListPage({ staff, hasMore: false, offset: 0, pageSize: 30, query: '', status: 'active' }, {
-    calendarNavigationAllowed: true,
-    clientsNavigationAllowed: true,
-    staffAccessScriptPath: '/calendar/staff/client.js',
-  });
+  return renderStaffListPage({ staff, hasMore: false, offset: 0, pageSize: 30, query: '', status: 'active' }, renderOptions);
 }
 
 function detailHtml() {
@@ -40,10 +43,25 @@ function detailHtml() {
       serviceScope: 'all_services',
       capabilities: ['appointment:create', 'appointment:view', 'calendar:booking:cancel', 'client:lookup', 'schedule:manage', 'staff:view'],
     },
-  }, {
-    calendarNavigationAllowed: true,
-    clientsNavigationAllowed: true,
-    staffAccessScriptPath: '/calendar/staff/client.js',
+  }, renderOptions);
+}
+
+function accessEnableHtml() {
+  const target = {
+    ...staff[2],
+    calendar_scope: 'own_appointments',
+    revision: 'a'.repeat(64),
+  };
+  const base = renderStaffDetailPage({
+    staff: target,
+    services: [{ name: 'Sports Massage', duration_minutes: 60, status: 'active' }],
+    access: null,
+    manageAllowed: false,
+  }, renderOptions);
+  return decorateStaffDetailAccessHtml(base, {
+    staff: target,
+    access: null,
+    accessManageAllowed: true,
   });
 }
 
@@ -64,14 +82,19 @@ fs.mkdirSync(outDir, { recursive: true });
 const proofs = [
   { view: 'staff-list', viewport: 'desktop', width: 1440, height: 960, html: listHtml() },
   { view: 'staff-detail', viewport: 'desktop', width: 1440, height: 960, html: detailHtml() },
+  { view: 'staff-access-enable', viewport: 'desktop', width: 1440, height: 960, html: accessEnableHtml() },
   { view: 'staff-list', viewport: 'narrow', width: 390, height: 844, html: listHtml() },
   { view: 'staff-detail', viewport: 'narrow', width: 390, height: 844, html: detailHtml() },
+  { view: 'staff-access-enable', viewport: 'narrow', width: 390, height: 1600, html: accessEnableHtml() },
 ];
 const manifest = [];
 
 for (const proof of proofs) {
   if (!/aria-current="page">Staff/.test(proof.html) || !/>Calendar<|>Calendar<\//.test(proof.html) || !/>Clients<|>Clients<\//.test(proof.html)) {
     throw new Error(`${proof.view}/${proof.viewport} lacks shared Workspace navigation`);
+  }
+  if (proof.view === 'staff-access-enable' && (!/Enable Workspace access/.test(proof.html) || !/name="identityConfirmed"/.test(proof.html))) {
+    throw new Error(`${proof.view}/${proof.viewport} lacks the bounded Access enablement controls`);
   }
   const stem = `${proof.view}-${proof.viewport}`;
   const htmlPath = path.join(outDir, `${stem}.html`);
