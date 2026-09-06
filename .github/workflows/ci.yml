@@ -80,7 +80,7 @@ jobs:
       - name: Run focused Workspace Clients tests
         run: node --test tests/workspace-clients-v1.test.js
       - name: Run focused Workspace Staff tests
-        run: node --test tests/workspace-staff-access-v1.test.js
+        run: node --test tests/workspace-staff-access-v1.test.js tests/workspace-staff-access-policy-boundary.test.js tests/workspace-staff-access-enablement.test.js tests/workspace-staff-access-legacy-completion.test.js
       - name: Run focused Workspace Services tests
         run: node --test tests/workspace-services-v1.test.js tests/workspace-services-stage-b.test.js tests/workspace-service-creation-v1.test.js
       - name: Run focused Workspace Mobile Polish tests
@@ -198,6 +198,15 @@ jobs:
           retention-days: 14
       - name: Generate Workspace Staff visual proof
         run: node scripts/workspace-staff-visual-proof.js
+      - name: Prove authenticated Staff Access read-only boundary
+        run: node scripts/workspace-staff-access-readonly-browser-proof.js
+      - name: Upload authenticated Staff Access proof
+        uses: actions/upload-artifact@v4
+        with:
+          name: workspace-staff-access-readonly-v1
+          path: artifacts/workspace-staff-access-readonly-v1
+          if-no-files-found: error
+          retention-days: 14
       - name: Upload Workspace Staff visual proof
         uses: actions/upload-artifact@v4
         with:
