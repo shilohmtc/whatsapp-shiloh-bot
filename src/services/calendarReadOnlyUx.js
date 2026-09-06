@@ -106,8 +106,27 @@ function addMonths(dateKey, months) {
   return `${String(targetYear).padStart(4, '0')}-${String(targetMonth + 1).padStart(2, '0')}-01`;
 }
 
+async function listCanonicalPublicHolidays({ startKey, endKey } = {}) {
+  if (!DATE_KEY.test(String(startKey || '')) || !DATE_KEY.test(String(endKey || ''))) return [];
+  const result = await pool.query(`/* CalendarReadOnlyUx:public_holidays */
+    SELECT holiday_date, name, observed
+      FROM public_holidays
+     WHERE country_code='ZA'
+       AND holiday_date >= $1::date
+       AND holiday_date < $2::date
+     ORDER BY holiday_date`, [startKey, endKey]);
+  return (result.rows || []).map(row => ({
+    date: DATE_KEY.test(String(row.holiday_date || ''))
+      ? String(row.holiday_date)
+      : dateKeyFromDate(new Date(row.holiday_date)),
+    name: String(row.name || 'Public holiday'),
+    observed: row.observed === true,
+    source: 'public_holidays',
+  }));
+}
+
 function normalizeView(value) {
-  const view = String(value || 'day').trim().toLowerCase();
+  const view = String(value || 'week').trim().toLowerCase();
   if (!ALLOWED_VIEWS.has(view)) throw uxError('CALENDAR_UX_INVALID_VIEW', 'Calendar view must be day, week, agenda or month.');
   return view;
 }
@@ -318,12 +337,17 @@ async function attachCanonicalClientMobiles(timeline, query) {
 function createCalendarReadOnlyUxService({
   listTimeline = schedulingEngine.listTimeline,
   query = (text, params) => pool.query(text, params),
+  listPublicHolidays = null,
 } = {}) {
   async function buildModel({ view: rawView, date: rawDate, staff: rawStaff, viewer, now = new Date() } = {}) {
     const timelineViewer = normalizeViewerForTimeline(viewer);
     const view = normalizeView(rawView);
     const dateKey = normalizeOperationalDateKey(parseDateKey(rawDate, now));
-    const visibleStaffSelection = normalizeVisibleStaffSelection(rawStaff);
+    const staffFilterMissing = rawStaff == null
+      || (Array.isArray(rawStaff) ? rawStaff.length === 0 : String(rawStaff).trim() === '');
+    const visibleStaffSelection = normalizeVisibleStaffSelection(
+      staffFilterMissing && (view === 'week' || view === 'month') ? 'all' : rawStaff,
+    );
     const period = periodFor(view, dateKey);
 
     const timeline = await listTimeline({
@@ -332,6 +356,27 @@ function createCalendarReadOnlyUxService({
       viewer: timelineViewer,
     });
     const timelineWithMobiles = await attachCanonicalClientMobiles(timeline, query);
+    const holidayFallback = (timelineWithMobiles.publicHolidays || timelineWithMobiles.closures || [])
+      .filter(item => item?.source === 'public_holidays' || item?.closureType === 'public_holiday')
+      .map(item => ({
+        date: String(item.date || item.holidayDate || '').slice(0, 10),
+        name: String(item.name || item.reason || 'Public holiday'),
+        observed: item.observed === true,
+        source: 'public_holidays',
+      }))
+      .filter(item => DATE_KEY.test(item.date));
+    let publicHolidays = holidayFallback;
+    if (typeof listPublicHolidays === 'function') {
+      try {
+        publicHolidays = await listPublicHolidays({
+          startKey: monthStartFor(dateKey),
+          endKey: addMonths(monthStartFor(dateKey), 1),
+        });
+      } catch (_holidayReadError) {
+        // Holiday annotation is informational. Canonical scheduling remains usable
+        // from the already-authorized SchedulingTimeline if this extra month read fails.
+      }
+    }
 
     const filtered = filterTimelineForVisibleStaff(timelineWithMobiles, visibleStaffSelection);
     return {
@@ -342,6 +387,7 @@ function createCalendarReadOnlyUxService({
       visibleStaffIds: filtered.visibleStaffIds,
       visibleStaffSelectionExplicit: filtered.visibleStaffSelectionExplicit,
       permittedStaff: filtered.permittedStaff,
+      publicHolidays,
       authorizedTimeline: filtered.authorizedTimeline,
       timeline: filtered.timeline,
       readOnly: true,
@@ -352,7 +398,7 @@ function createCalendarReadOnlyUxService({
   return { buildModel };
 }
 
-const service = createCalendarReadOnlyUxService();
+const service = createCalendarReadOnlyUxService({ listPublicHolidays: listCanonicalPublicHolidays });
 
 module.exports = {
   ALLOWED_VIEWS,
@@ -372,4 +418,6 @@ module.exports = {
   filterTimelineForVisibleStaff,
   attachCanonicalClientMobiles,
   uxError,
+  isSundayDateKey,
+  listCanonicalPublicHolidays,
 };

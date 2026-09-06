@@ -244,12 +244,13 @@ test('Month filters canonical timeline collections to selected permitted practit
   assert.deepEqual(result.timeline.events.map(item => item.id), [9203, 9301]);
 });
 
-test('Day, Week, Agenda and Month navigation preserve the complete selected People set', () => {
+test('Week, Agenda and Month navigation preserve the complete selected People set while Day remains compatibility-renderable', () => {
   for (const view of ['day', 'week', 'agenda', 'month']) {
     const html = renderCalendarPage(model(view, [21, 23]));
-    for (const target of ['day', 'week', 'agenda', 'month']) {
+    for (const target of ['week', 'agenda', 'month']) {
       assert.match(html, new RegExp(`view=${target}&amp;date=2026-09-18&amp;staff=21&amp;staff=23`));
     }
+    assert.doesNotMatch(html, /data-calendar-view-option="day"/);
     assert.match(html, /staff=21&amp;staff=23/);
   }
 });
@@ -290,7 +291,7 @@ test('Month renders a Monday-aligned Monday-Saturday grid with subdued outside d
   assert.match(html, /class="month-day outside-month" data-date="2026-08-31"/);
   assert.match(html, /class="event-practitioners"/);
   assert.match(html, /Amber Studio \+ Birch Studio/);
-  assert.match(html, /view=day&amp;date=2026-09-18&amp;staff=21&amp;staff=22&amp;staff=23/);
+  assert.match(html, /view=week&amp;date=2026-09-18&amp;staff=21&amp;staff=22&amp;staff=23/);
 });
 
 test('Sunday public holiday remains canonical while its observed Monday is visible', async () => {
@@ -329,7 +330,7 @@ test('Month density is bounded truthfully with a deterministic day drill-in', ()
   const html = renderCalendarPage(model('month', [21, 22, 23], timeline));
   assert.equal((html.match(/data-event-id="appointment-940[1-4]"/g) || []).length, 3);
   assert.match(html, /class="month-more"[^>]*>\+1 more<\/a>/);
-  assert.match(html, /view=day&amp;date=2026-09-18&amp;staff=21&amp;staff=22&amp;staff=23/);
+  assert.match(html, /view=week&amp;date=2026-09-18&amp;staff=21&amp;staff=22&amp;staff=23/);
 });
 
 test('Phone Week, Agenda and Month retain scan-first layouts and touch-safe Month dates', () => {
