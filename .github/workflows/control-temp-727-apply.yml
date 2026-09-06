@@ -45,6 +45,22 @@ jobs:
           if text.count(old_block) != 1:
               raise SystemExit(f'expected one duplicate-test patch block, found {text.count(old_block)}')
           patch.write_text(text.replace(old_block, new_block, 1))
+
+          phone_test = Path('tests/calendar-phone-compact-v2-p1.test.js')
+          text = phone_test.read_text()
+          old = "  assert.match(css, /\\.week-time-grid\\{margin:0!important;max-height:calc\\(100dvh - 81px\\)!important/);"
+          new = "  assert.match(css, /\\.week-time-grid\\{margin:0!important;max-height:calc\\(100dvh - 137px\\)!important/);"
+          if text.count(old) != 1:
+              raise SystemExit(f'expected one old Week height assertion, found {text.count(old)}')
+          phone_test.write_text(text.replace(old, new, 1))
+
+          parity_test = Path('tests/calendar-view-parity-month-v1.test.js')
+          text = parity_test.read_text()
+          old = '''test('Day, Week, Agenda and Month navigation preserve the complete selected People set', () => {\n  for (const view of ['day', 'week', 'agenda', 'month']) {\n    const html = renderCalendarPage(model(view, [21, 23]));\n    for (const target of ['day', 'week', 'agenda', 'month']) {\n      assert.match(html, new RegExp(`view=${target}&amp;date=2026-09-18&amp;staff=21&amp;staff=23`));\n    }\n    assert.match(html, /staff=21&amp;staff=23/);\n  }\n});'''
+          new = '''test('Week, Agenda and Month navigation preserve the complete selected People set while Day remains compatibility-renderable', () => {\n  for (const view of ['day', 'week', 'agenda', 'month']) {\n    const html = renderCalendarPage(model(view, [21, 23]));\n    for (const target of ['week', 'agenda', 'month']) {\n      assert.match(html, new RegExp(`view=${target}&amp;date=2026-09-18&amp;staff=21&amp;staff=23`));\n    }\n    assert.doesNotMatch(html, /data-calendar-view-option=\"day\"/);\n    assert.match(html, /staff=21&amp;staff=23/);\n  }\n});'''
+          if text.count(old) != 1:
+              raise SystemExit(f'expected one visible-view navigation test block, found {text.count(old)}')
+          parity_test.write_text(text.replace(old, new, 1))
           PY
       - name: Apply bounded #727 patch
         run: python3 scripts/control-temp-727-apply.py
