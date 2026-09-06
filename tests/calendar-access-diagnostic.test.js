@@ -102,12 +102,13 @@ test('Calendar access diagnostic is read-only, sanitized, and reports production
   assert.deepEqual(report.authorities.map((item) => item.principal), ['Christel', 'Jean-Pierre', 'Abigail', 'Marietjie']);
 
   const byName = Object.fromEntries(report.authorities.map((item) => [item.principal, item]));
+  assert.equal(byName.Christel.viewerScope, 'business_all_staff');
   assert.equal(byName['Jean-Pierre'].staffLinked, false);
   assert.equal(byName['Jean-Pierre'].staffActive, null);
   assert.equal(byName['Jean-Pierre'].viewerScope, 'business_all_staff');
   assert.equal(byName.Abigail.calendarScope, 'own_appointments');
   assert.equal(byName.Abigail.serviceScope, 'own_services');
-  assert.equal(byName.Abigail.viewerScope, 'business_all_staff');
+  assert.equal(byName.Abigail.viewerScope, 'own_staff');
   assert.equal(byName.Marietjie.calendarScope, 'own_services');
   assert.equal(byName.Marietjie.serviceScope, 'own_services');
   assert.equal(byName.Marietjie.viewerScope, 'business_all_staff');

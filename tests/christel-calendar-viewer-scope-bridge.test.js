@@ -132,6 +132,39 @@ test('2 canonical authenticated viewer crosses the adapter and Calendar read-onl
   assert.match(res.body, /Create booking/);
 });
 
+test('2a own-appointments canonical authority derives linked-staff-only browser scope', () => {
+  const viewer = deriveCalendarViewer(authorityRow({
+    id: 7,
+    staff_id: 7,
+    display_name: 'Employee Practitioner',
+    role: 'practitioner',
+    business_role: 'employee_practitioner',
+    calendar_scope: 'own_appointments',
+    service_scope: 'own_services',
+    permissions: { 'appointment:view': true },
+  }));
+  assert.deepEqual(viewer, { calendarScope: 'own_staff', staffId: 7 });
+  const normalized = normalizeViewerForTimeline(viewer);
+  assert.deepEqual(normalized, { calendarScope: 'own_appointments', staffId: 7 });
+  assert.deepEqual(resolveViewerFilter(normalized, null), { scope: 'own_appointments', staffIds: [7] });
+  assert.deepEqual(resolveViewerFilter(normalized, [8]), { scope: 'own_appointments', staffIds: [] });
+});
+
+test('2b own-services browser behavior remains business-wide at the adapter boundary', () => {
+  const viewer = deriveCalendarViewer(authorityRow({
+    id: 11,
+    staff_id: 11,
+    display_name: 'Tenant Practitioner',
+    role: 'practitioner',
+    business_role: 'tenant_practitioner',
+    calendar_scope: 'own_services',
+    service_scope: 'own_services',
+    permissions: { 'appointment:view': true },
+  }));
+  assert.deepEqual(viewer, { calendarScope: 'business_all_staff' });
+  assert.deepEqual(normalizeViewerForTimeline(viewer), { calendarScope: 'all_business' });
+});
+
 test('3 unknown browser viewer scopes remain forbidden before SchedulingTimeline is called', async () => {
   let timelineCalls = 0;
   const service = createCalendarReadOnlyUxService({
