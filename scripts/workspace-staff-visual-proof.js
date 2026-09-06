@@ -46,12 +46,16 @@ function detailHtml() {
   }, renderOptions);
 }
 
-function accessEnableHtml() {
-  const target = {
+function accessTarget() {
+  return {
     ...staff[2],
     calendar_scope: 'own_appointments',
     revision: 'a'.repeat(64),
   };
+}
+
+function accessEnableHtml() {
+  const target = accessTarget();
   const base = renderStaffDetailPage({
     staff: target,
     services: [{ name: 'Sports Massage', duration_minutes: 60, status: 'active' }],
@@ -61,6 +65,27 @@ function accessEnableHtml() {
   return decorateStaffDetailAccessHtml(base, {
     staff: target,
     access: null,
+    accessManageAllowed: true,
+  });
+}
+
+function accessCompleteHtml() {
+  const target = accessTarget();
+  const access = {
+    businessRole: 'employee_practitioner',
+    calendarScope: 'own_appointments',
+    serviceScope: 'own_services',
+    capabilities: [],
+  };
+  const base = renderStaffDetailPage({
+    staff: target,
+    services: [{ name: 'Full Body Swedish', duration_minutes: 60, status: 'active' }],
+    access,
+    manageAllowed: false,
+  }, renderOptions);
+  return decorateStaffDetailAccessHtml(base, {
+    staff: target,
+    access,
     accessManageAllowed: true,
   });
 }
@@ -83,9 +108,11 @@ const proofs = [
   { view: 'staff-list', viewport: 'desktop', width: 1440, height: 960, html: listHtml() },
   { view: 'staff-detail', viewport: 'desktop', width: 1440, height: 960, html: detailHtml() },
   { view: 'staff-access-enable', viewport: 'desktop', width: 1440, height: 960, html: accessEnableHtml() },
+  { view: 'staff-access-complete', viewport: 'desktop', width: 1440, height: 960, html: accessCompleteHtml() },
   { view: 'staff-list', viewport: 'narrow', width: 390, height: 844, html: listHtml() },
   { view: 'staff-detail', viewport: 'narrow', width: 390, height: 844, html: detailHtml() },
   { view: 'staff-access-enable', viewport: 'narrow', width: 390, height: 1600, html: accessEnableHtml() },
+  { view: 'staff-access-complete', viewport: 'narrow', width: 390, height: 1600, html: accessCompleteHtml() },
 ];
 const manifest = [];
 
@@ -95,6 +122,9 @@ for (const proof of proofs) {
   }
   if (proof.view === 'staff-access-enable' && (!/Enable Workspace access/.test(proof.html) || !/name="identityConfirmed"/.test(proof.html))) {
     throw new Error(`${proof.view}/${proof.viewport} lacks the bounded Access enablement controls`);
+  }
+  if (proof.view === 'staff-access-complete' && (!/Complete Workspace access/.test(proof.html) || !/data-access-mode="complete"/.test(proof.html) || !/name="identityConfirmed"/.test(proof.html))) {
+    throw new Error(`${proof.view}/${proof.viewport} lacks the bounded legacy Access completion controls`);
   }
   const stem = `${proof.view}-${proof.viewport}`;
   const htmlPath = path.join(outDir, `${stem}.html`);
