@@ -475,8 +475,9 @@ async function main() {
     assert.equal(weekMetrics.currentView, 'Week');
     assert.ok(weekMetrics.timeColumnHeight >= 778 && weekMetrics.timeColumnHeight <= 782, 'Phone Week does not use 30-minute compact cadence');
     assert.ok(weekMetrics.oneHourTop >= 59 && weekMetrics.oneHourTop <= 61, `08:00 event is not anchored to the 60px/hour grid: ${weekMetrics.oneHourTop}px`);
-    assert.ok(weekMetrics.oneHourHeight >= 59 && weekMetrics.oneHourHeight <= 61, `One-hour event height is not duration-true: ${weekMetrics.oneHourHeight}px`);
-    assert.ok(weekMetrics.twoHourHeight >= 118 && weekMetrics.twoHourHeight <= 122, `Two-hour event height is not duration-true: ${weekMetrics.twoHourHeight}px`);
+    assert.ok(weekMetrics.oneHourHeight >= 57 && weekMetrics.oneHourHeight <= 58, `One-hour event does not preserve the canonical scaled card gap: ${weekMetrics.oneHourHeight}px`);
+    assert.ok(weekMetrics.twoHourHeight >= 117 && weekMetrics.twoHourHeight <= 118, `Two-hour event does not preserve the canonical scaled card gap: ${weekMetrics.twoHourHeight}px`);
+    assert.ok(weekMetrics.twoHourHeight - weekMetrics.oneHourHeight >= 59 && weekMetrics.twoHourHeight - weekMetrics.oneHourHeight <= 61, 'Phone event height does not retain the 60px/hour duration increment');
     assert.equal(weekMetrics.plusVisible, true);
     assert.ok(weekMetrics.plusWidth >= 44 && weekMetrics.plusHeight >= 44, 'Phone + launcher is below 44px');
     assert.equal(weekMetrics.todayVisible, true);
