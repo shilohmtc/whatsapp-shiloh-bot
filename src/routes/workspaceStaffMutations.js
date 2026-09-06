@@ -103,6 +103,7 @@ function createWorkspaceStaffMutationRouter({
         expectedRevision: req.body?.expectedRevision,
         requestId: req.body?.requestId,
         whatsappNumber: req.body?.whatsappNumber,
+        identityConfirmed: req.body?.identityConfirmed === true,
       });
       return res.status(200).json(result);
     } catch (error) {
