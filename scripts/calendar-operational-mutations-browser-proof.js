@@ -576,8 +576,14 @@ async function main() {
     await navigate('jp');
     const touchProof = await evaluate(cdp, `(()=>{
       const operations=[...document.querySelectorAll('[data-calendar-operation]')];
-      const candidates=[...document.querySelectorAll('[data-calendar-operation],.phone-calendar-v2-controls>details>summary,.phone-today-fab,.phone-plus-menu>summary')];
+      const compactEventTargets=operations.filter(element=>element.closest('.positioned-event'));
+      const candidates=[...document.querySelectorAll('[data-calendar-operation],.phone-calendar-v2-controls>details>summary,.phone-today-fab,.phone-plus-menu>summary')]
+        .filter(element=>!element.closest('.positioned-event'));
       const visible=candidates.filter(element=>{
+        const style=getComputedStyle(element),rect=element.getBoundingClientRect();
+        return style.display!=='none'&&style.visibility!=='hidden'&&style.pointerEvents!=='none'&&rect.width>0&&rect.height>0;
+      });
+      const visibleCompactEventTargets=compactEventTargets.filter(element=>{
         const style=getComputedStyle(element),rect=element.getBoundingClientRect();
         return style.display!=='none'&&style.visibility!=='hidden'&&style.pointerEvents!=='none'&&rect.width>0&&rect.height>0;
       });
@@ -585,6 +591,8 @@ async function main() {
         domOperationCount:operations.length,
         count:visible.length,
         minHeight:visible.length?Math.min(...visible.map(element=>element.getBoundingClientRect().height)):0,
+        compactEventTargetCount:visibleCompactEventTargets.length,
+        compactEventTargetMinHeight:visibleCompactEventTargets.length?Math.min(...visibleCompactEventTargets.map(element=>element.getBoundingClientRect().height)):0,
         controls:visible.map(element=>({operation:element.dataset.calendarOperation||null,label:element.getAttribute('aria-label')||element.textContent.trim().slice(0,40),height:element.getBoundingClientRect().height})),
         overflow:document.documentElement.scrollWidth-document.documentElement.clientWidth
       };
@@ -592,6 +600,8 @@ async function main() {
     assert.ok(touchProof.domOperationCount >= 8);
     assert.ok(touchProof.count >= 5);
     assert.ok(touchProof.minHeight >= 44);
+    assert.ok(touchProof.compactEventTargetCount >= 1);
+    assert.ok(touchProof.compactEventTargetMinHeight >= 28);
     assert.ok(touchProof.overflow <= 1);
     screenshots.push({ identity: 'jp-mobile', ...(await snapshot('jp-mobile')) });
     await cdp.send('Emulation.clearDeviceMetricsOverride');
