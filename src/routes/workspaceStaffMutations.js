@@ -1,6 +1,7 @@
 const express = require('express');
 const workspaceStaff = require('../services/workspaceStaff');
 const workspaceStaffAccess = require('../services/workspaceStaffAccess');
+const workspaceStaffAccessCompletion = require('../services/workspaceStaffAccessCompletion');
 const {
   requireStaffSession,
   sameOriginGuard,
@@ -32,6 +33,7 @@ function createWorkspaceStaffMutationRouter({
   sessionService,
   service = workspaceStaff,
   accessService = workspaceStaffAccess,
+  accessCompletionService = workspaceStaffAccessCompletion,
 } = {}) {
   if (!sessionService) throw new Error('Workspace Staff mutations require the existing staff browser session service');
   const router = express.Router();
@@ -98,6 +100,22 @@ function createWorkspaceStaffMutationRouter({
   router.post('/:id/access/enable', ...mutationChain, async (req, res, next) => {
     try {
       const result = await accessService.enableWorkspaceAccess({
+        adminId: req.staffBrowserSession?.adminId,
+        staffId: req.params?.id,
+        expectedRevision: req.body?.expectedRevision,
+        requestId: req.body?.requestId,
+        whatsappNumber: req.body?.whatsappNumber,
+        identityConfirmed: req.body?.identityConfirmed === true,
+      });
+      return res.status(200).json(result);
+    } catch (error) {
+      return sendMutationError(error, req, res, next);
+    }
+  });
+
+  router.post('/:id/access/complete', ...mutationChain, async (req, res, next) => {
+    try {
+      const result = await accessCompletionService.completeWorkspaceAccess({
         adminId: req.staffBrowserSession?.adminId,
         staffId: req.params?.id,
         expectedRevision: req.body?.expectedRevision,
