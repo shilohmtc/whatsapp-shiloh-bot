@@ -193,7 +193,7 @@ function createFixture() {
     },
     communicationService: { async listRecent({ limit }) { return communicationActivity().slice(0, limit); } },
   });
-  const dashboardService = createWorkspaceDashboardService({
+  const canonicalDashboardService = createWorkspaceDashboardService({
     calendarService: { async buildModel(input) { return calendarModel({ practitionerOnly: input.viewer.calendarScope === 'own_appointments' }); } },
     messagesService: messageService,
     resolvePrincipal: async adminId => {
@@ -216,6 +216,12 @@ function createFixture() {
     canCertifyAppointmentFn: async (principal, appointmentId) => !(Number(principal.id) === 78 && Number(appointmentId) === 8102),
     finalizeAppointmentFn: async () => { state.productionMutations += 1; return { status: 'updated' }; },
   });
+  const dashboardService = {
+    async buildModel(input) {
+      return canonicalDashboardService.buildModel({ ...input, now: new Date('2026-09-05T14:00:00.000Z') });
+    },
+    finalizeVisit: canonicalDashboardService.finalizeVisit,
+  };
   const navigationService = createWorkspaceNavigationService({
     clientAccessService: access, staffAccessService: access, servicesAccessService: access, reportsAccessService: access,
   });
@@ -288,6 +294,7 @@ const METRICS_EXPRESSION = `(() => {
     unknownVisible:Array.from(document.querySelectorAll('[data-message-status="unknown"]')).some(visible),
     dashboardMode:document.body.dataset.dashboardMode||'',
     dashboardGreeting:document.querySelector('.brand h1')?.textContent.trim()||'',
+    dashboardEyebrow:document.querySelector('[data-dashboard-today] .eyebrow')?.textContent.trim()||'',
     dashboardAppointments:document.querySelectorAll('[data-dashboard-appointment]').length,
     dashboardTeamGroups:document.querySelectorAll('[data-dashboard-team-group]').length,
     dashboardActions:document.querySelectorAll('[data-dashboard-finalize]').length,
@@ -398,6 +405,7 @@ async function main() {
       if (metrics.dashboardMode) {
         assert.ok(metrics.dashboardAppointments > 0, `${name} has no operational appointments`);
         assert.ok(metrics.dashboardGreeting.startsWith('Welcome, '), `${name} has no canonical greeting`);
+        assert.equal(metrics.dashboardEyebrow, 'Today', `${name} does not prove the clinic-today state`);
         assert.match(metrics.dashboardCommunicationText, /Client notification needs attention/);
         if (metrics.dashboardActions) assert.ok(metrics.minDashboardActionHeight >= (phone ? 44 : 36), `${name} has undersized outcome actions`);
       }
