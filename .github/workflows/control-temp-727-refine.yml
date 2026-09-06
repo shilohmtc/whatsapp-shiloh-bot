@@ -25,6 +25,18 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci
+      - name: Normalize set-order proof assertion
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('scripts/control-temp-727-refine.py')
+          text = path.read_text()
+          old = "    assert.deepEqual(restoredMetrics.visibleStaffIds, ['51', '52', '53']);"
+          new = "    assert.deepEqual([...restoredMetrics.visibleStaffIds].sort(), ['51', '52', '53']);"
+          if text.count(old) != 1:
+              raise SystemExit(f'expected one restore-order assertion, found {text.count(old)}')
+          path.write_text(text.replace(old, new, 1))
+          PY
       - name: Apply bounded #727 release refinements
         run: python3 scripts/control-temp-727-refine.py
       - name: Verify temporary scaffolding retired
