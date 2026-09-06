@@ -157,6 +157,7 @@ function request(overrides = {}) {
     expectedRevision: staffRevision(staff),
     requestId: 'request_access_001',
     whatsappNumber: '082 123 4567',
+    identityConfirmed: true,
     ...overrides,
   };
 }
@@ -177,6 +178,16 @@ test('least-privilege practitioner preset contains only Workspace view authority
     serviceScope: 'own_services',
     capabilities: ['appointment:view'],
   });
+});
+
+test('operator must attest current WhatsApp identity before any access transaction', async () => {
+  const fake = accessDb();
+  const service = createWorkspaceStaffAccessService({ db: fake.db });
+  await assert.rejects(
+    service.enableWorkspaceAccess(request({ identityConfirmed: false })),
+    error => error.code === 'WORKSPACE_STAFF_ACCESS_IDENTITY_UNCONFIRMED' && error.httpStatus === 400
+  );
+  assert.equal(fake.state.calls.length, 0);
 });
 
 test('unauthorized operator fails closed before target or access records are touched', async () => {
@@ -264,6 +275,7 @@ test('new access creates exactly one view-only canonical principal and non-PII a
   });
   assert.equal(fake.state.audits.length, 1);
   assert.equal(fake.state.audits[0].metadata.createdPrincipal, true);
+  assert.equal(fake.state.audits[0].metadata.identityBinding, 'operator_attested_current_whatsapp');
   assert.equal(fake.state.audits[0].metadata.credentialMaterialCreated, false);
   assert.deepEqual(fake.state.audits[0].metadata.capabilities, ['appointment:view']);
   assert.equal(JSON.stringify(fake.state.audits[0]).includes('27821234567'), false);
@@ -285,6 +297,7 @@ test('exact inactive preset may be reactivated without changing identity, scopes
   assert.equal(response.status, 'enabled');
   assert.equal(fake.state.linked[0].active, true);
   assert.deepEqual(fake.state.linked[0].permissions, { 'appointment:view': true });
+  assert.equal(fake.state.audits[0].metadata.identityBinding, 'operator_attested_current_whatsapp');
   assert.equal(fake.state.audits[0].metadata.reactivatedExistingPrincipal, true);
   assert.equal(fake.state.audits[0].metadata.credentialMaterialChanged, false);
 });
@@ -322,6 +335,8 @@ test('Access presentation exposes only the bounded enable action for eligible ta
   const html = decorateStaffDetailAccessHtml(base, { staff, access: null, accessManageAllowed: true });
   assert.match(html, /Enable Workspace access/);
   assert.match(html, /placeholder="e\.g\. 082 123 4567"/);
+  assert.match(html, /name="identityConfirmed"/);
+  assert.match(html, /I verified this is Synthetic Practitioner’s current WhatsApp number/);
   assert.match(html, /appointment:view/);
   assert.match(html, /own appointments and own services only/);
   assert.match(html, /\/calendar\/team\/access-manage\.js/);
@@ -353,6 +368,7 @@ test('Access client uses existing CSRF boundary and fixed enable endpoint withou
   assert.match(script, /x-shiloh-csrf-token/);
   assert.match(script, /expectedRevision/);
   assert.match(script, /whatsappNumber/);
+  assert.match(script, /identityConfirmed/);
   assert.doesNotMatch(script, /businessRole|calendarScope|serviceScope|permissions|appointment:create|schedule:manage/);
 });
 
@@ -367,6 +383,7 @@ test('Access mutation HTTP boundary requires staff session, same-origin JSON and
       executions += 1;
       assert.equal(input.adminId, 61);
       assert.equal(input.staffId, '17');
+      assert.equal(input.identityConfirmed, true);
       return { status: 'enabled', staffId: 17 };
     },
   };
@@ -386,7 +403,7 @@ test('Access mutation HTTP boundary requires staff session, same-origin JSON and
     assert.equal(crossOrigin.status, 403);
     const noCsrf = await fetch(path, { method: 'POST', headers: { origin: base, 'content-type': 'application/json', cookie: 'shiloh_staff_session=session-ok' }, body: '{}' });
     assert.equal(noCsrf.status, 403);
-    const allowed = await fetch(path, { method: 'POST', headers: { origin: base, 'content-type': 'application/json', cookie: 'shiloh_staff_session=session-ok', 'x-shiloh-csrf-token': 'csrf-ok' }, body: JSON.stringify({ requestId: 'request_route', expectedRevision: 'a'.repeat(64), whatsappNumber: '0821234567' }) });
+    const allowed = await fetch(path, { method: 'POST', headers: { origin: base, 'content-type': 'application/json', cookie: 'shiloh_staff_session=session-ok', 'x-shiloh-csrf-token': 'csrf-ok' }, body: JSON.stringify({ requestId: 'request_route', expectedRevision: 'a'.repeat(64), whatsappNumber: '0821234567', identityConfirmed: true }) });
     assert.equal(allowed.status, 200);
     assert.equal(executions, 1);
   });
