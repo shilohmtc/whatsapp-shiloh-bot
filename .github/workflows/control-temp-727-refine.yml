@@ -1,0 +1,48 @@
+name: control-temp-727-refine
+
+on:
+  push:
+    branches: [work/727-phone-week-planner-v3]
+
+permissions:
+  contents: write
+
+jobs:
+  refine:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact branch
+        uses: actions/checkout@v7
+        with:
+          ref: work/727-phone-week-planner-v3
+          fetch-depth: 0
+      - name: Use Node 24.14.1
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24.14.1
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Apply bounded #727 release refinements
+        run: python3 scripts/control-temp-727-refine.py
+      - name: Verify temporary scaffolding retired
+        run: |
+          test ! -e scripts/control-temp-727-refine.py
+          test ! -e .github/workflows/control-temp-727-refine.yml
+          if find scripts .github/workflows -maxdepth 1 -type f -name 'control-temp-727-*' | grep -q .; then
+            echo 'Unexpected #727 temporary artifact remains' >&2
+            exit 1
+          fi
+      - name: Run focused #727 regression
+        run: node --test tests/calendar-phone-week-planner-v3.test.js tests/calendar-phone-compact-v2-p1.test.js tests/calendar-view-parity-month-v1.test.js tests/calendar-readonly-ux.test.js
+      - name: Run authenticated #727 browser proof
+        run: node scripts/calendar-spatial-phone-week-browser-proof.js
+      - name: Commit release-ready implementation
+        run: |
+          git config user.name "Shiloh Control"
+          git config user.email "shiloh-control@users.noreply.github.com"
+          git add -A
+          git commit -m "#727 harden Week Planner release proof"
+          git push origin HEAD:work/727-phone-week-planner-v3
