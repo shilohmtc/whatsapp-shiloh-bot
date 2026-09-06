@@ -128,9 +128,12 @@ async function refreshedQueueInteractive(admin, successMessage) {
   return { ...interactive, body: `${successMessage}\n\n${interactive.body}` };
 }
 
-async function loadAuthorizedPendingAppointment(admin, appointmentId, db = pool, lock = false) {
+async function loadAuthorizedPendingAppointment(admin, appointmentId, db = pool, lock = false, {
+  windowStart = HISTORICAL_WINDOW_START,
+  windowEnd = HISTORICAL_WINDOW_END,
+} = {}) {
   const result = await db.query(
-    `SELECT a.id,a.client_id,a.starts_at,a.ends_at,a.status,a.total_price,a.financial_classification,a.pre_adjustment_total_price,
+    `SELECT a.id,a.client_id,a.starts_at,a.ends_at,a.status,a.updated_at,a.total_price,a.financial_classification,a.pre_adjustment_total_price,
             COALESCE(c.display_name,a.source_client_name,'Unknown client') AS client_name,
             COALESCE((SELECT string_agg(DISTINCT aps.service_name_snapshot, ', ') FROM appointment_services aps WHERE aps.appointment_id=a.id AND aps.service_name_snapshot IS NOT NULL), '') AS services,
             COALESCE((SELECT string_agg(DISTINCT ast.staff_name_snapshot, ', ') FROM appointment_staff ast WHERE ast.appointment_id=a.id AND ast.staff_name_snapshot IS NOT NULL), '') AS staff
@@ -143,7 +146,7 @@ async function loadAuthorizedPendingAppointment(admin, appointmentId, db = pool,
         AND a.status NOT IN ('completed','cancelled','no_show')
         AND ${scopeSql('a')}
       ${lock ? 'FOR UPDATE OF a' : ''}`,
-    [isBusinessWide(admin), admin.staff_id, appointmentId, HISTORICAL_WINDOW_START, HISTORICAL_WINDOW_END]
+    [isBusinessWide(admin), admin.staff_id, appointmentId, windowStart, windowEnd]
   );
   return result.rows[0] || null;
 }
@@ -353,14 +356,25 @@ async function loadReplacementService(appointmentId, serviceId, db = pool) {
   return result.rows[0] || null;
 }
 
-async function finalizeAppointment(admin, appointmentId, targetStatus) {
+async function finalizeAppointment(admin, appointmentId, targetStatus, {
+  windowStart = HISTORICAL_WINDOW_START,
+  windowEnd = HISTORICAL_WINDOW_END,
+  expectedRevision = null,
+  workspace = false,
+  allowBusinessBackup = false,
+  connectionPool = pool,
+} = {}) {
   if (!FINAL_STATUSES.has(targetStatus)) return { status: 'invalid_status' };
-  const db = await pool.connect();
+  const db = await connectionPool.connect();
   try {
     await db.query('BEGIN');
-    const appointment = await loadAuthorizedPendingAppointment(admin, appointmentId, db, true);
+    const appointment = await loadAuthorizedPendingAppointment(admin, appointmentId, db, true, { windowStart, windowEnd });
     if (!appointment) { await db.query('ROLLBACK'); return { status: 'stale_or_forbidden' }; }
-    if (!(await canCertifyAppointment(admin, appointment.id, db))) { await db.query('ROLLBACK'); return { status: 'certification_forbidden' }; }
+    if (expectedRevision && new Date(appointment.updated_at).toISOString() !== String(expectedRevision)) {
+      await db.query('ROLLBACK');
+      return { status: 'stale_revision' };
+    }
+    if (!(await canCertifyAppointment(admin, appointment.id, db, { workspace, allowBusinessBackup }))) { await db.query('ROLLBACK'); return { status: 'certification_forbidden' }; }
     const isNoCharge = targetStatus === 'no_charge';
     const canonicalStatus = isNoCharge ? 'completed' : targetStatus;
     const financialClassification = isNoCharge ? 'no_charge' : 'standard';
@@ -372,12 +386,16 @@ async function finalizeAppointment(admin, appointmentId, targetStatus) {
     );
     await db.query(
       `INSERT INTO appointment_status_history (appointment_id,from_status,to_status,changed_by,reason) VALUES ($1,$2,$3,$4,$5)`,
-      [appointment.id, appointment.status, canonicalStatus, `admin:${admin.id}:${admin.display_name}`, isNoCharge ? 'Explicit WhatsApp practitioner attendance certification — no-charge visit; client charge R0; practitioner earnings R0' : 'Explicit WhatsApp practitioner attendance certification']
+      [appointment.id, appointment.status, canonicalStatus, `admin:${admin.id}:${admin.display_name}`, workspace
+        ? 'Explicit Workspace attendance certification'
+        : isNoCharge
+          ? 'Explicit WhatsApp practitioner attendance certification — no-charge visit; client charge R0; practitioner earnings R0'
+          : 'Explicit WhatsApp practitioner attendance certification']
     );
     await db.query(`UPDATE appointment_lifecycle SET status=$1,updated_at=NOW() WHERE appointment_id=$2`, [canonicalStatus, appointment.id]);
     await db.query(
       `INSERT INTO crm_audit_events (actor_admin_id,action,entity_type,entity_id,metadata) VALUES ($1,'admin.appointment_finalized','appointment',$2,$3::jsonb)`,
-      [admin.id, String(appointment.id), JSON.stringify({ fromStatus: appointment.status, toStatus: canonicalStatus, outcome: targetStatus, startsAt: appointment.starts_at, explicitAdminDecision: true, certificationAuthority: authorityDescription(admin), financialClassification, previousTotalPrice: appointment.total_price, clientCharge: isNoCharge ? 0 : appointment.total_price, practitionerEarningsOverride: isNoCharge ? 0 : null })]
+      [admin.id, String(appointment.id), JSON.stringify({ fromStatus: appointment.status, toStatus: canonicalStatus, outcome: targetStatus, startsAt: appointment.starts_at, explicitAdminDecision: true, certificationAuthority: authorityDescription(admin, { workspace, allowBusinessBackup }), surface: workspace ? 'workspace_dashboard' : 'whatsapp', financialClassification, previousTotalPrice: appointment.total_price, clientCharge: isNoCharge ? 0 : appointment.total_price, practitionerEarningsOverride: isNoCharge ? 0 : null })]
     );
     await db.query('COMMIT');
     return { status: 'updated', appointment, targetStatus, canonicalStatus, financialClassification };

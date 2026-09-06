@@ -119,8 +119,29 @@ function calendarFixture() {
     dateKey: '2026-09-05',
     timeline: {
       staff: [{ id: 11, displayName: 'Synthetic Practitioner' }],
-      appointments: [{ id: 501, kind: 'appointment', canonical: true, startsAt: '2026-09-05T08:00:00Z', clientName: 'Synthetic Client', serviceName: 'Treatment', staffIds: [11] }],
+      appointments: [{ id: 501, kind: 'appointment', canonical: true, startsAt: '2026-09-05T08:00:00Z', endsAt: '2026-09-05T09:00:00Z', status: 'confirmed', revision: '2026-09-05T07:00:00.000Z', clientName: 'Synthetic Client', serviceName: 'Treatment', staffIds: [11] }],
       closures: [],
+    },
+  };
+}
+
+function ownerPrincipal() {
+  return {
+    id: 7,
+    staff_id: 11,
+    display_name: 'Synthetic Owner',
+    business_role: 'owner',
+    calendar_scope: 'all_business',
+    service_scope: 'all_services',
+    permissions: { 'appointment:view': true, 'booking:update': true },
+    admin_active: true,
+    staff_status: 'active',
+    calendarAuthority: {
+      capabilities: ['appointment:view'],
+      linkedStaffId: 11,
+      businessRole: 'owner',
+      calendarScope: 'all_business',
+      serviceScope: 'all_services',
     },
   };
 }
@@ -128,6 +149,7 @@ function calendarFixture() {
 test('Dashboard composes canonical all-permitted Calendar day and bounded Messages projections', async () => {
   const calls = [];
   const service = createWorkspaceDashboardService({
+    resolvePrincipal: async () => ownerPrincipal(),
     calendarService: { async buildModel(input) { calls.push({ calendar: input }); return calendarFixture(); } },
     messagesService: {
       async resolveAccess() { return { capability: 'client:lookup' }; },
@@ -138,9 +160,9 @@ test('Dashboard composes canonical all-permitted Calendar day and bounded Messag
   const model = await service.buildModel({ adminId: 7, viewer, now: new Date('2026-09-05T08:00:00Z') });
   assert.equal(calls[0].calendar.view, 'day');
   assert.equal(calls[0].calendar.staff, 'all');
-  assert.equal(calls[0].calendar.viewer, viewer);
+  assert.deepEqual(calls[0].calendar.viewer, { calendarScope: 'all_business' });
   assert.equal(model.appointments.length, 1);
-  assert.equal(calls[1].messages.activityLimit, 6);
+  assert.equal(calls[1].messages.activityLimit, 4);
   await assert.rejects(service.buildModel({ adminId: 7, viewer: null }), error => error instanceof WorkspaceDashboardError && error.httpStatus === 403);
 });
 

@@ -3,6 +3,8 @@ const assert = require('node:assert/strict');
 
 const {
   canAccessOwnFinalization,
+  canAccessWorkspaceOwnFinalization,
+  canAccessWorkspaceBackupFinalization,
   certificationStaffIds,
   canCertifyAppointment,
   authorityDescription,
@@ -61,4 +63,30 @@ test('missing or ambiguous canonical identity evidence fails closed', async () =
   const ambiguous = { query: async () => ({ rows: [{ id: 22 }, { id: 22 }] }) };
   assert.deepEqual(await certificationStaffIds(admins.abigail, missing), []);
   assert.deepEqual(await certificationStaffIds(admins.abigail, ambiguous), []);
+});
+
+test('Workspace self-finalization uses current linked scope and capabilities without person-name policy', async () => {
+  const admin = {
+    display_name: 'Any Canonical Practitioner', staff_id: 44, staff_status: 'active', admin_active: true,
+    calendar_scope: 'own_appointments', permissions: { 'appointment:view': true, 'booking:update': true },
+  };
+  const db = authorityDb([44]);
+  assert.equal(canAccessOwnFinalization(admin), false);
+  assert.equal(canAccessWorkspaceOwnFinalization(admin), true);
+  assert.deepEqual(await certificationStaffIds(admin, db, { workspace: true }), [44]);
+  assert.deepEqual(db.calls[0].params, [44]);
+  assert.equal(await canCertifyAppointment(admin, 77, authorityDb([44]), { workspace: true }), true);
+  assert.equal(await canCertifyAppointment(admin, 78, authorityDb([44, 55]), { workspace: true }), false);
+});
+
+test('owner backup is capability/scope-bound and only activates in explicit Workspace mode', async () => {
+  const owner = {
+    display_name: 'Canonical Owner', staff_id: null, admin_active: true,
+    business_role: 'owner', calendar_scope: 'all_business',
+    permissions: { 'appointment:view': true, 'booking:update': true },
+  };
+  assert.equal(canAccessWorkspaceBackupFinalization(owner), true);
+  assert.equal(await canCertifyAppointment(owner, 80, authorityDb([44]), { workspace: true, allowBusinessBackup: true }), true);
+  assert.equal(await canCertifyAppointment(owner, 81, authorityDb([44])), false);
+  assert.equal(await canCertifyAppointment({ ...owner, permissions: { 'appointment:view': true } }, 82, authorityDb([44]), { workspace: true, allowBusinessBackup: true }), false);
 });
