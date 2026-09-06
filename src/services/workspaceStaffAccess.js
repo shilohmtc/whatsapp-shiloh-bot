@@ -101,7 +101,14 @@ function createWorkspaceStaffAccessService({ db = pool } = {}) {
     );
   }
 
-  async function enableWorkspaceAccess({ adminId, staffId, expectedRevision, requestId: rawRequestId, whatsappNumber } = {}) {
+  async function enableWorkspaceAccess({
+    adminId,
+    staffId,
+    expectedRevision,
+    requestId: rawRequestId,
+    whatsappNumber,
+    identityConfirmed,
+  } = {}) {
     if (typeof db.connect !== 'function') throw new Error('Workspace Staff Access mutations require a transactional database.');
     const id = positiveId(staffId);
     if (!id) throw new WorkspaceStaffError('WORKSPACE_STAFF_INVALID_ID', 'Staff reference is invalid.', 400);
@@ -112,6 +119,13 @@ function createWorkspaceStaffAccessService({ db = pool } = {}) {
       throw new WorkspaceStaffError(
         'WORKSPACE_STAFF_ACCESS_INVALID_WHATSAPP',
         'Enter a valid South African WhatsApp mobile number.',
+        400
+      );
+    }
+    if (identityConfirmed !== true) {
+      throw new WorkspaceStaffError(
+        'WORKSPACE_STAFF_ACCESS_IDENTITY_UNCONFIRMED',
+        'Confirm that you verified this staff member’s current WhatsApp number before enabling access.',
         400
       );
     }
@@ -211,6 +225,7 @@ function createWorkspaceStaffAccessService({ db = pool } = {}) {
         await audit(client, operator, id, {
           requestId,
           preset: 'employee_practitioner_view_only_v1',
+          identityBinding: 'operator_attested_current_whatsapp',
           reactivatedExistingPrincipal: true,
           credentialMaterialChanged: false,
           capabilities: [...PRACTITIONER_ACCESS_PRESET.capabilities],
@@ -239,6 +254,7 @@ function createWorkspaceStaffAccessService({ db = pool } = {}) {
       await audit(client, operator, id, {
         requestId,
         preset: 'employee_practitioner_view_only_v1',
+        identityBinding: 'operator_attested_current_whatsapp',
         createdPrincipal: true,
         credentialMaterialCreated: false,
         capabilities: [...PRACTITIONER_ACCESS_PRESET.capabilities],
