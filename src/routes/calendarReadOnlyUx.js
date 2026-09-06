@@ -2,6 +2,10 @@ const express = require('express');
 const { pool } = require('../db/pool');
 const calendarReadOnlyUx = require('../services/calendarReadOnlyUx');
 const { renderCalendarPage, renderUnavailablePage } = require('../presentation/calendarReadOnlyUx');
+const {
+  calendarPhoneCompactV2ClientScript,
+  decoratePhoneCalendarV2,
+} = require('../presentation/calendarPhoneCompactV2');
 const { isCalendarBridgeEnabled } = require('../middleware/staffBrowserSession');
 const { createCalendarCreateBookingService } = require('../services/calendarCreateBooking');
 const { createCalendarOperationalMutationService } = require('../services/calendarOperationalMutations');
@@ -310,6 +314,12 @@ function createCalendarReadOnlyHandler({
       if (bookingAllowed && !String(html).includes('aria-label="Calendar actions"')) {
         html = decorateBookingEntry(html, model.dateKey, bookingPath);
       }
+      html = decoratePhoneCalendarV2(html, {
+        model: renderedModel,
+        basePath,
+        bookingPath,
+        bookingAllowed,
+      });
       return res.status(200).type('html').send(html);
     } catch (error) {
       if (res.headersSent) return next(error);
@@ -324,6 +334,11 @@ function createCalendarReadOnlyHandler({
 
 function createCalendarReadOnlyRouter(options = {}) {
   const router = express.Router();
+  router.get('/phone-v2.js', (_req, res) => {
+    res.setHeader('Cache-Control', 'private, no-store, max-age=0');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    return res.status(200).type('application/javascript').send(calendarPhoneCompactV2ClientScript());
+  });
   router.get('/', createCalendarReadOnlyHandler(options));
   return router;
 }
