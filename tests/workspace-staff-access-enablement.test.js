@@ -369,6 +369,7 @@ test('Access client uses existing CSRF boundary and fixed enable endpoint withou
   assert.match(script, /expectedRevision/);
   assert.match(script, /whatsappNumber/);
   assert.match(script, /identityConfirmed/);
+  assert.doesNotMatch(script, /window\.confirm|\bconfirm\s*\(/);
   assert.doesNotMatch(script, /businessRole|calendarScope|serviceScope|permissions|appointment:create|schedule:manage/);
 });
 
