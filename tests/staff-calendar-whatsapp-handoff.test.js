@@ -155,17 +155,19 @@ function deterministicRandomBytes() {
   return (size) => Buffer.alloc(size, value++);
 }
 
-test('Workspace keeps Open Calendar first and natural-language Calendar entry distinct from Admin', () => {
+test('Workspace launcher uses Open Workspace while preserving Calendar command compatibility', () => {
   const launcher = workspaceLauncherInteractive({ display_name: 'Synthetic Staff' });
   assert.equal(launcher.type, 'button');
   assert.deepEqual(launcher.buttons.map((button) => [button.id, button.title]), [
-    ['admin_open_calendar', 'Open Calendar'],
+    ['admin_open_calendar', 'Open Workspace'],
     ['admin_open_menu', 'Admin'],
   ]);
+  assert.equal(isWorkspaceLauncherTerm('Open Workspace'), false);
   assert.equal(isWorkspaceLauncherTerm('Open Calendar'), false);
   assert.equal(isWorkspaceLauncherTerm('Admin'), false);
   const source = read('src/services/adminInteractiveMenu.js');
-  assert.match(source, /admin_open_calendar\|open calendar\|calendar/);
+  assert.match(source, /admin_open_calendar\|open workspace\|workspace\|open calendar\|calendar/);
+  assert.match(source, /\*Open Workspace\*/);
   assert.match(source, /issueCalendarHandoffForSender\(sender, admin\)/);
 });
 
@@ -272,12 +274,15 @@ test('handoff URL keeps credential in fragment on an isolated landing page and b
 
   const page = renderStaffCalendarHandoffPage();
   assert.match(page, /\/calendar\/staff\/handoff\.js/);
+  assert.match(page, /Shiloh Workspace/);
+  assert.doesNotMatch(page, /Shiloh Calendar/);
   assert.doesNotMatch(page, /\/calendar\/staff\/client\.js/);
   assert.doesNotMatch(page, new RegExp(token));
 
   const script = staffCalendarHandoffClientScript();
   assert.match(script, /\^#handoff=\(\[A-Za-z0-9_-\]\{43\}\)\$/);
   assert.match(script, /calendar-handoff\/exchange/);
+  assert.match(script, /Open Workspace/);
   assert.match(script, /window\.location\.replace\(CALENDAR_PATH\)/);
   assert.ok(script.indexOf('window.history.replaceState') < script.indexOf("postJson(AUTH_BASE+'/calendar-handoff/exchange'"), 'fragment must be removed before network exchange');
   assert.doesNotMatch(url.split('#')[0], /handoff=/);
