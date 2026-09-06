@@ -11,13 +11,18 @@ const {
 
 const STAFF_ACCESS_POLICY_VERSION = 'workspace_staff_access_policy_v1';
 const STAFF_ACCESS_LOCK_BASE = 731000000000;
+
+// #745 intentionally exposes only capabilities whose downstream authority is
+// proven to remain practitioner-own at mutation time. Calendar reschedule and
+// cancel can mutate a shared appointment when the linked practitioner is one
+// of several assignees, while client:lookup exposes the business-wide Clients
+// read model and appointment:create depends on that broad lookup. Those keys
+// therefore remain protected/read-only until a later canonical scoped contract
+// exists; this bounded editor must not broaden them merely because the raw
+// permission keys already exist.
 const PRACTITIONER_POLICY_CAPABILITIES = Object.freeze([
   'appointment:view',
   'booking:update',
-  'client:lookup',
-  'appointment:create',
-  'calendar:booking:reschedule',
-  'calendar:booking:cancel',
 ]);
 const PRACTITIONER_POLICY_CAPABILITY_SET = new Set(PRACTITIONER_POLICY_CAPABILITIES);
 const MANDATORY_PRACTITIONER_CAPABILITIES = Object.freeze(['appointment:view']);
@@ -31,32 +36,7 @@ const PRACTITIONER_POLICY_DEFINITIONS = Object.freeze([
   Object.freeze({
     key: 'booking:update',
     label: 'Complete / No-show visits',
-    description: 'Record Completed or No-show for your own eligible visits.',
-    mandatory: false,
-  }),
-  Object.freeze({
-    key: 'client:lookup',
-    label: 'Find clients',
-    description: 'Look up canonical client records where Workspace permits it.',
-    mandatory: false,
-  }),
-  Object.freeze({
-    key: 'appointment:create',
-    label: 'Create bookings',
-    description: 'Create bookings only for your permitted staff and services. Find clients is included automatically.',
-    mandatory: false,
-    requires: Object.freeze(['client:lookup']),
-  }),
-  Object.freeze({
-    key: 'calendar:booking:reschedule',
-    label: 'Reschedule bookings',
-    description: 'Reschedule only appointments allowed by your own appointment and service scopes.',
-    mandatory: false,
-  }),
-  Object.freeze({
-    key: 'calendar:booking:cancel',
-    label: 'Cancel bookings',
-    description: 'Cancel only appointments allowed by your own appointment and service scopes.',
+    description: 'Record Completed or No-show for your own eligible single-practitioner visits.',
     mandatory: false,
   }),
 ]);
@@ -102,7 +82,6 @@ function normalizeRequestedCapabilities(value) {
     requested.add(key);
   }
   for (const key of MANDATORY_PRACTITIONER_CAPABILITIES) requested.add(key);
-  if (requested.has('appointment:create')) requested.add('client:lookup');
   return PRACTITIONER_POLICY_CAPABILITIES.filter(key => requested.has(key));
 }
 
