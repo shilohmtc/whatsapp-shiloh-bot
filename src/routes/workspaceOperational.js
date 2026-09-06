@@ -4,9 +4,14 @@ const workspaceNavigation = require('../services/workspaceNavigation');
 const {
   renderDashboardPage,
   renderDashboardUnavailablePage,
+  dashboardClientScript,
 } = require('../presentation/workspaceDashboardUx');
 const { workspaceNavigationClientScript } = require('../presentation/workspaceShell');
-const { requireStaffSession } = require('../middleware/staffBrowserSession');
+const {
+  requireStaffSession,
+  sameOriginGuard,
+  csrfGuard,
+} = require('../middleware/staffBrowserSession');
 
 function isWorkspaceOperationalEnabled(env = process.env) {
   return String(env.SHILOH_CALENDAR_READONLY_UX_ENABLED || '').trim().toLowerCase() === 'true'
@@ -27,6 +32,15 @@ function dashboardSafeError(error) {
   return { status: 503, message: 'Canonical operational Dashboard data is temporarily unavailable.' };
 }
 
+function dashboardMutationError(error) {
+  const status = [400, 403, 409].includes(Number(error?.httpStatus)) ? Number(error.httpStatus) : 503;
+  return {
+    status,
+    code: String(error?.code || 'WORKSPACE_DASHBOARD_UNAVAILABLE'),
+    message: status === 503 ? 'Canonical appointment finalization is temporarily unavailable.' : error.message,
+  };
+}
+
 function createWorkspaceOperationalRouter({
   env = process.env,
   sessionService,
@@ -39,6 +53,8 @@ function createWorkspaceOperationalRouter({
   if (!sessionService) throw new Error('Workspace operational routes require the existing staff browser session service');
   const router = express.Router();
   const requireSession = requireStaffSession({ service: sessionService, env });
+  const sameOrigin = sameOriginGuard({ env });
+  const requireCsrf = csrfGuard({ service: sessionService });
 
   router.get('/nav.js', (_req, res) => {
     res.setHeader('Cache-Control', 'private, no-store, max-age=0');
@@ -52,6 +68,10 @@ function createWorkspaceOperationalRouter({
     return next();
   });
   router.use(requireSession);
+
+  router.get('/client.js', (_req, res) => {
+    return res.status(200).type('application/javascript').send(dashboardClientScript());
+  });
 
   router.get('/navigation', async (req, res) => {
     try {
@@ -76,6 +96,22 @@ function createWorkspaceOperationalRouter({
     }
   });
 
+  router.post('/appointments/:appointmentId/finalize', sameOrigin, requireCsrf, async (req, res) => {
+    try {
+      const result = await dashboardService.finalizeVisit({
+        adminId: req.staffBrowserSession?.adminId,
+        viewer: req.staffBrowserSession?.viewer,
+        appointmentId: req.params.appointmentId,
+        expectedRevision: req.body?.expectedRevision,
+        outcome: req.body?.outcome,
+      });
+      return res.status(200).json(result);
+    } catch (error) {
+      const safe = dashboardMutationError(error);
+      return res.status(safe.status).json({ error: safe.message, code: safe.code, requestId: req.id });
+    }
+  });
+
   return router;
 }
 
@@ -83,5 +119,6 @@ module.exports = {
   isWorkspaceOperationalEnabled,
   setWorkspaceOperationalSecurityHeaders,
   dashboardSafeError,
+  dashboardMutationError,
   createWorkspaceOperationalRouter,
 };

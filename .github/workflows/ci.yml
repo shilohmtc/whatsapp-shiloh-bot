@@ -86,7 +86,7 @@ jobs:
       - name: Run focused Workspace Mobile Polish tests
         run: node --test tests/workspace-mobile-polish-v1.test.js
       - name: Run focused Workspace Dashboard and Messages consolidation tests
-        run: node --test tests/workspace-dashboard-messages-consolidation-p1.test.js tests/workspace-communication-evidence-v1.test.js tests/workspace-booking-confirmation-recovery.test.js
+        run: node --test tests/workspace-dashboard-v2-p1.test.js tests/workspace-dashboard-messages-consolidation-p1.test.js tests/workspace-communication-evidence-v1.test.js tests/workspace-booking-confirmation-recovery.test.js
       - name: Run focused Calendar mobile staff overview tests
         run: node --test tests/calendar-mobile-staff-overview-v1.test.js
       - name: Run non-mutating regression tests
@@ -118,8 +118,8 @@ jobs:
       - name: Upload authenticated Workspace Dashboard and Messages browser proof
         uses: actions/upload-artifact@v4
         with:
-          name: workspace-dashboard-messages-v1
-          path: artifacts/workspace-dashboard-messages-v1
+          name: workspace-dashboard-v2-p1
+          path: artifacts/workspace-dashboard-v2-p1
           if-no-files-found: error
           retention-days: 14
       - name: Run Calendar Clean CRM V2 browser proof

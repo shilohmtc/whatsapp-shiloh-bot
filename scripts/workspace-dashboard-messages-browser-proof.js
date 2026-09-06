@@ -21,9 +21,10 @@ const { renderCalendarPage } = require('../src/presentation/calendarReadOnlyUx')
 const { applyCalendarResponsivePolish } = require('../src/routes/calendarReadOnlyUx');
 const { periodFor } = require('../src/services/calendarReadOnlyUx');
 
-const OUT_DIR = path.join(process.cwd(), 'artifacts', 'workspace-dashboard-messages-v1');
+const OUT_DIR = path.join(process.cwd(), 'artifacts', 'workspace-dashboard-v2-p1');
 const DATE_KEY = '2026-09-05';
-const SESSION_TOKEN = 'synthetic-workspace-session';
+const OWNER_SESSION_TOKEN = 'synthetic-owner-workspace-session';
+const PRACTITIONER_SESSION_TOKEN = 'synthetic-practitioner-workspace-session';
 const ENV = {
   NODE_ENV: 'production',
   SHILOH_CALENDAR_READONLY_UX_ENABLED: 'true',
@@ -121,13 +122,13 @@ async function evaluate(cdp, expression) {
   return result.result?.value;
 }
 
-function calendarModel() {
+function calendarModel({ practitionerOnly = false } = {}) {
   const staff = [
     { id: 31, displayName: 'Cedar Practitioner', schedulingType: 'regular' },
     { id: 32, displayName: 'Willow Practitioner', schedulingType: 'regular' },
   ];
   const appointment = (id, hour, staffIds, clientName) => ({
-    id, kind: 'appointment', canonical: true, revision: `revision-${id}`, status: 'scheduled',
+    id, kind: 'appointment', canonical: true, revision: `2026-09-05T06:${String(id % 60).padStart(2, '0')}:00.000Z`, status: 'scheduled',
     clientName, clientMobile: '27820000000', serviceName: 'Synthetic treatment',
     serviceContexts: [{ serviceId: 71, categoryName: 'Massage' }],
     startsAt: `${DATE_KEY}T${String(hour).padStart(2, '0')}:00:00.000Z`,
@@ -140,15 +141,17 @@ function calendarModel() {
     appointment(8102, 9, [31, 32], 'Shared Client'),
     appointment(8103, 11, [32], 'Protea Client'),
   ];
+  const visibleStaff = practitionerOnly ? staff.slice(0, 1) : staff;
+  const visibleAppointments = practitionerOnly ? appointments.filter(item => item.staffIds.includes(31)) : appointments;
   return {
     view: 'day', dateKey: DATE_KEY, period: periodFor('day', DATE_KEY),
     selectedStaffId: null, visibleStaffIds: staff.map(person => person.id), visibleStaffSelectionExplicit: true,
-    permittedStaff: staff, mutationCapability: { enabled: false },
+    permittedStaff: visibleStaff, mutationCapability: { enabled: false },
     timeline: {
-      staff,
-      workingWindows: staff.flatMap(person => [{ staffId: person.id, dayOfWeek: 6, startsLocal: '08:00:00', endsLocal: '15:00:00' }]),
+      staff: visibleStaff,
+      workingWindows: visibleStaff.flatMap(person => [{ staffId: person.id, dayOfWeek: 6, startsLocal: '08:00:00', endsLocal: '15:00:00' }]),
       scheduleExceptions: [], recurringClosures: [], closures: [], leave: [], externalBusy: [], blocks: [],
-      appointments, events: appointments,
+      appointments: visibleAppointments, events: visibleAppointments,
     },
   };
 }
@@ -175,9 +178,11 @@ function createFixture() {
   const state = { providerNetworkCalls: 0, senderCalls: 0, productionReads: 0, productionMutations: 0 };
   const sessionService = {
     async validateSessionToken(token) {
-      if (token !== SESSION_TOKEN) return { ok: false };
-      return { ok: true, sessionId: 88, adminId: 77, csrfHash: 'synthetic', recoveryRequired: false, viewer: { calendarScope: 'business_all_staff', operatorAdminId: 77 } };
+      if (token === OWNER_SESSION_TOKEN) return { ok: true, sessionId: 88, adminId: 77, csrfHash: 'synthetic-owner', recoveryRequired: false, viewer: { calendarScope: 'business_all_staff', operatorAdminId: 77 } };
+      if (token === PRACTITIONER_SESSION_TOKEN) return { ok: true, sessionId: 89, adminId: 78, csrfHash: 'synthetic-practitioner', recoveryRequired: false, viewer: { calendarScope: 'own_staff', staffId: 31, operatorAdminId: 78 } };
+      return { ok: false };
     },
+    validateCsrfToken() { return false; },
   };
   const access = { async resolveAccess() { return { canonical: true }; } };
   const messageService = createWorkspaceMessagesService({
@@ -188,10 +193,35 @@ function createFixture() {
     },
     communicationService: { async listRecent({ limit }) { return communicationActivity().slice(0, limit); } },
   });
-  const dashboardService = createWorkspaceDashboardService({
-    calendarService: { async buildModel() { return calendarModel(); } },
+  const canonicalDashboardService = createWorkspaceDashboardService({
+    calendarService: { async buildModel(input) { return calendarModel({ practitionerOnly: input.viewer.calendarScope === 'own_appointments' }); } },
     messagesService: messageService,
+    resolvePrincipal: async adminId => {
+      const practitioner = Number(adminId) === 78;
+      const calendarScope = practitioner ? 'own_appointments' : 'all_business';
+      const businessRole = practitioner ? 'employee_practitioner' : 'business_admin';
+      return {
+        id: Number(adminId), staff_id: practitioner ? 31 : null,
+        display_name: practitioner ? 'Cedar Practitioner' : 'Clinic Owner',
+        business_role: businessRole, calendar_scope: calendarScope,
+        service_scope: practitioner ? 'own_services' : 'all_services',
+        permissions: { 'appointment:view': true, 'booking:update': true },
+        admin_active: true, staff_status: practitioner ? 'active' : null,
+        calendarAuthority: {
+          capabilities: ['appointment:view'], linkedStaffId: practitioner ? 31 : null,
+          businessRole, calendarScope, serviceScope: practitioner ? 'own_services' : 'all_services',
+        },
+      };
+    },
+    canCertifyAppointmentFn: async (principal, appointmentId) => !(Number(principal.id) === 78 && Number(appointmentId) === 8102),
+    finalizeAppointmentFn: async () => { state.productionMutations += 1; return { status: 'updated' }; },
   });
+  const dashboardService = {
+    async buildModel(input) {
+      return canonicalDashboardService.buildModel({ ...input, now: new Date('2026-09-05T14:00:00.000Z') });
+    },
+    finalizeVisit: canonicalDashboardService.finalizeVisit,
+  };
   const navigationService = createWorkspaceNavigationService({
     clientAccessService: access, staffAccessService: access, servicesAccessService: access, reportsAccessService: access,
   });
@@ -211,7 +241,11 @@ function createFixture() {
   app.use(express.json());
   app.use(requestContext);
   app.get('/proof', (_req, res) => {
-    res.setHeader('Set-Cookie', serializeSessionCookie(SESSION_TOKEN, { env: ENV }));
+    res.setHeader('Set-Cookie', serializeSessionCookie(OWNER_SESSION_TOKEN, { env: ENV }));
+    return res.redirect(302, '/calendar/workspace');
+  });
+  app.get('/proof-practitioner', (_req, res) => {
+    res.setHeader('Set-Cookie', serializeSessionCookie(PRACTITIONER_SESSION_TOKEN, { env: ENV }));
     return res.redirect(302, '/calendar/workspace');
   });
   app.get('/calendar/staff/client.js', (_req, res) => res.type('application/javascript').send("'use strict';"));
@@ -252,12 +286,21 @@ const METRICS_EXPRESSION = `(() => {
     navRight:nav?.getBoundingClientRect().right||0,
     drawerOpen:Boolean(nav?.classList.contains('open')),
     menuHeight:menuToggle?.getBoundingClientRect().height||0,
+    menuLeft:menuToggle?.getBoundingClientRect().left||0,
     framePaddingBottom:frame?parseFloat(getComputedStyle(frame).paddingBottom)||0:0,
     signoutHeight:document.querySelector('[data-shiloh-logout]')?.getBoundingClientRect().height||0,
     signoutText:document.querySelector('[data-shiloh-logout]')?.textContent.trim()||'',
     signoutToTabsGap:(()=>{const button=document.querySelector('[data-shiloh-logout]'),tabs=document.querySelector('.tabs');return button&&tabs?tabs.getBoundingClientRect().top-button.getBoundingClientRect().bottom:null;})(),
     attentionVisible:visible(document.querySelector('[data-messages-attention]')),
     unknownVisible:Array.from(document.querySelectorAll('[data-message-status="unknown"]')).some(visible),
+    dashboardMode:document.body.dataset.dashboardMode||'',
+    dashboardGreeting:document.querySelector('.brand h1')?.textContent.trim()||'',
+    dashboardEyebrow:document.querySelector('[data-dashboard-today] .eyebrow')?.textContent.trim()||'',
+    dashboardAppointments:document.querySelectorAll('[data-dashboard-appointment]').length,
+    dashboardTeamGroups:document.querySelectorAll('[data-dashboard-team-group]').length,
+    dashboardActions:document.querySelectorAll('[data-dashboard-finalize]').length,
+    minDashboardActionHeight:(()=>{const nodes=Array.from(document.querySelectorAll('[data-dashboard-finalize]')).filter(visible);return nodes.length?Math.min(...nodes.map(node=>node.getBoundingClientRect().height)):0;})(),
+    dashboardCommunicationText:document.querySelector('[data-dashboard-communications-panel]')?.textContent.trim()||'',
   };
 })()`;
 
@@ -321,6 +364,7 @@ async function main() {
         width, height, deviceScaleFactor: 1, mobile: phone, screenWidth: width, screenHeight: height,
       });
       await navigate(`${origin}${urlPath}`);
+      await evaluate(cdp, `new Promise(resolve=>{scrollTo(0,0);setTimeout(resolve,300);})`);
       if (openDrawer) {
         await evaluate(cdp, `document.querySelector('[data-workspace-drawer-toggle]').click();true`);
         await poll(() => evaluate(cdp, `document.querySelector('[data-workspace-navigation-drawer]').classList.contains('open')`), Boolean);
@@ -332,6 +376,7 @@ async function main() {
       assert.ok(metrics.active, `${name} has no active destination`);
       if (phone) {
         assert.ok(metrics.menuHeight >= 44, `${name} has a menu touch target below 44px`);
+        assert.ok(metrics.menuLeft >= 7, `${name} captured the responsive drawer transition before the Phone shell settled`);
         if (!urlPath.startsWith('/calendar/read-only')) {
           assert.ok(metrics.signoutHeight >= 44, `${name} has a collapsed sign-out control`);
           assert.equal(metrics.signoutText, 'Sign out');
@@ -360,6 +405,13 @@ async function main() {
         assert.equal(metrics.attentionVisible, true);
         assert.equal(metrics.unknownVisible, true);
       }
+      if (metrics.dashboardMode) {
+        assert.ok(metrics.dashboardAppointments > 0, `${name} has no operational appointments`);
+        assert.ok(metrics.dashboardGreeting.startsWith('Welcome, '), `${name} has no canonical greeting`);
+        assert.equal(metrics.dashboardEyebrow, 'Today', `${name} does not prove the clinic-today state`);
+        assert.match(metrics.dashboardCommunicationText, /Client notification needs attention/);
+        if (metrics.dashboardActions) assert.ok(metrics.minDashboardActionHeight >= (phone ? 44 : 36), `${name} has undersized outcome actions`);
+      }
       return { name, phone, viewport: { width, height }, active: metrics.active, metrics, ...(await screenshot(name)) };
     }
 
@@ -371,7 +423,21 @@ async function main() {
       ['dashboard', '/calendar/workspace'], ['calendar', '/calendar/read-only'], ['clients', '/calendar/clients'], ['messages', '/calendar/messages?view=all'],
     ];
     for (const [name, urlPath] of destinations) screenshots.push(await proof({ name: `desktop-${name}`, path: urlPath, width: 1440, height: 1000, phone: false }));
+    const ownerDashboard = screenshots.find(item => item.name === 'desktop-dashboard').metrics;
+    assert.equal(ownerDashboard.dashboardMode, 'owner_overview');
+    assert.equal(ownerDashboard.dashboardGreeting, 'Welcome, Clinic Owner');
+    assert.equal(ownerDashboard.dashboardAppointments, 3);
+    assert.equal(ownerDashboard.dashboardTeamGroups, 3);
     for (const [name, urlPath] of destinations) screenshots.push(await proof({ name: `phone-${name}`, path: urlPath, width: 390, height: 844, phone: true }));
+    screenshots.push(await proof({ name: 'phone-practitioner-my-day', path: '/proof-practitioner', width: 390, height: 844, phone: true }));
+    const practitionerMetrics = screenshots.at(-1).metrics;
+    assert.equal(practitionerMetrics.dashboardMode, 'my_day');
+    assert.equal(practitionerMetrics.dashboardGreeting, 'Welcome, Cedar Practitioner');
+    assert.equal(practitionerMetrics.dashboardTeamGroups, 0);
+    assert.equal(practitionerMetrics.dashboardAppointments, 2);
+    assert.equal(practitionerMetrics.dashboardActions, 2);
+    await cdp.send('Page.navigate', { url: `${origin}/proof` });
+    await poll(() => evaluate(cdp, 'location.pathname'), value => value === '/calendar/workspace');
     screenshots.push(await proof({ name: 'phone-drawer-open', path: '/calendar/workspace', width: 390, height: 844, phone: true, openDrawer: true }));
 
     assert.deepEqual(browserExceptions, []);
@@ -381,7 +447,7 @@ async function main() {
     assert.match(exactHead, /^[0-9a-f]{40}$/);
     const manifest = {
       generatedAt: new Date().toISOString(), exactHead, authenticatedSession: true, syntheticDataOnly: true,
-      authority: 'Existing CalendarReadOnlyUx, client:lookup, client:notify and workspaceCommunicationEvidence composition',
+      authority: 'Existing CalendarReadOnlyUx, Calendar principal/capability scope, canonical appointment finalization, client:lookup, client:notify and workspaceCommunicationEvidence composition',
       productionReads: 0, productionMutations: 0, providerNetworkCalls: 0, senderCalls: 0, realClientSends: 0,
       screenshots,
     };
