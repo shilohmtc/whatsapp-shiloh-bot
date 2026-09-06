@@ -85,7 +85,7 @@ const proofs = [
   { view: 'staff-access-enable', viewport: 'desktop', width: 1440, height: 960, html: accessEnableHtml() },
   { view: 'staff-list', viewport: 'narrow', width: 390, height: 844, html: listHtml() },
   { view: 'staff-detail', viewport: 'narrow', width: 390, height: 844, html: detailHtml() },
-  { view: 'staff-access-enable', viewport: 'narrow', width: 390, height: 844, html: accessEnableHtml() },
+  { view: 'staff-access-enable', viewport: 'narrow', width: 390, height: 1600, html: accessEnableHtml() },
 ];
 const manifest = [];
 
