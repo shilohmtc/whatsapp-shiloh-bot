@@ -64,7 +64,7 @@ function isActionVisibleForAdmin(action, admin) {
 function workspaceLauncherInteractive(admin, pendingApprovals = false) {
   const name = String(admin?.display_name || 'Shiloh staff').trim();
   const buttons = [
-    { id: 'admin_open_calendar', title: 'Open Calendar' },
+    { id: 'admin_open_calendar', title: 'Open Workspace' },
     { id: 'admin_open_menu', title: 'Admin' },
   ];
   if (pendingApprovals) buttons.push({ id: 'admin_action_pending_approvals', title: 'Pending approvals' });
@@ -186,18 +186,18 @@ async function dispatchEarningsPeriod(sender, admin, subject, period) {
 
 async function issueCalendarHandoffForSender(sender, admin = null) {
   if (!calendarHandoffPublicOrigin(process.env)) {
-    return { handled: true, admin, reply: 'Calendar access is not available right now. No WhatsApp mutation was attempted.' };
+    return { handled: true, admin, reply: 'Workspace access is not available right now. No WhatsApp mutation was attempted.' };
   }
   const issued = await calendarHandoffService.issueForWhatsapp({ whatsapp: sender });
   if (!issued?.ok) {
-    return { handled: true, admin, reply: 'Calendar access is not available for this staff account. No WhatsApp mutation was attempted.' };
+    return { handled: true, admin, reply: 'Workspace access is not available for this staff account. No WhatsApp mutation was attempted.' };
   }
   const url = buildCalendarHandoffUrl(issued.token, process.env);
-  if (!url) return { handled: true, admin, reply: 'Calendar access is not available right now. No WhatsApp mutation was attempted.' };
+  if (!url) return { handled: true, admin, reply: 'Workspace access is not available right now. No WhatsApp mutation was attempted.' };
   return {
     handled: true,
     admin,
-    reply: `*Open Calendar*\n\nTap this secure one-time link to open Shiloh Calendar:\n${url}\n\nIt expires shortly and can only be used once.`,
+    reply: `*Open Workspace*\n\nTap this secure one-time link to open Shiloh Workspace:\n${url}\n\nIt expires shortly and can only be used once.`,
   };
 }
 
@@ -272,7 +272,7 @@ async function processAdminInteractiveMenuMessage(sender, text) {
   const loyalty = await processAdminLoyaltyRedemptionMessage(sender, text);
   if (loyalty.handled) return loyalty;
 
-  if (/^(?:admin_open_calendar|open calendar|calendar|admin_action_open_calendar)$/i.test(raw)) {
+  if (/^(?:admin_open_calendar|open workspace|workspace|open calendar|calendar|admin_action_open_calendar)$/i.test(raw)) {
     return issueCalendarHandoffForSender(sender, admin);
   }
   if (/^(?:admin_open_menu|admin|admin menu)$/i.test(raw)) {
@@ -314,7 +314,7 @@ async function processAdminInteractiveMenuMessage(sender, text) {
     handled: true,
     isAdmin: true,
     admin,
-    reply: 'That staff WhatsApp action is unavailable. No action was taken. Send *Menu* for the current options or *Open Calendar* for diary work.',
+    reply: 'That staff WhatsApp action is unavailable. No action was taken. Send *Menu* for the current options or *Open Workspace* for Workspace access.',
   };
 }
 
