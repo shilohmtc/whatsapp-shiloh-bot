@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const express = require('express');
 const { finalizeAppointment } = require('../src/services/adminAppointmentFinalization');
+const { canCertifyAppointment } = require('../src/services/attendanceFinalizationAuthority');
 const { createWorkspaceDashboardService } = require('../src/services/workspaceDashboard');
 const { createWorkspaceStaffMutationRouter } = require('../src/routes/workspaceStaffMutations');
 const { renderStaffDetailPage } = require('../src/presentation/workspaceStaffUx');
@@ -15,6 +16,11 @@ function principal(capability = true) {
     business_role: 'employee_practitioner', calendar_scope: 'own_appointments', service_scope: 'own_services',
     permissions: { 'appointment:view': true, 'booking:update': capability },
     calendarAuthority: { capabilities: ['appointment:view'], linkedStaffId: 17, businessRole: 'employee_practitioner', calendarScope: 'own_appointments', serviceScope: 'own_services' } };
+}
+function backupPrincipal() {
+  return { id: 92, staff_id: null, display_name: 'Synthetic Owner', admin_active: true, staff_status: 'active',
+    business_role: 'owner', calendar_scope: 'all_business', service_scope: 'all_services',
+    permissions: { 'appointment:view': true, 'booking:update': true } };
 }
 function finalizationDatabase(assigned) {
   const calls = [];
@@ -29,7 +35,7 @@ function finalizationDatabase(assigned) {
     }
     if (sql.includes('FROM staff')) return { rows: [{ id: 17 }] };
     if (sql.includes('FROM appointment_staff')) {
-      // Match the real query's NULL filtering, rather than silently treating unresolved links as absent in the fixture.
+      // Mirror the authority query faithfully: if it filters NULLs, the fixture does too.
       const ids = sql.includes('staff_id IS NOT NULL') ? assigned.filter(id => id !== null) : assigned;
       return { rows: [...new Set(ids)].map(staff_id => ({ staff_id })) };
     }
@@ -61,14 +67,27 @@ test('lack of booking:update denies the real Dashboard-to-finalizer path before 
   assert.equal(error.httpStatus, 400);
   assert.equal(db.calls.length, 0);
 });
-test('#745 cannot offer booking:update: unresolved secondary assignment defeats complete ownership proof', async () => {
+test('#747 fails closed when own-practitioner finalization contains unresolved assignment evidence', async () => {
   const migration = fs.readFileSync(path.join(__dirname, '../migrations/005_crm_appointments_calendar.sql'), 'utf8');
   assert.match(migration, /staff_id BIGINT REFERENCES staff\(id\) ON DELETE SET NULL/);
-  const { result, db } = await runFinalization([17, null]);
-  assert.equal(result.ok, true, 'documents the existing authority gap; #745 must not expand access to it');
-  assert.ok(db.calls.some(c => c.sql.includes('FROM appointment_staff') && c.sql.includes('staff_id IS NOT NULL')));
+  const { error, db } = await runFinalization([17, null]);
+  assert.equal(error.httpStatus, 403);
+  const authorityQuery = db.calls.find(c => c.sql.includes('FROM appointment_staff'));
+  assert.ok(authorityQuery);
+  assert.doesNotMatch(authorityQuery.sql, /staff_id IS NOT NULL/);
+  assert.equal(db.calls.some(c => /^(UPDATE|INSERT)/.test(c.sql)), false);
   assert.equal(fs.existsSync(path.join(__dirname, '../src/services/workspaceStaffAccessPolicy.js')), false, 'no optional-safe policy service remains');
   assert.doesNotMatch(workspaceStaffAccessClientScript(), /POLICY_SUFFIX|access\/policy|name="capability"/);
+});
+test('#747 preserves owner/business-admin backup semantics while own-practitioner NULL evidence fails closed', async () => {
+  for (const assigned of [[17], [18], [17, 18], [17, null], [18, null]]) {
+    const db = finalizationDatabase(assigned);
+    assert.equal(await canCertifyAppointment(backupPrincipal(), 51, db, { workspace: true, allowBusinessBackup: true }), true);
+  }
+  for (const assigned of [[], [null]]) {
+    const db = finalizationDatabase(assigned);
+    assert.equal(await canCertifyAppointment(backupPrincipal(), 51, db, { workspace: true, allowBusinessBackup: true }), false);
+  }
 });
 test('existing and incompatible Access principals are read-only with no misleading save/toggles/private material', () => {
   for (const access of [
