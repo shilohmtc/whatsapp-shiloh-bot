@@ -100,7 +100,7 @@ test('#751 authorized update mutates only recurring location hours and writes be
   assert.equal(result.days.find(day => day.dayOfWeek === 3).open, false);
   assert.equal(result.days.find(day => day.dayOfWeek === 1).startsLocal, '08:30');
   assert.equal(result.days.find(day => day.dayOfWeek === 0).permanent, true);
-  const writes = db.calls.filter(call => /^(UPDATE|INSERT)/.test(call.sql));
+  const writes = db.calls.filter(call => /\b(?:UPDATE|INSERT)\b/.test(call.sql));
   assert.ok(writes.some(call => call.sql.includes('location_working_hours')));
   assert.ok(writes.some(call => call.sql.includes('crm_audit_events')));
   for (const call of writes) {
