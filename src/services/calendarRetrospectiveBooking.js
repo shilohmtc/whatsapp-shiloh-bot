@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const { pool } = require('../db/pool');
+const crmV2ClientService = require('./crmV2ClientService');
 const { checkClinicHours, getDefaultActiveLocation } = require('./clinicHours');
 const { checkAuthoritativeSchedule, getConflicts } = require('./adminAvailability');
 const {
@@ -83,6 +84,7 @@ function createCalendarRetrospectiveBookingService({
   clinicHours = checkClinicHours,
   authoritativeSchedule = checkAuthoritativeSchedule,
   conflictsFor = getConflicts,
+  crmV2 = crmV2ClientService,
   now = () => new Date(),
 } = {}) {
   if (!db || typeof db.query !== 'function') throw new Error('Retrospective booking database is required.');
@@ -98,6 +100,32 @@ function createCalendarRetrospectiveBookingService({
       throw retrospectiveError('CALENDAR_PAST_FORBIDDEN', 'Current staff authority does not permit past appointment recording.', 403);
     }
     return admin;
+  }
+
+  async function listBookableOptions(adminId) {
+    const admin = await resolveOperator(adminId);
+    const result = await db.query(`SELECT st.id staff_id,st.display_name staff_name,sv.id service_id,sv.name service_name,
+      sv.duration_minutes,sv.processing_time_minutes,sv.extra_time_minutes,sv.price,sv.variable_price,
+      visibility.owner_staff_id private_owner_staff_id FROM staff st JOIN staff_services ss ON ss.staff_id=st.id
+      JOIN services sv ON sv.id=ss.service_id LEFT JOIN service_visibility_policies visibility
+      ON visibility.service_id=sv.id AND visibility.visibility_scope='tenant_private'
+      WHERE st.status='active' AND sv.status='active' ORDER BY sv.name,st.display_name`);
+    const staff = new Map(), services = new Map();
+    const clientId = admin.calendarAuthority.retrospectiveClientIds?.[0] || 1;
+    for (const row of result.rows) {
+      if (!allowsRetrospectiveBookingTarget(admin.calendarAuthority, { clientId, staffId:row.staff_id, serviceId:row.service_id, privateOwnerStaffId:row.private_owner_staff_id })) continue;
+      if (!staff.has(Number(row.staff_id))) staff.set(Number(row.staff_id), { id:Number(row.staff_id), displayName:row.staff_name, serviceIds:[] });
+      staff.get(Number(row.staff_id)).serviceIds.push(Number(row.service_id));
+      if (!services.has(Number(row.service_id))) services.set(Number(row.service_id), { id:Number(row.service_id), name:row.service_name, durationMinutes:Number(row.duration_minutes||0)+Number(row.processing_time_minutes||0)+Number(row.extra_time_minutes||0), price:row.price==null?null:Number(row.price), variablePrice:row.variable_price===true, staffIds:[] });
+      services.get(Number(row.service_id)).staffIds.push(Number(row.staff_id));
+    }
+    return { staff:[...staff.values()], services:[...services.values()] };
+  }
+
+  async function searchClients(adminId, query) {
+    const admin = await resolveOperator(adminId);
+    const found = await crmV2.searchClients({ query, status:'active', limit:10 });
+    return { clients:found.filter(client=>retrospectiveClientAllows(admin.calendarAuthority,client.id)).map(client=>({id:String(client.id),displayName:client.name,contactHint:null})), requiresExplicitSelection:true };
   }
 
   async function resolveSelection(queryable, admin, { clientId, staffId, serviceId, locationId, startsAt, endsAt, notes }) {
@@ -257,7 +285,7 @@ function createCalendarRetrospectiveBookingService({
         `INSERT INTO appointments
            (client_id, crm_v2_client_id, source_client_name, location_id,
             starts_at, ends_at, status, title, notes, total_price, currency, source)
-         VALUES (NULL,$1,$2,$3,$4,$5,'completed',$6,$7,$8,'ZAR','shiloh_calendar')
+         VALUES (NULL,$1,$2,$3,$4,$5,'unknown',$6,$7,$8,'ZAR','shiloh_calendar')
          RETURNING id, starts_at, ends_at, status`,
         [locked.client.id, locked.client.name, locked.location.id, locked.startsAt, locked.endsAt,
           locked.service.name, locked.notes, totalPrice]
@@ -276,7 +304,7 @@ function createCalendarRetrospectiveBookingService({
       );
       await client.query(
         `INSERT INTO appointment_status_history(appointment_id,from_status,to_status,changed_by,reason)
-         VALUES($1,NULL,'completed',$2,'Retrospective appointment recorded in Shiloh Workspace')`,
+         VALUES($1,NULL,'unknown',$2,'Retrospective appointment recorded; attendance outcome not inferred')`,
         [appointment.id, `admin:${admin.id}:${admin.display_name || ''}`]
       );
       await client.query(
@@ -309,7 +337,7 @@ function createCalendarRetrospectiveBookingService({
     }
   }
 
-  return { resolveOperator, review, record };
+  return { resolveOperator, listBookableOptions, searchClients, review, record };
 }
 
 const service = createCalendarRetrospectiveBookingService();

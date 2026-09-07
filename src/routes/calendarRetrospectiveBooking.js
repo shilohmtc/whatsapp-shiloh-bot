@@ -1,6 +1,5 @@
 const express = require('express');
 const { pool } = require('../db/pool');
-const { createCalendarCreateBookingService } = require('../services/calendarCreateBooking');
 const { createCalendarRetrospectiveBookingService } = require('../services/calendarRetrospectiveBooking');
 const { requireStaffSession, sameOriginGuard, csrfGuard } = require('../middleware/staffBrowserSession');
 const {
@@ -21,7 +20,6 @@ function createCalendarRetrospectiveBookingRouter({
   env = process.env,
   sessionService,
   service = createCalendarRetrospectiveBookingService({ db: pool }),
-  bookingService = createCalendarCreateBookingService({ db: pool, env }),
   renderPage = renderCalendarRetrospectiveBookingPage,
   renderClient = calendarRetrospectiveBookingClientScript,
 } = {}) {
@@ -42,13 +40,17 @@ function createCalendarRetrospectiveBookingRouter({
   router.get('/', requireSession, async (req, res, next) => {
     try {
       await service.resolveOperator(req.staffBrowserSession.adminId);
-      const options = await bookingService.listBookableOptions(req.staffBrowserSession.adminId);
+      const options = await service.listBookableOptions(req.staffBrowserSession.adminId);
       return res.status(200).type('html').send(renderPage({ options, clientScriptPath: `${req.baseUrl || '/calendar/book/past'}/client.js` }));
     } catch (error) {
       const status = statusForPastError(error);
       if (status !== 503) return res.status(status).type('text/plain').send('Past appointment recording unavailable');
       return next(error);
     }
+  });
+  router.post('/client-search', sameOrigin, requireSession, async (req,res,next) => {
+    try { return res.json(await service.searchClients(req.staffBrowserSession.adminId, req.body?.query)); }
+    catch(error){const status=statusForPastError(error);if(status!==503)return res.status(status).json({error:error.message,code:error.code});return next(error);}
   });
   router.get('/client.js', requireSession, async (req, res, next) => {
     try {

@@ -1,6 +1,7 @@
 const { createHash } = require('crypto');
 const { pool } = require('../db/pool');
 const workspaceStaffAccess = require('./workspaceStaffAccess');
+const { RETROSPECTIVE_CLIENT_IDS_KEY, evaluateCalendarAuthority } = require('./calendarAuthorization');
 const {
   WorkspaceStaffError,
   positiveId,
@@ -16,6 +17,7 @@ const PRACTITIONER_POLICY_CAPABILITIES = Object.freeze([
   'booking:update',
 ]);
 const PRACTITIONER_POLICY_CAPABILITY_SET = new Set(PRACTITIONER_POLICY_CAPABILITIES);
+const RECORD_PAST = 'appointment:record_past';
 const MANDATORY_PRACTITIONER_CAPABILITIES = Object.freeze(['appointment:view']);
 const PRACTITIONER_POLICY_DEFINITIONS = Object.freeze([
   Object.freeze({
@@ -48,8 +50,28 @@ function accessPolicyRevision(row) {
     calendarScope: String(row.calendar_scope || ''),
     serviceScope: String(row.service_scope || ''),
     capabilities: enabledCapabilities(row.permissions),
+    retrospectiveClientIds: normalizedRetrospectiveClientIds(row.permissions),
   };
   return createHash('sha256').update(JSON.stringify(canonical)).digest('hex');
+}
+
+function normalizedRetrospectiveClientIds(permissions) {
+  const source=permissionSet(permissions);
+  if (!Object.prototype.hasOwnProperty.call(source,RETROSPECTIVE_CLIENT_IDS_KEY)) return null;
+  if (!Array.isArray(source[RETROSPECTIVE_CLIENT_IDS_KEY])) return false;
+  const ids=source[RETROSPECTIVE_CLIENT_IDS_KEY].map(Number);
+  if (ids.some(id=>!Number.isSafeInteger(id)||id<=0)) return false;
+  return [...new Set(ids)].sort((a,b)=>a-b);
+}
+
+function retrospectivePolicy(staff, rows=[]) {
+  if (!staff || staff.status!=='active' || rows.length!==1) return null;
+  const row=rows[0], permissions=permissionSet(row.permissions);
+  if (row.active!==true || positiveId(row.staff_id)!==positiveId(staff.id) || permissions['appointment:create']!==true) return null;
+  if (!evaluateCalendarAuthority({ ...row, admin_active:true, staff_status:staff.status })) return null;
+  const ids=normalizedRetrospectiveClientIds(permissions);
+  if (ids===false) return { supported:false, reason:'The retrospective client condition is malformed and must be reconciled before editing.' };
+  return { supported:true, row, ids };
 }
 
 function normalizeRequestedCapabilities(value) {
@@ -110,6 +132,8 @@ function incompatibleReason(staff, rows = []) {
 
 function policyProjection(staff, rows = []) {
   const row = Array.isArray(rows) && rows.length === 1 ? rows[0] : null;
+  const retrospective=retrospectivePolicy(staff,rows);
+  if (retrospective) return { key:'workspace_retrospective_access_v1',supported:retrospective.supported,reason:retrospective.reason||null,staffId:positiveId(staff?.id),role:row?.role||null,businessRole:row?.business_role||null,calendarScope:row?.calendar_scope||null,serviceScope:row?.service_scope||null,capabilities:row?.permissions?.[RECORD_PAST]===true?[RECORD_PAST]:[],definitions:[{key:RECORD_PAST,label:'Record past appointments',description:'Record fully ended appointments silently within existing booking scopes.',mandatory:false}],retrospectiveClientIds:retrospective.ids,revision:row?accessPolicyRevision(row):null };
   const reason = incompatibleReason(staff, rows);
   const current = row
     ? PRACTITIONER_POLICY_CAPABILITIES.filter(key => permissionSet(row.permissions)[key] === true)
@@ -184,6 +208,7 @@ function createWorkspaceStaffAccessPolicyService({
     staffId,
     expectedAccessRevision,
     capabilities,
+    retrospectiveClientIds,
     requestId: rawRequestId,
   } = {}) {
     if (typeof db.connect !== 'function') throw new Error('Workspace Staff Access policy mutations require a transactional database.');
@@ -191,7 +216,6 @@ function createWorkspaceStaffAccessPolicyService({
     if (!id) throw new WorkspaceStaffError('WORKSPACE_STAFF_INVALID_ID', 'Staff reference is invalid.', 400);
     const requestId = requireRequestId(rawRequestId);
     const expected = requireExpectedRevision(expectedAccessRevision);
-    const normalized = normalizeRequestedCapabilities(capabilities);
     const client = await db.connect();
     try {
       await client.query('BEGIN');
@@ -215,24 +239,36 @@ function createWorkspaceStaffAccessPolicyService({
           409
         );
       }
-      const reason = incompatibleReason(staff, rows);
+      const projected=policyProjection(staff,rows);
+      const reason = projected.reason;
       if (reason) {
         throw new WorkspaceStaffError('WORKSPACE_STAFF_ACCESS_POLICY_UNSUPPORTED', reason, 409);
       }
 
-      const before = PRACTITIONER_POLICY_CAPABILITIES
+      let managed=PRACTITIONER_POLICY_CAPABILITIES, normalized;
+      let condition=undefined;
+      if(projected.key==='workspace_retrospective_access_v1'){
+        managed=[RECORD_PAST];
+        if(!Array.isArray(capabilities)||capabilities.some(key=>key!==RECORD_PAST))throw new WorkspaceStaffError('WORKSPACE_STAFF_ACCESS_POLICY_CAPABILITY_FORBIDDEN','Only retrospective capture is editable here.',400);
+        normalized=capabilities.includes(RECORD_PAST)?[RECORD_PAST]:[];
+        if(retrospectiveClientIds===null)condition=null;
+        else if(retrospectiveClientIds!==undefined){if(!Array.isArray(retrospectiveClientIds)||retrospectiveClientIds.some(id=>!positiveId(id)))throw new WorkspaceStaffError('WORKSPACE_STAFF_ACCESS_POLICY_INVALID','Canonical client IDs must be positive integers.',400);condition=[...new Set(retrospectiveClientIds.map(Number))].sort((a,b)=>a-b);}
+      } else normalized=normalizeRequestedCapabilities(capabilities);
+      const before = managed
         .filter(key => permissionSet(row.permissions)[key] === true);
-      if (before.length === normalized.length && before.every((key, index) => key === normalized[index])) {
+      const sameCondition=condition===undefined||(condition===null?projected.retrospectiveClientIds===null:JSON.stringify(condition)===JSON.stringify(projected.retrospectiveClientIds));
+      if (before.length === normalized.length && before.every((key, index) => key === normalized[index]) && sameCondition) {
         await client.query('COMMIT');
         return { status: 'unchanged', staffId: id, policy: policyProjection(staff, rows) };
       }
 
       const patch = Object.fromEntries(
-        PRACTITIONER_POLICY_CAPABILITIES.map(key => [key, normalized.includes(key)])
+        managed.map(key => [key, normalized.includes(key)])
       );
+      if(projected.key==='workspace_retrospective_access_v1'&&Array.isArray(condition))patch[RETROSPECTIVE_CLIENT_IDS_KEY]=condition;
       await client.query(
         `UPDATE staff_admin_accounts
-            SET permissions=COALESCE(permissions,'{}'::jsonb) || $2::jsonb,
+            SET permissions=(COALESCE(permissions,'{}'::jsonb) || $2::jsonb) ${condition===null?`- '${RETROSPECTIVE_CLIENT_IDS_KEY}'`:''},
                 updated_at=NOW()
           WHERE id=$1`,
         [row.id, JSON.stringify(patch)]
@@ -241,6 +277,7 @@ function createWorkspaceStaffAccessPolicyService({
         ...row,
         permissions: { ...permissionSet(row.permissions), ...patch },
       };
+      if(condition===null)delete updatedRow.permissions[RETROSPECTIVE_CLIENT_IDS_KEY];
       await client.query(
         `INSERT INTO crm_audit_events(actor_admin_id,action,entity_type,entity_id,metadata)
          VALUES($1,'workspace.staff_access_policy_updated','staff',$2,$3::jsonb)`,
@@ -250,9 +287,10 @@ function createWorkspaceStaffAccessPolicyService({
           policyVersion: STAFF_ACCESS_POLICY_VERSION,
           beforeCapabilities: before,
           afterCapabilities: normalized,
-          businessRole: 'employee_practitioner',
-          calendarScope: 'own_appointments',
-          serviceScope: 'own_services',
+          ...(projected.key==='workspace_retrospective_access_v1'?{retrospectiveClientIds:condition===undefined?projected.retrospectiveClientIds:condition}:{}),
+          businessRole: row.business_role,
+          calendarScope: row.calendar_scope,
+          serviceScope: row.service_scope,
           whatsappIdentityChanged: false,
           credentialMaterialChanged: false,
         })]
@@ -285,6 +323,8 @@ module.exports = {
   enabledCapabilities,
   accessPolicyRevision,
   normalizeRequestedCapabilities,
+  normalizedRetrospectiveClientIds,
+  retrospectivePolicy,
   incompatibleReason,
   policyProjection,
   createWorkspaceStaffAccessPolicyService,

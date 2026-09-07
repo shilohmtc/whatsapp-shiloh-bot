@@ -223,6 +223,7 @@ module.exports = {
   operationsForAuthority,
   serviceScopeAllows,
   serviceVisibilityAllows,
+  calendarScopeAllowsBookingTarget,
   retrospectiveClientAllows,
   allowsBookingTarget,
   allowsRetrospectiveBookingTarget,

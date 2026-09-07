@@ -139,6 +139,9 @@ function createWorkspaceStaffMutationRouter({
         expectedAccessRevision: req.body?.expectedAccessRevision,
         requestId: req.body?.requestId,
         capabilities: req.body?.capabilities,
+        ...(req.body && Object.prototype.hasOwnProperty.call(req.body, 'retrospectiveClientIds')
+          ? { retrospectiveClientIds: req.body.retrospectiveClientIds }
+          : {}),
       });
       return res.status(200).json(result);
     } catch (error) {
