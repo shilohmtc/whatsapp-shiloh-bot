@@ -4,13 +4,14 @@ const { checkClinicHours, getDefaultActiveLocation } = require('./clinicHours');
 const { checkAuthoritativeSchedule, getConflicts } = require('./adminAvailability');
 const {
   CALENDAR_CAPABILITIES,
+  RETROSPECTIVE_CLIENT_IDS_KEY,
   resolveCalendarAuthority,
   hasCapability,
-  allowsBookingTarget,
+  retrospectiveClientAllows,
+  allowsRetrospectiveBookingTarget,
 } = require('./calendarAuthorization');
 
-const RETROSPECTIVE_CAPABILITY = 'appointment:record_past';
-const RETROSPECTIVE_CLIENT_IDS_KEY = 'appointment:record_past:crm_v2_client_ids';
+const RETROSPECTIVE_CAPABILITY = CALENDAR_CAPABILITIES.RECORD_PAST;
 const MAX_NOTES_LENGTH = 4000;
 
 function retrospectiveError(code, message, httpStatus = 400, details = null) {
@@ -51,6 +52,9 @@ function requireRequestId(value) {
 }
 
 function permissionClientRestriction(admin = {}) {
+  if (Array.isArray(admin?.calendarAuthority?.retrospectiveClientIds)) {
+    return [...admin.calendarAuthority.retrospectiveClientIds];
+  }
   const permissions = admin.permissions && typeof admin.permissions === 'object' && !Array.isArray(admin.permissions)
     ? admin.permissions
     : {};
@@ -61,6 +65,7 @@ function permissionClientRestriction(admin = {}) {
 }
 
 function clientRestrictionAllows(admin, clientId) {
+  if (admin?.calendarAuthority) return retrospectiveClientAllows(admin.calendarAuthority, clientId);
   const restriction = permissionClientRestriction(admin);
   return restriction == null || restriction.includes(positiveId(clientId));
 }
@@ -89,8 +94,7 @@ function createCalendarRetrospectiveBookingService({
     const authority = admin?.calendarAuthority;
     if (!admin
       || !hasCapability(authority, CALENDAR_CAPABILITIES.BOOKING_CREATE)
-      || !hasCapability(authority, CALENDAR_CAPABILITIES.CLIENT_LOOKUP)
-      || admin.permissions?.[RETROSPECTIVE_CAPABILITY] !== true) {
+      || !hasCapability(authority, CALENDAR_CAPABILITIES.RECORD_PAST)) {
       throw retrospectiveError('CALENDAR_PAST_FORBIDDEN', 'Current staff authority does not permit past appointment recording.', 403);
     }
     return admin;
@@ -103,7 +107,7 @@ function createCalendarRetrospectiveBookingService({
     if (!client || !staff || !service) {
       throw retrospectiveError('CALENDAR_PAST_INVALID_SELECTION', 'Choose one canonical client, treatment and practitioner.');
     }
-    if (!clientRestrictionAllows(admin, client)) {
+    if (!retrospectiveClientAllows(admin.calendarAuthority, client)) {
       throw retrospectiveError('CALENDAR_PAST_CLIENT_SCOPE_DENIED', 'That client is outside this staff member’s retrospective recording scope.', 403);
     }
 
@@ -143,7 +147,8 @@ function createCalendarRetrospectiveBookingService({
     if (!selection || selection.staff_status !== 'active' || selection.service_status !== 'active') {
       throw retrospectiveError('CALENDAR_PAST_SELECTION_UNAVAILABLE', 'The practitioner/service selection is not an active canonical eligible pairing.', 409);
     }
-    if (!allowsBookingTarget(admin.calendarAuthority, {
+    if (!allowsRetrospectiveBookingTarget(admin.calendarAuthority, {
+      clientId: client,
       staffId: staff,
       serviceId: service,
       privateOwnerStaffId: selection.private_owner_staff_id,
