@@ -45,6 +45,7 @@ test('stable vocabulary and evaluator derive authority only from canonical data 
   assert.deepEqual(CALENDAR_CAPABILITIES, {
     VIEW: 'appointment:view',
     BOOKING_CREATE: 'appointment:create',
+    RECORD_PAST: 'appointment:record_past',
     CLIENT_LOOKUP: 'client:lookup',
     BOOKING_RESCHEDULE: 'calendar:booking:reschedule',
     BOOKING_CANCEL: 'calendar:booking:cancel',

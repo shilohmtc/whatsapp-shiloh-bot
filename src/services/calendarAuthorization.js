@@ -1,12 +1,15 @@
 const CALENDAR_CAPABILITIES = Object.freeze({
   VIEW: 'appointment:view',
   BOOKING_CREATE: 'appointment:create',
+  RECORD_PAST: 'appointment:record_past',
   CLIENT_LOOKUP: 'client:lookup',
   BOOKING_RESCHEDULE: 'calendar:booking:reschedule',
   BOOKING_CANCEL: 'calendar:booking:cancel',
   BOOKING_REASSIGN: 'calendar:booking:reassign',
   SCHEDULE_MANAGE: 'schedule:manage',
 });
+
+const RETROSPECTIVE_CLIENT_IDS_KEY = 'appointment:record_past:crm_v2_client_ids';
 
 const CALENDAR_OPERATIONS = Object.freeze([
   'appointment:reschedule',
@@ -43,6 +46,13 @@ function hasCapability(authority, capability) {
   return authority?.capabilities?.includes(capability) === true;
 }
 
+function conditionedClientIds(permissions) {
+  if (!Object.prototype.hasOwnProperty.call(permissions, RETROSPECTIVE_CLIENT_IDS_KEY)) return null;
+  const raw = permissions[RETROSPECTIVE_CLIENT_IDS_KEY];
+  if (!Array.isArray(raw)) return [];
+  return [...new Set(raw.map(positiveId).filter(Boolean))].sort((a, b) => a - b);
+}
+
 function evaluateCalendarAuthority(admin = {}, { allowedServiceIds = [] } = {}) {
   const operatorAdminId = positiveId(admin.id);
   if (!operatorAdminId || admin.admin_active !== true) return null;
@@ -72,6 +82,7 @@ function evaluateCalendarAuthority(admin = {}, { allowedServiceIds = [] } = {}) 
     serviceScope,
     capabilities,
     allowedServiceIds: scopedServiceIds,
+    retrospectiveClientIds: conditionedClientIds(permissions),
   };
 }
 
@@ -111,6 +122,27 @@ function calendarScopeAllowsBookingTarget(authority, staffId) {
 function allowsBookingTarget(authority, { staffId, serviceId, privateOwnerStaffId = null } = {}) {
   return hasCapability(authority, CALENDAR_CAPABILITIES.BOOKING_CREATE)
     && hasCapability(authority, CALENDAR_CAPABILITIES.CLIENT_LOOKUP)
+    && calendarScopeAllowsBookingTarget(authority, staffId)
+    && serviceScopeAllows(authority, [serviceId])
+    && serviceVisibilityAllows(authority, privateOwnerStaffId);
+}
+
+function retrospectiveClientAllows(authority, clientId) {
+  if (!authority) return false;
+  if (authority.retrospectiveClientIds == null) return positiveId(clientId) != null;
+  const targetClientId = positiveId(clientId);
+  return targetClientId != null && authority.retrospectiveClientIds.includes(targetClientId);
+}
+
+function allowsRetrospectiveBookingTarget(authority, {
+  clientId,
+  staffId,
+  serviceId,
+  privateOwnerStaffId = null,
+} = {}) {
+  return hasCapability(authority, CALENDAR_CAPABILITIES.BOOKING_CREATE)
+    && hasCapability(authority, CALENDAR_CAPABILITIES.RECORD_PAST)
+    && retrospectiveClientAllows(authority, clientId)
     && calendarScopeAllowsBookingTarget(authority, staffId)
     && serviceScopeAllows(authority, [serviceId])
     && serviceVisibilityAllows(authority, privateOwnerStaffId);
@@ -182,6 +214,7 @@ async function resolveCalendarAuthority(queryable, adminId) {
 
 module.exports = {
   CALENDAR_CAPABILITIES,
+  RETROSPECTIVE_CLIENT_IDS_KEY,
   CALENDAR_OPERATIONS,
   OPERATION_CAPABILITIES,
   evaluateCalendarAuthority,
@@ -190,7 +223,10 @@ module.exports = {
   operationsForAuthority,
   serviceScopeAllows,
   serviceVisibilityAllows,
+  calendarScopeAllowsBookingTarget,
+  retrospectiveClientAllows,
   allowsBookingTarget,
+  allowsRetrospectiveBookingTarget,
   allowsAppointmentTarget,
   allowsStaffTarget,
   allowsReassignmentTarget,

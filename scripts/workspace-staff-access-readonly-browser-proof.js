@@ -73,4 +73,5 @@ async function main() {
     const exactHead=spawnSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).stdout.trim();fs.writeFileSync(path.join(OUT_DIR,'manifest.json'),JSON.stringify({exactHead,syntheticDataOnly:true,authenticated:true,productionReads:0,productionMutations:0,providerWrites:0,policyWrites,csrfRejectedStatus:rejected,nativeDialogs:dialogs,screenshots},null,2));console.log(`Authenticated Staff Access editor proof passed: ${screenshots.length} screenshots; CSRF denial ${rejected}; no policy writes.`);
   } finally { cdp?.close();chrome?.kill('SIGTERM');if(server)await new Promise(r=>server.close(r));fs.rmSync(directory,{recursive:true,force:true}); }
 }
-main().catch(error=>{console.error(error);process.exitCode=1;});
+if(require.main===module)main().catch(error=>{console.error(error);process.exitCode=1;});
+module.exports={chromeExecutable,fileSha256,createCertificate,reservePort,poll,connectCdp,evaluate};
