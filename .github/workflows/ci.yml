@@ -198,13 +198,13 @@ jobs:
           retention-days: 14
       - name: Generate Workspace Staff visual proof
         run: node scripts/workspace-staff-visual-proof.js
-      - name: Prove authenticated Staff Access read-only boundary
+      - name: Prove authenticated Staff Access capability editor
         run: node scripts/workspace-staff-access-readonly-browser-proof.js
-      - name: Upload authenticated Staff Access proof
+      - name: Upload authenticated Staff Access editor proof
         uses: actions/upload-artifact@v4
         with:
-          name: workspace-staff-access-readonly-v1
-          path: artifacts/workspace-staff-access-readonly-v1
+          name: workspace-staff-access-editor-v1
+          path: artifacts/workspace-staff-access-editor-v1
           if-no-files-found: error
           retention-days: 14
       - name: Upload Workspace Staff visual proof
