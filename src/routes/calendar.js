@@ -3,6 +3,7 @@ const { pool } = require('../db/pool');
 const calendarReadOnlyUxRoutes = require('./calendarReadOnlyUx');
 const staffCalendarAccessUxRoutes = require('./staffCalendarAccessUx');
 const { createCalendarCreateBookingRouter } = require('./calendarCreateBooking');
+const { createCalendarRetrospectiveBookingRouter } = require('./calendarRetrospectiveBooking');
 const { createStaffBrowserSessionService } = require('../services/staffBrowserSession');
 const { createStaffBrowserSessionRouter } = require('./staffBrowserSession');
 const { createStaffAuthBrowserEnrollmentRouter } = require('./staffAuthBrowserEnrollment');
@@ -48,6 +49,7 @@ router.use('/staff-auth/admin-enrollment', createStaffAuthBrowserEnrollmentRoute
 router.use('/staff-auth', createStaffBrowserSessionRouter({ service: staffBrowserSessionService }));
 router.use('/staff', staffCalendarAccessUxRoutes);
 router.use('/client-authority', createOperatorContactAuthorityRouter({ sessionService: staffBrowserSessionService }));
+router.use('/book/past', createCalendarRetrospectiveBookingRouter({ sessionService: staffBrowserSessionService }));
 router.use('/book', createCalendarCreateBookingRouter({ sessionService: staffBrowserSessionService }));
 router.use('/operations', createCalendarOperationalMutationRouter({ sessionService: staffBrowserSessionService }));
 router.use('/clients', createWorkspaceClientsRouter({ sessionService: staffBrowserSessionService }));
