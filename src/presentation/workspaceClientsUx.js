@@ -62,8 +62,8 @@ function listHref({ query = '', status = 'active', offset = 0 } = {}) {
   return `/calendar/clients${suffix ? `?${suffix}` : ''}`;
 }
 
-function shellStart({ title, subtitle, calendarNavigationAllowed, staffAccessScriptPath }) {
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(title)} — Shiloh Workspace</title><style>${workspaceShellStyles()}${styles()}</style><script src="${escapeHtml(staffAccessScriptPath)}" defer></script></head><body data-workspace-clients="true"><div class="workspace-frame">${renderWorkspaceNavigation({ active: 'clients', calendarHref: calendarNavigationAllowed ? '/calendar/read-only' : null })}<div class="workspace-main"><div class="shell"><header class="topbar"><div class="brand"><h1>${escapeHtml(title)}</h1><p>${escapeHtml(subtitle)}</p></div><div class="topbar-side"><span class="truth-note">Canonical CRM V2 • Read-only</span><button class="signout-button" type="button" data-shiloh-logout>Sign out</button><span class="access-status" role="status" aria-live="polite" data-shiloh-calendar-access-status></span></div></header>`;
+function shellStart({ title, subtitle, displayName, calendarNavigationAllowed, staffAccessScriptPath }) {
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(title)} — Shiloh Workspace</title><style>${workspaceShellStyles()}${styles()}</style><script src="${escapeHtml(staffAccessScriptPath)}" defer></script></head><body data-workspace-clients="true"><div class="workspace-frame">${renderWorkspaceNavigation({ active: 'clients', displayName, calendarHref: calendarNavigationAllowed ? '/calendar/read-only' : null })}<div class="workspace-main"><div class="shell"><header class="topbar"><div class="brand"><h1>${escapeHtml(title)}</h1><p>${escapeHtml(subtitle)}</p></div><div class="topbar-side"><span class="truth-note">View only</span></div></header>`;
 }
 
 function renderClientListPage(model, {
@@ -80,12 +80,12 @@ function renderClientListPage(model, {
   const previousOffset = Math.max(0, model.offset - model.pageSize);
   const previous = model.offset > 0 ? `<a class="pager-link" href="${escapeHtml(listHref({ query: model.query, status: selectedStatus, offset: previousOffset }))}">Previous</a>` : '<span class="pager-spacer"></span>';
   const next = model.hasMore ? `<a class="pager-link" href="${escapeHtml(listHref({ query: model.query, status: selectedStatus, offset: model.offset + model.pageSize }))}">Next</a>` : '<span class="pager-spacer"></span>';
-  return `${shellStart({ title: 'Clients', subtitle: 'Find and inspect canonical client relationships.', calendarNavigationAllowed, staffAccessScriptPath })}<main data-clients-list-view>
+  return `${shellStart({ title: 'Clients', subtitle: 'Find and view client records.', displayName: model.authority?.displayName, calendarNavigationAllowed, staffAccessScriptPath })}<main data-clients-list-view>
     <section class="search-panel"><form class="search-form" method="get" action="/calendar/clients"><div class="field"><label for="client-search">Search clients</label><input id="client-search" name="q" type="search" value="${escapeHtml(model.query || '')}" placeholder="Name or mobile" maxlength="120"></div><div class="field"><label for="client-status">Status</label><select id="client-status" name="status">${statusOptions}</select></div><button class="button primary" type="submit">Search</button></form></section>
-    <div class="result-summary"><span>${model.clients.length} client${model.clients.length === 1 ? '' : 's'} on this page</span><span>Results are bounded to ${model.pageSize} per page</span></div>
-    <section class="client-list" aria-label="Canonical clients">${rows || '<div class="empty">No canonical CRM V2 clients match this search.</div>'}</section>
+    <div class="result-summary"><span>${model.clients.length} client${model.clients.length === 1 ? '' : 's'} on this page</span></div>
+    <section class="client-list" aria-label="Clients">${rows || '<div class="empty">No clients found.</div>'}</section>
     <nav class="pager" aria-label="Client result pages">${previous}${next}</nav>
-  </main><p class="footer-note">Client search is authorized by the current <strong>client:lookup</strong> capability. This page cannot create, edit, merge or message a client.</p></div></div></div></body></html>`;
+  </main><p class="footer-note">This page is view only. Client editing and messaging are not available here.</p></div></div></div></body></html>`;
 }
 
 function appointmentServices(appointment) {
@@ -113,11 +113,11 @@ function renderClientDetailPage(model, {
   const previous = model.historyOffset > 0 ? `<a class="pager-link" href="${historyBase}?historyOffset=${previousOffset}">Previous history</a>` : '<span class="pager-spacer"></span>';
   const next = model.hasMore ? `<a class="pager-link" href="${historyBase}?historyOffset=${model.historyOffset + model.pageSize}">Older history</a>` : '<span class="pager-spacer"></span>';
   const verified = client.mobile_verified_at ? 'Verified WhatsApp/mobile contact' : 'Contact not yet verified';
-  return `${shellStart({ title: 'Client detail', subtitle: 'Canonical profile and appointment history.', calendarNavigationAllowed, staffAccessScriptPath })}<main data-client-detail-view>
+  return `${shellStart({ title: 'Client detail', subtitle: 'Client profile and appointment history.', displayName: model.authority?.displayName, calendarNavigationAllowed, staffAccessScriptPath })}<main data-client-detail-view>
     <nav class="detail-actions" aria-label="Client navigation"><a class="button" href="/calendar/clients">← Back to Clients</a></nav>
     <section class="profile-panel"><header class="profile-heading"><div><span class="eyebrow">Canonical client</span><h2>${escapeHtml(client.name || 'Unnamed client')}</h2></div>${statusPill(client.status)}</header><div class="profile-grid"><div class="profile-field"><span>Profile</span><strong>${escapeHtml(String(client.profile_status || 'unknown').replace(/_/g, ' '))}</strong></div><div class="profile-field"><span>Date of birth</span><strong>${escapeHtml(formatDateOnly(client.date_of_birth))}</strong></div><div class="profile-field"><span>Gender</span><strong>${escapeHtml(String(client.gender || 'Not recorded').replace(/_/g, ' '))}</strong></div><div class="profile-field"><span>Appointment history</span><strong>${model.appointments.length} shown</strong></div></div><div class="contact-card"><div><span class="eyebrow">Primary mobile</span><strong>${escapeHtml(formatMobile(client.normalized_mobile))}</strong></div><small>${escapeHtml(verified)}</small></div></section>
     <section class="history-panel"><header class="section-heading"><div><span class="eyebrow">History</span><h2>Appointments</h2></div><span class="truth-note">Historical service and practitioner snapshots</span></header><div class="history-list">${historyRows || '<div class="empty">No CRM V2-linked appointments are recorded for this client.</div>'}</div><nav class="pager" aria-label="Appointment history pages">${previous}${next}</nav></section>
-  </main><p class="footer-note">History includes only appointments canonically linked through <strong>crm_v2_client_id</strong>. Legacy numeric IDs are never treated as a crosswalk.</p></div></div></div></body></html>`;
+  </main><p class="footer-note">Only appointments linked to this client are shown.</p></div></div></div></body></html>`;
 }
 
 function renderClientsUnavailablePage({ code = 'WORKSPACE_CLIENTS_UNAVAILABLE', message = 'Clients is unavailable.' } = {}) {

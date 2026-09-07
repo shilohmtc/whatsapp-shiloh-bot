@@ -85,7 +85,8 @@ function createWorkspaceServicesListHandler({
         status: req.query?.status,
         offset: req.query?.offset,
       });
-      let html = renderPage(model, await pageOptions(req, clientAccessService, staffAccessService, staffAccessPath));
+      const options = await detailPageOptions(req, service, clientAccessService, staffAccessService, staffAccessPath);
+      let html = renderPage(model, options);
       try { if (await creationService.resolveCreateAccess(req.staffBrowserSession?.adminId)) html = injectCreateAction(html); }
       catch (_error) {}
       return res.status(200).type('html').send(html);

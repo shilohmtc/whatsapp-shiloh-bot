@@ -162,7 +162,7 @@ test('Google-only and non-canonical debug items are not rendered', async () => {
   const model = await buildDayModel();
   const html = renderCalendarPage(model, { basePath: '/calendar/read-only' });
   assert.doesNotMatch(html, /Google-only|Non-canonical|google-shared|data-canonical="false"/i);
-  assert.match(html, /Shiloh is the scheduling authority/);
+  assert.match(html, /Shiloh schedule/);
 });
 
 test('provider or SchedulingTimeline failure renders explicit unavailable state without leaking scheduling data', async () => {

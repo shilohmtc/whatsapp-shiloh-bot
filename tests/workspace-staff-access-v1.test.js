@@ -191,9 +191,9 @@ test('Staff presentation is responsive, read-only and excludes private/security 
     services: [{ name: 'Swedish Massage', status: 'active' }],
     access: { businessRole: 'employee_practitioner', calendarScope: 'own_appointments', serviceScope: 'own_services', capabilities: ['appointment:view'] },
   }, { calendarNavigationAllowed: true, clientsNavigationAllowed: true, staffAccessScriptPath: '/calendar/staff/client.js' });
-  assert.match(detail, /Current authority/);
+  assert.match(detail, /Current access/);
   assert.match(detail, /appointment:view/);
-  assert.match(detail, /Read-only authority view/);
+  assert.match(detail, /Access settings are view only here/);
   assert.doesNotMatch(detail, /whatsapp_number|normalized_whatsapp|totp_secret|recovery_code|compensation/i);
 });
 

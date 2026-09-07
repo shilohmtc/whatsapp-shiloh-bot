@@ -150,7 +150,7 @@ function renderEventMeta(item, model) {
 }
 
 function renderProvenance(item) {
-  return `<span class="provenance canonical">${item.kind === 'appointment' ? 'Shiloh appointment' : 'Shiloh scheduling authority'}</span>`;
+  return `<span class="provenance canonical">${item.kind === 'appointment' ? 'Shiloh appointment' : 'Shiloh schedule'}</span>`;
 }
 
 function mutationEnabled(model) {
@@ -325,7 +325,7 @@ function renderOperationalSummary(model) {
   return `<section class="scan-summary" aria-label="Visible period summary">
     <div class="summary-context"><span class="eyebrow">At a glance</span><strong>${model.timeline?.staff?.length || 0} practitioner${model.timeline?.staff?.length === 1 ? '' : 's'} in view</strong></div>
     <div class="summary-metrics">${items.map(([label, value]) => `<div class="summary-metric"><strong>${value}</strong><span>${escapeHtml(label)}</span></div>`).join('')}</div>
-    <div class="provenance-key" aria-label="Scheduling authority"><span class="key-dot canonical"></span>Shiloh scheduling truth</div>
+    <div class="provenance-key" aria-label="Scheduling authority"><span class="key-dot canonical"></span>Shiloh schedule</div>
   </section>`;
 }
 
@@ -413,7 +413,7 @@ function renderDay(model, booking = {}) {
   }).join('');
 
   return `<main class="calendar-view day-view" data-view="day">
-    <div class="view-heading"><div><span class="eyebrow">Day</span><h2>${escapeHtml(formatDay(day, { weekday: 'long', month: 'long', year: 'numeric' }))}</h2></div><span class="read-only-badge">${mutationEnabled(model) ? 'Canonical operations' : 'Read-only'}</span></div>
+    <div class="view-heading"><div><span class="eyebrow">Day</span><h2>${escapeHtml(formatDay(day, { weekday: 'long', month: 'long', year: 'numeric' }))}</h2></div><span class="read-only-badge">${mutationEnabled(model) ? 'Calendar actions' : 'Read-only'}</span></div>
     ${renderClosureStrip(model, day)}
     ${sharedAppointments.length ? '<div class="shared-note">Shared appointments appear once as one canonical booking and retain all assigned practitioners.</div>' : ''}
     ${booking.enabled ? '<p class="calendar-booking-hint">Tap an empty time to start an appointment.</p>' : ''}
@@ -461,7 +461,7 @@ function renderWeek(model, booking = {}, basePath = '/calendar/read-only') {
   })).join('');
   const laneCount = operationalDays.length * staff.length;
   return `<main class="calendar-view week-view" data-view="week" data-spatial-week="true">
-    <div class="view-heading"><div><span class="eyebrow">Week</span><h2>${escapeHtml(formatDay(operationalDays[0] || model.period.startKey, { weekday: 'short', month: 'long' }))} – ${escapeHtml(formatDay(operationalDays.at(-1) || model.period.startKey, { weekday: 'short', month: 'long', year: 'numeric' }))}</h2></div>${renderPhoneWeekPractitionerPicker({ ...model, timeline: { ...model.timeline, staff } }, basePath)}<span class="read-only-badge">${mutationEnabled(model) ? 'Canonical operations' : 'Read-only'}</span></div>
+    <div class="view-heading"><div><span class="eyebrow">Week</span><h2>${escapeHtml(formatDay(operationalDays[0] || model.period.startKey, { weekday: 'short', month: 'long' }))} – ${escapeHtml(formatDay(operationalDays.at(-1) || model.period.startKey, { weekday: 'short', month: 'long', year: 'numeric' }))}</h2></div>${renderPhoneWeekPractitionerPicker({ ...model, timeline: { ...model.timeline, staff } }, basePath)}<span class="read-only-badge">${mutationEnabled(model) ? 'Calendar actions' : 'Read-only'}</span></div>
     ${renderViewPractitionerContext(model)}
     ${booking.enabled ? '<p class="calendar-booking-hint">Tap an empty time to start an appointment.</p>' : ''}
     <div class="time-grid week-time-grid">${renderTimeRail()}<div class="week-grid" style="--week-lane-count:${Math.max(laneCount, 1)}">${lanes || '<div class="empty large">No permitted practitioner lanes</div>'}</div></div>
@@ -475,7 +475,7 @@ function renderAgenda(model) {
     return `<section class="agenda-day"><header><h3>${escapeHtml(formatDay(day, { weekday: 'long', month: 'long' }))}</h3></header>${items.map(item => renderEventCard(item, model)).join('')}</section>`;
   }).filter(Boolean).join('');
   return `<main class="calendar-view agenda-view" data-view="agenda">
-    <div class="view-heading"><div><span class="eyebrow">Agenda</span><h2>Next 7 operational days from ${escapeHtml(formatDay(model.dateKey, { weekday: 'long', month: 'long' }))}</h2></div><span class="read-only-badge">${mutationEnabled(model) ? 'Canonical operations' : 'Read-only'}</span></div>
+    <div class="view-heading"><div><span class="eyebrow">Agenda</span><h2>Next 7 operational days from ${escapeHtml(formatDay(model.dateKey, { weekday: 'long', month: 'long' }))}</h2></div><span class="read-only-badge">${mutationEnabled(model) ? 'Calendar actions' : 'Read-only'}</span></div>
     ${renderViewPractitionerContext(model)}
     ${sections || '<div class="empty large">No scheduled items in this period</div>'}
   </main>`;
@@ -530,7 +530,7 @@ function renderMonth(model, basePath) {
     </section>`;
   }).join('');
   return `<main class="calendar-view month-view" data-view="month" data-month="${escapeHtml(targetMonth)}">
-    <div class="view-heading"><div><span class="eyebrow">Month</span><h2>${escapeHtml(formatMonth(model.period.startKey))}</h2></div><span class="read-only-badge">${mutationEnabled(model) ? 'Canonical operations' : 'Read-only'}</span></div>
+    <div class="view-heading"><div><span class="eyebrow">Month</span><h2>${escapeHtml(formatMonth(model.period.startKey))}</h2></div><span class="read-only-badge">${mutationEnabled(model) ? 'Calendar actions' : 'Read-only'}</span></div>
     ${renderViewPractitionerContext(model)}
     <div class="month-grid" aria-label="${escapeHtml(formatMonth(model.period.startKey))}"><div class="month-weekdays">${weekdays.map(day => `<span>${day}</span>`).join('')}</div><div class="month-days">${cells}</div></div>
   </main>`;
@@ -783,7 +783,7 @@ function renderCalendarPage(model, {
   const canMutate = mutationEnabled(model);
   const operationScript = canMutate ? `<script src="${escapeHtml(operationalMutationsScriptPath)}" defer></script>` : '';
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Calendar — Shiloh Workspace</title><style>${serviceFamilyAccentCss()}${styles()}${workspaceShellStyles()}${workspaceV1Styles()}${desktopSpatialLaneStyles()}${calendarViewParityStyles()}${calendarViewParityResponsiveStyles()}${canMutate ? operationalStyles() : ''}${calendarFirstPhoneStyles()}${goldieDensityPhoneStyles()}</style><script src="${escapeHtml(staffAccessScriptPath)}" defer></script>${operationScript}</head><body data-calendar-view="${escapeHtml(model.view)}" data-calendar-readonly="${canMutate ? 'false' : 'true'}"><div class="workspace-frame">${renderWorkspaceNavigation({ active: 'calendar', clientsHref: clientNavigationAllowed ? clientsPath : null })}<div class="workspace-main"><div class="shell">
-    <header class="topbar"><div class="brand"><h1>Calendar</h1><p>Your clinic schedule, at a glance.</p></div><div class="topbar-side">${renderOperationalActions(operationalActions)}<div class="truth-note">Africa/Johannesburg • Shiloh is the scheduling authority</div><div class="access-controls"><button class="signout-button" type="button" data-shiloh-logout>Sign out</button><span class="access-status" role="status" aria-live="polite" data-shiloh-calendar-access-status></span></div></div></header>
+    <header class="topbar"><div class="brand"><h1>Calendar</h1><p>Your clinic schedule, at a glance.</p></div><div class="topbar-side">${renderOperationalActions(operationalActions)}<div class="access-controls"></div></div></header>
     ${renderControls(model, basePath)}${renderOperationalSummary(model)}${canMutate ? '<span class="operation-status" role="status" aria-live="polite" data-calendar-operation-status></span>' : ''}${content}
     <div class="footer-note">${escapeHtml(timelineReadOnlyMessage)}</div>${renderManagementPanel(model)}
   </div></div></div></body></html>`;

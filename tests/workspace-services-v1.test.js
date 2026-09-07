@@ -210,7 +210,7 @@ test('Services presentation is responsive, read-only and excludes private/proven
   });
   assert.match(list, /data-services-list-view/);
   assert.match(list, /aria-current="page">Services/);
-  assert.match(list, /Booking ready/);
+  assert.match(list, /Available for booking/);
   assert.match(list, /@media\(max-width:700px\)/);
 
   const detail = renderServiceDetailPage({
@@ -228,8 +228,8 @@ test('Services presentation is responsive, read-only and excludes private/proven
     staffNavigationAllowed: true,
     staffAccessScriptPath: '/calendar/staff/client.js',
   });
-  assert.match(detail, /Read-only operational indicator/);
-  assert.match(detail, /Calendar\/booking authority still decides actual availability/);
+  assert.match(detail, /Booking status/);
+  assert.match(detail, /Available for booking/);
   assert.doesNotMatch(detail, /external_source|external_id|whatsapp_number|normalized_whatsapp|totp|recovery|secret/i);
 });
 

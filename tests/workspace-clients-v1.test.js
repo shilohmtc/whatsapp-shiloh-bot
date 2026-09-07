@@ -255,7 +255,7 @@ test('list presentation is compact, bounded and masks mobile contact', () => {
   assert.match(html, /data-clients-list-view/);
   assert.match(html, /Mobile ending 4567/);
   assert.doesNotMatch(html, /27821234567|\+27 82 123 4567/);
-  assert.match(html, /Results are bounded to 24 per page/);
+  assert.doesNotMatch(html, /Results are bounded/);
   assert.match(html, /href="\/calendar\/read-only">Calendar/);
   assert.match(html, /aria-current="page">Clients/);
   assert.match(html, /@media\(max-width:700px\)/);
@@ -273,7 +273,7 @@ test('detail shows authorized profile/contact and immutable historical snapshots
   assert.match(html, /Synthetic Practitioner/);
   assert.match(html, /cancelled/);
   assert.doesNotMatch(html, /provenance|source|created_at|updated_at|audit/i);
-  assert.match(html, /crm_v2_client_id/);
+  assert.match(html, /Only appointments linked to this client are shown/);
 });
 
 test('Calendar and Clients share capability-driven navigation without making Calendar scope a shortcut', () => {

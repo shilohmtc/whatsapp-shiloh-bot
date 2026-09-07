@@ -98,13 +98,14 @@ function renderReportsPage(model, {
 
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Reports — Shiloh Workspace</title><style>${workspaceShellStyles()}${reportStyles()}</style><script src="${escapeHtml(staffAccessScriptPath)}" defer></script></head><body data-workspace-reports="true"><div class="workspace-frame">${renderWorkspaceNavigation({
     active: 'reports',
+    displayName: model.authority?.displayName,
     calendarHref: '/calendar/read-only',
     clientsHref: '/calendar/clients',
     staffHref: '/calendar/team',
     servicesHref: '/calendar/services',
     reportsHref: '/calendar/reports',
   })}<div class="workspace-main"><div class="shell">
-    <header class="topbar"><div class="brand"><h1>Reports</h1><p>Appointments and operational capacity from canonical Shiloh data.</p></div><div class="topbar-side"><span class="truth-note">Africa/Johannesburg • Read-only operational truth</span><button class="signout-button" type="button" data-shiloh-logout>Sign out</button><span class="access-status" role="status" aria-live="polite" data-shiloh-calendar-access-status></span></div></header>
+    <header class="topbar"><div class="brand"><h1>Reports</h1><p>Appointments and clinic capacity.</p></div><div class="topbar-side"><span class="truth-note">View only</span></div></header>
 
     <section class="filter-panel" aria-label="Report filters">
       <div class="preset-row"><span class="preset-label">Quick range</span>${presetLinks}</div>
