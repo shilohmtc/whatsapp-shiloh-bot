@@ -41,7 +41,7 @@ function finalizationDatabase(assigned) {
     }
     return { rows: [], rowCount: 1 };
   };
-  return { calls, connect: async () => ({ query, release() {} }) };
+  return { calls, query, connect: async () => ({ query, release() {} }) };
 }
 async function runFinalization(assigned, capability = true) {
   const db = finalizationDatabase(assigned);
