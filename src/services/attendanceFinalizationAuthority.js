@@ -73,17 +73,23 @@ async function canCertifyAppointment(admin, appointmentId, db = pool, { workspac
   const allowed = backup ? [] : await certificationStaffIds(admin, db, { workspace });
   if (!backup && !allowed.length) return false;
 
+  // Keep unresolved assignment evidence in the canonical ownership decision.
+  // appointment_staff.staff_id is nullable (ON DELETE SET NULL), so dropping
+  // NULL rows here can make an incomplete assignment set look exclusively own.
   const assigned = await db.query(
     `SELECT DISTINCT staff_id
        FROM appointment_staff
       WHERE appointment_id=$1
-        AND staff_id IS NOT NULL
       ORDER BY staff_id`,
     [appointmentId]
   );
-  const staffIds = assigned.rows.map((row) => Number(row.staff_id));
+  const hasUnresolvedAssignment = assigned.rows.some((row) => row.staff_id == null);
+  const staffIds = assigned.rows
+    .filter((row) => row.staff_id != null)
+    .map((row) => Number(row.staff_id));
   if (!staffIds.length) return false;
   if (backup) return true;
+  if (hasUnresolvedAssignment) return false;
   return staffIds.every((staffId) => allowed.includes(staffId));
 }
 
