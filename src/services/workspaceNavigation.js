@@ -2,6 +2,7 @@ const workspaceClients = require('./workspaceClients');
 const workspaceStaff = require('./workspaceStaff');
 const workspaceServices = require('./workspaceServices');
 const workspaceReports = require('./workspaceReports');
+const workspaceClinicHours = require('./workspaceClinicHours');
 
 const DESTINATIONS = Object.freeze({
   dashboard: '/calendar/workspace',
@@ -11,6 +12,7 @@ const DESTINATIONS = Object.freeze({
   staff: '/calendar/team',
   services: '/calendar/services',
   reports: '/calendar/reports',
+  clinicHours: '/calendar/clinic-hours',
 });
 
 function allowedDestination(allowed, key) {
@@ -22,15 +24,17 @@ function createWorkspaceNavigationService({
   staffAccessService = workspaceStaff,
   servicesAccessService = workspaceServices,
   reportsAccessService = workspaceReports,
+  clinicHoursAccessService = workspaceClinicHours,
 } = {}) {
   async function resolve({ session } = {}) {
     const adminId = session?.adminId;
     const calendarAllowed = Boolean(session?.viewer);
-    const [clients, staff, services, reports] = await Promise.allSettled([
+    const [clients, staff, services, reports, clinicHours] = await Promise.allSettled([
       clientAccessService.resolveAccess(adminId),
       staffAccessService.resolveAccess(adminId),
       servicesAccessService.resolveAccess(adminId),
       reportsAccessService.resolveAccess(adminId),
+      clinicHoursAccessService.resolveAccess(adminId),
     ]);
     const clientsAllowed = clients.status === 'fulfilled' && Boolean(clients.value);
     return {
@@ -41,6 +45,7 @@ function createWorkspaceNavigationService({
       staff: allowedDestination(staff.status === 'fulfilled' && Boolean(staff.value), 'staff'),
       services: allowedDestination(services.status === 'fulfilled' && Boolean(services.value), 'services'),
       reports: allowedDestination(reports.status === 'fulfilled' && Boolean(reports.value), 'reports'),
+      clinicHours: allowedDestination(clinicHours.status === 'fulfilled' && Boolean(clinicHours.value), 'clinicHours'),
     };
   }
 
