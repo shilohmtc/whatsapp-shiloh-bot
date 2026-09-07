@@ -16,10 +16,11 @@ const LOCK_KEY = 'shiloh:control:retrospective-access:753:2026-09-07:v1';
 const RECORD_PAST = 'appointment:record_past';
 const RECORD_PAST_CLIENT_IDS = 'appointment:record_past:crm_v2_client_ids';
 
-// #579 Stage B was already LIVE at the lower bound. Its terminal acceptance comment
-// was posted at the upper bound after the one controlled CRM V2 retry succeeded.
-// The selector also requires canonical registration provenance and a completed
-// CRM V2 onboarding session; ambiguity always fails closed.
+// #579 Stage B was already LIVE at the lower bound. Its terminal acceptance
+// comment was posted at the upper bound after the one controlled CRM V2 retry
+// succeeded. Registration provenance is durable; onboarding sessions are not
+// because the normal temporary-session retention job removes them after hours.
+// Exactly one canonical CRM V2 row must match this window or preflight blocks.
 const DEMO_ACCEPTANCE_WINDOW_START = '2026-08-30T09:34:35.000Z';
 const DEMO_ACCEPTANCE_WINDOW_END = '2026-08-30T09:37:46.000Z';
 
@@ -210,13 +211,6 @@ async function readSnapshot(db) {
        AND c.provenance #>> '{registrationCompleted,via}' = 'whatsapp'
        AND c.provenance #>> '{registrationCompleted,at}' >= $1
        AND c.provenance #>> '{registrationCompleted,at}' < $2
-       AND EXISTS (
-         SELECT 1
-           FROM client_onboarding_sessions s
-          WHERE s.crm_v2_client_id=c.id
-            AND s.identity_model='crm_v2'
-            AND s.state='complete'
-       )
      ORDER BY c.id
   `, [DEMO_ACCEPTANCE_WINDOW_START, DEMO_ACCEPTANCE_WINDOW_END]);
   const holders = await db.query(`
