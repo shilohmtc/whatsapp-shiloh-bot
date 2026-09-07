@@ -199,11 +199,12 @@ test('#749 authorized policy mutation changes only the bounded permission keys a
 });
 
 test('#749 unauthorized operator and stale revision fail closed before permission update', async () => {
-  for (const [adminId, expected] of [[77, accessPolicyRevision(practitionerAccess())], [61, 'stale-revision']]) {
+  const staleRevision = '0'.repeat(64);
+  for (const [adminId, expected] of [[77, accessPolicyRevision(practitionerAccess())], [61, staleRevision]]) {
     const db = policyDatabase();
     const service = createWorkspaceStaffAccessPolicyService({ db, accessService: manageAccess });
     await assert.rejects(
-      service.updatePolicy({ adminId, staffId: 17, expectedAccessRevision: expected, requestId: `req-${adminId}`, capabilities: ['booking:update'] }),
+      service.updatePolicy({ adminId, staffId: 17, expectedAccessRevision: expected, requestId: `req-749-${adminId}`, capabilities: ['booking:update'] }),
       error => [403, 409].includes(error.httpStatus)
     );
     assert.equal(db.calls.some(c => c.sql.startsWith('UPDATE staff_admin_accounts')), false);
