@@ -34,7 +34,7 @@ function accessEnablementMarkup(model = {}) {
     if (eligibleEmployeePractitioner(staff) && isCompatibleLegacyAccessView(model.access)) {
       return `${accessFormMarkup(staff, { mode: 'complete' })}<p class="footer-note">This completion path is available only because the existing active authority already matches the employee-practitioner scopes and has no enabled capabilities. Any different or broader authority remains fail-closed.</p>`;
     }
-    return `${READ_ONLY_NOTE}<p class="footer-note">Existing access is preserved. This bounded surface does not edit, broaden, downgrade or replace an active authority record.</p>`;
+    return `<div data-staff-access-readonly>${READ_ONLY_NOTE}<p class="footer-note">Existing access is preserved. No optional practitioner access changes are available here. This surface does not edit, broaden, downgrade or replace an active authority record.</p></div>`;
   }
   if (staff.status !== 'active') {
     return `${READ_ONLY_NOTE}<div class="warning-note">Workspace access can only be enabled for an active canonical Staff profile. Reactivate the Staff profile first if that reflects current clinic authority.</div>`;
