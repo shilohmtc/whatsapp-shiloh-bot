@@ -7,6 +7,10 @@ const {
   CONTROLLED_RELEASE_MIGRATION_ENV,
   runControlledReleaseMigration,
 } = require('../src/services/controlledReleaseMigration');
+const {
+  MODE_ENV: RETROSPECTIVE_ACCESS_MODE_ENV,
+  runConfigured: runConfiguredRetrospectiveAccessProvisioning,
+} = require('../src/services/retrospectiveAccessProvisioning753');
 
 async function run() {
   const controlled = await runControlledReleaseMigration();
@@ -24,6 +28,20 @@ async function run() {
     checksumMismatches: state.checksumMismatches,
     ledgerRowsAbsentFromRelease: state.ledgerRowsAbsentFromRelease,
   }));
+
+  const retrospectiveAccess = await runConfiguredRetrospectiveAccessProvisioning();
+  if (retrospectiveAccess.status !== 'disabled') {
+    console.log(JSON.stringify({
+      event: 'retrospective_access_753_control_operation',
+      configuredBy: RETROSPECTIVE_ACCESS_MODE_ENV,
+      ...retrospectiveAccess,
+    }));
+  }
+  if (retrospectiveAccess.status === 'refused') {
+    const error = new Error(`Retrospective access #753 control operation refused: ${retrospectiveAccess.reason}`);
+    error.code = 'RETROSPECTIVE_ACCESS_753_REFUSED';
+    throw error;
+  }
 }
 
 run()
