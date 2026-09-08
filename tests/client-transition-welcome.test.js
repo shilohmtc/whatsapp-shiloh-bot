@@ -70,8 +70,9 @@ test('Book appointment enters deterministic service discovery instead of stale b
 });
 
 test('already-delivered legacy Book appointment payload remains compatible', () => {
-  assert.equal(commandForAdminButton('client_book_now'), 'services');
-  assert.match(webhookSource, /commandForAdminButton\(id\)\|\|id\|\|null/);
+  const { commandForClientBookingButton } = require('../src/services/clientBookingInteractive');
+  assert.equal(commandForClientBookingButton('client_book_now'), 'services');
+  assert.match(webhookSource, /commandForClientBookingButton\(id\)\|\|id\|\|null/);
 });
 
 test('registered-client interactive body stays within Meta limit and excludes the greeting', () => {

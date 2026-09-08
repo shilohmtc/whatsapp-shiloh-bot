@@ -253,6 +253,67 @@ test('Dashboard presentation makes appointment operations primary and communicat
   assert.match(dashboardClientScript(), /expectedRevision/);
 });
 
+test('Needs Attention projects pending and awaiting-client booking requests with exact resolution actions', async () => {
+  const requests = [
+    {
+      appointmentId: 7651, effectiveStatus: 'pending', clientName: 'Request Client', serviceName: 'Treatment',
+      staffName: 'Canonical Practitioner', requestedStartsAt: '2026-09-09T08:00:00.000Z', requestedRevision: '2026-09-05T06:30:00.000Z',
+    },
+    {
+      appointmentId: 7652, effectiveStatus: 'awaiting_client_confirmation', clientName: 'Awaiting Client', serviceName: 'Treatment',
+      staffName: 'Canonical Practitioner', proposedStaffName: 'Canonical Practitioner', requestedStartsAt: '2026-09-10T08:00:00.000Z',
+      proposedStartsAt: '2026-09-11T08:00:00.000Z', requestedRevision: '2026-09-05T06:31:00.000Z',
+    },
+  ];
+  let listInput;
+  const service = createWorkspaceDashboardService({
+    resolvePrincipal: async () => authorityPrincipal(),
+    calendarService: { async buildModel() { return calendarModel([]); } },
+    messagesService: messagesService(),
+    bookingRequestService: { async listUnresolvedBookingRequests(input) { listInput = input; return requests; } },
+    finalizeAppointmentFn: async () => ({ status: 'updated' }),
+    canCertifyAppointmentFn: async () => true,
+  });
+  const model = await service.buildModel({ adminId: 7, viewer: { calendarScope: 'own_staff', staffId: 11 }, now: NOW });
+  assert.equal(listInput.principal.id, 7);
+  assert.equal(listInput.now, NOW);
+  assert.equal(model.bookingRequests.length, 2);
+  const html = renderDashboardPage(model);
+  assert.match(html, /Needs staff resolution/);
+  assert.match(html, /Awaiting client/);
+  assert.match(html, />Accept requested appointment</);
+  assert.match(html, />Propose alternative</);
+  assert.match(html, />Cannot accommodate</);
+  assert.doesNotMatch(html, />Approve<|>Decline</);
+  assert.doesNotMatch(html, /Alternative practitioner/);
+
+  const ownerHtml = renderDashboardPage({ ...model, mode: 'owner_overview' });
+  assert.match(ownerHtml, /Alternative practitioner/);
+  assert.match(dashboardClientScript(), /booking-requests/);
+});
+
+test('Workspace booking-request action re-resolves authority and forwards only controlled inputs', async () => {
+  const calls = [];
+  const bookingRequestService = {
+    async listUnresolvedBookingRequests() { return []; },
+    async acceptRequestedAppointment(input) { calls.push(['accept', input]); return { ok: true, status: 'approved' }; },
+    async proposeAlternative(input) { calls.push(['propose', input]); return { ok: true, status: 'awaiting_client_confirmation' }; },
+    async cannotAccommodate(input) { calls.push(['cannot', input]); return { ok: true, status: 'declined' }; },
+  };
+  const service = createWorkspaceDashboardService({
+    resolvePrincipal: async () => authorityPrincipal(),
+    calendarService: { async buildModel() { return calendarModel([]); } }, messagesService: messagesService(),
+    bookingRequestService, finalizeAppointmentFn: async () => ({ status: 'updated' }), canCertifyAppointmentFn: async () => true,
+  });
+  const common = { adminId: 7, viewer: { calendarScope: 'own_staff', staffId: 11 }, appointmentId: 7651, expectedRevision: '2026-09-05T06:30:00.000Z' };
+  await service.resolveBookingRequest({ ...common, action: 'accept' });
+  await service.resolveBookingRequest({ ...common, action: 'propose', startsAt: '2026-09-11T08:00:00.000Z', staffId: 11, serviceId: 25 });
+  await service.resolveBookingRequest({ ...common, action: 'cannot_accommodate' });
+  assert.deepEqual(calls.map(call => call[0]), ['accept', 'propose', 'cannot']);
+  assert.equal(calls[0][1].principal.id, 7);
+  assert.equal(calls[1][1].startsAt, '2026-09-11T08:00:00.000Z');
+});
+
 test('Dashboard finalization route preserves session, same-origin and CSRF boundaries', async () => {
   const calls = [];
   const session = { ok: true, adminId: 7, viewer: { calendarScope: 'business_all_staff' }, csrfHash: 'test' };
@@ -279,4 +340,33 @@ test('Dashboard finalization route preserves session, same-origin and CSRF bound
   assert.equal(calls.length, 1);
   assert.equal(calls[0].adminId, 7);
   assert.equal(calls[0].viewer, session.viewer);
+});
+
+test('booking-request routes preserve session, same-origin and CSRF boundaries', async () => {
+  const calls = [];
+  const session = { ok: true, adminId: 7, viewer: { calendarScope: 'own_staff', staffId: 11 }, csrfHash: 'test' };
+  const sessionService = {
+    async validateSessionToken(token) { return token === 'valid' ? session : { ok: false }; },
+    validateCsrfToken(current, token) { return current === session && token === 'csrf'; },
+  };
+  const dashboardService = {
+    async buildModel() { throw new Error('not used'); },
+    async resolveBookingRequest(input) { calls.push(input); return { ok: true, status: 'awaiting_client_confirmation' }; },
+  };
+  const app = express();
+  app.use(express.json());
+  app.use('/calendar/workspace', createWorkspaceOperationalRouter({ env: ENABLED_ENV, sessionService, dashboardService }));
+  await withServer(app, async base => {
+    const path = `${base}/calendar/workspace/booking-requests/7651/propose`;
+    const body = JSON.stringify({ expectedRevision: '2026-09-05T06:30:00.000Z', startsAt: '2026-09-11T08:00:00.000Z', staffId: 11 });
+    assert.equal((await fetch(path, { method: 'POST', headers: { 'content-type': 'application/json' }, body })).status, 401);
+    assert.equal((await fetch(path, { method: 'POST', headers: { cookie: 'shiloh_staff_session=valid', 'content-type': 'application/json' }, body })).status, 403);
+    assert.equal((await fetch(path, { method: 'POST', headers: { cookie: 'shiloh_staff_session=valid', origin: base, 'content-type': 'application/json', 'x-shiloh-csrf-token': 'bad' }, body })).status, 403);
+    assert.equal((await fetch(path, { method: 'POST', headers: { cookie: 'shiloh_staff_session=valid', origin: base, 'content-type': 'application/json', 'x-shiloh-csrf-token': 'csrf' }, body })).status, 200);
+  });
+  assert.equal(calls.length, 1);
+  assert.deepEqual(calls[0], {
+    adminId: 7, viewer: session.viewer, appointmentId: '7651', action: 'propose',
+    expectedRevision: '2026-09-05T06:30:00.000Z', startsAt: '2026-09-11T08:00:00.000Z', staffId: 11, serviceId: undefined,
+  });
 });

@@ -37,9 +37,8 @@ test('stale Appointments and mutation IDs resolve to retirement instead of old e
 });
 
 test('ordinary webhook dispatches retirement and contains no appointment mutation fallthrough', () => {
-  const retired = webhook.indexOf('processAdminRetiredAuthorityMessage(from,text)');
-  const admin = webhook.indexOf('processAdminInteractiveMenuMessage(from,text)');
-  assert.ok(retired >= 0 && admin > retired);
+  assert.match(webhook, /processAdminRetiredAuthorityMessage\(from,text\)/);
+  assert.doesNotMatch(webhook, /processAdminInteractiveMenuMessage/);
   assert.doesNotMatch(webhook, /processAdminBookingUpdateMessage|processAdminMobileBookingFlowMessage|processAdminAssistantMessage/);
 });
 

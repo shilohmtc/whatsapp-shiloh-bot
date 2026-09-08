@@ -31,7 +31,7 @@ test('runtime resolves an exact approved provider asset through the Shiloh contr
   const provider = {
     id: 'provider-template-id',
     status: 'APPROVED',
-    ...buildMetaTemplateRegistrationPayload('booking_approval_request'),
+    ...buildMetaTemplateRegistrationPayload('booking_declined'),
   };
 
   axios.get = async () => ({ data: { data: [provider], paging: {} } });
@@ -41,10 +41,10 @@ test('runtime resolves an exact approved provider asset through the Shiloh contr
     await withEnvironment({
       WHATSAPP_TOKEN: 'test-token',
       WHATSAPP_BUSINESS_ACCOUNT_ID: 'test-waba',
-      WHATSAPP_BOOKING_APPROVAL_REQUEST_TEMPLATE: 'shiloh_booking_approval_request_v1',
+      WHATSAPP_BOOKING_DECLINED_TEMPLATE: 'shiloh_booking_declined_v1',
     }, async () => {
-      const state = await assertMessageContractSendAllowed('booking_approval_request');
-      assert.equal(state.key, 'booking_approval_request');
+      const state = await assertMessageContractSendAllowed('booking_declined');
+      assert.equal(state.key, 'booking_declined');
       assert.equal(state.ready, true);
       assert.equal(state.binding.bound, true);
       assert.equal(state.binding.state, 'approved_exact');
@@ -61,7 +61,7 @@ test('runtime fails closed when provider approval exists but semantic content dr
   const provider = {
     id: 'provider-template-id',
     status: 'APPROVED',
-    ...buildMetaTemplateRegistrationPayload('booking_approval_request'),
+    ...buildMetaTemplateRegistrationPayload('booking_declined'),
   };
   provider.components = JSON.parse(JSON.stringify(provider.components));
   provider.components[0].text = `${provider.components[0].text} drift`;
@@ -73,10 +73,10 @@ test('runtime fails closed when provider approval exists but semantic content dr
     await withEnvironment({
       WHATSAPP_TOKEN: 'test-token',
       WHATSAPP_BUSINESS_ACCOUNT_ID: 'test-waba',
-      WHATSAPP_BOOKING_APPROVAL_REQUEST_TEMPLATE: 'shiloh_booking_approval_request_v1',
+      WHATSAPP_BOOKING_DECLINED_TEMPLATE: 'shiloh_booking_declined_v1',
     }, async () => {
       await assert.rejects(
-        assertMessageContractSendAllowed('booking_approval_request'),
+        assertMessageContractSendAllowed('booking_declined'),
         /not exact, approved and configured/,
       );
     });

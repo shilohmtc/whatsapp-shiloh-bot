@@ -13,14 +13,14 @@ const {
   resolveMetaTemplateBinding,
 } = require('../src/services/metaTemplateAdapter');
 
-test('Shiloh owns one canonical registry with 19 identities and 16 sendable contracts', () => {
+test('Shiloh owns one canonical registry with 19 identities and 14 sendable contracts', () => {
   const contracts = getShilohMessageContracts();
   assert.equal(contracts.length, 19);
   assert.equal(new Set(contracts.map((contract) => contract.id)).size, 19);
-  assert.equal(contracts.filter((contract) => contract.sendable).length, 16);
+  assert.equal(contracts.filter((contract) => contract.sendable).length, 14);
   assert.deepEqual(
     contracts.filter((contract) => contract.lifecycle === 'retired').map((contract) => contract.id).sort(),
-    ['appointment_followup_legacy', 'appointment_reminder_legacy', 'birthday_v1'],
+    ['appointment_followup_legacy', 'appointment_reminder_legacy', 'birthday_v1', 'booking_approval_outcome', 'booking_approval_request'],
   );
   assert.equal(META_TEMPLATE_BINDINGS.length, contracts.length);
   assert.equal(new Set(META_TEMPLATE_BINDINGS.map((binding) => binding.contractId)).size, contracts.length);
@@ -65,17 +65,21 @@ test('Meta registration payload is deterministic and retired contracts cannot be
     () => buildMetaTemplateRegistrationPayload('appointment_followup_legacy'),
     /Retired Shiloh message contract cannot be registered/,
   );
+  assert.throws(
+    () => buildMetaTemplateRegistrationPayload('booking_approval_request'),
+    /Retired Shiloh message contract cannot be registered/,
+  );
   assert.equal(buildMetaTemplateContractView('appointment_followup_legacy').name, 'appointment_followup');
 });
 
-test('exact approved Meta readback creates a binding with matching Shiloh spec hash', () => {
+test('exact approved current Meta readback creates a binding with matching Shiloh spec hash', () => {
   const provider = {
     id: 'provider-template-id',
     status: 'APPROVED',
-    ...buildMetaTemplateRegistrationPayload('booking_approval_request'),
+    ...buildMetaTemplateRegistrationPayload('booking_declined'),
   };
   const binding = resolveMetaTemplateBinding({
-    contractId: 'booking_approval_request',
+    contractId: 'booking_declined',
     providerTemplates: [provider],
   });
   assert.equal(binding.bound, true);
@@ -85,7 +89,7 @@ test('exact approved Meta readback creates a binding with matching Shiloh spec h
 });
 
 test('Meta binding fails closed for missing, pending, rejected, drifted and duplicate variants', () => {
-  const contractId = 'booking_approval_request';
+  const contractId = 'booking_declined';
   const exact = buildMetaTemplateRegistrationPayload(contractId);
   assert.equal(resolveMetaTemplateBinding({ contractId, providerTemplates: [] }).state, 'missing');
   assert.equal(resolveMetaTemplateBinding({ contractId, providerTemplates: [{ id: 'p', status: 'PENDING', ...exact }] }).state, 'pending');

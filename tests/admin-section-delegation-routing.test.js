@@ -8,10 +8,8 @@ const interactive = fs.readFileSync(path.join(root, 'src/services/adminInteracti
 const mobile = fs.readFileSync(path.join(root, 'src/services/adminMobileMenu.js'), 'utf8');
 const webhook = fs.readFileSync(path.join(root, 'src/controllers/webhookController.js'), 'utf8');
 
-test('stable Today and Tomorrow actions delegate directly to appointment-date owner', () => {
-  assert.match(interactive, /processAdminAppointmentsByDateMessage/);
-  assert.match(interactive, /action\.key === 'today' \|\| action\.key === 'tomorrow'/);
-  assert.match(interactive, /return processAdminAppointmentsByDateMessage\(sender, action\.command\)/);
+test('Today and Tomorrow have no ordinary WhatsApp delegation', () => {
+  assert.doesNotMatch(interactive, /processAdminAppointmentsByDateMessage|action\.key === 'today'|action\.key === 'tomorrow'/);
 });
 
 test('removed staff operations have no ordinary interactive or mobile delegation', () => {
@@ -26,8 +24,8 @@ test('removed staff operations have no ordinary interactive or mobile delegation
   }
 });
 
-test('interactive adapter is terminal for authenticated staff and has no generic authority fallbacks', () => {
-  assert.match(webhook, /processAdminInteractiveMenuMessage\(from,text\)/);
+test('retirement adapter is terminal for recognized stale staff actions and has no generic authority fallbacks', () => {
+  assert.match(webhook, /processAdminRetiredAuthorityMessage\(from,text\)/);
   assert.doesNotMatch(webhook, /processAdminAppointmentsByDateMessage\(from,text\)|processAdminAssistantMessage\(from,text\)/);
-  assert.match(interactive, /That staff WhatsApp action is unavailable\. No action was taken/);
+  assert.match(interactive, /processRetiredAdminAuthorityMessage/);
 });

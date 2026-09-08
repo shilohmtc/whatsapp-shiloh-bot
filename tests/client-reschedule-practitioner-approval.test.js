@@ -82,7 +82,8 @@ test('explicit change boundaries reconcile stale pending requests so they cannot
   const clientRequest = patch.indexOf('await reconcileStalePendingRescheduleHolds();');
   const create = patch.indexOf('await createPendingRescheduleRequest', clientRequest);
   assert.ok(clientRequest >= 0 && create > clientRequest);
-  assert.match(patch, /reschedule_approval_\(\?:approve\|decline\)_\\d\+/);
+  const webhook = fs.readFileSync(path.join(root, 'src', 'controllers', 'webhookController.js'), 'utf8');
+  assert.match(webhook, /processRescheduleApprovalDecision\(from,text\)/);
 });
 
 test('approval transport contract is frozen and uses deterministic decision payloads', () => {
@@ -100,8 +101,9 @@ test('practitioner decision is authorized through exactly one active staff admin
   assert.match(service, /result\.rowCount !== 1/);
   assert.match(service, /Number\(admin\.staff_id\) !== Number\(context\.approver_staff_id\)/);
   assert.match(service, /You are not authorized to decide this reschedule request/);
-  assert.match(patch, /processRescheduleApprovalDecision/);
-  assert.match(patch, /originalProcessBookingApprovalMessage/);
+  const webhook = fs.readFileSync(path.join(root, 'src', 'controllers', 'webhookController.js'), 'utf8');
+  assert.match(webhook, /processRescheduleApprovalDecision\(from,text\)/);
+  assert.doesNotMatch(patch, /originalProcessBookingApprovalMessage/);
 });
 
 test('approve revalidates before canonical mutation and decline never mutates appointment time', () => {

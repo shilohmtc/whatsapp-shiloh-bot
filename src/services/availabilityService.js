@@ -196,6 +196,15 @@ async function listAvailableSlots({
              AND cb.starts_at < (c.local_end AT TIME ZONE '${TZ}')
              AND cb.ends_at > (c.local_start AT TIME ZONE '${TZ}')
         )
+        AND NOT EXISTS (
+          SELECT 1 FROM appointment_booking_approvals aba
+           WHERE aba.proposed_staff_ids @> ARRAY[$2::bigint]
+             AND aba.status = 'awaiting_client_confirmation'
+             AND aba.proposal_expires_at > NOW()
+             AND ($6::bigint IS NULL OR aba.appointment_id <> $6)
+             AND aba.proposed_starts_at < (c.local_end AT TIME ZONE '${TZ}')
+             AND aba.proposed_ends_at > (c.local_start AT TIME ZONE '${TZ}')
+        )
       ORDER BY starts_at`,
     [date, staffId, locationId, totalMinutes, intervalMinutes, excludeAppointmentId]
   );

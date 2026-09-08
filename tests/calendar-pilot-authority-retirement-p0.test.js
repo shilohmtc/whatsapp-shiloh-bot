@@ -215,9 +215,8 @@ test('Open Calendar uses one-time handoff while canonical capability remains sol
 
   const launcher = read('src/services/adminInteractiveMenu.js');
   const handoff = read('src/services/staffCalendarHandoff.js');
-  assert.match(launcher, /issueForWhatsapp\(\{ whatsapp: sender \}\)/);
-  assert.match(launcher, /secure one-time link/);
-  assert.doesNotMatch(launcher, /Sign in to Shiloh Calendar with your own staff account/);
+  assert.doesNotMatch(launcher, /issueForWhatsapp|secure one-time link|Open Calendar/);
+  assert.match(launcher, /processRetiredAdminAuthorityMessage/);
   assert.doesNotMatch(handoff, /EMERGENCY_ADMIN_ID|staffBrowserPilotGate|SHILOH_STAFF_BROWSER_PILOT|SHILOH_EMERGENCY_CHRISTEL_CALENDAR_BOOKING_ENABLED/);
   assert.doesNotMatch(handoff, /display_name\s*===|Christel|Jean-Pierre|Naomi|Marietjie|Abigail/);
 });

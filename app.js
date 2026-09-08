@@ -14,8 +14,6 @@ const customerExperienceService = require("./src/services/customerExperience");
 const clientIdentityService = require("./src/services/clientIdentityOnboarding");
 const clientDiscoveryService = require("./src/services/clientDiscoveryMenu");
 const { installClientNavigationPriority } = require("./src/services/clientNavigationPriority");
-const adminAssistantService = require("./src/services/adminAssistant");
-const { activateSportsPackage } = require("./src/services/clientDiscoveryPackages");
 
 validateEnv();
 const processClientServiceFamilyMessage = clientFamilyService.processClientServiceFamilyMessage;
@@ -30,19 +28,6 @@ appointmentChangeService.processAppointmentChangeMessage = async (phone, text, .
 const processCustomerExperienceMessage = customerExperienceService.processCustomerExperienceMessage;
 customerExperienceService.processCustomerExperienceMessage = async (...args) => presentCustomerExperienceResult(await processCustomerExperienceMessage(...args));
 installClientNavigationPriority({ identityService: clientIdentityService, discoveryService: clientDiscoveryService });
-
-// Package activation is an explicit business-admin command. Delegate it before the
-// generic Admin assistant fallback claims unknown Admin text, while leaving all other
-// Admin commands on their established path.
-const processAdminAssistantMessage = adminAssistantService.processAdminAssistantMessage;
-adminAssistantService.processAdminAssistantMessage = async (sender, text, ...rest) => {
-  const activation = String(text || '').trim().match(/^(?:activate|grant)\s+sports massage(?:\s+monthly)?\s+package\s+(?:for|to)\s+(.+)$/i);
-  if (activation) {
-    const result = await activateSportsPackage(sender, activation[1]);
-    if (result?.handled) return result;
-  }
-  return processAdminAssistantMessage(sender, text, ...rest);
-};
 
 const webhookRoutes = require("./src/routes/webhook");
 const adminRoutes = require("./src/routes/admin");

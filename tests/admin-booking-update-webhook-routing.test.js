@@ -8,6 +8,6 @@ const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'controllers', 
 test('manage-booking interactions are retired before the retained admin router', () => {
   assert.doesNotMatch(source, /processAdminBookingUpdateMessage|processStatelessAdminBookingUpdateMessage|processAdminAssistantMessage/);
   const retired = source.indexOf('processAdminRetiredAuthorityMessage(from,text)');
-  const menu = source.indexOf('processAdminInteractiveMenuMessage(from,text)');
-  assert.ok(retired >= 0 && menu > retired);
+  assert.ok(retired >= 0);
+  assert.doesNotMatch(source, /processAdminInteractiveMenuMessage/);
 });

@@ -43,13 +43,10 @@ test('Jean-Pierre business admin still maps to shared Christel and Abigail prici
   assert.equal(pricingOwner(jeanPierre), 'christel');
 });
 
-test('all ordinary staff Admin menus are reduced to the same four quick views', () => {
+test('all ordinary staff WhatsApp Admin menus are retired', () => {
   for (const admin of [jeanPierre, christel, abigail, marietjie]) {
     const keys = getMenuOptions(admin).map((option) => option.key);
-    assert.deepEqual(keys, ['today', 'tomorrow', 'reports', 'earnings']);
-    for (const removed of ['open_calendar', 'help', 'client', 'walkin', 'staff_services', 'pricing', 'finalize', 'block_time', 'schedule']) {
-      assert.equal(keys.includes(removed), false, `${admin.display_name}: ${removed}`);
-    }
+    assert.deepEqual(keys, []);
   }
 });
 

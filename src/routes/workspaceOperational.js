@@ -38,7 +38,7 @@ function dashboardMutationError(error) {
   return {
     status,
     code: String(error?.code || 'WORKSPACE_DASHBOARD_UNAVAILABLE'),
-    message: status === 503 ? 'Canonical appointment finalization is temporarily unavailable.' : error.message,
+    message: status === 503 ? 'Canonical Workspace operation is temporarily unavailable.' : error.message,
   };
 }
 
@@ -112,6 +112,32 @@ function createWorkspaceOperationalRouter({
       return res.status(safe.status).json({ error: safe.message, code: safe.code, requestId: req.id });
     }
   });
+
+  async function bookingRequestAction(req, res, action) {
+    try {
+      const result = await dashboardService.resolveBookingRequest({
+        adminId: req.staffBrowserSession?.adminId,
+        viewer: req.staffBrowserSession?.viewer,
+        appointmentId: req.params.appointmentId,
+        action,
+        expectedRevision: req.body?.expectedRevision,
+        startsAt: req.body?.startsAt,
+        staffId: req.body?.staffId,
+        serviceId: req.body?.serviceId,
+      });
+      return res.status(200).json(result);
+    } catch (error) {
+      const safe = dashboardMutationError(error);
+      return res.status(safe.status).json({ error: safe.message, code: safe.code, requestId: req.id });
+    }
+  }
+
+  router.post('/booking-requests/:appointmentId/accept', sameOrigin, requireCsrf,
+    (req, res) => bookingRequestAction(req, res, 'accept'));
+  router.post('/booking-requests/:appointmentId/propose', sameOrigin, requireCsrf,
+    (req, res) => bookingRequestAction(req, res, 'propose'));
+  router.post('/booking-requests/:appointmentId/cannot_accommodate', sameOrigin, requireCsrf,
+    (req, res) => bookingRequestAction(req, res, 'cannot_accommodate'));
 
   return router;
 }

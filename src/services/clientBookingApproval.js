@@ -1,21 +1,60 @@
 const { pool } = require('../db/pool');
-const { normalizePhone } = require('./clientIdentityOnboarding');
-const { sendWhatsAppMessage, sendWhatsAppReplyButtons, sendWhatsAppTemplate } = require('./whatsapp');
+const { normalizeMobile } = require('./crmV2ClientService');
+const { checkClinicHours } = require('./clinicHours');
+const { checkAuthoritativeSchedule } = require('./adminAvailability');
+const { pendingBookingProposalConflicts } = require('./bookingRequestHolds');
+const { sendWhatsAppList, sendWhatsAppTemplate } = require('./whatsapp');
 const { sendCustomerBookingConfirmationForAppointment } = require('./customerBookingConfirmation');
-const {
-  DEMO_KEY,
-  resolveCurrentControlledDemoClient,
-  getControlledDemoIdentity,
-} = require('./controlledDemoIdentity');
+const { ensureBookingApprovalInfrastructure } = require('./clientBookingApprovalSchema');
 const logger = require('../lib/logger');
 
-const APPROVE_PREFIX = 'booking_approval_approve_';
-const DECLINE_PREFIX = 'booking_approval_decline_';
-const DUMMY_TEST_DISPLAY_NAME = 'Dummy Test';
-const JUVAN_POLICY_KEY = 'juvan_botha_jp_booking_approval';
-const JP_DISPLAY_NAME = 'Jean-Pierre';
-const CONTROLLED_JUVAN_MODE = 'controlled_juvan_primary_backup';
-const TEMPLATE_LANGUAGE = process.env.WHATSAPP_TEMPLATE_LANGUAGE || 'en';
+const CLIENT_ACCEPT_PREFIX = 'booking_proposal_accept_';
+const CLIENT_ANOTHER_PREFIX = 'booking_proposal_another_';
+const ACTIVE_REQUEST_STATES = new Set(['pending', 'awaiting_client_confirmation']);
+const BUSINESS_WIDE_ROLES = new Set(['owner', 'business_admin']);
+const PROPOSAL_TTL_MS = 24 * 60 * 60 * 1000;
+
+class BookingRequestError extends Error {
+  constructor(code, message, httpStatus = 400) {
+    super(message);
+    this.name = 'BookingRequestError';
+    this.code = code;
+    this.httpStatus = httpStatus;
+  }
+}
+
+function positiveId(value, code = 'BOOKING_REQUEST_INVALID') {
+  const id = Number(value);
+  if (!Number.isSafeInteger(id) || id <= 0) throw new BookingRequestError(code, 'A valid canonical identifier is required.');
+  return id;
+}
+
+function exactDate(value, code = 'BOOKING_REQUEST_INVALID_TIME') {
+  const date = new Date(value);
+  if (!value || Number.isNaN(date.getTime())) throw new BookingRequestError(code, 'A valid appointment time is required.');
+  return date;
+}
+
+function revisionOf(value) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+function canonicalIds(value) {
+  return (Array.isArray(value) ? value : []).map(Number).filter(Number.isSafeInteger);
+}
+
+function sameIds(left, right) {
+  if (!Array.isArray(left) || !Array.isArray(right)) return false;
+  const a = canonicalIds(left);
+  const b = canonicalIds(right);
+  return a.length > 0 && a.length === left.length && b.length === right.length
+    && a.length === b.length && a.every((id, index) => id === b[index]);
+}
+
+function normalizePhone(value) {
+  return normalizeMobile(value) || String(value || '').replace(/\D/g, '');
+}
 
 function fmtDateTime(value) {
   return new Intl.DateTimeFormat('en-ZA', {
@@ -24,510 +63,509 @@ function fmtDateTime(value) {
   }).format(new Date(value));
 }
 
-async function ensureBookingApprovalTable(db = pool) {
-  await db.query(`CREATE TABLE IF NOT EXISTS appointment_booking_approvals (appointment_id BIGINT PRIMARY KEY REFERENCES appointments(id) ON DELETE CASCADE, approver_staff_id BIGINT REFERENCES staff(id), approver_admin_id BIGINT REFERENCES staff_admin_accounts(id), observer_staff_id BIGINT REFERENCES staff(id), status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'declined')), approval_mode TEXT NOT NULL DEFAULT 'standard', requested_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), approver_notified_at TIMESTAMPTZ, backup_notified_at TIMESTAMPTZ, observer_notified_at TIMESTAMPTZ, decided_at TIMESTAMPTZ, decided_by_admin_id BIGINT, decision_note TEXT, updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`);
-  await db.query(`ALTER TABLE appointment_booking_approvals ADD COLUMN IF NOT EXISTS approver_admin_id BIGINT REFERENCES staff_admin_accounts(id)`);
-  await db.query(`ALTER TABLE appointment_booking_approvals ADD COLUMN IF NOT EXISTS approval_mode TEXT NOT NULL DEFAULT 'standard'`);
-  await db.query(`ALTER TABLE appointment_booking_approvals ADD COLUMN IF NOT EXISTS backup_notified_at TIMESTAMPTZ`);
-  await db.query(`ALTER TABLE appointment_booking_approvals ALTER COLUMN approver_staff_id DROP NOT NULL`);
-  await db.query(`CREATE INDEX IF NOT EXISTS idx_appointment_booking_approvals_status ON appointment_booking_approvals(status, requested_at)`);
-  await db.query(`CREATE INDEX IF NOT EXISTS idx_appointment_booking_approvals_approver ON appointment_booking_approvals(approver_staff_id, status)`);
-  await db.query(`CREATE INDEX IF NOT EXISTS idx_appointment_booking_approvals_admin_approver ON appointment_booking_approvals(approver_admin_id, status)`);
-  await db.query(`CREATE TABLE IF NOT EXISTS client_booking_approval_policies (policy_key TEXT PRIMARY KEY, client_id BIGINT UNIQUE REFERENCES clients(id) ON DELETE RESTRICT, approver_admin_id BIGINT NOT NULL REFERENCES staff_admin_accounts(id) ON DELETE RESTRICT, expected_display_name TEXT NOT NULL, active BOOLEAN NOT NULL DEFAULT TRUE, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`);
-  await db.query(`ALTER TABLE client_booking_approval_policies ALTER COLUMN client_id DROP NOT NULL`);
+function clientActionId(prefix, appointmentId, version) {
+  return `${prefix}${positiveId(appointmentId)}_${positiveId(version)}`;
 }
 
-async function resolveObserverStaffId(db, staffName) {
-  if (String(staffName || '').trim().toLowerCase() !== 'abigail') return null;
-  const result = await db.query(`SELECT id FROM staff WHERE LOWER(display_name) = 'christel' AND status = 'active' ORDER BY id LIMIT 1`);
-  return result.rows[0]?.id || null;
-}
-
-async function primaryAssignment(db, appointmentId) {
-  const result = await db.query(`
-    SELECT ast.staff_id, st.display_name
-      FROM appointment_staff ast
-      JOIN staff st ON st.id=ast.staff_id
-     WHERE ast.appointment_id=$1
-       AND ast.position=1
-       AND st.status='active'
-     ORDER BY ast.id
-     LIMIT 1`, [appointmentId]);
-  return result.rows[0] || null;
-}
-
-async function exactJeanPierreAdmin(db, adminId) {
-  if (!adminId) return null;
-  const result = await db.query(`
-    SELECT id,staff_id,display_name,normalized_whatsapp,business_role,calendar_scope,service_scope
-      FROM staff_admin_accounts
-     WHERE id=$1
-       AND LOWER(TRIM(display_name))='jean-pierre'
-       AND active=TRUE
-       AND business_role='business_admin'
-       AND calendar_scope='all_business'
-       AND service_scope='all_services'
-       AND normalized_whatsapp IS NOT NULL`, [adminId]);
-  return result.rowCount === 1 ? result.rows[0] : null;
-}
-
-async function resolveJuvanApprovalPolicy(db, appointmentId) {
-  const appointment = await db.query(`SELECT id,client_id FROM appointments WHERE id=$1`, [appointmentId]);
-  const row = appointment.rows[0];
-  if (!row) return null;
-
-  const state = await resolveCurrentControlledDemoClient(db);
-  const currentId = state.client?.id == null ? null : Number(state.client.id);
-  if (state.status !== 'bound') {
-    if (currentId != null && Number(row.client_id) === currentId) {
-      throw new Error(`Controlled Juvan booking approval blocked: current demo identity is ${state.status}`);
-    }
-    return null;
-  }
-  if (Number(row.client_id) !== currentId) return null;
-
-  const primary = await primaryAssignment(db, appointmentId);
-  if (!primary?.staff_id) throw new Error('Controlled Juvan booking approval blocked: assigned Primary practitioner could not be resolved');
-  const backup = await exactJeanPierreAdmin(db, state.approverAdminId);
-  if (!backup) throw new Error('Controlled Juvan booking approval blocked: Jean-Pierre backup authority drifted');
-
-  return {
-    approverAdminId: Number(backup.id),
-    approverStaffId: Number(primary.staff_id),
-    observerStaffId: null,
-    mode: CONTROLLED_JUVAN_MODE,
-    clientId: currentId,
-    primaryName: primary.display_name,
-    backupName: backup.display_name,
-  };
-}
-
-async function resolveDummyTestApprovalPolicy(db, appointmentId) {
-  const appointment = await db.query(`SELECT a.client_id, c.display_name, (SELECT COUNT(*)::int FROM clients dc WHERE LOWER(TRIM(dc.display_name)) = LOWER($2) AND dc.status = 'active') AS active_dummy_count FROM appointments a JOIN clients c ON c.id = a.client_id WHERE a.id = $1`, [appointmentId, DUMMY_TEST_DISPLAY_NAME]);
-  const row = appointment.rows[0];
-  if (!row || String(row.display_name || '').trim().toLowerCase() !== DUMMY_TEST_DISPLAY_NAME.toLowerCase()) return null;
-  if (Number(row.active_dummy_count) !== 1) throw new Error(`Dummy Test approval blocked: expected exactly one active CRM ${DUMMY_TEST_DISPLAY_NAME} profile`);
-  const jp = await db.query(`SELECT saa.id AS admin_id, saa.display_name, saa.normalized_whatsapp FROM staff_admin_accounts saa WHERE LOWER(TRIM(saa.display_name)) = LOWER($1) AND saa.active = TRUE AND saa.business_role = 'business_admin' AND saa.calendar_scope = 'all_business' AND saa.service_scope = 'all_services' AND saa.normalized_whatsapp IS NOT NULL ORDER BY saa.id`, [JP_DISPLAY_NAME]);
-  if (jp.rowCount !== 1) throw new Error(`Dummy Test approval blocked: expected exactly one active ${JP_DISPLAY_NAME} business_admin account with all_business/all_services scope and WhatsApp identity`);
-  return { approverAdminId: Number(jp.rows[0].admin_id), approverStaffId: null, observerStaffId: null, mode: 'standard' };
-}
-
-async function resolveClientApprovalPolicy(db, appointmentId) {
-  return resolveDummyTestApprovalPolicy(db, appointmentId);
-}
-
-async function createPendingBookingApproval(db, { appointmentId, staffId, staffName }) {
-  await ensureBookingApprovalTable(db);
-  const specialPolicy = await resolveClientApprovalPolicy(db, appointmentId);
-  const controlledJuvan = specialPolicy?.mode === CONTROLLED_JUVAN_MODE;
-  const observerStaffId = specialPolicy ? null : await resolveObserverStaffId(db, staffName);
-  const approverStaffId = controlledJuvan ? specialPolicy.approverStaffId : (specialPolicy ? null : Number(staffId));
-  const approverAdminId = specialPolicy?.approverAdminId || null;
-  const approvalMode = controlledJuvan ? CONTROLLED_JUVAN_MODE : 'standard';
-  const result = await db.query(`
-    INSERT INTO appointment_booking_approvals
-      (appointment_id,approver_staff_id,approver_admin_id,observer_staff_id,status,approval_mode)
-    VALUES ($1,$2,$3,$4,'pending',$5)
-    ON CONFLICT (appointment_id) DO UPDATE SET
-      approver_staff_id=EXCLUDED.approver_staff_id,
-      approver_admin_id=EXCLUDED.approver_admin_id,
-      observer_staff_id=EXCLUDED.observer_staff_id,
-      approval_mode=EXCLUDED.approval_mode,
-      updated_at=NOW()
-    WHERE appointment_booking_approvals.status='pending'
-    RETURNING appointment_id,approver_staff_id,approver_admin_id,observer_staff_id,status,approval_mode`,
-  [appointmentId, approverStaffId, approverAdminId, observerStaffId, approvalMode]);
-  return result.rows[0] || null;
-}
-
-async function approvalContext(appointmentId, db = pool) {
-  await ensureBookingApprovalTable(db);
-  const result = await db.query(`
-    SELECT aba.appointment_id,aba.approver_staff_id,aba.approver_admin_id,aba.observer_staff_id,
-           aba.status,aba.approval_mode,aba.approver_notified_at,aba.backup_notified_at,aba.observer_notified_at,
-           aba.decided_at,aba.decided_by_admin_id,aba.decision_note,
-           a.client_id,a.crm_v2_client_id,a.starts_at,a.ends_at,a.status AS appointment_status,
-           CASE WHEN a.crm_v2_client_id IS NOT NULL THEN 'crm_v2' ELSE 'legacy' END AS identity_model,
-           COALESCE(v2.name,c.display_name,a.source_client_name) AS client_name,
-           CASE WHEN a.crm_v2_client_id IS NOT NULL THEN v2.normalized_mobile
-                ELSE (SELECT normalized_value FROM client_contacts cc WHERE cc.client_id=a.client_id AND contact_type IN ('whatsapp','mobile') AND normalized_value IS NOT NULL ORDER BY is_primary DESC,id LIMIT 1)
-           END AS client_phone,
-           COALESCE((SELECT string_agg(aps.service_name_snapshot, ' + ' ORDER BY aps.position) FROM appointment_services aps WHERE aps.appointment_id=a.id),a.title) AS service_name,
-           COALESCE((SELECT string_agg(ast.staff_name_snapshot, ' + ' ORDER BY ast.position) FROM appointment_staff ast WHERE ast.appointment_id=a.id),primary_staff.display_name,backup_admin.display_name) AS staff_name,
-           primary_staff.display_name AS primary_name,
-           backup_admin.display_name AS backup_name,
-           observer.display_name AS observer_name
-      FROM appointment_booking_approvals aba
-      JOIN appointments a ON a.id=aba.appointment_id
-      LEFT JOIN clients c ON c.id=a.client_id
-      LEFT JOIN crm_v2_clients v2 ON v2.id=a.crm_v2_client_id AND v2.status='active'
-      LEFT JOIN staff primary_staff ON primary_staff.id=aba.approver_staff_id
-      LEFT JOIN staff_admin_accounts backup_admin ON backup_admin.id=aba.approver_admin_id AND backup_admin.active=TRUE
-      LEFT JOIN staff observer ON observer.id=aba.observer_staff_id
-     WHERE aba.appointment_id=$1
-       AND num_nonnulls(a.client_id,a.crm_v2_client_id)=1
-       AND (a.crm_v2_client_id IS NULL OR v2.id IS NOT NULL)`, [appointmentId]);
-  return result.rows[0] || null;
-}
-
-async function adminContactForStaff(staffId, db = pool) {
-  if (!staffId) return null;
-  const result = await db.query(`SELECT id,staff_id,display_name,normalized_whatsapp FROM staff_admin_accounts WHERE staff_id=$1 AND active=TRUE AND normalized_whatsapp IS NOT NULL ORDER BY id LIMIT 1`, [staffId]);
-  return result.rows[0] || null;
-}
-
-async function adminContactForAdmin(adminId, db = pool) {
-  if (!adminId) return null;
-  const result = await db.query(`SELECT id,staff_id,display_name,normalized_whatsapp FROM staff_admin_accounts WHERE id=$1 AND active=TRUE AND normalized_whatsapp IS NOT NULL LIMIT 1`, [adminId]);
-  return result.rows[0] || null;
-}
-
-async function clientPhone(clientId, db = pool) {
-  const result = await db.query(`SELECT normalized_value FROM client_contacts WHERE client_id=$1 AND contact_type IN ('whatsapp','mobile') AND normalized_value IS NOT NULL ORDER BY is_primary DESC,id LIMIT 1`, [clientId]);
-  return result.rows[0]?.normalized_value || null;
-}
-
-function approvalButtons(appointmentId) {
-  return [{ id: `${APPROVE_PREFIX}${appointmentId}`, title: 'Approve' }, { id: `${DECLINE_PREFIX}${appointmentId}`, title: 'Decline' }];
-}
-
-function isAuthorizedDecisionMaker(admin, context) {
-  if (!admin || !context) return false;
-  if (context.approver_admin_id && Number(context.approver_admin_id) === Number(admin.id)) return true;
-  if (context.approver_staff_id && Number(context.approver_staff_id) === Number(admin.staff_id)) return true;
-  return Boolean(context.observer_staff_id) && Number(context.observer_staff_id) === Number(admin.staff_id);
-}
-
-async function sendApprovalRequest(to, context, role = null) {
-  const primary = context.primary_name || context.staff_name || 'Assigned practitioner';
-  const backup = context.backup_name || JP_DISPLAY_NAME;
-  const staffPresentation = role
-    ? `${primary} | Primary: ${primary} | Backup: ${backup} | Your role: ${role}`
-    : context.staff_name;
-  return sendWhatsAppTemplate(to, 'shiloh_booking_approval_request_v1', [context.client_name, context.service_name, staffPresentation, fmtDateTime(context.starts_at), String(context.appointment_id)], TEMPLATE_LANGUAGE, [`${APPROVE_PREFIX}${context.appointment_id}`, `${DECLINE_PREFIX}${context.appointment_id}`]);
-}
-
-async function validateControlledJuvanRead(context, db = pool) {
-  const state = await resolveCurrentControlledDemoClient(db);
-  if (state.status !== 'bound' || Number(state.client?.id) !== Number(context.client_id)) {
-    return { ok: false, reason: `controlled_identity_${state.status}` };
-  }
-  const primary = await primaryAssignment(db, context.appointment_id);
-  const backup = await exactJeanPierreAdmin(db, state.approverAdminId);
-  if (!primary?.staff_id || !backup) return { ok: false, reason: 'approver_truth_unavailable' };
-  if (Number(primary.staff_id) !== Number(context.approver_staff_id)
-      || Number(backup.id) !== Number(context.approver_admin_id)) {
-    return { ok: false, reason: 'stored_approver_truth_drift' };
-  }
-  return { ok: true, state, primary, backup };
-}
-
-async function requestControlledJuvanApproval(context) {
-  const validation = await validateControlledJuvanRead(context);
-  if (!validation.ok) {
-    await pool.query(`INSERT INTO crm_audit_events(action,entity_type,entity_id,metadata) VALUES ('client.booking_approval.notification_blocked','appointment',$1,$2::jsonb)`, [context.appointment_id, JSON.stringify({ reason: validation.reason, approvalMode: CONTROLLED_JUVAN_MODE })]);
-    return { sent: false, reason: validation.reason };
-  }
-
-  const primaryContact = await adminContactForStaff(validation.primary.staff_id);
-  const backupContact = await adminContactForAdmin(validation.backup.id);
-  if (!primaryContact || !backupContact) {
-    const reason = !primaryContact ? 'primary_whatsapp_unavailable' : 'backup_whatsapp_unavailable';
-    await pool.query(`INSERT INTO crm_audit_events(action,entity_type,entity_id,metadata) VALUES ('client.booking_approval.notification_blocked','appointment',$1,$2::jsonb)`, [context.appointment_id, JSON.stringify({ reason, approvalMode: CONTROLLED_JUVAN_MODE, primaryStaffId: validation.primary.staff_id, backupAdminId: validation.backup.id })]);
-    return { sent: false, reason };
-  }
-
-  let primarySent = Boolean(context.approver_notified_at);
-  let backupSent = Boolean(context.backup_notified_at);
-  if (!primarySent) {
-    await sendApprovalRequest(primaryContact.normalized_whatsapp, { ...context, primary_name: validation.primary.display_name, backup_name: validation.backup.display_name }, 'Primary');
-    await pool.query(`UPDATE appointment_booking_approvals SET approver_notified_at=NOW(),updated_at=NOW() WHERE appointment_id=$1 AND status='pending' AND approval_mode=$2`, [context.appointment_id, CONTROLLED_JUVAN_MODE]);
-    primarySent = true;
-  }
-  if (!backupSent) {
-    await sendApprovalRequest(backupContact.normalized_whatsapp, { ...context, primary_name: validation.primary.display_name, backup_name: validation.backup.display_name }, 'Backup');
-    await pool.query(`UPDATE appointment_booking_approvals SET backup_notified_at=NOW(),updated_at=NOW() WHERE appointment_id=$1 AND status='pending' AND approval_mode=$2`, [context.appointment_id, CONTROLLED_JUVAN_MODE]);
-    backupSent = true;
-  }
-  return {
-    sent: primarySent && backupSent,
-    primaryApprover: validation.primary.display_name,
-    backupApprover: validation.backup.display_name,
-  };
-}
-
-async function requestPractitionerApproval({ appointmentId }) {
-  const context = await approvalContext(appointmentId);
-  if (!context || context.status !== 'pending' || context.appointment_status === 'cancelled') return { sent: false, reason: 'not_pending' };
-  if (context.approval_mode === CONTROLLED_JUVAN_MODE) return requestControlledJuvanApproval(context);
-
-  const approver = context.approver_admin_id ? await adminContactForAdmin(context.approver_admin_id) : await adminContactForStaff(context.approver_staff_id);
-  if (!approver) {
-    await pool.query(`INSERT INTO crm_audit_events(action,entity_type,entity_id,metadata) VALUES ('client.booking_approval.notification_blocked','appointment',$1,$2::jsonb)`, [appointmentId, JSON.stringify({ reason: 'approver_whatsapp_unavailable', approverStaffId: context.approver_staff_id || null, approverAdminId: context.approver_admin_id || null })]);
-    return { sent: false, reason: 'approver_whatsapp_unavailable' };
-  }
-  if (!context.approver_notified_at) {
-    await sendApprovalRequest(approver.normalized_whatsapp, context);
-    await pool.query(`UPDATE appointment_booking_approvals SET approver_notified_at=NOW(),updated_at=NOW() WHERE appointment_id=$1 AND status='pending'`, [appointmentId]);
-  }
-  if (context.observer_staff_id && !context.observer_notified_at) {
-    const observer = await adminContactForStaff(context.observer_staff_id);
-    if (observer) {
-      await sendApprovalRequest(observer.normalized_whatsapp, context);
-      await pool.query(`UPDATE appointment_booking_approvals SET observer_notified_at=NOW(),updated_at=NOW() WHERE appointment_id=$1 AND status='pending'`, [appointmentId]);
-    }
-  }
-  return { sent: true, approver: approver.display_name, secondaryApprover: context.observer_name || null };
-}
-
-function parseApprovalDecision(value = '') {
+function parseClientProposalAction(value = '') {
   const text = String(value || '').trim().toLowerCase();
-  let match = text.match(/^booking_approval_approve_(\d+)$/);
-  if (match) return { appointmentId: Number(match[1]), decision: 'approved' };
-  match = text.match(/^booking_approval_decline_(\d+)$/);
-  if (match) return { appointmentId: Number(match[1]), decision: 'declined' };
+  let match = text.match(/^booking_proposal_accept_(\d+)_(\d+)$/);
+  if (match) return { appointmentId: Number(match[1]), proposalVersion: Number(match[2]), action: 'accept' };
+  match = text.match(/^booking_proposal_another_(\d+)_(\d+)$/);
+  if (match) return { appointmentId: Number(match[1]), proposalVersion: Number(match[2]), action: 'another' };
   return null;
 }
 
-async function resolveAdminByWhatsApp(sender, db = pool) {
-  const normalized = normalizePhone(sender);
-  const result = await db.query(`SELECT id,staff_id,display_name,normalized_whatsapp FROM staff_admin_accounts WHERE normalized_whatsapp=$1 AND active=TRUE ORDER BY id LIMIT 1`, [normalized]);
-  return result.rows[0] || null;
+function operatorCanResolve(principal, row) {
+  if (!principal || !row) return false;
+  const role = String(principal.business_role || principal.calendarAuthority?.businessRole || '').toLowerCase();
+  const scope = String(principal.calendar_scope || principal.calendarAuthority?.calendarScope || '').toLowerCase();
+  if (BUSINESS_WIDE_ROLES.has(role) && scope === 'all_business') return true;
+  if (principal.staff_id && Number(row.approver_staff_id) === Number(principal.staff_id)) return true;
+  return false;
 }
 
-async function lockedDecisionContext(db, appointmentId) {
-  const result = await db.query(`
-    SELECT aba.appointment_id,aba.approver_staff_id,aba.approver_admin_id,aba.observer_staff_id,
-           aba.status,aba.approval_mode,aba.decided_by_admin_id,aba.decision_note,
-           a.client_id,a.crm_v2_client_id,a.starts_at,a.ends_at,a.status AS appointment_status,
-           CASE WHEN a.crm_v2_client_id IS NOT NULL THEN 'crm_v2' ELSE 'legacy' END AS identity_model,
-           COALESCE(v2.name,c.display_name,a.source_client_name) AS client_name,
-           CASE WHEN a.crm_v2_client_id IS NOT NULL THEN v2.normalized_mobile
-                ELSE (SELECT normalized_value FROM client_contacts cc WHERE cc.client_id=a.client_id AND contact_type IN ('whatsapp','mobile') AND normalized_value IS NOT NULL ORDER BY is_primary DESC,id LIMIT 1)
-           END AS client_phone,
-           COALESCE((SELECT string_agg(aps.service_name_snapshot,' + ' ORDER BY aps.position) FROM appointment_services aps WHERE aps.appointment_id=a.id),a.title) AS service_name,
-           COALESCE((SELECT string_agg(ast.staff_name_snapshot,' + ' ORDER BY ast.position) FROM appointment_staff ast WHERE ast.appointment_id=a.id),'Shiloh practitioner') AS staff_name
+function hasBusinessWideAuthority(principal) {
+  const role = String(principal?.business_role || principal?.calendarAuthority?.businessRole || '').toLowerCase();
+  const scope = String(principal?.calendar_scope || principal?.calendarAuthority?.calendarScope || '').toLowerCase();
+  return BUSINESS_WIDE_ROLES.has(role) && scope === 'all_business';
+}
+
+function requestSnapshotMatches(row) {
+  return Boolean(row
+    && row.appointment_status !== 'cancelled'
+    && sameIds(row.requested_staff_ids, row.current_staff_ids)
+    && sameIds(row.requested_service_ids, row.current_service_ids)
+    && String(row.requested_client_id || '') === String(row.current_client_id || '')
+    && String(row.requested_crm_v2_client_id || '') === String(row.current_crm_v2_client_id || '')
+    && Number(row.requested_location_id) === Number(row.current_location_id)
+    && Number(row.requested_staff_id) === Number(row.current_staff_id)
+    && Number(row.requested_service_id) === Number(row.current_service_id)
+    && new Date(row.requested_starts_at).getTime() === new Date(row.current_starts_at).getTime()
+    && new Date(row.requested_ends_at).getTime() === new Date(row.current_ends_at).getTime()
+    && revisionOf(row.requested_revision) === revisionOf(row.current_revision));
+}
+
+function requestQuery({ lock = false } = {}) {
+  return `
+    SELECT aba.*,
+           a.client_id AS current_client_id,a.crm_v2_client_id AS current_crm_v2_client_id,
+           a.location_id AS current_location_id,a.starts_at AS current_starts_at,a.ends_at AS current_ends_at,
+           a.status AS appointment_status,a.updated_at AS current_revision,
+           ast.staff_id AS current_staff_id,aps.service_id AS current_service_id,
+           staff_snapshot.ids AS current_staff_ids,service_snapshot.ids AS current_service_ids,
+           COALESCE(v2.name,c.display_name,a.source_client_name,'Client') AS client_name,
+           COALESCE(st.display_name,ast.staff_name_snapshot,'Shiloh practitioner') AS staff_name,
+           COALESCE(s.name,aps.service_name_snapshot,a.title,'Shiloh appointment') AS service_name,
+           COALESCE(l.name,'Shiloh') AS location_name,
+           CASE WHEN a.crm_v2_client_id IS NOT NULL THEN v2.normalized_mobile ELSE
+             (SELECT normalized_value FROM client_contacts cc WHERE cc.client_id=a.client_id
+               AND LOWER(cc.contact_type) IN ('whatsapp','mobile','phone','telephone')
+               AND cc.normalized_value IS NOT NULL ORDER BY cc.is_primary DESC,cc.id LIMIT 1)
+           END AS current_client_phone,
+           (SELECT COUNT(*)::int FROM appointment_staff x WHERE x.appointment_id=a.id) AS staff_count,
+           (SELECT COUNT(*)::int FROM appointment_services x WHERE x.appointment_id=a.id) AS service_count
       FROM appointment_booking_approvals aba
       JOIN appointments a ON a.id=aba.appointment_id
+      JOIN appointment_staff ast ON ast.appointment_id=a.id AND ast.position=1
+      JOIN appointment_services aps ON aps.appointment_id=a.id AND aps.position=1
+      JOIN LATERAL (SELECT array_agg(x.staff_id ORDER BY x.position,x.id) AS ids FROM appointment_staff x WHERE x.appointment_id=a.id) staff_snapshot ON TRUE
+      JOIN LATERAL (SELECT array_agg(x.service_id ORDER BY x.position,x.id) AS ids FROM appointment_services x WHERE x.appointment_id=a.id) service_snapshot ON TRUE
       LEFT JOIN clients c ON c.id=a.client_id
       LEFT JOIN crm_v2_clients v2 ON v2.id=a.crm_v2_client_id AND v2.status='active'
+      LEFT JOIN staff st ON st.id=ast.staff_id
+      LEFT JOIN services s ON s.id=aps.service_id
+      LEFT JOIN locations l ON l.id=a.location_id
      WHERE aba.appointment_id=$1
-       AND num_nonnulls(a.client_id,a.crm_v2_client_id)=1
-       AND (a.crm_v2_client_id IS NULL OR v2.id IS NOT NULL)
-     FOR UPDATE OF aba,a`, [appointmentId]);
-  return result.rows[0] || null;
+     ${lock ? 'FOR UPDATE OF aba,a,ast,aps' : ''}`;
 }
 
-async function validateControlledJuvanDecision(db, row, admin) {
-  const state = await resolveCurrentControlledDemoClient(db);
-  if (state.status !== 'bound' || Number(state.client?.id) !== Number(row.client_id)) {
-    return { ok: false, reason: `controlled_identity_${state.status}` };
+async function loadRequest(db, appointmentId, lock = false) {
+  const result = await db.query(requestQuery({ lock }), [positiveId(appointmentId)]);
+  return result.rows?.[0] || null;
+}
+
+async function createPendingBookingApproval(db, { appointmentId }) {
+  await ensureBookingApprovalInfrastructure(db);
+  const result = await db.query(`
+    INSERT INTO appointment_booking_approvals (
+      appointment_id,approver_staff_id,status,approval_mode,
+      requested_client_id,requested_crm_v2_client_id,requested_client_phone,
+      requested_location_id,requested_staff_id,requested_staff_ids,requested_service_id,requested_service_ids,
+      requested_starts_at,requested_ends_at,requested_revision
+    )
+    SELECT a.id,ast.staff_id,'pending','standard',a.client_id,a.crm_v2_client_id,
+           CASE WHEN a.crm_v2_client_id IS NOT NULL THEN v2.normalized_mobile ELSE
+             (SELECT normalized_value FROM client_contacts cc WHERE cc.client_id=a.client_id
+               AND LOWER(cc.contact_type) IN ('whatsapp','mobile','phone','telephone')
+               AND cc.normalized_value IS NOT NULL ORDER BY cc.is_primary DESC,cc.id LIMIT 1) END,
+           a.location_id,ast.staff_id,staff_snapshot.ids,aps.service_id,service_snapshot.ids,a.starts_at,a.ends_at,a.updated_at
+      FROM appointments a
+      JOIN appointment_staff ast ON ast.appointment_id=a.id AND ast.position=1
+      JOIN appointment_services aps ON aps.appointment_id=a.id AND aps.position=1
+      JOIN LATERAL (SELECT array_agg(x.staff_id ORDER BY x.position,x.id) AS ids FROM appointment_staff x WHERE x.appointment_id=a.id) staff_snapshot ON TRUE
+      JOIN LATERAL (SELECT array_agg(x.service_id ORDER BY x.position,x.id) AS ids FROM appointment_services x WHERE x.appointment_id=a.id) service_snapshot ON TRUE
+      LEFT JOIN crm_v2_clients v2 ON v2.id=a.crm_v2_client_id AND v2.status='active'
+     WHERE a.id=$1
+    ON CONFLICT (appointment_id) DO UPDATE SET
+      approver_staff_id=EXCLUDED.approver_staff_id,
+      requested_client_id=EXCLUDED.requested_client_id,
+      requested_crm_v2_client_id=EXCLUDED.requested_crm_v2_client_id,
+      requested_client_phone=EXCLUDED.requested_client_phone,
+      requested_location_id=EXCLUDED.requested_location_id,
+      requested_staff_id=EXCLUDED.requested_staff_id,
+      requested_staff_ids=EXCLUDED.requested_staff_ids,
+      requested_service_id=EXCLUDED.requested_service_id,
+      requested_service_ids=EXCLUDED.requested_service_ids,
+      requested_starts_at=EXCLUDED.requested_starts_at,
+      requested_ends_at=EXCLUDED.requested_ends_at,
+      requested_revision=EXCLUDED.requested_revision,
+      updated_at=NOW()
+    WHERE appointment_booking_approvals.status='pending'
+    RETURNING *`, [positiveId(appointmentId)]);
+  return result.rows?.[0] || null;
+}
+
+async function listUnresolvedBookingRequests({ db = pool, principal, now = new Date() }) {
+  const result = await db.query(`
+    SELECT aba.appointment_id,aba.approver_staff_id,aba.approver_admin_id,aba.observer_staff_id,
+           aba.status,aba.requested_at,aba.requested_starts_at,aba.requested_ends_at,
+           aba.requested_revision,aba.proposed_starts_at,aba.proposed_ends_at,
+           aba.proposed_staff_id,aba.proposal_version,aba.proposal_expires_at,
+           COALESCE(v2.name,c.display_name,a.source_client_name,'Client') AS client_name,
+           COALESCE(s.name,aps.service_name_snapshot,a.title,'Shiloh appointment') AS service_name,
+           COALESCE(st.display_name,ast.staff_name_snapshot,'Shiloh practitioner') AS staff_name,
+           COALESCE(pst.display_name,st.display_name,ast.staff_name_snapshot,'Shiloh practitioner') AS proposed_staff_name
+      FROM appointment_booking_approvals aba
+      JOIN appointments a ON a.id=aba.appointment_id AND a.status<>'cancelled'
+      JOIN appointment_staff ast ON ast.appointment_id=a.id AND ast.position=1
+      JOIN appointment_services aps ON aps.appointment_id=a.id AND aps.position=1
+      LEFT JOIN clients c ON c.id=a.client_id
+      LEFT JOIN crm_v2_clients v2 ON v2.id=a.crm_v2_client_id AND v2.status='active'
+      LEFT JOIN staff st ON st.id=ast.staff_id
+      LEFT JOIN staff pst ON pst.id=aba.proposed_staff_id
+      LEFT JOIN services s ON s.id=aps.service_id
+     WHERE aba.status IN ('pending','awaiting_client_confirmation')
+     ORDER BY aba.requested_at,aba.appointment_id`);
+  return (result.rows || []).filter(row => operatorCanResolve(principal, row)).map(row => ({
+    appointmentId: Number(row.appointment_id), status: row.status,
+    effectiveStatus: row.status === 'awaiting_client_confirmation' && new Date(row.proposal_expires_at).getTime() <= now.getTime() ? 'pending' : row.status,
+    clientName: row.client_name, serviceName: row.service_name, staffName: row.staff_name,
+    requestedStartsAt: row.requested_starts_at, requestedEndsAt: row.requested_ends_at,
+    requestedRevision: revisionOf(row.requested_revision),
+    proposedStartsAt: row.proposed_starts_at, proposedEndsAt: row.proposed_ends_at,
+    proposedStaffId: row.proposed_staff_id ? Number(row.proposed_staff_id) : null,
+    proposedStaffName: row.proposed_staff_name, proposalVersion: Number(row.proposal_version || 0),
+    proposalExpiresAt: row.proposal_expires_at,
+  }));
+}
+
+async function canonicalWindowAvailable(db, {
+  appointmentId, staffId, serviceId, locationId, startsAt, endsAt, excludeProposalAppointmentId = null,
+}) {
+  const resource = await db.query(`
+    SELECT st.id AS staff_id,st.display_name,st.status AS staff_status,st.resource_type,
+           s.id AS service_id,s.status AS service_status,l.id AS location_id,l.status AS location_status,
+           EXISTS(SELECT 1 FROM staff_services ss WHERE ss.staff_id=st.id AND ss.service_id=s.id) AS eligible
+      FROM staff st CROSS JOIN services s CROSS JOIN locations l
+     WHERE st.id=$1 AND s.id=$2 AND l.id=$3`, [staffId, serviceId, locationId]);
+  const canonical = resource.rows?.[0];
+  if (!canonical || canonical.staff_status !== 'active' || canonical.resource_type !== 'practitioner'
+      || canonical.service_status !== 'active' || canonical.location_status !== 'active' || canonical.eligible !== true) {
+    return { ok: false, reason: 'canonical_resource_changed' };
   }
-  const primary = await primaryAssignment(db, row.appointment_id);
-  const backup = await exactJeanPierreAdmin(db, state.approverAdminId);
-  if (!primary?.staff_id || !backup) return { ok: false, reason: 'approver_truth_unavailable' };
-  if (Number(primary.staff_id) !== Number(row.approver_staff_id)
-      || Number(backup.id) !== Number(row.approver_admin_id)) {
-    return { ok: false, reason: 'stored_approver_truth_drift' };
+  const clinic = await checkClinicHours({ db, locationId, startsAt, endsAt });
+  if (!clinic.covered) return { ok: false, reason: 'clinic_hours' };
+  const schedule = await checkAuthoritativeSchedule({ db, staffId, locationId, startsAt, endsAt });
+  if (!schedule.covered || schedule.partialUnavailable || (schedule.allDayUnavailable && !schedule.insideAvailableException)) {
+    return { ok: false, reason: 'staff_schedule' };
   }
-
-  let role = null;
-  if (Number(admin.staff_id) === Number(primary.staff_id)) role = 'Primary';
-  else if (Number(admin.id) === Number(backup.id)) role = 'Backup';
-  if (!role) return { ok: false, reason: 'not_authorized' };
-
-  const primaryContact = await adminContactForStaff(primary.staff_id, db);
-  const backupContact = await adminContactForAdmin(backup.id, db);
-  return { ok: true, state, primary, backup, role, primaryContact, backupContact };
+  const conflicts = await db.query(`
+    SELECT conflict_type,id FROM (
+      SELECT 'appointment'::text conflict_type,a.id FROM appointments a
+      JOIN appointment_staff ast ON ast.appointment_id=a.id
+      WHERE ast.staff_id=$1 AND a.id<>$2 AND a.status<>'cancelled' AND a.starts_at<$4 AND a.ends_at>$3
+      UNION ALL
+      SELECT 'calendar_block',cb.id FROM calendar_blocks cb
+      WHERE cb.staff_id=$1 AND cb.starts_at<$4 AND cb.ends_at>$3
+      UNION ALL
+      SELECT 'reschedule_hold',rr.id FROM appointment_reschedule_requests rr
+      WHERE rr.approver_staff_id=$1 AND rr.status='pending' AND rr.proposed_starts_at<$4 AND rr.proposed_ends_at>$3
+    ) x LIMIT 1`, [staffId, appointmentId, startsAt, endsAt]);
+  if (conflicts.rowCount) return { ok: false, reason: conflicts.rows[0].conflict_type };
+  const proposalConflicts = await pendingBookingProposalConflicts({
+    db, staffId, startsAt, endsAt, excludeAppointmentId: excludeProposalAppointmentId,
+  });
+  if (proposalConflicts.length) return { ok: false, reason: 'booking_proposal_hold' };
+  return { ok: true, canonical };
 }
 
-async function winnerLabel(db, row, validation) {
-  if (!row.decided_by_admin_id) return 'another authorized approver';
-  const result = await db.query(`SELECT id,staff_id,display_name FROM staff_admin_accounts WHERE id=$1`, [row.decided_by_admin_id]);
-  const winner = result.rows[0];
-  if (!winner) return 'another authorized approver';
-  const role = Number(winner.id) === Number(validation.backup.id)
-    ? 'Backup'
-    : (Number(winner.staff_id) === Number(validation.primary.staff_id) ? 'Primary' : 'authorized approver');
-  return `${winner.display_name} (${role})`;
+async function audit(db, principal, action, appointmentId, metadata = {}) {
+  await db.query(`INSERT INTO crm_audit_events(actor_admin_id,action,entity_type,entity_id,metadata)
+                  VALUES($1,$2,'appointment',$3,$4::jsonb)`,
+  [principal?.id || null, action, appointmentId, JSON.stringify({ surface: 'workspace_booking_requests', ...metadata })]);
 }
 
-function controlledStaleReply(reason) {
-  if (reason === 'not_authorized') return 'You are not the current Primary practitioner or Jean-Pierre Backup for this controlled Juvan booking, so no decision was recorded.';
-  return 'This controlled Juvan booking approval no longer matches the current canonical CRM identity and appointment truth. No decision was recorded.';
-}
-
-async function notifyGenericOtherDecisionMaker(context, decision, decidingAdmin) {
-  if (!context?.observer_staff_id) return;
-  const otherStaffId = Number(decidingAdmin.staff_id) === Number(context.approver_staff_id) ? context.observer_staff_id : context.approver_staff_id;
-  const other = await adminContactForStaff(otherStaffId);
-  if (!other || Number(other.id) === Number(decidingAdmin.id)) return;
-  const template = process.env.WHATSAPP_BOOKING_APPROVAL_OUTCOME_TEMPLATE;
-  if (template) return sendWhatsAppTemplate(other.normalized_whatsapp, template, [context.client_name, context.service_name, fmtDateTime(context.starts_at), decidingAdmin.display_name, decision, String(context.appointment_id)], TEMPLATE_LANGUAGE);
-  return sendWhatsAppMessage(other.normalized_whatsapp, ['*Booking request update*', '', `${context.client_name} — ${context.service_name} — ${fmtDateTime(context.starts_at)}`, `${decidingAdmin.display_name} has ${decision} the request.`, 'The first valid decision is final for this request.'].join('\n'));
-}
-
-async function notifyControlledOtherDecisionMaker(context, decision, decidingAdmin, validation) {
-  const other = validation.role === 'Primary' ? validation.backupContact : validation.primaryContact;
-  const otherRole = validation.role === 'Primary' ? 'Backup' : 'Primary';
-  if (!other || Number(other.id) === Number(decidingAdmin.id)) return;
-  const decider = `${decidingAdmin.display_name} (${validation.role})`;
-  const template = process.env.WHATSAPP_BOOKING_APPROVAL_OUTCOME_TEMPLATE;
-  if (template) return sendWhatsAppTemplate(other.normalized_whatsapp, template, [context.client_name, context.service_name, fmtDateTime(context.starts_at), decider, decision, String(context.appointment_id)], TEMPLATE_LANGUAGE);
-  return sendWhatsAppMessage(other.normalized_whatsapp, [
-    '*Juvan booking request update*', '',
-    `Client: ${context.client_name}`,
-    `Treatment: ${context.service_name}`,
-    `With: ${validation.primary.display_name}`,
-    `Time: ${fmtDateTime(context.starts_at)}`,
-    `Primary: ${validation.primary.display_name}`,
-    `Backup: ${validation.backup.display_name}`,
-    '',
-    `${decider} has ${decision} the request.`,
-    `Your ${otherRole} decision is no longer required. The first valid decision is final.`,
-  ].join('\n'));
-}
-
-async function approveBookingRequest(admin, context) {
-  const db = await pool.connect();
-  let controlledValidation = null;
-  let locked = null;
+async function inTransaction(dbPool, operation) {
+  const db = await dbPool.connect();
   try {
     await db.query('BEGIN');
-    if (context.approval_mode === CONTROLLED_JUVAN_MODE) await getControlledDemoIdentity(db, true);
-    locked = await lockedDecisionContext(db, context.appointment_id);
-    if (!locked) { await db.query('ROLLBACK'); return { handled: true, reply: 'That booking approval request no longer exists.' }; }
-
-    if (locked.approval_mode === CONTROLLED_JUVAN_MODE) {
-      controlledValidation = await validateControlledJuvanDecision(db, locked, admin);
-      if (!controlledValidation.ok) { await db.query('ROLLBACK'); return { handled: true, reply: controlledStaleReply(controlledValidation.reason) }; }
-      if (locked.status !== 'pending') {
-        const winner = await winnerLabel(db, locked, controlledValidation);
-        await db.query('ROLLBACK');
-        return { handled: true, status: locked.status, reply: `This booking request has already been ${locked.status} by ${winner}. No second decision was recorded.` };
-      }
-    } else {
-      if (!isAuthorizedDecisionMaker(admin, locked)) { await db.query('ROLLBACK'); return { handled: true, reply: 'You are not authorized to decide this booking request, so no decision was recorded.' }; }
-      if (locked.status !== 'pending') { await db.query('ROLLBACK'); return { handled: true, status: locked.status, reply: `This booking request has already been ${locked.status}.` }; }
-    }
-
-    if (locked.appointment_status === 'cancelled') {
-      await db.query(`UPDATE appointment_booking_approvals SET status='declined',decided_at=NOW(),decided_by_admin_id=$2,decision_note='appointment already cancelled',updated_at=NOW() WHERE appointment_id=$1 AND status='pending'`, [locked.appointment_id, admin.id]);
-      await db.query('COMMIT');
-      return { handled: true, status: 'declined', reply: 'This booking request is no longer active because the appointment was already cancelled.' };
-    }
-
-    const note = controlledValidation ? `first_decision:${controlledValidation.role.toLowerCase()}` : null;
-    const updated = await db.query(`UPDATE appointment_booking_approvals SET status='approved',decided_at=NOW(),decided_by_admin_id=$2,decision_note=COALESCE($3,decision_note),updated_at=NOW() WHERE appointment_id=$1 AND status='pending' RETURNING appointment_id`, [locked.appointment_id, admin.id, note]);
-    if (updated.rowCount !== 1) { await db.query('ROLLBACK'); return { handled: true, reply: 'This booking request changed before your decision could be recorded. No second decision was written.' }; }
-    await db.query(`INSERT INTO crm_audit_events(action,entity_type,entity_id,metadata) VALUES ('client.booking_approval.approved','appointment',$1,$2::jsonb)`, [locked.appointment_id, JSON.stringify({ decisionMakerStaffId: admin.staff_id || null, decisionMakerAdminId: admin.id, decisionMakerName: admin.display_name, approvalRole: controlledValidation?.role || null, approvalMode: locked.approval_mode, controlledDemoKey: controlledValidation ? DEMO_KEY : null, identityModel: locked.identity_model, clientId: locked.client_id || null, crmV2ClientId: locked.crm_v2_client_id || null })]);
+    const result = await operation(db);
     await db.query('COMMIT');
+    return result;
   } catch (error) {
     try { await db.query('ROLLBACK'); } catch (_) {}
     throw error;
-  } finally {
-    db.release();
-  }
-
-  const confirmation = await sendCustomerBookingConfirmationForAppointment(locked.appointment_id);
-  try {
-    if (controlledValidation) await notifyControlledOtherDecisionMaker(locked, 'approved', admin, controlledValidation);
-    else await notifyGenericOtherDecisionMaker(locked, 'approved', admin);
-  } catch (error) { logger.warn({ err: error, appointmentId: locked.appointment_id }, 'Booking approval peer outcome notification failed'); }
-  const roleLabel = controlledValidation ? ` (${controlledValidation.role})` : '';
-  return {
-    handled: true,
-    status: 'approved',
-    reply: confirmation.sent
-      ? `Approved by ${admin.display_name}${roleLabel}. Appointment #${locked.appointment_id} is confirmed and the client confirmation has been sent.`
-      : `Approved by ${admin.display_name}${roleLabel}. Appointment #${locked.appointment_id} is confirmed. Client confirmation delivery status: ${confirmation.reason || 'not sent'}.`,
-  };
+  } finally { db.release(); }
 }
 
-async function declineBookingRequest(admin, context) {
-  const db = await pool.connect();
-  let controlledValidation = null;
-  let locked = null;
+async function lockStaffIds(db, staffIds) {
+  const ids = [...new Set(canonicalIds(staffIds))].sort((a, b) => a - b);
+  for (const staffId of ids) await db.query('SELECT pg_advisory_xact_lock($1::bigint)', [staffId]);
+  return ids;
+}
+
+async function validateAllWindows(db, { appointmentId, staffIds, serviceIds, locationId, startsAt, endsAt, excludeProposalAppointmentId }, validateWindow) {
+  if (!canonicalIds(staffIds).length || !canonicalIds(serviceIds).length) return { ok: false, reason: 'canonical_assignment_missing' };
+  let canonical = null;
+  for (const staffId of canonicalIds(staffIds)) {
+    for (const serviceId of canonicalIds(serviceIds)) {
+      const available = await validateWindow(db, {
+        appointmentId, staffId, serviceId, locationId, startsAt, endsAt, excludeProposalAppointmentId,
+      });
+      if (!available.ok) return available;
+      canonical ||= available.canonical;
+    }
+  }
+  return { ok: true, canonical };
+}
+
+function requireResolvable(principal, row, expectedRevision, allowedStates = ACTIVE_REQUEST_STATES) {
+  if (!row) throw new BookingRequestError('BOOKING_REQUEST_NOT_FOUND', 'That booking request no longer exists.', 404);
+  if (!operatorCanResolve(principal, row)) throw new BookingRequestError('BOOKING_REQUEST_FORBIDDEN', 'Current Workspace authority cannot resolve this booking request.', 403);
+  if (!allowedStates.has(row.status)) throw new BookingRequestError('BOOKING_REQUEST_ALREADY_RESOLVED', 'That booking request has already been resolved.', 409);
+  if (expectedRevision && revisionOf(expectedRevision) !== revisionOf(row.requested_revision)) {
+    throw new BookingRequestError('BOOKING_REQUEST_STALE', 'This request changed. Refresh Workspace before trying again.', 409);
+  }
+  if (!requestSnapshotMatches(row)) throw new BookingRequestError('BOOKING_REQUEST_CANONICAL_DRIFT', 'The canonical appointment changed after the client request. No resolution was recorded.', 409);
+}
+
+async function acceptRequestedAppointment({ dbPool = pool, principal, appointmentId, expectedRevision, now = new Date(), validateWindow = canonicalWindowAvailable, sendConfirmation = sendCustomerBookingConfirmationForAppointment }) {
+  const id = positiveId(appointmentId);
+  await inTransaction(dbPool, async db => {
+    const row = await loadRequest(db, id, true);
+    requireResolvable(principal, row, expectedRevision);
+    if (row.status === 'awaiting_client_confirmation' && new Date(row.proposal_expires_at).getTime() > now.getTime()) {
+      throw new BookingRequestError('BOOKING_REQUEST_AWAITING_CLIENT', 'This request is awaiting the client’s response to an active alternative.', 409);
+    }
+    await lockStaffIds(db, row.current_staff_ids);
+    const available = await validateAllWindows(db, {
+      appointmentId: id, staffIds: row.current_staff_ids, serviceIds: row.current_service_ids,
+      locationId: Number(row.current_location_id), startsAt: row.current_starts_at, endsAt: row.current_ends_at,
+      excludeProposalAppointmentId: id,
+    }, validateWindow);
+    if (!available.ok) throw new BookingRequestError('BOOKING_REQUEST_UNAVAILABLE', 'The requested appointment is no longer canonically available.', 409);
+    const updated = await db.query(`UPDATE appointment_booking_approvals SET status='approved',decided_at=NOW(),
+      decided_by_admin_id=$2,decision_note='workspace_accept_requested',updated_at=NOW()
+      WHERE appointment_id=$1 AND (status='pending' OR
+        (status='awaiting_client_confirmation' AND proposal_expires_at <= $3))
+      RETURNING appointment_id`, [id, principal.id, now]);
+    if (updated.rowCount !== 1) throw new BookingRequestError('BOOKING_REQUEST_STALE', 'This request changed before it could be accepted.', 409);
+    await audit(db, principal, 'client.booking_request.accepted_requested', id);
+  });
+  const confirmation = await sendConfirmation(id);
+  return { ok: true, appointmentId: id, status: 'approved', confirmation };
+}
+
+async function defaultSendProposal(row, version) {
+  const phone = normalizePhone(row.current_client_phone);
+  if (!phone) throw new Error('Canonical client WhatsApp identity is unavailable');
+  return sendWhatsAppList(phone, [
+    `Hi ${row.client_name}, Shiloh has another option for your booking request. 🌿`, '',
+    `Service: ${row.service_name}`, `With: ${row.proposed_staff_name || row.staff_name}`,
+    `Proposed time: ${fmtDateTime(row.proposed_starts_at)}`, '',
+    'Please choose one response. The appointment is not confirmed until your acceptance is revalidated.',
+  ].join('\n'), 'Choose', [
+    { id: clientActionId(CLIENT_ACCEPT_PREFIX, row.appointment_id, version), title: 'Yes, book this', description: 'Accept this exact option' },
+    { id: clientActionId(CLIENT_ANOTHER_PREFIX, row.appointment_id, version), title: "I'd like another option", description: 'Ask the Shiloh team to review again' },
+  ], 'Booking request');
+}
+
+async function proposeAlternative({
+  dbPool = pool, principal, appointmentId, expectedRevision, startsAt, staffId = null, serviceId = null,
+  now = new Date(), sendProposal = defaultSendProposal,
+  validateWindow = canonicalWindowAvailable,
+}) {
+  const id = positiveId(appointmentId);
+  const start = exactDate(startsAt);
+  if (start.getTime() <= now.getTime()) throw new BookingRequestError('BOOKING_REQUEST_PAST_TIME', 'The proposed time must be in the future.');
+  let deliveryRow;
+  const version = await inTransaction(dbPool, async db => {
+    const row = await loadRequest(db, id, true);
+    requireResolvable(principal, row, expectedRevision);
+    const targetStaffId = staffId == null ? Number(row.current_staff_id) : positiveId(staffId);
+    const targetServiceId = serviceId == null ? Number(row.current_service_id) : positiveId(serviceId);
+    const currentStaffIds = canonicalIds(row.current_staff_ids);
+    const currentServiceIds = canonicalIds(row.current_service_ids);
+    if (staffId != null && currentStaffIds.length !== 1) {
+      throw new BookingRequestError('BOOKING_REQUEST_COMPLEX_PRACTITIONER_CHANGE', 'This multi-practitioner request can only receive an alternative time.', 400);
+    }
+    if (targetStaffId !== Number(row.current_staff_id) && !hasBusinessWideAuthority(principal)) {
+      throw new BookingRequestError('BOOKING_REQUEST_TARGET_FORBIDDEN', 'Current Workspace authority cannot propose another practitioner.', 403);
+    }
+    if (targetServiceId !== Number(row.current_service_id)) {
+      throw new BookingRequestError('BOOKING_REQUEST_SERVICE_CHANGE_UNSUPPORTED', 'Choose an alternative time or practitioner for the requested service.', 400);
+    }
+    const duration = new Date(row.requested_ends_at).getTime() - new Date(row.requested_starts_at).getTime();
+    if (!(duration > 0)) throw new BookingRequestError('BOOKING_REQUEST_INVALID_DURATION', 'The requested appointment duration is invalid.');
+    const end = new Date(start.getTime() + duration);
+    const targetStaffIds = currentStaffIds.length === 1 ? [targetStaffId] : currentStaffIds;
+    await lockStaffIds(db, targetStaffIds);
+    const available = await validateAllWindows(db, {
+      appointmentId: id, staffIds: targetStaffIds, serviceIds: currentServiceIds,
+      locationId: Number(row.current_location_id), startsAt: start, endsAt: end,
+      excludeProposalAppointmentId: id,
+    }, validateWindow);
+    if (!available.ok) throw new BookingRequestError('BOOKING_REQUEST_ALTERNATIVE_UNAVAILABLE', 'That alternative is not canonically available.', 409);
+    const expiry = new Date(now.getTime() + PROPOSAL_TTL_MS);
+    const updated = await db.query(`UPDATE appointment_booking_approvals SET
+      status='awaiting_client_confirmation',proposed_location_id=$2,proposed_staff_id=$3,proposed_staff_ids=$4,proposed_service_id=$5,
+      proposed_starts_at=$6,proposed_ends_at=$7,proposal_version=proposal_version+1,proposal_expires_at=$8,
+      proposed_by_admin_id=$9,decision_note=NULL,updated_at=NOW()
+      WHERE appointment_id=$1 AND status IN ('pending','awaiting_client_confirmation')
+      RETURNING proposal_version`, [id, row.current_location_id, targetStaffId, targetStaffIds, targetServiceId, start, end, expiry, principal.id]);
+    if (updated.rowCount !== 1) throw new BookingRequestError('BOOKING_REQUEST_STALE', 'This request changed before the alternative could be proposed.', 409);
+    await audit(db, principal, 'client.booking_request.alternative_proposed', id, {
+      proposalVersion: Number(updated.rows[0].proposal_version), proposedStaffId: targetStaffId,
+      proposedServiceId: targetServiceId, proposedStartsAt: start.toISOString(), proposalExpiresAt: expiry.toISOString(),
+    });
+    deliveryRow = { ...row, appointment_id: id, proposed_starts_at: start, proposed_ends_at: end,
+      proposed_staff_name: targetStaffIds.length === 1 ? available.canonical.display_name : 'Shiloh team', current_client_phone: row.current_client_phone };
+    return Number(updated.rows[0].proposal_version);
+  });
   try {
-    await db.query('BEGIN');
-    if (context.approval_mode === CONTROLLED_JUVAN_MODE) await getControlledDemoIdentity(db, true);
-    locked = await lockedDecisionContext(db, context.appointment_id);
-    if (!locked) { await db.query('ROLLBACK'); return { handled: true, reply: 'That booking approval request no longer exists.' }; }
-
-    if (locked.approval_mode === CONTROLLED_JUVAN_MODE) {
-      controlledValidation = await validateControlledJuvanDecision(db, locked, admin);
-      if (!controlledValidation.ok) { await db.query('ROLLBACK'); return { handled: true, reply: controlledStaleReply(controlledValidation.reason) }; }
-      if (locked.status !== 'pending') {
-        const winner = await winnerLabel(db, locked, controlledValidation);
-        await db.query('ROLLBACK');
-        return { handled: true, status: locked.status, reply: `This booking request has already been ${locked.status} by ${winner}. No second decision was recorded.` };
-      }
-    } else {
-      if (!isAuthorizedDecisionMaker(admin, locked)) { await db.query('ROLLBACK'); return { handled: true, reply: 'You are not authorized to decide this booking request, so no decision was recorded.' }; }
-      if (locked.status !== 'pending') { await db.query('ROLLBACK'); return { handled: true, status: locked.status, reply: `This booking request has already been ${locked.status}.` }; }
-    }
-
-    const note = controlledValidation ? `first_decision:${controlledValidation.role.toLowerCase()}` : null;
-    const updated = await db.query(`UPDATE appointment_booking_approvals SET status='declined',decided_at=NOW(),decided_by_admin_id=$2,decision_note=COALESCE($3,decision_note),updated_at=NOW() WHERE appointment_id=$1 AND status='pending' RETURNING appointment_id`, [locked.appointment_id, admin.id, note]);
-    if (updated.rowCount !== 1) { await db.query('ROLLBACK'); return { handled: true, reply: 'This booking request changed before your decision could be recorded. No second decision was written.' }; }
-    if (locked.appointment_status !== 'cancelled') {
-      await db.query(`UPDATE appointments SET status='cancelled',updated_at=NOW() WHERE id=$1 AND status<>'cancelled'`, [locked.appointment_id]);
-      await db.query(`INSERT INTO appointment_status_history(appointment_id,from_status,to_status,changed_by,reason) VALUES ($1,$2,'cancelled',$3,'Authorized practitioner/supervisor declined client booking request')`, [locked.appointment_id, locked.appointment_status, `admin:${admin.id}`]);
-    }
-    await db.query(`INSERT INTO crm_audit_events(action,entity_type,entity_id,metadata) VALUES ('client.booking_approval.declined','appointment',$1,$2::jsonb)`, [locked.appointment_id, JSON.stringify({ decisionMakerStaffId: admin.staff_id || null, decisionMakerAdminId: admin.id, decisionMakerName: admin.display_name, approvalRole: controlledValidation?.role || null, approvalMode: locked.approval_mode, controlledDemoKey: controlledValidation ? DEMO_KEY : null, identityModel: locked.identity_model, clientId: locked.client_id || null, crmV2ClientId: locked.crm_v2_client_id || null })]);
-    await db.query('COMMIT');
+    await sendProposal(deliveryRow, version);
+    await dbPool.query(`INSERT INTO crm_audit_events(actor_admin_id,action,entity_type,entity_id,metadata)
+      VALUES($1,'client.booking_request.alternative_sent','appointment',$2,$3::jsonb)`,
+    [principal.id, id, JSON.stringify({ surface: 'workspace_booking_requests', proposalVersion: version })]);
   } catch (error) {
-    try { await db.query('ROLLBACK'); } catch (_) {}
-    throw error;
-  } finally {
-    db.release();
+    await dbPool.query(`UPDATE appointment_booking_approvals SET status='pending',proposed_location_id=NULL,
+      proposed_staff_id=NULL,proposed_staff_ids=NULL,proposed_service_id=NULL,proposed_starts_at=NULL,proposed_ends_at=NULL,
+      proposal_expires_at=NULL,decision_note='proposal_delivery_failed',updated_at=NOW()
+      WHERE appointment_id=$1 AND status='awaiting_client_confirmation' AND proposal_version=$2`, [id, version]);
+    logger.error({ err: error, appointmentId: id, proposalVersion: version }, 'Booking alternative client delivery failed');
+    throw new BookingRequestError('BOOKING_REQUEST_DELIVERY_FAILED', 'The alternative could not be delivered, so its hold was released and the request still needs attention.', 503);
   }
-
-  const phone = locked.client_phone || (locked.client_id ? await clientPhone(locked.client_id) : null);
-  if (phone) {
-    const template = process.env.WHATSAPP_BOOKING_DECLINED_TEMPLATE;
-    try {
-      if (template) await sendWhatsAppTemplate(phone, template, [locked.client_name, locked.service_name, fmtDateTime(locked.starts_at), String(locked.appointment_id)], TEMPLATE_LANGUAGE, ['BOOKING']);
-      else {
-        const body = ['*Booking request update*', '', `Your request for ${locked.service_name} on ${fmtDateTime(locked.starts_at)} could not be confirmed.`, 'The held time has been released. Nothing is booked.', '', 'Would you like to choose another available time? 🌿', 'Use the button below, or type *BOOKING*.'].join('\n');
-        await sendWhatsAppReplyButtons(phone, body, [{ id: 'BOOKING', title: 'Book another time' }]);
-      }
-    } catch (error) { logger.error({ err: error, appointmentId: locked.appointment_id }, 'Declined booking client notification failed'); }
-  }
-  try {
-    if (controlledValidation) await notifyControlledOtherDecisionMaker(locked, 'declined', admin, controlledValidation);
-    else await notifyGenericOtherDecisionMaker(locked, 'declined', admin);
-  } catch (error) { logger.warn({ err: error, appointmentId: locked.appointment_id }, 'Booking decline peer outcome notification failed'); }
-  const roleLabel = controlledValidation ? ` (${controlledValidation.role})` : '';
-  return { handled: true, status: 'declined', reply: `Declined by ${admin.display_name}${roleLabel}. Appointment request #${locked.appointment_id} was cancelled and the held time was released.` };
+  return { ok: true, appointmentId: id, status: 'awaiting_client_confirmation', proposalVersion: version };
 }
 
-async function processClientBookingApprovalMessage(sender, text) {
-  const decision = parseApprovalDecision(text);
-  if (!decision) return { handled: false };
-  await ensureBookingApprovalTable();
-  const admin = await resolveAdminByWhatsApp(sender);
-  if (!admin) return { handled: true, reply: 'This approval action is restricted to an authorized Shiloh practitioner or supervisor.' };
-  const context = await approvalContext(decision.appointmentId);
-  if (!context) return { handled: true, reply: 'That booking approval request no longer exists.' };
-  if (context.approval_mode !== CONTROLLED_JUVAN_MODE && !isAuthorizedDecisionMaker(admin, context)) {
-    return { handled: true, reply: 'You are not authorized to decide this booking request, so no decision was recorded.' };
+async function defaultSendCannotAccommodate(row) {
+  const configured = String(process.env.WHATSAPP_BOOKING_DECLINED_TEMPLATE || '').trim();
+  if (configured !== 'shiloh_booking_declined_v1') return { sent: false, reason: 'template_not_configured' };
+  await sendWhatsAppTemplate(normalizePhone(row.current_client_phone), configured,
+    [row.client_name, row.service_name, fmtDateTime(row.requested_starts_at), String(row.appointment_id)],
+    process.env.WHATSAPP_TEMPLATE_LANGUAGE || 'en', ['client_booking_start']);
+  return { sent: true };
+}
+
+async function cannotAccommodate({ dbPool = pool, principal, appointmentId, expectedRevision, sendOutcome = defaultSendCannotAccommodate }) {
+  const id = positiveId(appointmentId);
+  const row = await inTransaction(dbPool, async db => {
+    const locked = await loadRequest(db, id, true);
+    requireResolvable(principal, locked, expectedRevision);
+    const updated = await db.query(`UPDATE appointment_booking_approvals SET status='declined',decided_at=NOW(),
+      decided_by_admin_id=$2,decision_note='workspace_cannot_accommodate',proposal_expires_at=NULL,updated_at=NOW()
+      WHERE appointment_id=$1 AND status IN ('pending','awaiting_client_confirmation') RETURNING appointment_id`, [id, principal.id]);
+    if (updated.rowCount !== 1) throw new BookingRequestError('BOOKING_REQUEST_STALE', 'This request changed before it could be resolved.', 409);
+    const cancelled = await db.query(`UPDATE appointments SET status='cancelled',updated_at=NOW() WHERE id=$1 AND status<>'cancelled' RETURNING id`, [id]);
+    if (cancelled.rowCount !== 1) throw new BookingRequestError('BOOKING_REQUEST_STALE', 'This appointment changed before it could be cancelled.', 409);
+    await db.query(`UPDATE appointment_lifecycle SET status='cancelled',updated_at=NOW()
+      WHERE appointment_id=$1 AND status<>'cancelled'`, [id]);
+    await db.query(`INSERT INTO appointment_status_history(appointment_id,from_status,to_status,changed_by,reason)
+      VALUES($1,$2,'cancelled',$3,'Booking request could not be accommodated in Workspace')`,
+    [id, locked.appointment_status, `admin:${principal.id}`]);
+    await audit(db, principal, 'client.booking_request.cannot_accommodate', id);
+    return locked;
+  });
+  let delivery;
+  try { delivery = await sendOutcome(row); }
+  catch (error) { logger.error({ err: error, appointmentId: id }, 'Cannot-accommodate client delivery failed'); delivery = { sent: false, reason: 'send_failed' }; }
+  return { ok: true, appointmentId: id, status: 'declined', delivery };
+}
+
+async function clientIdentityMatches(row, sender) {
+  const phone = normalizePhone(sender);
+  return Boolean(phone && phone === normalizePhone(row.requested_client_phone) && phone === normalizePhone(row.current_client_phone)
+    && String(row.requested_client_id || '') === String(row.current_client_id || '')
+    && String(row.requested_crm_v2_client_id || '') === String(row.current_crm_v2_client_id || ''));
+}
+
+function clearProposalSql(nextStatus = 'pending') {
+  return `status='${nextStatus}',proposed_location_id=NULL,proposed_staff_id=NULL,proposed_service_id=NULL,
+    proposed_staff_ids=NULL,
+    proposed_starts_at=NULL,proposed_ends_at=NULL,proposal_expires_at=NULL,client_responded_at=NOW(),updated_at=NOW()`;
+}
+
+async function requestAnotherOption({ dbPool = pool, sender, appointmentId, proposalVersion }) {
+  const id = positiveId(appointmentId);
+  await inTransaction(dbPool, async db => {
+    const row = await loadRequest(db, id, true);
+    if (!row || row.status !== 'awaiting_client_confirmation' || Number(row.proposal_version) !== positiveId(proposalVersion)) {
+      throw new BookingRequestError('BOOKING_PROPOSAL_STALE', 'That proposed option is no longer active.', 409);
+    }
+    if (!(await clientIdentityMatches(row, sender))) throw new BookingRequestError('BOOKING_PROPOSAL_IDENTITY', 'That response does not match the booking request.', 403);
+    const updated = await db.query(`UPDATE appointment_booking_approvals SET ${clearProposalSql()} WHERE appointment_id=$1 AND status='awaiting_client_confirmation' AND proposal_version=$2 RETURNING appointment_id`, [id, proposalVersion]);
+    if (updated.rowCount !== 1) throw new BookingRequestError('BOOKING_PROPOSAL_STALE', 'That proposed option is no longer active.', 409);
+    await audit(db, null, 'client.booking_request.another_option_requested', id, { proposalVersion: Number(proposalVersion) });
+  });
+  return { handled: true, status: 'pending', reply: 'Thanks — I’ve asked the Shiloh team to review another option. Your request is not confirmed yet.' };
+}
+
+async function acceptProposedAlternative({ dbPool = pool, sender, appointmentId, proposalVersion, now = new Date(), validateWindow = canonicalWindowAvailable, sendConfirmation = sendCustomerBookingConfirmationForAppointment }) {
+  const id = positiveId(appointmentId);
+  const outcome = await inTransaction(dbPool, async db => {
+    const row = await loadRequest(db, id, true);
+    if (!row || row.status !== 'awaiting_client_confirmation' || Number(row.proposal_version) !== positiveId(proposalVersion)) {
+      throw new BookingRequestError('BOOKING_PROPOSAL_STALE', 'That proposed option is no longer active.', 409);
+    }
+    if (!(await clientIdentityMatches(row, sender))) throw new BookingRequestError('BOOKING_PROPOSAL_IDENTITY', 'That response does not match the booking request.', 403);
+    if (!requestSnapshotMatches(row)) throw new BookingRequestError('BOOKING_PROPOSAL_CANONICAL_DRIFT', 'The original request changed, so this option cannot be confirmed.', 409);
+    if (new Date(row.proposal_expires_at).getTime() <= now.getTime()) {
+      const expired = await db.query(`UPDATE appointment_booking_approvals SET ${clearProposalSql()} WHERE appointment_id=$1 AND status='awaiting_client_confirmation' AND proposal_version=$2 RETURNING appointment_id`, [id, proposalVersion]);
+      if (expired.rowCount !== 1) throw new BookingRequestError('BOOKING_PROPOSAL_STALE', 'That proposed option is no longer active.', 409);
+      await audit(db, null, 'client.booking_request.proposal_expired', id, { proposalVersion: Number(proposalVersion) });
+      return { status: 'expired' };
+    }
+    const proposedStaffIds = canonicalIds(row.proposed_staff_ids);
+    await lockStaffIds(db, proposedStaffIds);
+    const available = await validateAllWindows(db, {
+      appointmentId: id, staffIds: proposedStaffIds, serviceIds: row.current_service_ids, locationId: Number(row.proposed_location_id),
+      startsAt: row.proposed_starts_at, endsAt: row.proposed_ends_at, excludeProposalAppointmentId: id,
+    }, validateWindow);
+    if (!available.ok) {
+      const released = await db.query(`UPDATE appointment_booking_approvals SET ${clearProposalSql()} WHERE appointment_id=$1 AND status='awaiting_client_confirmation' AND proposal_version=$2 RETURNING appointment_id`, [id, proposalVersion]);
+      if (released.rowCount !== 1) throw new BookingRequestError('BOOKING_PROPOSAL_STALE', 'That proposed option is no longer active.', 409);
+      await audit(db, null, 'client.booking_request.proposal_unavailable', id, { proposalVersion: Number(proposalVersion), reason: available.reason });
+      return { status: 'unavailable' };
+    }
+    const accepted = await db.query(`UPDATE appointment_booking_approvals SET status='approved',decided_at=NOW(),client_responded_at=NOW(),
+      decision_note='client_accepted_workspace_alternative',proposal_expires_at=NULL,updated_at=NOW()
+      WHERE appointment_id=$1 AND status='awaiting_client_confirmation' AND proposal_version=$2
+      RETURNING appointment_id`, [id, proposalVersion]);
+    if (accepted.rowCount !== 1) throw new BookingRequestError('BOOKING_PROPOSAL_STALE', 'That proposed option is no longer active.', 409);
+    await db.query(`UPDATE appointments SET location_id=$2,starts_at=$3,ends_at=$4,updated_at=NOW() WHERE id=$1`,
+      [id, row.proposed_location_id, row.proposed_starts_at, row.proposed_ends_at]);
+    if (proposedStaffIds.length === 1 && Number(row.current_staff_id) !== proposedStaffIds[0]) {
+      await db.query(`UPDATE appointment_staff SET staff_id=$2,staff_name_snapshot=$3 WHERE appointment_id=$1 AND position=1`,
+        [id, proposedStaffIds[0], available.canonical.display_name]);
+    }
+    await db.query(`UPDATE appointment_lifecycle SET appointment_at=$2,appointment_ends_at=$3,
+      therapist_text=(SELECT string_agg(staff_name_snapshot,' + ' ORDER BY position) FROM appointment_staff WHERE appointment_id=$1),
+      reminder_sent_at=NULL,updated_at=NOW() WHERE appointment_id=$1`, [id, row.proposed_starts_at, row.proposed_ends_at]);
+    await db.query(`INSERT INTO appointment_status_history(appointment_id,from_status,to_status,changed_by,reason)
+      VALUES($1,$2,$2,$3,'Client accepted Workspace-proposed booking alternative after canonical revalidation')`,
+    [id, row.appointment_status, `client:${normalizePhone(sender)}`]);
+    await audit(db, null, 'client.booking_request.alternative_accepted', id, { proposalVersion: Number(proposalVersion), staffIds: proposedStaffIds });
+    return { status: 'approved' };
+  });
+  if (outcome.status === 'expired') return { handled: true, status: 'pending', reply: 'That option has expired, so it was not booked. The Shiloh team will review another option.' };
+  if (outcome.status === 'unavailable') return { handled: true, status: 'pending', reply: 'That option is no longer available, so it was not booked. The Shiloh team will review another option.' };
+  const confirmation = await sendConfirmation(id);
+  return { handled: true, status: 'approved', confirmation, reply: confirmation.sent
+    ? 'Your appointment is confirmed. I’ve sent the final booking details. 🌿'
+    : 'Your appointment is confirmed after the final availability check. The Shiloh team can help if the confirmation message is delayed.' };
+}
+
+async function processClientBookingProposalMessage(sender, text, options = {}) {
+  const action = parseClientProposalAction(text);
+  if (!action) return { handled: false };
+  try {
+    return action.action === 'accept'
+      ? await acceptProposedAlternative({ sender, ...action, ...options })
+      : await requestAnotherOption({ sender, ...action, ...options });
+  } catch (error) {
+    if (error instanceof BookingRequestError) return { handled: true, status: 'rejected', reply: error.message };
+    logger.error({ err: error, appointmentId: action.appointmentId }, 'Client booking proposal response failed');
+    return { handled: true, status: 'failed', reply: 'I couldn’t safely process that booking response. No new appointment confirmation was made; please ask the Shiloh team to review it.' };
   }
-  return decision.decision === 'approved' ? approveBookingRequest(admin, context) : declineBookingRequest(admin, context);
 }
 
 module.exports = {
-  APPROVE_PREFIX,
-  DECLINE_PREFIX,
-  CONTROLLED_JUVAN_MODE,
-  approvalButtons,
+  CLIENT_ACCEPT_PREFIX,
+  CLIENT_ANOTHER_PREFIX,
+  PROPOSAL_TTL_MS,
+  BookingRequestError,
+  clientActionId,
+  parseClientProposalAction,
+  operatorCanResolve,
+  requestSnapshotMatches,
   createPendingBookingApproval,
-  ensureBookingApprovalTable,
-  isAuthorizedDecisionMaker,
-  parseApprovalDecision,
-  processClientBookingApprovalMessage,
-  requestPractitionerApproval,
-  resolveClientApprovalPolicy,
-  resolveDummyTestApprovalPolicy,
-  resolveJuvanApprovalPolicy,
+  listUnresolvedBookingRequests,
+  canonicalWindowAvailable,
+  acceptRequestedAppointment,
+  proposeAlternative,
+  cannotAccommodate,
+  requestAnotherOption,
+  acceptProposedAlternative,
+  processClientBookingProposalMessage,
 };

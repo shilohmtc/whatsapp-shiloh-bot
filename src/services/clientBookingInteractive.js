@@ -2,6 +2,8 @@ const { displayDate } = require('./bookingIntent');
 const { CLIENT_COPY } = require('../config/clientCopy');
 
 const CLIENT_BOOKING_BUTTON_COMMANDS = Object.freeze({
+  client_book_now: 'services',
+  client_booking_start: 'services',
   client_date_today: 'today',
   client_date_tomorrow: 'tomorrow',
   client_time_morning: 'morning',

@@ -40,10 +40,8 @@ test('guarded Admin command replies are left unchanged', () => {
 
 test('retirement routing replaces active mobile booking and legacy Assistant fallbacks', () => {
   const controller = fs.readFileSync(path.join(__dirname, '..', 'src', 'controllers', 'webhookController.js'), 'utf8');
-  const retired = controller.indexOf('processAdminRetiredAuthorityMessage(from,text)');
-  const retained = controller.indexOf('processAdminInteractiveMenuMessage(from,text)');
-  assert.ok(retired >= 0 && retained > retired);
-  assert.doesNotMatch(controller, /processAdminMobileBookingFlowMessage|processAdminAssistantMessage/);
+  assert.match(controller, /processAdminRetiredAuthorityMessage\(from,text\)/);
+  assert.doesNotMatch(controller, /processAdminInteractiveMenuMessage|processAdminMobileBookingFlowMessage|processAdminAssistantMessage/);
 });
 
 test('startup preloads the fallback cleanup patch before app.js captures the Admin assistant export', () => {

@@ -12,8 +12,7 @@ test('Marietjie can view her own earnings while Christel and Jean-Pierre remain 
   assert.match(earnings, /return christel \|\| jeanPierre \|\| marietjieSelf/);
 });
 
-test('Marietjie own admin uses the generic Earnings flow', () => {
-  assert.match(menu, /if \(name === 'marietjie' && admin\?\.staff_id\) return \['marietjie'\]/);
-  assert.match(menu, /function earningsInteractive\(admin\)/);
-  assert.doesNotMatch(menu, /💰 Marietjie earnings|marietjieEarningsButtons/);
+test('Marietjie earnings remains technical-only and is absent from ordinary WhatsApp routing', () => {
+  assert.doesNotMatch(menu, /earningsInteractive|adminMarietjieEarnings|marietjieEarningsButtons/);
+  assert.match(menu, /processRetiredAdminAuthorityMessage/);
 });

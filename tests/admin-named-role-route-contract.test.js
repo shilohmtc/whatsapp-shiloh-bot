@@ -3,7 +3,6 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const { actionForId } = require('../src/services/adminInteractiveMenu');
 const { getMenuOptions } = require('../src/services/adminMobileMenu');
 
 const rollout = fs.readFileSync(path.join(__dirname, '..', 'migrations', '037_p2_staff_rollout_permissions.sql'), 'utf8');
@@ -49,13 +48,13 @@ test('named roles advertise only retained and capability-gated actions', () => {
 });
 
 test('named-person earnings shortcuts are not stable top-level actions', () => {
-  for (const key of ['christel_earnings', 'abigail_earnings', 'marietjie_earnings']) {
-    assert.equal(actionForId(`admin_action_${key}`), null);
-  }
-  assert.ok(actionForId('admin_action_earnings'));
+  const interactive = fs.readFileSync(path.join(__dirname, '..', 'src/services/adminInteractiveMenu.js'), 'utf8');
+  assert.doesNotMatch(interactive, /christel_earnings|abigail_earnings|marietjie_earnings|admin_action_earnings/);
+  assert.match(interactive, /processRetiredAdminAuthorityMessage/);
 });
 
 test('ordinary webhook has no generic Admin Assistant fallthrough', () => {
-  assert.match(webhook, /processAdminInteractiveMenuMessage\(from,text\)/);
+  assert.match(webhook, /processAdminRetiredAuthorityMessage\(from,text\)/);
+  assert.doesNotMatch(webhook, /processAdminInteractiveMenuMessage/);
   assert.doesNotMatch(webhook, /processAdminAssistantMessage|processAdminMobileBookingFlowMessage|processAdminBookingUpdateMessage/);
 });

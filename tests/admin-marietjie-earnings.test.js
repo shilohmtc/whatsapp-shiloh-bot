@@ -24,12 +24,8 @@ test('Marietjie earnings are restricted to Marietjie self, Christel and Jean-Pie
   assert.match(earnings, /Marietjie earnings are available only to Marietjie, Christel, and the authorized business admin/);
 });
 
-test('Marietjie earnings route through generic Earnings with new period IDs', () => {
-  for (const suffix of ['today', 'week', 'last_week', 'month']) {
-    assert.match(menu, new RegExp(`'${suffix}'`));
-  }
+test('Marietjie earnings remain technical-only and are absent from ordinary WhatsApp', () => {
   assert.match(buttons, /admin_marietjie_earnings_today: 'admin_retired_named_earnings'/);
-  assert.doesNotMatch(menu, /key: 'marietjie_earnings'/);
-  assert.match(menu, /processAdminMarietjieEarningsMessage/);
-  assert.match(menu, /function earningsInteractive\(admin\)/);
+  assert.doesNotMatch(menu, /marietjie_earnings|processAdminMarietjieEarningsMessage|earningsInteractive/);
+  assert.match(menu, /processRetiredAdminAuthorityMessage/);
 });

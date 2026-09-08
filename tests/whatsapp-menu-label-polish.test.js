@@ -12,7 +12,6 @@ const {
 const { serviceInteractive } = require('../src/services/adminMobileBookingFlow');
 const { serviceList } = require('../src/services/adminServicePricing');
 const { serviceChangeListInteractive } = require('../src/services/adminAppointmentFinalization');
-const { pendingListInteractive } = require('../src/services/adminPendingBookingApprovals');
 const { servicePageInteractive } = require('../src/services/clientDiscoveryMenu');
 const { packageDirectoryInteractive } = require('../src/services/clientDiscoveryPackages');
 const { presentTreatmentRow } = require('../src/presentation/clientTreatmentListPresentation');
@@ -55,7 +54,7 @@ test('Admin booking service rows show the full canonical treatment wording', () 
   assertListLimits(row);
 });
 
-test('Admin pricing, finalization and approval lists prioritize full dynamic labels', () => {
+test('technical Admin pricing and finalization lists prioritize full dynamic labels', () => {
   const pricingRow = serviceList([{ id: 7, name: fullServiceName, price: 650, variable_price: false }]).rows[0];
   assert.ok(pricingRow.description.startsWith(fullServiceName));
   assertListLimits(pricingRow);
@@ -68,15 +67,10 @@ test('Admin pricing, finalization and approval lists prioritize full dynamic lab
   assert.ok(finalizationRow.description.startsWith(fullServiceName));
   assertListLimits(finalizationRow);
 
-  const clientName = 'Jean-Pierre Long Canonical Client Name';
-  const approvalRow = pendingListInteractive([{
-    appointment_id: 700,
-    client_name: clientName,
-    service_name: fullServiceName,
-    starts_at: '2026-08-21T14:30:00+02:00',
-  }]).rows[0];
-  assert.ok(approvalRow.description.startsWith(clientName));
-  assertListLimits(approvalRow);
+});
+
+test('legacy pending-approval list module is retired', () => {
+  assert.equal(fs.existsSync(path.join(root, 'src/services/adminPendingBookingApprovals.js')), false);
 });
 
 test('client discovery and package lists show full canonical names where they fit', () => {
@@ -117,7 +111,6 @@ test('every dynamic Admin and client list producer in scope uses the shared full
     'src/services/adminBookingUpdate.js',
     'src/services/adminAppointmentFinalization.js',
     'src/services/adminServicePricing.js',
-    'src/services/adminPendingBookingApprovals.js',
     'src/services/clientDiscoveryMenu.js',
     'src/services/clientDiscoveryPackages.js',
     'src/services/clientBookingAvailability.js',
