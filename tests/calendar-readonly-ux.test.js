@@ -155,7 +155,7 @@ test('PR #380 multi-practitioner appointment renders once as one canonical share
   assert.match(html, /Therapeutic Massage/);
   assert.match(html, /Appointment #880/);
   assert.match(html, /Julia \+ Christel/);
-  assert.match(html, /one canonical booking/i);
+  assert.match(html, /shared appointments appear once/i);
 });
 
 test('Google-only and non-canonical debug items are not rendered', async () => {
@@ -178,7 +178,7 @@ test('provider or SchedulingTimeline failure renders explicit unavailable state 
   await handler(req, res, () => {});
   assert.equal(res.statusCode, 503);
   assert.match(res.body, /Calendar unavailable/);
-  assert.match(res.body, /failing closed/i);
+  assert.match(res.body, /Calendar is temporarily unavailable/i);
   assert.doesNotMatch(res.body, /provider detail that must not reach browser/);
 });
 
@@ -206,7 +206,7 @@ test('practitioner filtering is display-only and rejects staff outside server-pe
   const res = fakeResponse();
   await handler(req, res, () => {});
   assert.equal(res.statusCode, 403);
-  assert.match(res.body, /outside your authenticated Calendar scope/i);
+  assert.match(res.body, /outside your Calendar access/i);
   assert.doesNotMatch(res.body, /Taylor Client|Christel|appointment-880/);
 });
 
