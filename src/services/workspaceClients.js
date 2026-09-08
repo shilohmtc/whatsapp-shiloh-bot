@@ -1,7 +1,7 @@
 const { pool } = require('../db/pool');
 const crmReadService = require('./crmReadService');
 const { createWorkspaceCommunicationEvidenceService } = require('./workspaceCommunicationEvidence');
-const { createWorkspaceClientMutationService, clientRevision } = require('./workspaceClientMutations');
+const { evaluateClientManageAuthority, clientRevision } = require('./workspaceClientMutations');
 
 const CLIENT_LOOKUP_CAPABILITY = 'client:lookup';
 const CLIENT_LIST_PAGE_SIZE = 24;
@@ -60,7 +60,6 @@ function normalizeOffset(value) {
 function createWorkspaceClientsService({ db = pool, readService = crmReadService, communicationService = null } = {}) {
   if (!db || typeof db.query !== 'function') throw new Error('Workspace Clients database is required');
   const communicationReads = communicationService || createWorkspaceCommunicationEvidenceService({ db });
-  const mutationAccess = createWorkspaceClientMutationService({ db });
 
   async function resolveAccess(adminId) {
     const id = positiveId(adminId);
@@ -76,7 +75,9 @@ function createWorkspaceClientsService({ db = pool, readService = crmReadService
         LIMIT 2`,
       [id]
     );
-    return evaluateClientReadAuthority(result.rows);
+    const authority = evaluateClientReadAuthority(result.rows);
+    if (!authority) return null;
+    return { ...authority, manageAllowed: Boolean(evaluateClientManageAuthority(result.rows)) };
   }
 
   async function requireAccess(adminId) {
@@ -93,7 +94,7 @@ function createWorkspaceClientsService({ db = pool, readService = crmReadService
 
   async function listClients({ adminId, q, status, offset } = {}) {
     const authority = await requireAccess(adminId);
-    const manageAllowed = Boolean(await mutationAccess.resolveManageAccess(adminId));
+    const manageAllowed = authority.manageAllowed === true;
     const safeOffset = normalizeOffset(offset);
     const safeQuery = normalizeSearch(q);
     const safeStatus = normalizeStatus(status);
@@ -117,7 +118,7 @@ function createWorkspaceClientsService({ db = pool, readService = crmReadService
 
   async function getClientDetail({ adminId, clientId, historyOffset } = {}) {
     const authority = await requireAccess(adminId);
-    const manageAllowed = Boolean(await mutationAccess.resolveManageAccess(adminId));
+    const manageAllowed = authority.manageAllowed === true;
     const id = positiveId(clientId);
     if (!id) throw new WorkspaceClientsError('WORKSPACE_CLIENTS_INVALID_ID', 'Client reference is invalid.', 400);
     const client = await readService.getClient(id);
