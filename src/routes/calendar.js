@@ -11,6 +11,7 @@ const { createOptionalCalendarSessionMiddleware } = require('../middleware/staff
 const { createOperatorContactAuthorityRouter } = require('./operatorContactAuthority');
 const { createCalendarOperationalMutationRouter } = require('./calendarOperationalMutations');
 const { createWorkspaceClientsRouter } = require('./workspaceClients');
+const { createWorkspaceClientMutationRouter } = require('./workspaceClientMutations');
 const { createWorkspaceClientNotificationRouter } = require('./workspaceClientNotifications');
 const { createWorkspaceStaffRouter } = require('./workspaceStaff');
 const { createWorkspaceStaffMutationRouter } = require('./workspaceStaffMutations');
@@ -53,6 +54,7 @@ router.use('/book/past', createCalendarRetrospectiveBookingRouter({ sessionServi
 router.use('/book', createCalendarCreateBookingRouter({ sessionService: staffBrowserSessionService }));
 router.use('/operations', createCalendarOperationalMutationRouter({ sessionService: staffBrowserSessionService }));
 router.use('/clients', createWorkspaceClientsRouter({ sessionService: staffBrowserSessionService }));
+router.use('/clients', createWorkspaceClientMutationRouter({ sessionService: staffBrowserSessionService }));
 router.use('/clients', createWorkspaceClientNotificationRouter({ sessionService: staffBrowserSessionService }));
 router.use('/team', createWorkspaceStaffRouter({ sessionService: staffBrowserSessionService }));
 router.use('/team', createWorkspaceStaffMutationRouter({ sessionService: staffBrowserSessionService }));

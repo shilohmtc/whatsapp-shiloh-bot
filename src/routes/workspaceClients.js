@@ -1,11 +1,17 @@
 const express = require('express');
 const workspaceClients = require('../services/workspaceClients');
 const workspaceClientNotifications = require('../services/workspaceClientNotifications');
+const workspaceClientMutations = require('../services/workspaceClientMutations');
 const {
   renderClientListPage,
   renderClientsUnavailablePage,
 } = require('../presentation/workspaceClientsUx');
 const { renderClientDetailPageWithCommunications } = require('../presentation/workspaceCommunicationEvidenceUx');
+const {
+  injectClientListManagement,
+  injectClientDetailManagement,
+  workspaceClientsManageClientScript,
+} = require('../presentation/workspaceClientsManageUx');
 const { requireStaffSession } = require('../middleware/staffBrowserSession');
 
 function isWorkspaceClientsEnabled(env = process.env) {
@@ -43,6 +49,7 @@ function createWorkspaceClientListHandler({
   service = workspaceClients,
   renderPage = renderClientListPage,
   renderUnavailable = renderClientsUnavailablePage,
+  injectManagement = injectClientListManagement,
   staffAccessPath = '/calendar/staff',
 } = {}) {
   return async function workspaceClientListHandler(req, res) {
@@ -55,7 +62,8 @@ function createWorkspaceClientListHandler({
         status: req.query?.status,
         offset: req.query?.offset,
       });
-      return res.status(200).type('html').send(renderPage(model, pageOptions(req, staffAccessPath)));
+      const html = injectManagement(renderPage(model, pageOptions(req, staffAccessPath)), model);
+      return res.status(200).type('html').send(html);
     } catch (error) {
       const safe = safeError(error);
       return res.status(safe.status).type('html').send(renderUnavailable({ code: error?.code, message: safe.message }));
@@ -69,6 +77,7 @@ function createWorkspaceClientDetailHandler({
   notificationService = workspaceClientNotifications,
   renderPage = renderClientDetailPageWithCommunications,
   renderUnavailable = renderClientsUnavailablePage,
+  injectManagement = injectClientDetailManagement,
   staffAccessPath = '/calendar/staff',
 } = {}) {
   return async function workspaceClientDetailHandler(req, res) {
@@ -86,10 +95,8 @@ function createWorkspaceClientDetailHandler({
       } catch (_error) {
         notificationActionAllowed = false;
       }
-      return res.status(200).type('html').send(renderPage(
-        model,
-        pageOptions(req, staffAccessPath, { notificationActionAllowed })
-      ));
+      const html = renderPage(model, pageOptions(req, staffAccessPath, { notificationActionAllowed }));
+      return res.status(200).type('html').send(injectManagement(html, model));
     } catch (error) {
       const safe = safeError(error);
       return res.status(safe.status).type('html').send(renderUnavailable({ code: error?.code, message: safe.message }));
@@ -99,10 +106,22 @@ function createWorkspaceClientDetailHandler({
 
 function createWorkspaceClientsRouter({ sessionService, ...options } = {}) {
   if (!sessionService) throw new Error('Workspace Clients requires the existing staff browser session service');
+  const service = options.service || workspaceClients;
+  const mutationService = options.mutationService || workspaceClientMutations;
   const router = express.Router();
   router.use(requireStaffSession({ service: sessionService, env: options.env }));
-  router.get('/', createWorkspaceClientListHandler(options));
-  router.get('/:id', createWorkspaceClientDetailHandler(options));
+  router.get('/manage.js', async (req, res) => {
+    setWorkspaceClientsSecurityHeaders(res);
+    if (!isWorkspaceClientsEnabled(options.env || process.env)) return res.sendStatus(404);
+    try {
+      if (!(await mutationService.resolveManageAccess(req.staffBrowserSession?.adminId))) return res.sendStatus(403);
+      return res.status(200).type('application/javascript').send(workspaceClientsManageClientScript());
+    } catch (_error) {
+      return res.sendStatus(403);
+    }
+  });
+  router.get('/', createWorkspaceClientListHandler({ ...options, service }));
+  router.get('/:id', createWorkspaceClientDetailHandler({ ...options, service }));
   return router;
 }
 

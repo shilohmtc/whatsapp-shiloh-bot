@@ -1,6 +1,7 @@
 const { pool } = require('../db/pool');
 const crmReadService = require('./crmReadService');
 const { createWorkspaceCommunicationEvidenceService } = require('./workspaceCommunicationEvidence');
+const { evaluateClientManageAuthority, clientRevision } = require('./workspaceClientMutations');
 
 const CLIENT_LOOKUP_CAPABILITY = 'client:lookup';
 const CLIENT_LIST_PAGE_SIZE = 24;
@@ -74,7 +75,9 @@ function createWorkspaceClientsService({ db = pool, readService = crmReadService
         LIMIT 2`,
       [id]
     );
-    return evaluateClientReadAuthority(result.rows);
+    const authority = evaluateClientReadAuthority(result.rows);
+    if (!authority) return null;
+    return { ...authority, manageAllowed: Boolean(evaluateClientManageAuthority(result.rows)) };
   }
 
   async function requireAccess(adminId) {
@@ -91,6 +94,7 @@ function createWorkspaceClientsService({ db = pool, readService = crmReadService
 
   async function listClients({ adminId, q, status, offset } = {}) {
     const authority = await requireAccess(adminId);
+    const manageAllowed = authority.manageAllowed === true;
     const safeOffset = normalizeOffset(offset);
     const safeQuery = normalizeSearch(q);
     const safeStatus = normalizeStatus(status);
@@ -102,6 +106,7 @@ function createWorkspaceClientsService({ db = pool, readService = crmReadService
     });
     return {
       authority,
+      manageAllowed,
       clients: clients.slice(0, CLIENT_LIST_PAGE_SIZE),
       hasMore: clients.length > CLIENT_LIST_PAGE_SIZE,
       offset: safeOffset,
@@ -113,10 +118,22 @@ function createWorkspaceClientsService({ db = pool, readService = crmReadService
 
   async function getClientDetail({ adminId, clientId, historyOffset } = {}) {
     const authority = await requireAccess(adminId);
+    const manageAllowed = authority.manageAllowed === true;
     const id = positiveId(clientId);
     if (!id) throw new WorkspaceClientsError('WORKSPACE_CLIENTS_INVALID_ID', 'Client reference is invalid.', 400);
     const client = await readService.getClient(id);
     if (!client) throw new WorkspaceClientsError('WORKSPACE_CLIENT_NOT_FOUND', 'Client was not found.', 404);
+    const revisionResult = await db.query(
+      `/* workspaceClients:revision */
+       SELECT id,name,normalized_mobile,date_of_birth,gender,profile_status,
+              mobile_verified_at,source,status,created_at,updated_at
+         FROM crm_v2_clients
+        WHERE id=$1
+        LIMIT 1`,
+      [id]
+    );
+    if (!revisionResult.rows[0]) throw new WorkspaceClientsError('WORKSPACE_CLIENT_NOT_FOUND', 'Client was not found.', 404);
+    client.revision = clientRevision(revisionResult.rows[0]);
     const safeOffset = normalizeOffset(historyOffset);
     const history = await readService.getClientAppointments(id, {
       limit: CLIENT_HISTORY_PAGE_SIZE + 1,
@@ -135,6 +152,7 @@ function createWorkspaceClientsService({ db = pool, readService = crmReadService
     }
     return {
       authority,
+      manageAllowed,
       client,
       appointments: history.slice(0, CLIENT_HISTORY_PAGE_SIZE),
       hasMore: history.length > CLIENT_HISTORY_PAGE_SIZE,
