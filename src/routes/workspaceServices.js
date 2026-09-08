@@ -32,11 +32,11 @@ function setWorkspaceServicesSecurityHeaders(res) {
 
 function safeError(error) {
   const status = Number(error?.httpStatus) || 503;
-  if (status === 400) return { status, message: 'The requested Services operation is invalid.' };
-  if (status === 403) return { status, message: 'Your authenticated Shiloh access does not permit this Services operation.' };
-  if (status === 404) return { status, message: 'That canonical service was not found.' };
-  if (status === 409) return { status, message: error?.message || 'Canonical Services changed. Reload and retry.' };
-  return { status: 503, message: 'Canonical Services are temporarily unavailable.' };
+  if (status === 400) return { status, message: 'The requested Services action is invalid.' };
+  if (status === 403) return { status, message: 'You do not have access to this Services action.' };
+  if (status === 404) return { status, message: 'That service was not found.' };
+  if (status === 409) return { status, message: 'Services changed. Reload and retry.' };
+  return { status: 503, message: 'Services are temporarily unavailable.' };
 }
 
 function navScript() {
