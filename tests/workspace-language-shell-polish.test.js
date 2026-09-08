@@ -10,6 +10,9 @@ const {
   renderServicesListPage,
   renderServiceDetailPage,
 } = require('../src/presentation/workspaceServicesUx');
+const { renderClientDetailPage } = require('../src/presentation/workspaceClientsUx');
+const { renderMessagesPage } = require('../src/presentation/workspaceMessagesUx');
+const { safeError: servicesSafeError } = require('../src/routes/workspaceServices');
 const { staffCalendarAccessClientScript } = require('../src/presentation/staffCalendarAccessUx');
 
 function dashboardModel() {
@@ -74,6 +77,32 @@ test('Services presents exact clinic-facing labels without changing eligibility 
   }, { manageAllowed: false });
   assert.match(detail, /You can view this service, but editing is not available\./);
   assert.doesNotMatch(detail, /services:manage|Canonical mutation authority|controlled slice/);
+});
+
+test('Clients and Messages keep internal architecture terms out of ordinary empty and access states', () => {
+  const clientDetail = renderClientDetailPage({
+    authority: { displayName: 'Naomi' },
+    client: { id: 9, name: 'Synthetic Client', status: 'active', profile_status: 'registered' },
+    appointments: [], hasMore: false, historyOffset: 0, pageSize: 20,
+  });
+  assert.match(clientDetail, /Client record/);
+  assert.match(clientDetail, /No appointments are recorded for this client\./);
+  assert.doesNotMatch(clientDetail, /Canonical client|CRM V2-linked/);
+
+  const messages = renderMessagesPage({
+    authority: { displayName: 'Naomi' }, selectedView: 'all', notificationAuthority: null,
+    attention: [], activity: [], attentionUnavailable: false, activityUnavailable: false,
+  });
+  assert.match(messages, /Recovery actions are not available with your current access\./);
+  assert.match(messages, /No communication activity is recorded yet\./);
+  assert.doesNotMatch(messages, /client:notify|canonical communication activity|Fail closed/);
+});
+
+test('Services fail-closed messages remain ordinary clinic language', () => {
+  assert.equal(servicesSafeError({ httpStatus: 403 }).message, 'You do not have access to this Services action.');
+  assert.equal(servicesSafeError({ httpStatus: 404 }).message, 'That service was not found.');
+  assert.equal(servicesSafeError({ httpStatus: 409, message: 'Canonical Services changed internally.' }).message, 'Services changed. Reload and retry.');
+  assert.equal(servicesSafeError({ httpStatus: 503 }).message, 'Services are temporarily unavailable.');
 });
 
 test('shared sign-out still uses the existing CSRF-protected logout endpoint', () => {
