@@ -46,3 +46,60 @@ test('canonical CI runs the focused Clean Change hygiene gate', () => {
   assert.match(ci, /Run focused Clean Change hygiene test/);
   assert.match(ci, /node --test tests\/control-clean-change-gate\.test\.js/);
 });
+
+test('engineering fast path requires impact scanning and coherent multi-file changes', () => {
+  const guide = read('docs/SHILOH_ENGINEERING_FAST_PATH.md');
+  for (const marker of [
+    'Pre-CI contract impact scan',
+    'Coherent multi-file changes',
+    'CI parallelism rule',
+    'Verification cadence',
+  ]) assert.ok(guide.includes(marker), `missing Fast Path marker: ${marker}`);
+  assert.match(guide, /search the repository for the exact route, symbol, field or selector/);
+  assert.match(guide, /update affected assertions\/stubs\/proofs in the same candidate/);
+  assert.match(guide, /GitHub tree\/commit primitives/);
+  assert.match(guide, /full exact-head CI as the release gate/);
+});
+
+test('canonical CI parallelizes isolated proof families without dropping release gates', () => {
+  const ci = read('.github/workflows/ci.yml');
+  for (const job of ['test', 'calendar_browser_proofs', 'workspace_browser_proofs']) {
+    assert.match(ci, new RegExp(`^  ${job}:`, 'm'), `missing CI job ${job}`);
+  }
+  assert.doesNotMatch(ci, /continue-on-error:\s*true/);
+
+  for (const command of [
+    'npm test',
+    'calendar-operational-mutations-browser-proof.js',
+    'calendar-clean-crm-v2-browser-proof.js',
+    'calendar-mobile-staff-overview-browser-proof.js',
+    'calendar-desktop-spatial-lanes-browser-proof.js',
+    'calendar-view-parity-month-browser-proof.js',
+    'calendar-spatial-phone-week-browser-proof.js',
+    'calendar-cockpit-visual-proof.js',
+    'calendar-retrospective-booking-browser-proof.js',
+    'workspace-client-notifications-browser-proof.js',
+    'workspace-dashboard-messages-browser-proof.js',
+    'workspace-mobile-polish-visual-proof.js',
+    'workspace-mobile-viewport-proof.js',
+    'workspace-clients-visual-proof.js',
+    'workspace-staff-visual-proof.js',
+    'workspace-staff-access-readonly-browser-proof.js',
+    'workspace-services-visual-proof.js',
+  ]) assert.ok(ci.includes(command), `missing release-required CI command: ${command}`);
+
+  const testStart = ci.indexOf('\n  test:');
+  const calendarStart = ci.indexOf('\n  calendar_browser_proofs:');
+  const workspaceStart = ci.indexOf('\n  workspace_browser_proofs:');
+  assert.ok(testStart >= 0 && calendarStart > testStart && workspaceStart > calendarStart);
+
+  const testBlock = ci.slice(testStart, calendarStart);
+  const calendarBlock = ci.slice(calendarStart, workspaceStart);
+  const workspaceBlock = ci.slice(workspaceStart);
+  assert.ok(testBlock.includes('npm test'));
+  assert.ok(!testBlock.includes('calendar-operational-mutations-browser-proof.js'));
+  assert.ok(calendarBlock.includes('calendar-operational-mutations-browser-proof.js'));
+  assert.ok(calendarBlock.includes('calendar-retrospective-booking-browser-proof.js'));
+  assert.ok(workspaceBlock.includes('workspace-dashboard-messages-browser-proof.js'));
+  assert.ok(workspaceBlock.includes('workspace-services-visual-proof.js'));
+});
