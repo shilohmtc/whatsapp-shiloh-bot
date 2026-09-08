@@ -42,10 +42,10 @@ function statusForError(error) {
 }
 
 function safeUnavailableMessage(error) {
-  if (error?.code === 'CALENDAR_UX_STAFF_FILTER_FORBIDDEN') return 'That practitioner is outside your authenticated Calendar scope.';
+  if (error?.code === 'CALENDAR_UX_STAFF_FILTER_FORBIDDEN') return 'That practitioner is outside your Calendar access.';
   if (statusForError(error) === 400) return 'The requested Calendar view or filter is invalid.';
-  if (statusForError(error) === 403) return 'Your authenticated Shiloh access does not permit this Calendar view.';
-  return 'SchedulingTimeline is unavailable, so Shiloh Calendar is failing closed.';
+  if (statusForError(error) === 403) return 'Your Shiloh access does not permit this Calendar view.';
+  return 'Calendar is temporarily unavailable.';
 }
 
 function bookingOperationalActions(dateKey, bookingPath = '/calendar/book') {
@@ -191,10 +191,16 @@ function mobileStaffOverviewStyles() {
 }
 
 function applyCalendarResponsivePolish(html) {
-  return String(html).replace(
-    '.controls{position:sticky;top:0;z-index:5;grid-template-columns:1fr 1fr;',
-    '.controls{position:sticky;top:0;z-index:5;grid-template-columns:1fr;',
-  );
+  return String(html)
+    .replace(
+      '.controls{position:sticky;top:0;z-index:5;grid-template-columns:1fr 1fr;',
+      '.controls{position:sticky;top:0;z-index:5;grid-template-columns:1fr;',
+    )
+    .replace('aria-label="Scheduling authority"', 'aria-label="Schedule source"')
+    .replace(
+      'Shared appointments appear once as one canonical booking and retain all assigned practitioners.',
+      'Shared appointments appear once and retain all assigned practitioners.',
+    );
 }
 
 // Compatibility fallback for renderers that do not yet consume operationalActions.
@@ -304,10 +310,10 @@ function createCalendarReadOnlyHandler({
           ...(bookingAllowed ? bookingOperationalActions(model.dateKey, bookingPath) : []),
         ],
         timelineReadOnlyMessage: mutationCapability
-          ? 'Calendar operations update Shiloh canonical state only. Every save revalidates current authority, revision, schedules and conflicts; no client message is sent by these controls.'
+          ? 'Calendar changes are checked again against the current appointment, schedule and conflicts before saving. These controls do not send client messages.'
           : bookingAllowed
             ? 'Timeline remains read-only. Use Create booking to add an appointment. Reschedule, cancellation, drag/drop, reassignment, block, leave and schedule changes are not available here.'
-            : 'Read-only operational view. Booking, reschedule, cancellation, block, leave and schedule mutations are not available here.',
+            : 'Read-only Calendar view. Booking, reschedule, cancellation, block, leave and schedule changes are not available here.',
       });
       html = applyCalendarResponsivePolish(html, renderedModel, basePath);
 
