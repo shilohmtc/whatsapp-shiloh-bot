@@ -282,7 +282,7 @@ test('direct confirmation delegates once with authenticated operator and bounded
   assert.equal(result.appointmentId, 9001);
   assert.equal(calls.length, 1);
   assert.equal(calls[0][0].id, TEST_ADMIN_ID);
-  assert.deepEqual(calls[0][1], { source: 'shiloh_calendar' });
+  assert.deepEqual(calls[0][1], { source: 'shiloh_calendar', notes: null });
 });
 
 test('Calendar V2 path has no legacy lookup, shadow client/contact write or identity-evidence dependency', () => {
