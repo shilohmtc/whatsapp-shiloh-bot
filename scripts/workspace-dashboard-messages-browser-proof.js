@@ -366,7 +366,7 @@ async function main() {
     async function navigate(url) {
       await cdp.send('Page.navigate', { url });
       await poll(() => evaluate(cdp, 'document.readyState'), value => value === 'complete');
-      await poll(() => evaluate(cdp, `Array.from(document.querySelectorAll('.workspace-link')).filter(n=>n.tagName==='A'||n.classList.contains('active')).length`), value => value === 7);
+      await poll(() => evaluate(cdp, `Array.from(document.querySelectorAll('[data-workspace-destination]')).filter(n=>n.tagName==='A'||n.classList.contains('active')).length`), value => value === 7);
     }
     async function screenshot(name) {
       const result = await cdp.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false, fromSurface: true });
