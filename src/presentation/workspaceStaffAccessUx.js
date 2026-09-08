@@ -58,7 +58,7 @@ function accessEnablementMarkup(model = {}) {
     const reason = model.accessPolicy?.reason
       ? '<div class="warning-note">This access setup cannot be edited with the simple practitioner controls.</div>'
       : '';
-    return `<div data-staff-access-readonly>${READ_ONLY_NOTE}${reason}<p class="footer-note">Existing access is unchanged. Protected, broader or incompatible access is not silently replaced.</p></div>`;
+    return `<div data-staff-access-readonly data-access-contract="Existing access is preserved">${READ_ONLY_NOTE}${reason}<p class="footer-note">Existing access is unchanged. Protected, broader or incompatible access is not silently replaced.</p></div>`;
   }
   if (staff.status !== 'active') {
     return `${READ_ONLY_NOTE}<div class="warning-note">Workspace access can only be enabled for an active Staff profile. Reactivate the Staff profile first if that reflects the current clinic setup.</div>`;
