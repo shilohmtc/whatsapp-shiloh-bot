@@ -21,6 +21,10 @@ const {
   injectCalendarInlineServiceCreation,
   serviceCreationClientScript,
 } = require('../presentation/workspaceServiceCreationUx');
+const {
+  decorateCreateBookingNotes,
+  calendarCreateBookingNotesClientScript,
+} = require('../presentation/calendarAppointmentNotesUx');
 
 const CLIENT_BROWSE_QUERY = '__shiloh_calendar_active_clients_v1__';
 
@@ -38,6 +42,7 @@ function statusForError(error) {
   if (code === 'CALENDAR_BOOKING_FORBIDDEN' || code === 'CALENDAR_BOOKING_SCOPE_UNRESOLVED') return 403;
   if (code === 'CALENDAR_BOOKING_CRM_V2_CONFLICT' || code === 'CALENDAR_BOOKING_CLIENT_MOBILE_CHANGED' || code === 'CALENDAR_BOOKING_CRM_V2_CLIENT_INACTIVE') return 409;
   if (code === 'CALENDAR_BOOKING_INELIGIBLE_SELECTION' || code === 'CALENDAR_BOOKING_CONFIRMATION_UNSAFE' || code === 'CALENDAR_BOOKING_NO_PENDING') return 409;
+  if (code === 'APPOINTMENT_NOTES_TOO_LONG') return 400;
   if (code === 'CRM_V2_CLIENT_NOT_FOUND') return 404;
   if (code === 'CRM_V2_INVALID_MOBILE' || code === 'CRM_V2_INVALID_NAME' || code === 'CRM_V2_SEARCH_TOO_SHORT' || code === 'CRM_V2_INVALID_CLIENT_ID') return 400;
   if (code.startsWith('CALENDAR_BOOKING_INVALID_') || code === 'CALENDAR_BOOKING_CLIENT_REQUIRED') return 400;
@@ -101,6 +106,8 @@ function createCalendarCreateBookingRouter({
   renderClientChoice = calendarCreateBookingClientChoiceScript,
   injectServiceCreation = injectCalendarInlineServiceCreation,
   renderServiceCreationClient = serviceCreationClientScript,
+  injectAppointmentNotes = decorateCreateBookingNotes,
+  renderAppointmentNotesClient = calendarCreateBookingNotesClientScript,
 } = {}) {
   if (!sessionService) throw new Error('Calendar Create Booking staff session service is required');
   if (!clientDirectory || typeof clientDirectory.listActiveClients !== 'function') {
@@ -129,6 +136,7 @@ function createCalendarCreateBookingRouter({
       try {
         if (await creationService.resolveCreateAccess(req.staffBrowserSession.adminId)) html = injectServiceCreation(html);
       } catch (_error) {}
+      html = injectAppointmentNotes(html);
       return res.status(200).type('html').send(html);
     } catch (error) {
       if (statusForError(error) !== 503) return res.status(statusForError(error)).type('text/plain').send('Calendar booking unavailable');
@@ -139,7 +147,7 @@ function createCalendarCreateBookingRouter({
   router.get('/client.js', requireSession, async (req, res, next) => {
     try {
       await bookingService.resolveOperator(req.staffBrowserSession.adminId);
-      let source = `${renderClient()}\n${renderClientChoice()}`;
+      let source = `${renderClient()}\n${renderClientChoice()}\n${renderAppointmentNotesClient()}`;
       try {
         if (await creationService.resolveCreateAccess(req.staffBrowserSession.adminId)) source += `\n${renderServiceCreationClient()}`;
       } catch (_error) {}
@@ -203,7 +211,10 @@ function createCalendarCreateBookingRouter({
 
   router.post('/confirm', sameOrigin, requireSession, requireCsrf, async (req, res, next) => {
     try {
-      const result = await bookingService.confirm({ adminId: req.staffBrowserSession.adminId });
+      const result = await bookingService.confirm({
+        adminId: req.staffBrowserSession.adminId,
+        notes: req.body?.notes,
+      });
       if (result.status !== 'created') {
         return res.status(409).json({ status: result.status, reply: result.reply || 'Booking was not created.' });
       }
