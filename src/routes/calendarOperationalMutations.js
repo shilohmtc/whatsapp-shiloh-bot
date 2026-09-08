@@ -12,6 +12,8 @@ const {
   calendarOperationalMutationsClientScript,
 } = require('../presentation/calendarOperationalMutationsUx');
 const workspaceClientNotifications = require('../services/workspaceClientNotifications');
+const { createWorkspaceAppointmentNotesService } = require('../services/workspaceAppointmentNotes');
+const { calendarManageAppointmentNotesClientScript } = require('../presentation/calendarAppointmentNotesUx');
 
 function setOperationalSecurityHeaders(res) {
   res.setHeader('Cache-Control', 'private, no-store, max-age=0');
@@ -61,7 +63,9 @@ function createCalendarOperationalMutationRouter({
   sessionService,
   mutationService = createCalendarOperationalMutationService({ db: pool }),
   notificationService = workspaceClientNotifications,
+  notesService = createWorkspaceAppointmentNotesService({ db: pool }),
   renderClient = calendarOperationalMutationsClientScript,
+  renderNotesClient = calendarManageAppointmentNotesClientScript,
 } = {}) {
   if (!sessionService) throw new Error('Calendar operational mutations require the staff session service.');
   const router = express.Router();
@@ -104,7 +108,7 @@ function createCalendarOperationalMutationRouter({
   }));
 
   router.get('/client.js', requireSession, requireAnyActionCapability, (_req, res) => {
-    return res.status(200).type('application/javascript').send(renderClient());
+    return res.status(200).type('application/javascript').send(`${renderClient()}\n${renderNotesClient()}`);
   });
 
   router.get('/booking-confirmation-exceptions', requireSession, requireNotificationCapability, (_req, res) => {
@@ -128,6 +132,33 @@ function createCalendarOperationalMutationRouter({
       const result = await notificationService.sendBookingConfirmation({
         adminId: req.staffBrowserSession.adminId,
         appointmentId: req.params.appointmentId,
+      });
+      return res.status(200).json(result);
+    } catch (error) {
+      return sendOperationalError(error, req, res, next);
+    }
+  });
+
+  router.get('/appointments/:appointmentId/notes', requireSession, async (req, res, next) => {
+    try {
+      const result = await notesService.get({
+        adminId: req.staffBrowserSession.adminId,
+        appointmentId: req.params.appointmentId,
+      });
+      return res.status(200).json(result);
+    } catch (error) {
+      return sendOperationalError(error, req, res, next);
+    }
+  });
+
+  router.patch('/appointments/:appointmentId/notes', sameOrigin, requireSession, requireCsrf, async (req, res, next) => {
+    try {
+      const result = await notesService.update({
+        adminId: req.staffBrowserSession.adminId,
+        appointmentId: req.params.appointmentId,
+        expectedRevision: req.body?.expectedRevision,
+        notes: req.body?.notes,
+        requestId: req.body?.requestId,
       });
       return res.status(200).json(result);
     } catch (error) {
