@@ -155,7 +155,7 @@ test('PR #380 multi-practitioner appointment renders once as one canonical share
   assert.match(html, /Therapeutic Massage/);
   assert.match(html, /Appointment #880/);
   assert.match(html, /Julia \+ Christel/);
-  assert.match(html, /shared appointments appear once/i);
+  assert.match(html, /one canonical booking/i);
 });
 
 test('Google-only and non-canonical debug items are not rendered', async () => {
