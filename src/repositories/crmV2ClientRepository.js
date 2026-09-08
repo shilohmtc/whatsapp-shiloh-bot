@@ -11,7 +11,8 @@ class PostgresCrmV2ClientRepository {
   }
 
   async withTransaction(work) {
-    if (typeof this.queryable.connect !== 'function') return work(this);
+    if (typeof this.queryable?.release === 'function') return work(this);
+    if (typeof this.queryable?.connect !== 'function') return work(this);
     const client = await this.queryable.connect();
     const transaction = new PostgresCrmV2ClientRepository(client);
     try {
