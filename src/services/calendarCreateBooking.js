@@ -11,6 +11,7 @@ const {
   hasCapability,
   allowsBookingTarget,
 } = require('./calendarAuthorization');
+const { normalizeAppointmentNotes } = require('./appointmentNotes');
 
 const BOOKING_TIME_INCREMENT_MINUTES = 5;
 
@@ -352,7 +353,8 @@ function createCalendarCreateBookingService({
     return { status: cancelled ? 'discarded' : 'no_pending', crmV2ClientRemoved: false };
   }
 
-  async function confirm({ adminId } = {}) {
+  async function confirm({ adminId, notes } = {}) {
+    const normalizedNotes = normalizeAppointmentNotes(notes);
     const admin = await resolveOperator(adminId);
     const pending = await pendingBooking(Number(admin.id));
     if (!pending) throw bookingError('CALENDAR_BOOKING_NO_PENDING', 'There is no pending CRM V2 Calendar booking to confirm.');
@@ -365,7 +367,7 @@ function createCalendarCreateBookingService({
     ) {
       throw bookingError('CALENDAR_BOOKING_CLIENT_MOBILE_CHANGED', 'The current canonical CRM V2 client/mobile changed. Prepare the booking again.');
     }
-    return confirmBooking(admin, { source: 'shiloh_calendar' });
+    return confirmBooking(admin, { source: 'shiloh_calendar', notes: normalizedNotes });
   }
 
   return {
