@@ -254,8 +254,8 @@ test('Workspace Staff UX exposes only bounded lifecycle controls and secure JSON
   assert.match(managed, /name="displayName"/);
   assert.match(managed, /name="schedulingType"/);
   assert.match(managed, /name="clientBookable"/);
-  assert.match(managed, /Service assignment is intentionally read-only here/);
-  assert.match(managed, /Role, capability and scope changes remain separately governed/);
+  assert.match(managed, /Service assignments are view only here/);
+  assert.match(managed, /Staff profile changes do not create or edit sign-in credentials/);
   assert.doesNotMatch(managed, /name="business_role"|name="calendar_scope"|name="permissions"|Delete staff/i);
 
   const viewOnly = renderStaffDetailPage({

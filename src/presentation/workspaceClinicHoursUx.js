@@ -30,6 +30,7 @@ function renderClinicHoursPage(model, {
   const rows = (model.days || []).map(renderDay).join('');
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Clinic hours — Shiloh Workspace</title><style>${workspaceShellStyles()}${clinicHoursStyles()}</style><script src="${escapeHtml(staffAccessScriptPath)}" defer></script><script src="${escapeHtml(clientScriptPath)}" defer></script></head><body data-workspace-clinic-hours="true"><div class="workspace-frame">${renderWorkspaceNavigation({
     active: 'clinicHours',
+    displayName: model.authority?.displayName,
     dashboardHref: '/calendar/workspace',
     calendarHref: '/calendar/read-only',
     clientsHref: '/calendar/clients',
@@ -38,7 +39,7 @@ function renderClinicHoursPage(model, {
     servicesHref: '/calendar/services',
     reportsHref: '/calendar/reports',
   })}<div class="workspace-main"><div class="shell">
-    <header class="topbar"><div class="brand"><h1>Clinic hours</h1><p>Normal recurring operating hours for the whole clinic.</p></div><div class="topbar-side"><span class="truth-note">${escapeHtml(model.location?.timezone || 'Africa/Johannesburg')} • Canonical booking envelope</span><button class="signout-button" type="button" data-shiloh-logout>Sign out</button><span class="access-status" role="status" aria-live="polite" data-shiloh-calendar-access-status></span></div></header>
+    <header class="topbar"><div class="brand"><h1>Clinic hours</h1><p>Normal recurring operating hours for the whole clinic.</p></div></header>
     <section class="notice"><strong>What this changes:</strong> recurring booking availability going forward. Existing appointments are not moved or cancelled. Public holidays and one-off clinic closures remain separate and are not changed here.</section>
     <form class="hours-card" data-clinic-hours-form data-revision="${escapeHtml(model.revision)}" novalidate>
       <div class="hours-head"><div><h2>Weekly operating hours</h2><p>Set one clinic-wide window per day, or mark the day closed.</p></div><span class="location-pill">${escapeHtml(model.location?.name || 'Shiloh')}</span></div>

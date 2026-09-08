@@ -95,7 +95,7 @@ test('cockpit exposes labelled controls, scan summary and lane state', () => {
   assert.match(html, /aria-label="Visible period summary"/);
   assert.match(html, /<strong>1<\/strong><span>Appointments<\/span>/);
   assert.match(html, /<strong>1<\/strong><span>Blocks \+ leave<\/span>/);
-  assert.match(html, /Shiloh scheduling truth/);
+  assert.match(html, /Shiloh schedule/);
   assert.match(html, /class="lane-count">1 item/);
   assert.match(html, /aria-current="page"/);
   assert.match(html, /Shiloh <small>Workspace<\/small>/);

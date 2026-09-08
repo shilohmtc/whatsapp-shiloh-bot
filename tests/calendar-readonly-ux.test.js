@@ -162,7 +162,7 @@ test('Google-only and non-canonical debug items are not rendered', async () => {
   const model = await buildDayModel();
   const html = renderCalendarPage(model, { basePath: '/calendar/read-only' });
   assert.doesNotMatch(html, /Google-only|Non-canonical|google-shared|data-canonical="false"/i);
-  assert.match(html, /Shiloh is the scheduling authority/);
+  assert.match(html, /Shiloh schedule/);
 });
 
 test('provider or SchedulingTimeline failure renders explicit unavailable state without leaking scheduling data', async () => {
@@ -178,7 +178,7 @@ test('provider or SchedulingTimeline failure renders explicit unavailable state 
   await handler(req, res, () => {});
   assert.equal(res.statusCode, 503);
   assert.match(res.body, /Calendar unavailable/);
-  assert.match(res.body, /failing closed/i);
+  assert.match(res.body, /Calendar is temporarily unavailable/i);
   assert.doesNotMatch(res.body, /provider detail that must not reach browser/);
 });
 
@@ -206,7 +206,7 @@ test('practitioner filtering is display-only and rejects staff outside server-pe
   const res = fakeResponse();
   await handler(req, res, () => {});
   assert.equal(res.statusCode, 403);
-  assert.match(res.body, /outside your authenticated Calendar scope/i);
+  assert.match(res.body, /outside your Calendar access/i);
   assert.doesNotMatch(res.body, /Taylor Client|Christel|appointment-880/);
 });
 

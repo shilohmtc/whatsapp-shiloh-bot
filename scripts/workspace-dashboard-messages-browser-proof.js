@@ -18,6 +18,7 @@ const { createWorkspaceDashboardService } = require('../src/services/workspaceDa
 const { createWorkspaceMessagesService } = require('../src/services/workspaceMessages');
 const { createWorkspaceNavigationService } = require('../src/services/workspaceNavigation');
 const { renderCalendarPage } = require('../src/presentation/calendarReadOnlyUx');
+const { renderServicesListPage } = require('../src/presentation/workspaceServicesUx');
 const { applyCalendarResponsivePolish } = require('../src/routes/calendarReadOnlyUx');
 const { periodFor } = require('../src/services/calendarReadOnlyUx');
 
@@ -255,6 +256,18 @@ function createFixture() {
   app.use('/calendar/clients', createWorkspaceClientsRouter({
     env: ENV, sessionService, service: clientService, notificationService: { async resolveAccess() { return null; } },
   }));
+  app.get('/calendar/services', requireStaffSession({ service: sessionService, env: ENV }), (_req, res) => {
+    return res.status(200).type('html').send(renderServicesListPage({
+      authority: { displayName: 'Clinic Owner' }, query: '', status: 'active', offset: 0, pageSize: 30, hasMore: false,
+      services: [
+        { id: 71, name: 'Synthetic treatment', category_name: 'Massage', duration_minutes: 60, total_minutes: 60, price: '700.00', status: 'active', assigned_staff_count: 2, booking_eligibility: { eligible: true, clientBookableStaffCount: 2 } },
+        { id: 72, name: 'Consultation', category_name: 'Facial', duration_minutes: 45, total_minutes: 45, price: '450.00', status: 'active', assigned_staff_count: 0, booking_eligibility: { eligible: false, clientBookableStaffCount: 0 } },
+      ],
+    }, {
+      calendarNavigationAllowed: true, clientsNavigationAllowed: true, staffNavigationAllowed: true,
+      staffAccessScriptPath: '/calendar/staff/client.js', manageAllowed: true,
+    }));
+  });
   app.get('/calendar/read-only', requireStaffSession({ service: sessionService, env: ENV }), (_req, res) => {
     const html = renderCalendarPage(calendarModel(), {
       clientNavigationAllowed: true,
@@ -301,6 +314,9 @@ const METRICS_EXPRESSION = `(() => {
     dashboardActions:document.querySelectorAll('[data-dashboard-finalize]').length,
     minDashboardActionHeight:(()=>{const nodes=Array.from(document.querySelectorAll('[data-dashboard-finalize]')).filter(visible);return nodes.length?Math.min(...nodes.map(node=>node.getBoundingClientRect().height)):0;})(),
     dashboardCommunicationText:document.querySelector('[data-dashboard-communications-panel]')?.textContent.trim()||'',
+    accountFooterVisible:visible(document.querySelector('[data-workspace-account-footer]')),
+    accountFooterText:document.querySelector('[data-workspace-account-footer]')?.textContent.trim()||'',
+    servicesCopy:document.querySelector('[data-services-list-view]')?.parentElement?.textContent.trim()||'',
   };
 })()`;
 
@@ -350,7 +366,7 @@ async function main() {
     async function navigate(url) {
       await cdp.send('Page.navigate', { url });
       await poll(() => evaluate(cdp, 'document.readyState'), value => value === 'complete');
-      await poll(() => evaluate(cdp, `Array.from(document.querySelectorAll('.workspace-link')).filter(n=>n.tagName==='A'||n.classList.contains('active')).length`), value => value === 7);
+      await poll(() => evaluate(cdp, `Array.from(document.querySelectorAll('[data-workspace-destination]')).filter(n=>n.tagName==='A'||n.classList.contains('active')).length`), value => value === 7);
     }
     async function screenshot(name) {
       const result = await cdp.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false, fromSurface: true });
@@ -380,7 +396,6 @@ async function main() {
         if (!urlPath.startsWith('/calendar/read-only')) {
           assert.ok(metrics.signoutHeight >= 44, `${name} has a collapsed sign-out control`);
           assert.equal(metrics.signoutText, 'Sign out');
-          if (metrics.signoutToTabsGap != null) assert.ok(metrics.signoutToTabsGap >= 8, `${name} overlays its sign-out control with Messages tabs`);
         }
         assert.equal(metrics.framePaddingBottom, 0, `${name} still reserves bottom-navigation space`);
         if (openDrawer) {
@@ -390,6 +405,8 @@ async function main() {
           assert.equal(metrics.moreVisible, false);
           assert.equal(metrics.moreOpen, false);
           assert.ok(metrics.minNavTargetHeight >= 44, `${name} has a drawer target below 44px`);
+          assert.equal(metrics.accountFooterVisible, true, `${name} does not show the account footer in the open drawer`);
+          assert.match(metrics.accountFooterText, /Signed in as\s*Clinic Owner\s*Sign out/);
         } else {
           assert.equal(metrics.drawerOpen, false);
           assert.ok(metrics.navRight <= 1, `${name} leaves the closed drawer on-screen`);
@@ -400,6 +417,7 @@ async function main() {
       } else {
         assert.deepEqual([...metrics.primary, ...metrics.secondary], ['Dashboard', 'Calendar', 'Clients', 'Messages', 'Staff', 'Services', 'Reports']);
         assert.equal(metrics.moreVisible, false);
+        assert.equal(metrics.accountFooterVisible, true, `${name} does not show the Desktop account footer`);
       }
       if (urlPath.startsWith('/calendar/messages')) {
         assert.equal(metrics.attentionVisible, true);
@@ -412,17 +430,22 @@ async function main() {
         assert.match(metrics.dashboardCommunicationText, /Client notification needs attention/);
         if (metrics.dashboardActions) assert.ok(metrics.minDashboardActionHeight >= (phone ? 44 : 36), `${name} has undersized outcome actions`);
       }
+      if (urlPath.startsWith('/calendar/services')) {
+        assert.match(metrics.servicesCopy, /Manage services, pricing and practitioner assignments\./);
+        assert.match(metrics.servicesCopy, /Available for booking/);
+        assert.doesNotMatch(metrics.servicesCopy, /Canonical offerings|Results are bounded|Booking ready/);
+      }
       return { name, phone, viewport: { width, height }, active: metrics.active, metrics, ...(await screenshot(name)) };
     }
 
-    await cdp.send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false, screenWidth: 1440, screenHeight: 1000 });
+    await cdp.send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 960, deviceScaleFactor: 1, mobile: false, screenWidth: 1440, screenHeight: 960 });
     await cdp.send('Page.navigate', { url: `${origin}/proof` });
     await poll(() => evaluate(cdp, 'location.pathname'), value => value === '/calendar/workspace');
     const screenshots = [];
     const destinations = [
-      ['dashboard', '/calendar/workspace'], ['calendar', '/calendar/read-only'], ['clients', '/calendar/clients'], ['messages', '/calendar/messages?view=all'],
+      ['dashboard', '/calendar/workspace'], ['calendar', '/calendar/read-only'], ['clients', '/calendar/clients'], ['messages', '/calendar/messages?view=all'], ['services', '/calendar/services'],
     ];
-    for (const [name, urlPath] of destinations) screenshots.push(await proof({ name: `desktop-${name}`, path: urlPath, width: 1440, height: 1000, phone: false }));
+    for (const [name, urlPath] of destinations) screenshots.push(await proof({ name: `desktop-${name}`, path: urlPath, width: 1440, height: 960, phone: false }));
     const ownerDashboard = screenshots.find(item => item.name === 'desktop-dashboard').metrics;
     assert.equal(ownerDashboard.dashboardMode, 'owner_overview');
     assert.equal(ownerDashboard.dashboardGreeting, 'Welcome, Clinic Owner');
