@@ -82,7 +82,7 @@ async function confirmCalendarV2BookingDirect(admin, options = {}) {
     if (schedule.partialUnavailable || (schedule.allDayUnavailable && !schedule.insideAvailableException) || !schedule.covered) {
       await db.query(`DELETE FROM admin_booking_sessions WHERE admin_id = $1`, [admin.id]);
       await db.query('COMMIT');
-      return { status: 'schedule_changed', reply: "The practitioner's authoritative working schedule no longer permit this time. Nothing was written." };
+      return { status: 'schedule_changed', reply: "The practitioner's authoritative working schedule no longer permits this time. Nothing was written." };
     }
     const conflicts = await getConflicts({ db, staffId: session.staff_id, startsAt: session.starts_at, endsAt: session.ends_at });
     if (conflicts.length) {
