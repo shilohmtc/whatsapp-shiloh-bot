@@ -207,7 +207,7 @@ test('Month reuses the server-permitted People filter and rejects a crafted unau
   const response = fakeResponse();
   await handler(request, response, () => {});
   assert.equal(response.statusCode, 403);
-  assert.match(response.body, /outside your authenticated Calendar scope/i);
+  assert.match(response.body, /outside your Calendar access/i);
   assert.doesNotMatch(response.body, /Amber Client|Shared Client|Birch Studio/);
 });
 
