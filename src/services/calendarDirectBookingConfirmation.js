@@ -5,6 +5,7 @@ const {
   queueCustomerBookingConfirmation,
   sendCustomerBookingConfirmationForAppointment,
 } = require('./customerBookingConfirmation');
+const { normalizeAppointmentNotes } = require('./appointmentNotes');
 
 function isCanonicalMobile(value) {
   return /^27[678][0-9]{8}$/.test(String(value || ''));
@@ -12,6 +13,7 @@ function isCanonicalMobile(value) {
 
 async function confirmCalendarV2BookingDirect(admin, options = {}) {
   const bookingSource = options.source || 'shiloh_calendar';
+  const appointmentNotes = normalizeAppointmentNotes(options.notes);
   const db = await pool.connect();
   let customerConfirmationObligation = null;
   try {
@@ -89,9 +91,6 @@ async function confirmCalendarV2BookingDirect(admin, options = {}) {
       return { status: 'conflict', reply: 'A conflicting appointment or staff block appeared before creation. Nothing was written.' };
     }
 
-    // Last identity read before the appointment write. Lock the canonical CRM V2
-    // client and require its current mobile to remain valid and identical to the
-    // server-derived snapshot captured when the review was prepared.
     const finalClientResult = await db.query(
       `SELECT id, name, normalized_mobile, status
          FROM crm_v2_clients
@@ -117,8 +116,8 @@ async function confirmCalendarV2BookingDirect(admin, options = {}) {
     const appointmentResult = await db.query(
       `INSERT INTO appointments
          (client_id, crm_v2_client_id, source_client_name, location_id,
-          starts_at, ends_at, status, title, total_price, currency, source)
-       VALUES (NULL, $1, $2, $3, $4, $5, 'scheduled', $6, $7, 'ZAR', $8)
+          starts_at, ends_at, status, title, notes, total_price, currency, source)
+       VALUES (NULL, $1, $2, $3, $4, $5, 'scheduled', $6, $7, $8, 'ZAR', $9)
        RETURNING id, starts_at, ends_at, status`,
       [
         session.crm_v2_client_id,
@@ -127,6 +126,7 @@ async function confirmCalendarV2BookingDirect(admin, options = {}) {
         session.starts_at,
         session.ends_at,
         session.service_name,
+        appointmentNotes,
         totalPrice,
         bookingSource,
       ]
@@ -164,6 +164,8 @@ async function confirmCalendarV2BookingDirect(admin, options = {}) {
         startsAt: session.starts_at,
         endsAt: session.ends_at,
         source: bookingSource,
+        notesPresent: Boolean(appointmentNotes),
+        noteLength: appointmentNotes ? appointmentNotes.length : 0,
         finalCanonicalMobileRechecked: true,
         authoritativeClinicHoursChecked: true,
         authoritativeScheduleChecked: true,

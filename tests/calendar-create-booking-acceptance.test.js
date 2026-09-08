@@ -372,7 +372,7 @@ test('24 Calendar confirm requires confirmation-safe authority then delegates wi
   assert.equal(result.appointmentId, 777);
   assert.equal(confirmCalls.length, 1);
   assert.equal(confirmCalls[0][0].id, TEST_ADMIN_ID);
-  assert.deepEqual(confirmCalls[0][1], { source: 'shiloh_calendar' });
+  assert.deepEqual(confirmCalls[0][1], { source: 'shiloh_calendar', notes: null });
 });
 
 test('25 approved leave is applied atomically as full-day canonical staff_schedule_exceptions before request approval commits', () => {

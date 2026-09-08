@@ -1,0 +1,38 @@
+function decorateCreateBookingNotes(html) {
+  const marker = '      </div>\n      <div class="actions"><button class="button" type="button" data-review-booking disabled>Review booking</button></div>';
+  if (!String(html).includes(marker)) return String(html);
+  const field = `        <div class="field wide appointment-notes-field"><label for="appointment-notes">Internal notes <span class="appointment-notes-optional">Optional</span></label><textarea id="appointment-notes" maxlength="4000" rows="4" placeholder="Internal context for staff only"></textarea><div class="hint">Internal only — not included in client confirmations or reminders.</div></div>\n`;
+  return String(html)
+    .replace(marker, `${field}${marker}`)
+    .replace('</head>', '<style>.appointment-notes-field textarea{width:100%;min-height:92px;border:1px solid var(--line);border-radius:11px;padding:10px 11px;background:#fff;color:var(--ink);font:inherit;resize:vertical}.appointment-notes-optional{color:var(--muted);font-weight:500;font-size:.75rem}</style></head>');
+}
+
+function calendarCreateBookingNotesClientScript() {
+  return `(function(){'use strict';
+var notes=document.getElementById('appointment-notes');if(!notes)return;
+var nativeFetch=window.fetch.bind(window);
+window.fetch=function(input,init){var url=typeof input==='string'?input:(input&&input.url)||'';var method=String((init&&init.method)||'GET').toUpperCase();if(method==='POST'&&/\\/calendar\\/book\\/confirm(?:\\?|$)/.test(url)&&init&&typeof init.body==='string'){try{var body=JSON.parse(init.body||'{}');body.notes=notes.value;init=Object.assign({},init,{body:JSON.stringify(body)});}catch(_error){}}return nativeFetch(input,init);};
+function updateReview(){var panel=document.querySelector('[data-review-panel]');if(!panel||panel.hidden)return;var review=panel.querySelector('[data-review]');if(!review)return;var old=review.querySelector('[data-review-appointment-notes]');if(old)old.remove();var row=document.createElement('div');row.className='review-row';row.dataset.reviewAppointmentNotes='true';var label=document.createElement('span');label.textContent='Internal notes';var value=document.createElement('strong');var text=String(notes.value||'').trim();value.textContent=text||'None';row.appendChild(label);row.appendChild(value);review.appendChild(row);notes.disabled=true;}
+var panel=document.querySelector('[data-review-panel]');if(panel&&window.MutationObserver){new MutationObserver(function(){if(panel.hidden){notes.disabled=false;}else{window.setTimeout(updateReview,0);}}).observe(panel,{attributes:true,attributeFilter:['hidden']});}
+var discard=document.querySelector('[data-discard-booking]');if(discard)discard.addEventListener('click',function(){window.setTimeout(function(){if(panel&&panel.hidden)notes.disabled=false;},0);});
+})();`;
+}
+
+function calendarManageAppointmentNotesClientScript() {
+  return `(function(){'use strict';
+var API='/calendar/operations';var AUTH='/calendar/staff-auth';
+function one(selector,root){return(root||document).querySelector(selector);}function operationId(){if(window.crypto&&typeof window.crypto.randomUUID==='function')return window.crypto.randomUUID();return'N'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2);}
+async function json(response){try{return await response.json();}catch(_error){return{};}}
+async function csrf(){var response=await fetch(AUTH+'/csrf',{method:'POST',credentials:'same-origin',cache:'no-store',headers:{'Content-Type':'application/json','Accept':'application/json'},body:'{}'});if(!response.ok)throw new Error('Your secure Calendar session has expired.');var body=await json(response);if(!body.csrfToken)throw new Error('A secure operation token could not be issued.');return body.csrfToken;}
+function ensureForm(panel){var form=one('[data-appointment-notes-form]',panel);if(form)return form;form=document.createElement('form');form.className='panel-action visible appointment-notes-manage';form.dataset.appointmentNotesForm='true';form.innerHTML='<span class="eyebrow">Internal notes</span><label><span class="sr-only">Internal appointment notes</span><textarea name="notes" maxlength="4000" rows="5" placeholder="Internal context for staff only"></textarea></label><span class="panel-hint">Internal only — not included in client confirmations or reminders.</span><button type="submit">Save notes</button><span class="panel-hint" data-appointment-notes-status></span>';var actions=one('.panel-actions',panel);if(actions&&actions.parentNode)actions.parentNode.insertBefore(form,actions);else one('.management-card',panel).appendChild(form);if(!one('[data-appointment-notes-style]')){var style=document.createElement('style');style.dataset.appointmentNotesStyle='true';style.textContent='.appointment-notes-manage{display:grid!important;gap:8px!important}.appointment-notes-manage textarea{width:100%;min-height:96px;border:1px solid var(--line-strong);border-radius:9px;padding:9px;font:inherit;background:#fff;resize:vertical}.appointment-notes-manage button{min-height:44px}.appointment-notes-manage [data-appointment-notes-status]{min-height:1em}';document.head.appendChild(style);}return form;}
+async function load(card,panel){var id=Number(card.dataset.appointmentId);if(!id)return;var form=ensureForm(panel);var textarea=form.elements.notes;var status=one('[data-appointment-notes-status]',form);form.dataset.appointmentId=String(id);form.dataset.revision='';textarea.disabled=true;status.textContent='Loading current internal note…';try{var response=await fetch(API+'/appointments/'+id+'/notes',{credentials:'same-origin',cache:'no-store',headers:{'Accept':'application/json'}});var body=await json(response);if(!response.ok)throw new Error(body.error||'Internal notes are unavailable.');if(form.dataset.appointmentId!==String(id))return;textarea.value=body.notes||'';form.dataset.revision=body.revision||'';textarea.disabled=false;status.textContent='';}catch(error){textarea.value='';textarea.disabled=true;status.textContent=error.message||'Internal notes are unavailable.';}}
+document.addEventListener('click',function(event){var button=event.target.closest('[data-calendar-operation="manage-appointment"]');if(!button)return;var card=button.closest('[data-appointment-id]');var panel=one('[data-calendar-management-panel]');if(card&&panel)window.setTimeout(function(){load(card,panel);},0);});
+document.addEventListener('submit',async function(event){var form=event.target.closest('[data-appointment-notes-form]');if(!form)return;event.preventDefault();var id=Number(form.dataset.appointmentId);var revision=String(form.dataset.revision||'');if(!id||!revision)return;var textarea=form.elements.notes;var status=one('[data-appointment-notes-status]',form);textarea.disabled=true;status.textContent='Saving internal note…';try{var token=await csrf();var response=await fetch(API+'/appointments/'+id+'/notes',{method:'PATCH',credentials:'same-origin',cache:'no-store',headers:{'Content-Type':'application/json','Accept':'application/json','x-shiloh-csrf-token':token},body:JSON.stringify({expectedRevision:revision,notes:textarea.value,requestId:operationId()})});token='';var body=await json(response);if(!response.ok)throw new Error(body.error||'The internal note was not saved.');form.dataset.revision=body.revision||revision;status.textContent='Internal note saved. Refreshing Calendar…';window.setTimeout(function(){window.location.reload();},350);}catch(error){textarea.disabled=false;status.textContent=error.message||'The internal note was not saved.';}});
+})();`;
+}
+
+module.exports = {
+  decorateCreateBookingNotes,
+  calendarCreateBookingNotesClientScript,
+  calendarManageAppointmentNotesClientScript,
+};

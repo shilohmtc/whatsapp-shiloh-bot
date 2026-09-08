@@ -309,7 +309,7 @@ async function main() {
     await evaluate(cdp, `document.querySelector('[data-create-booking]').click();true`);
     await poll(() => state.confirmations.length, (value) => value > beforeConfirm);
     await poll(() => evaluate(cdp, 'location.pathname'), (value) => value === '/calendar/read-only');
-    assert.deepEqual(state.confirmations.at(-1), { adminId: 71 });
+    assert.deepEqual(state.confirmations.at(-1), { adminId: 71, notes: '' });
     assert.equal(state.canonicalReloads, 1);
 
     await navigate();
@@ -335,7 +335,7 @@ async function main() {
     assert.equal(acknowledgementRequests.length, 0);
     const confirmRequests = state.requests.filter((item) => item.path === '/calendar/book/confirm');
     assert.equal(confirmRequests.length, 1);
-    assert.ok(confirmRequests.every((item) => Object.keys(item.body).length === 0));
+    assert.deepEqual(confirmRequests[0].body, { notes: '' });
     assert.equal(exceptions.length, 0);
     assert.equal(network.some((url) => /google|whatsapp|provider|meta/i.test(url)), false);
 

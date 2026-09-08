@@ -118,7 +118,8 @@ test('Calendar browser submits no final-mobile acknowledgement identity evidence
   assert.doesNotMatch(route, /router\.post\('\/mobile-acknowledgement'/);
   assert.match(confirm, /sameOrigin, requireSession, requireCsrf/);
   assert.match(confirm, /adminId: req\.staffBrowserSession\.adminId/);
-  assert.doesNotMatch(confirm, /req\.body|clientId|actorAdminId|normalizedMobile/);
+  assert.match(confirm, /notes: req\.body\?\.notes/);
+  assert.doesNotMatch(confirm, /clientId|actorAdminId|normalizedMobile/);
   assert.doesNotMatch(ux, /Final mobile acknowledgement|Acknowledge final mobile|data-mobile-ack/);
 });
 
