@@ -95,6 +95,22 @@ jobs:
           SHILOH_STAFF_BROWSER_SESSION_CALENDAR_BRIDGE_ENABLED: 'false'
           SHILOH_CALENDAR_READONLY_UX_ENABLED: 'false'
         run: npm test
+
+  calendar_browser_proofs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Use Node 24.14.1
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24.14.1
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
       - name: Run authenticated Calendar mutation browser proof
         run: node --require ./scripts/calendar-operational-mutations-notification-proof-stub.js scripts/calendar-operational-mutations-browser-proof.js
       - name: Upload authenticated Calendar mutation browser proof
@@ -104,24 +120,6 @@ jobs:
           path: artifacts/calendar-operational-mutations-browser-proof
           if-no-files-found: error
           retention-days: 14
-      - name: Run authenticated Workspace client notification browser proof
-        run: node scripts/workspace-client-notifications-browser-proof.js
-      - name: Upload authenticated Workspace client notification browser proof
-        uses: actions/upload-artifact@v4
-        with:
-          name: workspace-client-notifications-browser-proof
-          path: artifacts/workspace-client-notifications-browser-proof
-          if-no-files-found: error
-          retention-days: 14
-      - name: Run authenticated Workspace Dashboard and Messages browser proof
-        run: node scripts/workspace-dashboard-messages-browser-proof.js
-      - name: Upload authenticated Workspace Dashboard and Messages browser proof
-        uses: actions/upload-artifact@v4
-        with:
-          name: workspace-dashboard-v2-p1
-          path: artifacts/workspace-dashboard-v2-p1
-          if-no-files-found: error
-          retention-days: 14
       - name: Run Calendar Clean CRM V2 browser proof
         run: node scripts/calendar-clean-crm-v2-browser-proof.js
       - name: Upload Calendar Clean CRM V2 browser proof
@@ -129,17 +127,6 @@ jobs:
         with:
           name: calendar-clean-crm-v2-browser-proof
           path: artifacts/calendar-clean-crm-v2-browser-proof
-          if-no-files-found: error
-          retention-days: 14
-      - name: Generate Workspace Mobile Polish visual proof
-        run: node scripts/workspace-mobile-polish-visual-proof.js
-      - name: Verify true Workspace mobile CSS viewports
-        run: node scripts/workspace-mobile-viewport-proof.js
-      - name: Upload Workspace Mobile Polish visual proof
-        uses: actions/upload-artifact@v4
-        with:
-          name: workspace-mobile-polish-v1
-          path: artifacts/workspace-mobile-polish-v1
           if-no-files-found: error
           retention-days: 14
       - name: Run Calendar mobile staff overview browser proof
@@ -187,6 +174,60 @@ jobs:
           path: artifacts/calendar-cockpit-visual-proof
           if-no-files-found: error
           retention-days: 14
+      - name: Prove authenticated retrospective appointment capture
+        run: node scripts/calendar-retrospective-booking-browser-proof.js
+      - name: Upload authenticated retrospective appointment proof
+        uses: actions/upload-artifact@v4
+        with:
+          name: calendar-retrospective-booking
+          path: artifacts/calendar-retrospective-booking
+          if-no-files-found: error
+          retention-days: 14
+
+  workspace_browser_proofs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Use Node 24.14.1
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24.14.1
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Run authenticated Workspace client notification browser proof
+        run: node scripts/workspace-client-notifications-browser-proof.js
+      - name: Upload authenticated Workspace client notification browser proof
+        uses: actions/upload-artifact@v4
+        with:
+          name: workspace-client-notifications-browser-proof
+          path: artifacts/workspace-client-notifications-browser-proof
+          if-no-files-found: error
+          retention-days: 14
+      - name: Run authenticated Workspace Dashboard and Messages browser proof
+        run: node scripts/workspace-dashboard-messages-browser-proof.js
+      - name: Upload authenticated Workspace Dashboard and Messages browser proof
+        uses: actions/upload-artifact@v4
+        with:
+          name: workspace-dashboard-v2-p1
+          path: artifacts/workspace-dashboard-v2-p1
+          if-no-files-found: error
+          retention-days: 14
+      - name: Generate Workspace Mobile Polish visual proof
+        run: node scripts/workspace-mobile-polish-visual-proof.js
+      - name: Verify true Workspace mobile CSS viewports
+        run: node scripts/workspace-mobile-viewport-proof.js
+      - name: Upload Workspace Mobile Polish visual proof
+        uses: actions/upload-artifact@v4
+        with:
+          name: workspace-mobile-polish-v1
+          path: artifacts/workspace-mobile-polish-v1
+          if-no-files-found: error
+          retention-days: 14
       - name: Generate Workspace Clients visual proof
         run: node scripts/workspace-clients-visual-proof.js
       - name: Upload Workspace Clients visual proof
@@ -200,15 +241,6 @@ jobs:
         run: node scripts/workspace-staff-visual-proof.js
       - name: Prove authenticated Staff Access capability editor
         run: node scripts/workspace-staff-access-readonly-browser-proof.js
-      - name: Prove authenticated retrospective appointment capture
-        run: node scripts/calendar-retrospective-booking-browser-proof.js
-      - name: Upload authenticated retrospective appointment proof
-        uses: actions/upload-artifact@v4
-        with:
-          name: calendar-retrospective-booking
-          path: artifacts/calendar-retrospective-booking
-          if-no-files-found: error
-          retention-days: 14
       - name: Upload authenticated Staff Access editor proof
         uses: actions/upload-artifact@v4
         with:
