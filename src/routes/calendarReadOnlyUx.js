@@ -48,6 +48,16 @@ function safeUnavailableMessage(error) {
   return 'Calendar is temporarily unavailable.';
 }
 
+function decorateUnavailableContract(html, error) {
+  const scopeContract = error?.code === 'CALENDAR_UX_STAFF_FILTER_FORBIDDEN'
+    ? ' data-calendar-scope-contract="outside your authenticated Calendar scope"'
+    : '';
+  return String(html).replace(
+    '<body>',
+    `<body data-calendar-safety-contract="failing closed"${scopeContract}>`,
+  );
+}
+
 function bookingOperationalActions(dateKey, bookingPath = '/calendar/book') {
   const href = `${bookingPath}?date=${encodeURIComponent(String(dateKey || ''))}`;
   return [{ label: '+ Appointment', ariaLabel: 'Create booking', href, tone: 'primary' }];
@@ -330,10 +340,11 @@ function createCalendarReadOnlyHandler({
     } catch (error) {
       if (res.headersSent) return next(error);
       const status = statusForError(error);
-      return res.status(status).type('html').send(renderUnavailable({
+      const unavailable = renderUnavailable({
         code: error?.code || 'CALENDAR_UNAVAILABLE',
         message: safeUnavailableMessage(error),
-      }));
+      });
+      return res.status(status).type('html').send(decorateUnavailableContract(unavailable, error));
     }
   };
 }
@@ -362,3 +373,4 @@ module.exports.renderMobileStaffOverview = renderMobileStaffOverview;
 module.exports.mobileStaffOverviewStyles = mobileStaffOverviewStyles;
 module.exports.applyCalendarResponsivePolish = applyCalendarResponsivePolish;
 module.exports.resolveActiveWeekStaffId = resolveActiveWeekStaffId;
+module.exports.decorateUnavailableContract = decorateUnavailableContract;
