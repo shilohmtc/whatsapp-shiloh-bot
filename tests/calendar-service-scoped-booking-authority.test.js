@@ -117,28 +117,29 @@ test('direct final confirmation is bound to session actor, scope and V2 pending 
     crmV2Service: crmV2(),
     confirmBooking: async (...args) => { confirmCalls.push(args); return { status: 'created', appointmentId: 777 }; },
   });
-  const result = await service.confirm({ adminId: principals.marietjie.id, actorAdminId: 99, clientId: 999, mobile: '27829999999' });
+  const result = await service.confirm({ adminId: principals.marietjie.id, notes: ' staff only ', actorAdminId: 99, clientId: 999, mobile: '27829999999' });
   assert.equal(confirmCalls.length, 1);
   assert.equal(confirmCalls[0][0].id, principals.marietjie.id);
-  assert.deepEqual(confirmCalls[0][1], { source: 'shiloh_calendar' });
+  assert.deepEqual(confirmCalls[0][1], { source: 'shiloh_calendar', notes: 'staff only' });
   assert.equal(result.appointmentId, 777);
   const pendingRead = db.calls.find((call) => call.sql.includes('FROM admin_booking_sessions abs'));
   assert.deepEqual(pendingRead.params, [principals.marietjie.id]);
 });
 
-test('Calendar confirm accepts no browser identity and acknowledgement ceremony endpoint is retired', () => {
+test('Calendar confirm accepts only internal note body data, no browser identity, and acknowledgement ceremony endpoint is retired', () => {
   const routeSource = fs.readFileSync(path.join(__dirname, '../src/routes/calendarCreateBooking.js'), 'utf8');
   const confirm = routeSource.slice(routeSource.indexOf("router.post('/confirm'"));
   assert.doesNotMatch(routeSource, /router\.post\('\/mobile-acknowledgement'/);
   assert.match(confirm, /sameOrigin, requireSession, requireCsrf/);
   assert.match(confirm, /adminId: req\.staffBrowserSession\.adminId/);
-  assert.doesNotMatch(confirm, /req\.body|clientId|mobile|actorAdminId/);
+  assert.match(confirm, /notes: req\.body\?\.notes/);
+  assert.doesNotMatch(confirm, /clientId|mobile|actorAdminId/);
 });
 
-test('Calendar layer delegates V2 appointment writes and carries only canonical mobile snapshot state', () => {
+test('Calendar layer delegates V2 appointment writes while retaining canonical mobile snapshot and internal notes', () => {
   const source = fs.readFileSync(path.join(__dirname, '../src/services/calendarCreateBooking.js'), 'utf8');
   assert.doesNotMatch(source, /INSERT INTO appointments|INSERT INTO clients|INSERT INTO client_contacts/);
-  assert.match(source, /confirmBooking\(admin, \{ source: 'shiloh_calendar' \}\)/);
+  assert.match(source, /confirmBooking\(admin, \{ source: 'shiloh_calendar', notes: normalizedNotes \}\)/);
   assert.match(source, /client_mobile_snapshot/);
   assert.doesNotMatch(source, /mobile_acknowledged_at|acknowledged_mobile|acknowledgeMobile/);
   assert.doesNotMatch(source, /operatorContactAuthority|client_identity_verifications/);
