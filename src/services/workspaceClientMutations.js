@@ -1,7 +1,14 @@
 const crypto = require('crypto');
 const { pool } = require('../db/pool');
 const { PostgresCrmV2ClientRepository } = require('../repositories/crmV2ClientRepository');
-const { createCrmV2ClientService, CrmV2Error, normalizeMobile } = require('./crmV2ClientService');
+const {
+  createCrmV2ClientService,
+  CrmV2Error,
+  normalizeMobile,
+  normalizeName,
+  normalizeDateOfBirth,
+  normalizeGender,
+} = require('./crmV2ClientService');
 
 const CLIENT_MANAGE_CAPABILITY = 'client:manage';
 const ORIGIN = 'workspace.clients';
@@ -52,6 +59,26 @@ function mobileIdentityEvidence(value) {
   return crypto.createHash('sha256').update(`workspace.clients.mobile:v1:${normalized}`).digest('hex');
 }
 function mutationFingerprint(operation, payload) { return crypto.createHash('sha256').update(JSON.stringify({ operation, ...payload })).digest('hex'); }
+function normalizeRequestedProfile({ name, mobile, dateOfBirth, gender } = {}) {
+  const cleanName = normalizeName(name);
+  const normalizedMobile = normalizeMobile(mobile);
+  if (!cleanName) throw new CrmV2Error('CRM_V2_INVALID_NAME', 'Enter a valid client name.');
+  if (!normalizedMobile) throw new CrmV2Error('CRM_V2_INVALID_MOBILE', 'Enter a valid South African mobile number.');
+  return {
+    name: cleanName,
+    normalizedMobile,
+    dateOfBirth: normalizeDateOfBirth(dateOfBirth),
+    gender: normalizeGender(gender),
+  };
+}
+function sameClientProfile(row, requested) {
+  if (!row || !requested) return false;
+  const currentDob = field(row, 'date_of_birth', 'dateOfBirth') ? String(field(row, 'date_of_birth', 'dateOfBirth')).slice(0, 10) : null;
+  return String(field(row, 'name', 'name') || '') === requested.name
+    && String(field(row, 'normalized_mobile', 'normalizedMobile') || '') === requested.normalizedMobile
+    && currentDob === requested.dateOfBirth
+    && (field(row, 'gender', 'gender') || null) === requested.gender;
+}
 function normalizeError(error) {
   if (error instanceof WorkspaceClientMutationError) return error;
   if (error instanceof CrmV2Error) return new WorkspaceClientMutationError(error.code, error.message, error.httpStatus || 400);
@@ -114,7 +141,11 @@ function createWorkspaceClientMutationService({ db = pool } = {}) {
     return inTransaction({ adminId, requestId, operation: 'update', fingerprintPayload: { clientId: id, expectedRevision: expected, name: String(name ?? ''), mobile: String(mobile ?? ''), dateOfBirth: dateOfBirth == null ? '' : String(dateOfBirth), gender: gender == null ? '' : String(gender) }, execute: async ({ repository, crm, operator }) => {
       const current = await repository.getClientById(id, { forUpdate: true }); if (!current) throw new WorkspaceClientMutationError('WORKSPACE_CLIENT_NOT_FOUND', 'Client was not found.', 404);
       const beforeRevision = clientRevision(current); if (beforeRevision !== expected) throw new WorkspaceClientMutationError('WORKSPACE_CLIENT_STALE_REVISION', 'This client changed. Reload Clients before retrying.', 409);
-      const updated = await crm.updateClient({ clientId: id, name, mobile, dateOfBirth, gender, actorReference: `workspace_admin:${operator.operatorAdminId}` });
+      const requested = normalizeRequestedProfile({ name, mobile, dateOfBirth, gender });
+      if (sameClientProfile(current, requested)) {
+        return { status: 'unchanged', clientId: id, beforeRevision, revision: beforeRevision, auditChanges: { fields: [], mobile: null, mobileVerificationReset: false } };
+      }
+      const updated = await crm.updateClient({ clientId: id, name: requested.name, mobile: requested.normalizedMobile, dateOfBirth: requested.dateOfBirth, gender: requested.gender, actorReference: `workspace_admin:${operator.operatorAdminId}` });
       if (updated.status === 'conflict') throw new WorkspaceClientMutationError('WORKSPACE_CLIENT_MOBILE_CONFLICT', 'Another active canonical client owns that mobile number.', 409);
       if (updated.status !== 'updated' || !updated.client) throw new WorkspaceClientMutationError('WORKSPACE_CLIENT_UPDATE_FAILED', 'Client update did not complete safely.', 409);
       const changedFields = []; if (String(current.name || '') !== String(updated.client.name || '')) changedFields.push('name'); if (String(current.normalized_mobile || '') !== String(updated.client.normalizedMobile || '')) changedFields.push('mobile');
@@ -138,4 +169,21 @@ function createWorkspaceClientMutationService({ db = pool } = {}) {
 }
 
 const service = createWorkspaceClientMutationService();
-module.exports = { CLIENT_MANAGE_CAPABILITY, ORIGIN, EVENT_TYPES, WorkspaceClientMutationError, positiveId, permissionSet, evaluateClientManageAuthority, requireRequestId, requireExpectedRevision, clientRevision, mobileIdentityEvidence, mutationFingerprint, createWorkspaceClientMutationService, ...service };
+module.exports = {
+  CLIENT_MANAGE_CAPABILITY,
+  ORIGIN,
+  EVENT_TYPES,
+  WorkspaceClientMutationError,
+  positiveId,
+  permissionSet,
+  evaluateClientManageAuthority,
+  requireRequestId,
+  requireExpectedRevision,
+  clientRevision,
+  mobileIdentityEvidence,
+  mutationFingerprint,
+  normalizeRequestedProfile,
+  sameClientProfile,
+  createWorkspaceClientMutationService,
+  ...service,
+};
