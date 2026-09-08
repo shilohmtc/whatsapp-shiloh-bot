@@ -5,6 +5,7 @@ class AppointmentNotesError extends Error {
     super(message);
     this.name = 'AppointmentNotesError';
     this.code = code;
+    this.httpStatus = 400;
   }
 }
 
