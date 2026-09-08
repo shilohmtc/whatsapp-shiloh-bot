@@ -18,6 +18,9 @@ const PRACTITIONER_POLICY_CAPABILITIES = Object.freeze([
 ]);
 const PRACTITIONER_POLICY_CAPABILITY_SET = new Set(PRACTITIONER_POLICY_CAPABILITIES);
 const RECORD_PAST = 'appointment:record_past';
+const ADJUST_END = 'appointment:adjust_end';
+const CALENDAR_OPERATIONAL_ACCESS_CAPABILITIES = Object.freeze([RECORD_PAST, ADJUST_END]);
+const CALENDAR_OPERATIONAL_ACCESS_CAPABILITY_SET = new Set(CALENDAR_OPERATIONAL_ACCESS_CAPABILITIES);
 const MANDATORY_PRACTITIONER_CAPABILITIES = Object.freeze(['appointment:view']);
 const PRACTITIONER_POLICY_DEFINITIONS = Object.freeze([
   Object.freeze({
@@ -133,7 +136,23 @@ function incompatibleReason(staff, rows = []) {
 function policyProjection(staff, rows = []) {
   const row = Array.isArray(rows) && rows.length === 1 ? rows[0] : null;
   const retrospective=retrospectivePolicy(staff,rows);
-  if (retrospective) return { key:'workspace_retrospective_access_v1',supported:retrospective.supported,reason:retrospective.reason||null,staffId:positiveId(staff?.id),role:row?.role||null,businessRole:row?.business_role||null,calendarScope:row?.calendar_scope||null,serviceScope:row?.service_scope||null,capabilities:row?.permissions?.[RECORD_PAST]===true?[RECORD_PAST]:[],definitions:[{key:RECORD_PAST,label:'Record past appointments',description:'Record fully ended appointments silently within existing booking scopes.',mandatory:false}],retrospectiveClientIds:retrospective.ids,revision:row?accessPolicyRevision(row):null };
+  if (retrospective) return {
+    key:'workspace_retrospective_access_v1',
+    supported:retrospective.supported,
+    reason:retrospective.reason||null,
+    staffId:positiveId(staff?.id),
+    role:row?.role||null,
+    businessRole:row?.business_role||null,
+    calendarScope:row?.calendar_scope||null,
+    serviceScope:row?.service_scope||null,
+    capabilities:CALENDAR_OPERATIONAL_ACCESS_CAPABILITIES.filter(key=>row?.permissions?.[key]===true),
+    definitions:[
+      {key:RECORD_PAST,label:'Record past appointments',description:'Record fully ended appointments silently within existing booking scopes.',mandatory:false},
+      {key:ADJUST_END,label:'Adjust appointment end time',description:'Correct an appointment’s effective end time within existing Calendar and service scopes.',mandatory:false},
+    ],
+    retrospectiveClientIds:retrospective.ids,
+    revision:row?accessPolicyRevision(row):null,
+  };
   const reason = incompatibleReason(staff, rows);
   const current = row
     ? PRACTITIONER_POLICY_CAPABILITIES.filter(key => permissionSet(row.permissions)[key] === true)
@@ -248,9 +267,9 @@ function createWorkspaceStaffAccessPolicyService({
       let managed=PRACTITIONER_POLICY_CAPABILITIES, normalized;
       let condition=undefined;
       if(projected.key==='workspace_retrospective_access_v1'){
-        managed=[RECORD_PAST];
-        if(!Array.isArray(capabilities)||capabilities.some(key=>key!==RECORD_PAST))throw new WorkspaceStaffError('WORKSPACE_STAFF_ACCESS_POLICY_CAPABILITY_FORBIDDEN','Only retrospective capture is editable here.',400);
-        normalized=capabilities.includes(RECORD_PAST)?[RECORD_PAST]:[];
+        managed=[...CALENDAR_OPERATIONAL_ACCESS_CAPABILITIES];
+        if(!Array.isArray(capabilities)||capabilities.some(key=>!CALENDAR_OPERATIONAL_ACCESS_CAPABILITY_SET.has(key)))throw new WorkspaceStaffError('WORKSPACE_STAFF_ACCESS_POLICY_CAPABILITY_FORBIDDEN','Only bounded Calendar operational capabilities are editable here.',400);
+        normalized=managed.filter(key=>capabilities.includes(key));
         if(retrospectiveClientIds===null)condition=null;
         else if(retrospectiveClientIds!==undefined){if(!Array.isArray(retrospectiveClientIds)||retrospectiveClientIds.some(id=>!positiveId(id)))throw new WorkspaceStaffError('WORKSPACE_STAFF_ACCESS_POLICY_INVALID','Canonical client IDs must be positive integers.',400);condition=[...new Set(retrospectiveClientIds.map(Number))].sort((a,b)=>a-b);}
       } else normalized=normalizeRequestedCapabilities(capabilities);
@@ -320,6 +339,7 @@ module.exports = {
   PRACTITIONER_POLICY_CAPABILITIES,
   MANDATORY_PRACTITIONER_CAPABILITIES,
   PRACTITIONER_POLICY_DEFINITIONS,
+  CALENDAR_OPERATIONAL_ACCESS_CAPABILITIES,
   enabledCapabilities,
   accessPolicyRevision,
   normalizeRequestedCapabilities,
