@@ -26,7 +26,7 @@ function setAccessSecurityHeaders(res) {
 
 function normalizeReason(value) {
   const reason = String(value || '').trim().toLowerCase();
-  return reason === 'logout' || reason === 'session' ? reason : null;
+  return ['logout', 'session', 'access'].includes(reason) ? reason : null;
 }
 
 function withAuthenticatorSetupGuidance(html) {
@@ -46,12 +46,10 @@ function retireBrowserWhatsAppGuidance(html) {
     /\s*<p class="privacy-note">Authenticator and recovery credentials stay outside WhatsApp\.[\s\S]*?<\/p>\s*/,
     '\n',
   );
-  for (const initialMessage of [
-    'Use your authenticator here, or open Workspace from your existing Shiloh WhatsApp conversation.',
-    'Your staff session is missing, expired, or revoked. Sign in again to continue.',
-  ]) {
-    output = output.replace(`>${initialMessage}</div>`, '></div>');
-  }
+  output = output.replace(
+    '>Use your authenticator here, or open Workspace from your existing Shiloh WhatsApp conversation.</div>',
+    '></div>',
+  );
   if (!output.includes('[data-shiloh-status]:empty{display:none}')) {
     output = output.replace('<style>', '<style>[data-shiloh-status]:empty{display:none}');
   }
