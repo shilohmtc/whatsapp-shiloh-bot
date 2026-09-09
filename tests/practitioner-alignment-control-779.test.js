@@ -57,7 +57,7 @@ test('#779 control source writes no identity/auth state, emits bounded audit evi
   assert.match(source, /INSERT INTO staff_services\(staff_id,service_id\)/i);
   assert.match(source, /DELETE FROM staff_services target/i);
   assert.match(source, /INSERT INTO staff_auth_security_events/i);
-  assert.match(source, /control_practitioner_alignment_779/);
+  assert.match(source, /VALUES\('practitioner_alignment',NULL,\$1,'control','Control issue #779'/);
   assert.doesNotMatch(source, /UPDATE staff_auth_|DELETE FROM staff_auth_/i);
   assert.doesNotMatch(
     source,
