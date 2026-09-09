@@ -13,7 +13,6 @@ const CALENDAR_CAPABILITIES = Object.freeze({
 const RETROSPECTIVE_CLIENT_IDS_KEY = 'appointment:record_past:crm_v2_client_ids';
 
 const CALENDAR_OPERATIONS = Object.freeze([
-  'appointment:adjust_end',
   'appointment:reschedule',
   'appointment:cancel',
   'appointment:reassign',
@@ -23,7 +22,6 @@ const CALENDAR_OPERATIONS = Object.freeze([
 ]);
 
 const OPERATION_CAPABILITIES = Object.freeze({
-  'appointment:adjust_end': CALENDAR_CAPABILITIES.ADJUST_END,
   'appointment:reschedule': CALENDAR_CAPABILITIES.BOOKING_RESCHEDULE,
   'appointment:cancel': CALENDAR_CAPABILITIES.BOOKING_CANCEL,
   'appointment:reassign': CALENDAR_CAPABILITIES.BOOKING_REASSIGN,
