@@ -25,7 +25,6 @@ function sanitizePrincipal(row, { includeDisplayName = false } = {}) {
     businessRole: String(row.business_role || ''),
     calendarScope: String(row.calendar_scope || ''),
     serviceScope: String(row.service_scope || ''),
-    rawStaffScope: String(row.staff_scope || ''),
     linkedStaffStatus: row.staff_status == null ? null : String(row.staff_status),
     linkedStaffResourceType: row.staff_resource_type == null ? null : String(row.staff_resource_type),
     capabilities: enabledCapabilities(row.permissions),
@@ -39,7 +38,7 @@ async function loadAudit({ db = pool } = {}) {
   const targetResult = await db.query(
     `/* receptionPrincipalAudit780:target */
      SELECT a.id,a.staff_id,a.display_name,a.active,a.role,a.permissions,
-            a.business_role,a.calendar_scope,a.service_scope,a.staff_scope,
+            a.business_role,a.calendar_scope,a.service_scope,
             s.status AS staff_status,s.resource_type AS staff_resource_type
        FROM staff_admin_accounts a
        LEFT JOIN staff s ON s.id=a.staff_id
@@ -51,7 +50,7 @@ async function loadAudit({ db = pool } = {}) {
   const cohortResult = await db.query(
     `/* receptionPrincipalAudit780:booking-operator-cohort */
      SELECT a.id,a.staff_id,a.display_name,a.active,a.role,a.permissions,
-            a.business_role,a.calendar_scope,a.service_scope,a.staff_scope,
+            a.business_role,a.calendar_scope,a.service_scope,
             s.status AS staff_status,s.resource_type AS staff_resource_type
        FROM staff_admin_accounts a
        LEFT JOIN staff s ON s.id=a.staff_id
@@ -83,6 +82,7 @@ async function loadAudit({ db = pool } = {}) {
       businessRole: String(row.business_role || ''),
       calendarScope: String(row.calendar_scope || ''),
     })),
+    staffScopeColumnPresent: false,
     secretsExposed: false,
     mutationPerformed: false,
   };
