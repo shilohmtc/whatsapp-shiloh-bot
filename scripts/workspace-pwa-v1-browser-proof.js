@@ -185,7 +185,7 @@ async function main() {
     const expiredPng = path.join(OUT_DIR, 'expired-session.png');
     await chromeRun(chrome, [`--user-data-dir=${expiredProfile}`, '--window-size=390,844', `--screenshot=${expiredPng}`, `${origin}/proof-expired`]);
     const expiredDom = await chromeRun(chrome, [`--user-data-dir=${expiredProfile}`, '--window-size=390,844', '--virtual-time-budget=1000', '--dump-dom', `${origin}/proof-expired`]);
-    assert.match(expiredDom, /data-shiloh-status data-state="session-ended"><\/div>/);
+    assert.match(expiredDom, /data-shiloh-status(?:="")? data-state="session-ended"><\/div>/);
     assert.doesNotMatch(expiredDom, /data-authenticated-workspace/);
 
     const report = {
