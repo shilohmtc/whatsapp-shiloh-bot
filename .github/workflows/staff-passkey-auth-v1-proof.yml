@@ -3,7 +3,7 @@ name: Staff Passkey Auth V1 Proof
 on:
   pull_request:
     paths:
-      - 'migrations/109_staff_passkey_auth_v1.sql'
+      - 'migrations/111_staff_passkey_auth_v1.sql'
       - 'src/services/staffPasskeyAuth.js'
       - 'src/routes/staffPasskeyAuth.js'
       - 'src/routes/staffCalendarAccessUx.js'

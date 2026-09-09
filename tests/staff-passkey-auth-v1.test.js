@@ -93,7 +93,7 @@ test('#794 registration and lifecycle require recent TOTP/passkey session, not r
 });
 
 test('#794 schema is additive, multi-credential, soft-revocable and extends canonical auth method', () => {
-  const sql = fs.readFileSync(path.join(__dirname, '../migrations/110_staff_passkey_auth_v1.sql'), 'utf8');
+  const sql = fs.readFileSync(path.join(__dirname, '../migrations/111_staff_passkey_auth_v1.sql'), 'utf8');
   assert.match(sql, /staff_auth_passkey_credentials/); assert.match(sql, /admin_id BIGINT NOT NULL REFERENCES staff_admin_accounts/); assert.match(sql, /credential_id TEXT NOT NULL UNIQUE/);
   assert.match(sql, /revoked_at TIMESTAMPTZ/); assert.doesNotMatch(sql, /DELETE FROM staff_auth_passkey_credentials/i); assert.match(sql, /'passkey'/);
   assert.match(sql, /staff_auth_webauthn_challenges/); assert.match(sql, /purpose IN \('registration', 'authentication'\)/);
