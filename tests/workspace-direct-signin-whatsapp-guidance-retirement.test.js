@@ -29,7 +29,7 @@ test('direct Workspace sign-in retires the redundant legacy WhatsApp helper whil
   assert.match(page, /Use a recovery code/);
   assert.match(page, /Recovery administration/);
   assert.match(page, /Authenticator enrollment/);
-  assert.match(page, /Staff-auth administrators: recovery enrollment/);
+  assert.match(page, /Open recovery enrollment tools/);
 
   assert.doesNotMatch(page, /Easiest access/i);
   assert.doesNotMatch(page, /Open from Shiloh WhatsApp/i);
