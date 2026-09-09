@@ -12,7 +12,7 @@ const { dateKeyInBusinessTimezone } = require('./operationalCalendar');
 const bookingRequestResolution = require('./workspaceBookingRequestRouting');
 
 const FINAL_STATUSES = new Set(['completed', 'cancelled', 'no_show']);
-const OWNER_ROLES = new Set(['owner', 'business_admin']);
+const BUSINESS_OVERVIEW_ROLES = new Set(['owner', 'business_admin', 'booking_operator']);
 const NO_BOOKING_REQUESTS = {
   async listUnresolvedBookingRequests() { return []; },
 };
@@ -51,8 +51,8 @@ function dashboardAuthority(principal) {
   const authority = principal?.calendarAuthority;
   if (!authority || !hasCapability(authority, CALENDAR_CAPABILITIES.VIEW)) return null;
   const role = String(authority.businessRole || '').trim().toLowerCase();
-  const isOwnerOverview = OWNER_ROLES.has(role) && authority.calendarScope === 'all_business';
-  if (isOwnerOverview) {
+  const isBusinessOverview = BUSINESS_OVERVIEW_ROLES.has(role) && authority.calendarScope === 'all_business';
+  if (isBusinessOverview) {
     return {
       mode: 'owner_overview',
       linkedStaffId: positiveId(authority.linkedStaffId),
