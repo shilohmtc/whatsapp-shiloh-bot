@@ -26,7 +26,7 @@ function setAccessSecurityHeaders(res) {
 
 function normalizeReason(value) {
   const reason = String(value || '').trim().toLowerCase();
-  return reason === 'logout' || reason === 'session' ? reason : null;
+  return ['logout', 'session', 'access'].includes(reason) ? reason : null;
 }
 
 function withAuthenticatorSetupGuidance(html) {
@@ -46,16 +46,26 @@ function retireBrowserWhatsAppGuidance(html) {
     /\s*<p class="privacy-note">Authenticator and recovery credentials stay outside WhatsApp\.[\s\S]*?<\/p>\s*/,
     '\n',
   );
-  for (const initialMessage of [
-    'Use your authenticator here, or open Workspace from your existing Shiloh WhatsApp conversation.',
-    'Your staff session is missing, expired, or revoked. Sign in again to continue.',
-  ]) {
-    output = output.replace(`>${initialMessage}</div>`, '></div>');
-  }
+  output = output.replace(
+    '>Use your authenticator here, or open Workspace from your existing Shiloh WhatsApp conversation.</div>',
+    '></div>',
+  );
+  output = output.replace(
+    '>Your staff session is missing, expired, or revoked. Sign in again to continue.</div>',
+    '></div>',
+  );
   if (!output.includes('[data-shiloh-status]:empty{display:none}')) {
     output = output.replace('<style>', '<style>[data-shiloh-status]:empty{display:none}');
   }
   return output;
+}
+
+function withAccessChangedGuidance(html, reason) {
+  if (reason !== 'access') return html;
+  return String(html).replace(
+    'data-state="ready"></div>',
+    'data-state="session-ended">Your Shiloh Workspace access changed or no longer permits Workspace. Sign in again, or ask an authorized administrator if access should be restored.</div>',
+  );
 }
 
 function createStaffCalendarAccessPageHandler({
@@ -67,13 +77,15 @@ function createStaffCalendarAccessPageHandler({
     if (!isStaffCalendarAccessUxEnabled(env)) return res.status(404).type('text/plain').send('Not Found');
     const basePath = req.baseUrl || '/calendar/staff';
     const providerIndependentAuthEnabled = providerIndependentAuthPolicy(env).operational;
+    const reason = normalizeReason(req.query?.reason);
     let html = renderPage({
-      reason: normalizeReason(req.query?.reason),
+      reason,
       clientScriptPath: `${basePath}/client.js`,
       providerIndependentAuthEnabled,
     });
     if (providerIndependentAuthEnabled) html = withAuthenticatorSetupGuidance(html);
     html = retireBrowserWhatsAppGuidance(html);
+    html = withAccessChangedGuidance(html, reason);
     return res.status(200).type('html').send(html);
   };
 }
@@ -131,3 +143,4 @@ module.exports.setAccessSecurityHeaders = setAccessSecurityHeaders;
 module.exports.normalizeReason = normalizeReason;
 module.exports.withAuthenticatorSetupGuidance = withAuthenticatorSetupGuidance;
 module.exports.retireBrowserWhatsAppGuidance = retireBrowserWhatsAppGuidance;
+module.exports.withAccessChangedGuidance = withAccessChangedGuidance;
