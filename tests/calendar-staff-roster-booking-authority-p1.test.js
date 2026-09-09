@@ -46,6 +46,7 @@ test('stable vocabulary and evaluator derive authority only from canonical data 
     VIEW: 'appointment:view',
     BOOKING_CREATE: 'appointment:create',
     RECORD_PAST: 'appointment:record_past',
+    ADJUST_END: 'appointment:adjust_end',
     CLIENT_LOOKUP: 'client:lookup',
     BOOKING_RESCHEDULE: 'calendar:booking:reschedule',
     BOOKING_CANCEL: 'calendar:booking:cancel',
