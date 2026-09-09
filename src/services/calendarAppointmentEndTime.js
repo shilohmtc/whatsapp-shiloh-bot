@@ -283,7 +283,7 @@ function createCalendarAppointmentEndTimeService({
       const row = updated.rows[0];
       await client.query(
         `UPDATE appointment_lifecycle
-            SET appointment_ends_at=$2, updated_at=NOW()
+            SET appointment_ends_at=$2
           WHERE appointment_id=$1`,
         [id, newEnd]
       );
