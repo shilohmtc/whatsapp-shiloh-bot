@@ -14,6 +14,7 @@ test('#779 source practitioner guard accepts own-scope practitioner and rejects 
     business_role: 'employee_practitioner',
     calendar_scope: 'own_appointments',
     service_scope: 'own_services',
+    staff_scope: 'own_staff',
     permissions: { 'appointment:view': true },
   };
   assert.doesNotThrow(() => control.assertSourcePractitioner(staff, access));
@@ -32,6 +33,7 @@ test('#779 sanitized projections contain operational authority but no identity/a
     business_role: 'employee_practitioner',
     calendar_scope: 'own_appointments',
     service_scope: 'own_services',
+    staff_scope: 'own_staff',
     permissions: { 'appointment:view': true },
     whatsapp_number: '+27820000000',
     normalized_whatsapp: '27820000000',
@@ -39,20 +41,28 @@ test('#779 sanitized projections contain operational authority but no identity/a
     recovery_codes: 'never-log',
     session_token: 'never-log',
   });
+  assert.equal(access.staffScope, 'own_staff');
   assert.deepEqual(access.capabilities, ['appointment:view']);
   const serialized = JSON.stringify(access);
   assert.doesNotMatch(serialized, /27820000000|never-log|whatsapp|totp|recovery|session/i);
 });
 
-test('#779 control source never writes or copies identity/auth fields and clones only staff service ids', () => {
+test('#779 control source writes no identity/auth state, emits bounded audit evidence, and clones only staff service ids', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'services', 'practitionerAlignmentControl779.js'), 'utf8');
   const adminUpdate = source.match(/UPDATE staff_admin_accounts[\s\S]*?WHERE id=\$1`/i)?.[0] || '';
   assert.match(adminUpdate, /staff_id=\$2/);
   assert.match(adminUpdate, /permissions=\$4::jsonb/);
+  assert.match(adminUpdate, /staff_scope=\$8/);
   assert.doesNotMatch(adminUpdate, /whatsapp|totp|recovery|session|password|credential/i);
   assert.match(source, /INSERT INTO staff_services\(staff_id,service_id\)/i);
   assert.match(source, /DELETE FROM staff_services target/i);
-  assert.doesNotMatch(source, /INSERT INTO staff_auth|UPDATE staff_auth|DELETE FROM staff_auth/i);
+  assert.match(source, /INSERT INTO staff_auth_security_events/i);
+  assert.match(source, /control_practitioner_alignment_779/);
+  assert.doesNotMatch(source, /UPDATE staff_auth_|DELETE FROM staff_auth_/i);
+  assert.doesNotMatch(
+    source,
+    /INSERT INTO staff_totp_credentials|INSERT INTO staff_auth_recovery_codes|INSERT INTO staff_browser_sessions|UPDATE staff_totp_credentials|UPDATE staff_auth_recovery_codes|UPDATE staff_browser_sessions|DELETE FROM staff_totp_credentials|DELETE FROM staff_auth_recovery_codes|DELETE FROM staff_browser_sessions/i
+  );
 });
 
 test('#779 exact service comparison is order-independent', () => {
