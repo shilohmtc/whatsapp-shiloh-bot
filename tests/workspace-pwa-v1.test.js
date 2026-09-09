@@ -17,7 +17,7 @@ const {
   shouldDecoratePwaHtmlPath,
   pwaLaunchDestination,
 } = require('../src/routes/workspacePwa');
-const { normalizeReason, retireBrowserWhatsAppGuidance } = require('../src/routes/staffCalendarAccessUx');
+const { normalizeReason, retireBrowserWhatsAppGuidance, withAccessChangedGuidance } = require('../src/routes/staffCalendarAccessUx');
 const { renderStaffCalendarAccessPage } = require('../src/presentation/staffCalendarAccessUx');
 
 test('#791 manifest installs one canonical Shiloh Workspace delivery shell', () => {
@@ -98,12 +98,20 @@ test('#791 PWA metadata covers canonical Workspace/auth HTML surfaces without in
   assert.equal(shouldDecoratePwaHtmlPath('/abc123.ics'), false);
 });
 
-test('#791 expired/revoked session remains explicit after retired WhatsApp browser guidance', () => {
+test('#791 expired session fails closed into canonical sign-in without restoring the retired persistent warning', () => {
   assert.equal(normalizeReason('session'), 'session');
-  assert.equal(normalizeReason('access'), 'access');
   const sessionPage = retireBrowserWhatsAppGuidance(renderStaffCalendarAccessPage({ reason: 'session', providerIndependentAuthEnabled: true }));
-  assert.match(sessionPage, /missing, expired, or revoked/i);
+  assert.match(sessionPage, /data-shiloh-status data-state="session-ended"><\/div>/);
+  assert.doesNotMatch(sessionPage, /missing, expired, or revoked/i);
   assert.doesNotMatch(sessionPage, /Open from Shiloh WhatsApp/);
+});
+
+test('#791 revoked/access-changed authority remains explicit at canonical entry', () => {
+  assert.equal(normalizeReason('access'), 'access');
+  const base = retireBrowserWhatsAppGuidance(renderStaffCalendarAccessPage({ providerIndependentAuthEnabled: true }));
+  const accessPage = withAccessChangedGuidance(base, 'access');
+  assert.match(accessPage, /access changed or no longer permits Workspace/i);
+  assert.match(accessPage, /data-state="session-ended"/);
 });
 
 test('#791 integration is a delivery shell only: no auth/session/permission source or schema mutation is introduced', () => {
