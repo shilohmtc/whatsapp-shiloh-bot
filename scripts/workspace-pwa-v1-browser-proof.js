@@ -107,7 +107,7 @@ function createFixture() {
   const app = express();
   app.use(requestContext);
   app.use('/calendar', createWorkspacePwaHtmlMiddleware());
-  app.use('/calendar/pwa', createWorkspacePwaRouter({ sessionService }));
+  app.use('/calendar/pwa', createWorkspacePwaRouter({ sessionService, env: ENV }));
   app.get('/proof-client.js', (_req, res) => res.type('application/javascript').send("addEventListener('load',()=>{document.documentElement.dataset.rootOverflow=String(document.documentElement.scrollWidth>document.documentElement.clientWidth);document.documentElement.dataset.displayStandalone=String(!!(matchMedia&&matchMedia('(display-mode: standalone)').matches));});"));
   app.get('/proof-auth', (_req, res) => {
     state.valid = true;
