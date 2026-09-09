@@ -11,7 +11,6 @@ const { createWorkspaceClinicHoursRouter } = require('../src/routes/workspaceCli
 const {
   renderClinicHoursPage,
   clinicHoursClientScript,
-  clinicHoursNavigationClientScript,
 } = require('../src/presentation/workspaceClinicHoursUx');
 const { createWorkspaceNavigationService } = require('../src/services/workspaceNavigation');
 
@@ -144,7 +143,10 @@ test('#751 presentation is explicit about existing appointments, holiday separat
   assert.match(html, /type="time"/);
   assert.match(clinicHoursClientScript(), /staff-auth\/csrf/);
   assert.match(clinicHoursClientScript(), /x-shiloh-csrf-token/);
-  assert.match(clinicHoursNavigationClientScript(), /Clinic hours/);
+  assert.match(html, /data-workspace-destination="clinicHours"/);
+  assert.match(html, /data-clinic-hours-mobile-cohesion/);
+  assert.match(html, /position:sticky/);
+  assert.match(html, /data-open="false"/);
 });
 
 test('#751 Workspace navigation exposes Clinic hours only when schedule:manage access resolves', async () => {

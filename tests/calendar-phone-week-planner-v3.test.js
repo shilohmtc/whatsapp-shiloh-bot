@@ -112,7 +112,7 @@ test('Phone Month receives one capacity band per date and retains public-holiday
   assert.doesNotMatch(html, /data-phone-public-holiday="Heritage Day"[^>]*data-kind="clinic_closure"/);
 });
 
-test('Phone Week layout is practitioner-column based and drawer is materially narrower than #725', () => {
+test('Phone Week layout is practitioner-column based and drawer stays compact', () => {
   const css = phoneCalendarV2Styles();
   assert.match(css, /--phone-visible-staff-count/);
   assert.match(css, /data-phone-active-day="true"\]\[data-phone-staff-visible="true"\]/);
@@ -120,7 +120,7 @@ test('Phone Week layout is practitioner-column based and drawer is materially na
   assert.match(css, /phone-week-staff-toggle/);
   assert.doesNotMatch(css, /\.week-day-date\{display:grid!important/);
   const shellCss = workspaceShellStyles();
-  assert.match(shellCss, /width:clamp\(204px,56vw,220px\)/);
+  assert.match(shellCss, /width:clamp\(176px,48vw,190px\)/);
   const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'presentation', 'calendarReadOnlyUx.js'), 'utf8');
   assert.match(source, /queryHref\(basePath, 'week', day, visibleStaffIds/);
 });

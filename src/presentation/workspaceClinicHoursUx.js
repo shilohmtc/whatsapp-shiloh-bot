@@ -11,12 +11,12 @@ function clinicHoursStyles() {
 function renderDay(day) {
   const dayOfWeek = Number(day.dayOfWeek);
   if (day.permanent === true || dayOfWeek === 0) {
-    return `<div class="day-row" data-clinic-day="0"><div><span class="day-name">Sunday</span><span class="day-note">Permanent clinic closure</span></div><div class="permanent-state">Closed</div><div class="permanent-state">Sunday cannot be opened here.</div></div>`;
+    return `<div class="day-row" data-clinic-day="0" data-open="false"><div><span class="day-name">Sunday</span><span class="day-note">Permanent clinic closure</span></div><div class="permanent-state">Closed</div><div class="permanent-state">Sunday cannot be opened here.</div></div>`;
   }
   const open = day.open === true;
   const defaultStart = day.startsLocal || (dayOfWeek === 6 ? '08:00' : '08:00');
   const defaultEnd = day.endsLocal || (dayOfWeek === 6 ? '14:00' : '17:00');
-  return `<div class="day-row" data-clinic-day="${dayOfWeek}">
+  return `<div class="day-row" data-clinic-day="${dayOfWeek}" data-open="${open ? 'true' : 'false'}">
     <div><span class="day-name">${escapeHtml(day.name)}</span><span class="day-note">Recurring weekly hours</span></div>
     <label><span class="day-note">Status</span><select class="state-select" data-clinic-open aria-label="${escapeHtml(day.name)} status"><option value="open"${open ? ' selected' : ''}>Open</option><option value="closed"${open ? '' : ' selected'}>Closed</option></select></label>
     <div class="time-pair"><label><span class="day-note">Opens</span><input class="time-input" data-clinic-start type="time" step="300" value="${escapeHtml(defaultStart)}"${open ? '' : ' disabled'}></label><span class="time-separator">to</span><label><span class="day-note">Closes</span><input class="time-input" data-clinic-end type="time" step="300" value="${escapeHtml(defaultEnd)}"${open ? '' : ' disabled'}></label></div>
@@ -38,9 +38,11 @@ function renderClinicHoursPage(model, {
     staffHref: '/calendar/team',
     servicesHref: '/calendar/services',
     reportsHref: '/calendar/reports',
+    clinicHoursHref: '/calendar/clinic-hours',
   })}<div class="workspace-main"><div class="shell">
     <header class="topbar"><div class="brand"><h1>Clinic hours</h1><p>Normal recurring operating hours for the whole clinic.</p></div></header>
     <section class="notice"><strong>What this changes:</strong> recurring booking availability going forward. Existing appointments are not moved or cancelled. Public holidays and one-off clinic closures remain separate and are not changed here.</section>
+    <style data-clinic-hours-mobile-cohesion>@media(max-width:700px){.form-actions{position:sticky;bottom:max(8px,env(safe-area-inset-bottom));z-index:4;margin:0 -5px -5px;padding:10px;border:1px solid var(--line);border-radius:13px;background:rgba(255,253,249,.97);box-shadow:0 -8px 24px rgba(32,50,43,.12)}.day-row[data-open="false"]{opacity:.76}}</style>
     <form class="hours-card" data-clinic-hours-form data-revision="${escapeHtml(model.revision)}" novalidate>
       <div class="hours-head"><div><h2>Weekly operating hours</h2><p>Set one clinic-wide window per day, or mark the day closed.</p></div><span class="location-pill">${escapeHtml(model.location?.name || 'Shiloh')}</span></div>
       <div class="hours-list">${rows}</div>
@@ -55,17 +57,11 @@ function clinicHoursClientScript() {
 const form=document.querySelector('[data-clinic-hours-form]');if(!form)return;
 const status=document.querySelector('[data-clinic-hours-status]');const save=document.querySelector('[data-clinic-hours-save]');
 function setStatus(message,kind=''){if(!status)return;status.textContent=message||'';status.className='save-status'+(kind?' '+kind:'');}
-function syncRow(row){const open=row.querySelector('[data-clinic-open]')?.value==='open';for(const input of row.querySelectorAll('[data-clinic-start],[data-clinic-end]'))input.disabled=!open;}
+function syncRow(row){const open=row.querySelector('[data-clinic-open]')?.value==='open';row.dataset.open=String(open);for(const input of row.querySelectorAll('[data-clinic-start],[data-clinic-end]'))input.disabled=!open;}
 for(const row of form.querySelectorAll('[data-clinic-day]:not([data-clinic-day="0"])')){syncRow(row);row.querySelector('[data-clinic-open]')?.addEventListener('change',()=>syncRow(row));}
 async function csrfToken(){const response=await fetch('/calendar/staff-auth/csrf',{method:'POST',credentials:'same-origin',cache:'no-store',headers:{'content-type':'application/json','accept':'application/json'},body:'{}'});const data=await response.json().catch(()=>({}));if(!response.ok||!data.csrfToken)throw new Error(data.error||'Could not prepare the secure save request.');return data.csrfToken;}
 function payload(){const days=[];for(const row of form.querySelectorAll('[data-clinic-day]:not([data-clinic-day="0"])')){const dayOfWeek=Number(row.dataset.clinicDay);const open=row.querySelector('[data-clinic-open]')?.value==='open';days.push({dayOfWeek,open,startsLocal:open?row.querySelector('[data-clinic-start]')?.value:null,endsLocal:open?row.querySelector('[data-clinic-end]')?.value:null});}return {expectedRevision:form.dataset.revision,days};}
 form.addEventListener('submit',async event=>{event.preventDefault();if(save)save.disabled=true;setStatus('Saving…');try{const csrf=await csrfToken();const response=await fetch('/calendar/clinic-hours',{method:'POST',credentials:'same-origin',cache:'no-store',headers:{'content-type':'application/json','accept':'application/json','x-shiloh-csrf-token':csrf},body:JSON.stringify(payload())});const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.error||'Clinic hours could not be saved.');form.dataset.revision=data.revision||form.dataset.revision;setStatus('Clinic hours saved.','success');setTimeout(()=>location.reload(),450);}catch(error){setStatus(error.message||'Clinic hours could not be saved.','error');if(save)save.disabled=false;}});
-})();`;
-}
-
-function clinicHoursNavigationClientScript() {
-  return `(()=>{'use strict';
-fetch('/calendar/workspace/navigation',{credentials:'same-origin',cache:'no-store',headers:{Accept:'application/json'}}).then(async response=>{if(!response.ok)return;const item=(await response.json())?.clinicHours;if(!item||item.allowed!==true||!item.href)return;const menu=document.querySelector('[data-workspace-more-menu]');if(!menu||menu.querySelector('[data-workspace-destination="clinicHours"]'))return;const link=document.createElement('a');link.className='workspace-link';link.href=item.href;link.dataset.workspaceDestination='clinicHours';link.textContent='Clinic hours';if(location.pathname===item.href){link.classList.add('active');link.setAttribute('aria-current','page');document.querySelector('[data-workspace-more-toggle]')?.classList.add('active');}const empty=menu.querySelector('.workspace-more-empty');menu.insertBefore(link,empty||null);if(empty)empty.hidden=true;}).catch(()=>{});
 })();`;
 }
 
@@ -74,5 +70,4 @@ module.exports = {
   renderDay,
   renderClinicHoursPage,
   clinicHoursClientScript,
-  clinicHoursNavigationClientScript,
 };

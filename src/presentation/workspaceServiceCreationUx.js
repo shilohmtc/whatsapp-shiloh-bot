@@ -33,8 +33,9 @@ function renderWorkspaceServiceCreationPage() {
 
 function injectWorkspaceServiceCreateAction(html) {
   const source = String(html || '');
-  if (!source.includes('<main>')) return source;
-  return source.replace('<main>', '<main><div style="display:flex;justify-content:flex-end;margin:0 0 12px"><a class="button primary" href="/calendar/services/new">+ Create service</a></div>');
+  const anchor = '<main data-services-list-view>';
+  if (!source.includes(anchor)) return source;
+  return source.replace(anchor, `${anchor}<div data-service-primary-action style="display:flex;justify-content:flex-start;margin:0 0 12px"><a class="button primary" href="/calendar/services/new">+ Add service</a></div>`);
 }
 
 function injectCalendarInlineServiceCreation(html) {

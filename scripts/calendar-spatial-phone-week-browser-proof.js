@@ -485,7 +485,7 @@ async function main() {
         rootScrollWidth:document.documentElement.scrollWidth,
       };
     })()`);
-    assert.ok(drawerMetrics.width >= 203 && drawerMetrics.width <= 221, `Phone drawer missed the #727 204–220px target: ${drawerMetrics.width}px`);
+    assert.ok(drawerMetrics.width >= 170 && drawerMetrics.width <= 190, `Phone drawer missed the compact 170–190px target: ${drawerMetrics.width}px`);
     assert.deepEqual(drawerMetrics.labels, ['Dashboard', 'Calendar', 'Clients', 'Messages', 'Staff', 'Services', 'Reports']);
     assert.ok(drawerMetrics.minHeight >= 44, 'Phone drawer destination is below 44px');
     assert.equal(drawerMetrics.moreVisible, false);
