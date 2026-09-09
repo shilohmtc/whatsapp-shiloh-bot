@@ -1,11 +1,11 @@
 const { pool } = require('../db/pool');
 const { sendWhatsAppTemplate } = require('./whatsapp');
+const { TEMPLATE_NAME: STAFF_ALERT_TEMPLATE } = require('./workspaceBookingRequestAlertTemplateProvisioning');
 const logger = require('../lib/logger');
 
 const MAX_ATTEMPTS = 3;
 const RETRY_AFTER_MS = 15 * 60 * 1000;
 const GLOBAL_COORDINATION_ROLES = ['owner', 'business_admin', 'booking_operator'];
-const STAFF_ALERT_TEMPLATE = 'shiloh_booking_request_staff_alert_v1';
 
 function positiveId(value) {
   const id = Number(value);
@@ -47,7 +47,23 @@ async function alertRecipients(db, context) {
              WHEN a.business_role=ANY($2::text[]) AND a.calendar_scope='all_business' THEN 'global'
              ELSE 'self'
            END AS effective_scope,
-           brcs.team_id
+           brcs.team_id,
+           CASE
+             WHEN brcs.admin_id IS NOT NULL AND brcs.scope_kind='team' THEN (
+               SELECT COUNT(DISTINCT pending.appointment_id)::int
+                 FROM appointment_booking_approvals pending
+                 JOIN staff_operational_team_members pending_tm
+                   ON pending_tm.staff_id=pending.requested_staff_id
+                  AND pending_tm.active=TRUE
+                WHERE pending.status IN ('pending','awaiting_client_confirmation')
+                  AND pending_tm.team_id=brcs.team_id
+             )
+             ELSE (
+               SELECT COUNT(*)::int
+                 FROM appointment_booking_approvals pending
+                WHERE pending.status IN ('pending','awaiting_client_confirmation')
+             )
+           END AS pending_count
       FROM staff_admin_accounts a
       LEFT JOIN booking_request_coordination_scopes brcs ON brcs.admin_id=a.id AND brcs.active=TRUE
      WHERE a.active=TRUE
@@ -124,12 +140,13 @@ function alertBody(context) {
   ].join('\n');
 }
 
-async function defaultSendAlert(recipient, context) {
-  const owner = context.team_name || context.staff_name || 'Shiloh team';
+async function defaultSendAlert(recipient) {
+  const recipientName = String(recipient.display_name || 'Shiloh team').trim() || 'Shiloh team';
+  const pendingCount = Math.max(1, Number(recipient.pending_count) || 1);
   return sendWhatsAppTemplate(
     recipient.normalized_whatsapp,
     STAFF_ALERT_TEMPLATE,
-    [owner, formatRequestTime(context.requested_starts_at), String(context.appointment_id)],
+    [recipientName, String(pendingCount)],
     'en',
     ['staff_open_workspace'],
   );
