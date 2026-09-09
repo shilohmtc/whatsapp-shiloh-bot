@@ -178,7 +178,12 @@ test('#804 unknown WhatsApp greeting remains on the existing client flow; eligib
     bootstrapService: { issueBootstrap: async () => ({ ok: true, handled: false }) },
     sendMessage: async () => { throw new Error('must not send'); },
   });
-  await unknown({ body: { entry: [{ changes: [{ value: { messages: [{ type: 'text', from: '2772', text: { body: 'Hi' } }] } }] }] } }, {}, () => { nextCount += 1; });
+  const unknownReq = {
+    body: {
+      entry: [{ changes: [{ value: { messages: [{ type: 'text', from: '2772', text: { body: 'Hi' } }] } }] }],
+    },
+  };
+  await unknown(unknownReq, {}, () => { nextCount += 1; });
   assert.equal(nextCount, 1);
 
   const sends = [];
@@ -187,7 +192,13 @@ test('#804 unknown WhatsApp greeting remains on the existing client flow; eligib
     sendMessage: async (to, body) => sends.push({ to, body }),
   });
   const res = { status: null, sendStatus(value) { this.status = value; return this; } };
-  await eligible({ body: { entry: [{ changes: [{ value: { messages: [{ type: 'text', from: '2772', text: { body: 'Hi' } }] } }] }] } }, log: { error() {} } }, res, () => { throw new Error('must not fall through'); });
+  const eligibleReq = {
+    body: {
+      entry: [{ changes: [{ value: { messages: [{ type: 'text', from: '2772', text: { body: 'Hi' } }] } }] }],
+    },
+    log: { error() {} },
+  };
+  await eligible(eligibleReq, res, () => { throw new Error('must not fall through'); });
   assert.equal(res.status, 200);
   assert.equal(sends.length, 1);
   assert.match(sends[0].body, /Set up Shiloh securely/);
