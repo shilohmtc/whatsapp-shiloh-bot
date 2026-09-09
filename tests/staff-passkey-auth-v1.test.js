@@ -5,11 +5,16 @@ const fs = require('fs');
 const path = require('path');
 const {
   b64url,
+  normalizeCredentialHint,
   passkeyPolicy,
   strongRecentSession,
   verifyRegistrationResponse,
   verifyAssertionResponse,
 } = require('../src/services/staffPasskeyAuth');
+const {
+  passkeyHintCookieName,
+  serializePasskeyHintCookie,
+} = require('../src/routes/staffPasskeyAuth');
 
 const ORIGIN = 'https://staff.shiloh.example';
 const RP_ID = 'staff.shiloh.example';
@@ -90,6 +95,38 @@ test('#794 registration and lifecycle require recent TOTP/passkey session, not r
   assert.equal(strongRecentSession({ ...base, authMethod: 'break_glass' }, now), false);
   assert.equal(strongRecentSession({ ...base, authMethod: 'whatsapp_otp' }, now), false);
   assert.equal(strongRecentSession({ ...base, authMethod: 'totp', recoveryRequired: true }, now), false);
+});
+
+test('#794 device credential is non-discoverable, platform-bound, and targeted on re-entry', () => {
+  const service = fs.readFileSync(path.join(__dirname, '../src/services/staffPasskeyAuth.js'), 'utf8');
+  const ux = fs.readFileSync(path.join(__dirname, '../src/presentation/staffPasskeyUx.js'), 'utf8');
+  assert.match(service, /authenticatorAttachment:\s*'platform'/);
+  assert.match(service, /residentKey:\s*'discouraged'/);
+  assert.match(service, /requireResidentKey:\s*false/);
+  assert.doesNotMatch(service, /residentKey:\s*'required'/);
+  assert.match(service, /userVerification:\s*'required'/);
+  assert.match(service, /allowCredentials:\s*\[\{ type: 'public-key', id: credential\.credential_id/);
+  assert.match(service, /STAFF_PASSKEY_KNOWN_PRINCIPAL_REQUIRED/);
+  assert.match(service, /INSERT INTO staff_auth_webauthn_challenges \(challenge_hash, purpose, admin_id/);
+  assert.match(service, /Number\(credential\.admin_id\) !== Number\(challenge\.admin_id\)/);
+  assert.match(ux, /allowCredentials\|\|\[\]/);
+  assert.match(ux, /known-principal/);
+});
+
+test('#794 remembered device hint is opaque, HttpOnly, strict, secure in production, and not authority', () => {
+  const hint = b64url(crypto.randomBytes(32));
+  assert.equal(normalizeCredentialHint(hint), hint);
+  assert.equal(normalizeCredentialHint('not a credential id'), null);
+  const env = { NODE_ENV: 'production' };
+  assert.equal(passkeyHintCookieName(env), '__Host-shiloh_staff_device_credential');
+  const cookie = serializePasskeyHintCookie(hint, { env });
+  assert.match(cookie, /^__Host-shiloh_staff_device_credential=/);
+  assert.match(cookie, /Path=\//);
+  assert.match(cookie, /HttpOnly/);
+  assert.match(cookie, /SameSite=Strict/);
+  assert.match(cookie, /Secure/);
+  assert.match(cookie, /Max-Age=/);
+  assert.doesNotMatch(cookie, /session|mobile|whatsapp|admin_id/i);
 });
 
 test('#794 schema is additive, multi-credential, soft-revocable and extends canonical auth method', () => {
