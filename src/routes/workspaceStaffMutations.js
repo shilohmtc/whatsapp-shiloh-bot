@@ -3,6 +3,7 @@ const workspaceStaff = require('../services/workspaceStaff');
 const workspaceStaffAccess = require('../services/workspaceStaffAccess');
 const workspaceStaffAccessCompletion = require('../services/workspaceStaffAccessCompletion');
 const workspaceStaffAccessPolicy = require('../services/workspaceStaffAccessPolicy');
+const workspaceAccessV2 = require('../services/workspaceAccessV2');
 const {
   requireStaffSession,
   sameOriginGuard,
@@ -36,6 +37,7 @@ function createWorkspaceStaffMutationRouter({
   accessService = workspaceStaffAccess,
   accessCompletionService = workspaceStaffAccessCompletion,
   accessPolicyService = workspaceStaffAccessPolicy,
+  accessV2Service = workspaceAccessV2,
 } = {}) {
   if (!sessionService) throw new Error('Workspace Staff mutations require the existing staff browser session service');
   const router = express.Router();
@@ -147,6 +149,32 @@ function createWorkspaceStaffMutationRouter({
     } catch (error) {
       return sendMutationError(error, req, res, next);
     }
+  });
+
+  router.post('/workspace-access/reception', ...mutationChain, async (req, res, next) => {
+    try {
+      return res.status(201).json(await accessV2Service.createReception({ adminId: req.staffBrowserSession?.adminId, requestId: req.body?.requestId, whatsappNumber: req.body?.whatsappNumber, identityConfirmed: req.body?.identityConfirmed === true }));
+    } catch (error) { return sendMutationError(error, req, res, next); }
+  });
+  router.post('/workspace-access/:id/preset', ...mutationChain, async (req, res, next) => {
+    try {
+      return res.status(200).json(await accessV2Service.applyPreset({ adminId: req.staffBrowserSession?.adminId, principalId: req.params?.id, requestId: req.body?.requestId, expectedRevision: req.body?.expectedRevision, preset: req.body?.preset }));
+    } catch (error) { return sendMutationError(error, req, res, next); }
+  });
+  router.post('/workspace-access/:id/copy-preview', ...mutationChain, async (req, res, next) => {
+    try {
+      return res.status(200).json(await accessV2Service.previewCopy({ adminId: req.staffBrowserSession?.adminId, principalId: req.params?.id, expectedRevision: req.body?.expectedRevision, sourcePrincipalId: req.body?.sourcePrincipalId, expectedSourceRevision: req.body?.expectedSourceRevision }));
+    } catch (error) { return sendMutationError(error, req, res, next); }
+  });
+  router.post('/workspace-access/:id/copy', ...mutationChain, async (req, res, next) => {
+    try {
+      return res.status(200).json(await accessV2Service.copyAccess({ adminId: req.staffBrowserSession?.adminId, principalId: req.params?.id, requestId: req.body?.requestId, expectedRevision: req.body?.expectedRevision, sourcePrincipalId: req.body?.sourcePrincipalId, expectedSourceRevision: req.body?.expectedSourceRevision }));
+    } catch (error) { return sendMutationError(error, req, res, next); }
+  });
+  router.post('/workspace-access/:id/status', ...mutationChain, async (req, res, next) => {
+    try {
+      return res.status(200).json(await accessV2Service.setActive({ adminId: req.staffBrowserSession?.adminId, principalId: req.params?.id, requestId: req.body?.requestId, expectedRevision: req.body?.expectedRevision, active: req.body?.active }));
+    } catch (error) { return sendMutationError(error, req, res, next); }
   });
 
   return router;

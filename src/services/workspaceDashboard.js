@@ -13,6 +13,7 @@ const bookingRequestResolution = require('./clientBookingApproval');
 
 const FINAL_STATUSES = new Set(['completed', 'cancelled', 'no_show']);
 const OWNER_ROLES = new Set(['owner', 'business_admin']);
+const BUSINESS_OVERVIEW_ROLES = new Set(['owner', 'business_admin', 'booking_operator']);
 const NO_BOOKING_REQUESTS = {
   async listUnresolvedBookingRequests() { return []; },
 };
@@ -51,12 +52,14 @@ function dashboardAuthority(principal) {
   const authority = principal?.calendarAuthority;
   if (!authority || !hasCapability(authority, CALENDAR_CAPABILITIES.VIEW)) return null;
   const role = String(authority.businessRole || '').trim().toLowerCase();
-  const isOwnerOverview = OWNER_ROLES.has(role) && authority.calendarScope === 'all_business';
-  if (isOwnerOverview) {
+  const isBusinessOverview = BUSINESS_OVERVIEW_ROLES.has(role)
+    && authority.calendarScope === 'all_business'
+    && principal.permissions?.['appointment:view'] === true;
+  if (isBusinessOverview) {
     return {
-      mode: 'owner_overview',
+      mode: OWNER_ROLES.has(role) ? 'owner_overview' : 'business_overview',
       linkedStaffId: positiveId(authority.linkedStaffId),
-      canFinalize: principal.permissions?.['booking:update'] === true,
+      canFinalize: OWNER_ROLES.has(role) && principal.permissions?.['booking:update'] === true,
       timelineViewer: { calendarScope: 'all_business' },
     };
   }
@@ -207,7 +210,7 @@ function createWorkspaceDashboardService({
       linkedStaffId: authority.linkedStaffId,
       calendar,
       appointments,
-      teamGroups: authority.mode === 'owner_overview'
+      teamGroups: ['owner_overview', 'business_overview'].includes(authority.mode)
         ? groupOwnerAppointments(appointments, calendar.timeline?.staff || [])
         : [],
       awaitingFinalization,

@@ -11,6 +11,8 @@ const { once } = require('node:events');
 const express = require('express');
 const { createWorkspaceStaffRouter } = require('../src/routes/workspaceStaff');
 const { createWorkspaceStaffMutationRouter } = require('../src/routes/workspaceStaffMutations');
+const { principalProjection } = require('../src/services/workspaceAccessV2');
+const { expectedPermissions: receptionPermissions } = require('../src/services/workspaceReceptionAccess');
 const OUT_DIR = path.join(process.cwd(), 'artifacts', 'workspace-staff-access-editor-v1');
 const ENV = { SHILOH_CALENDAR_READONLY_UX_ENABLED: 'true', SHILOH_STAFF_BROWSER_SESSION_CALENDAR_BRIDGE_ENABLED: 'true' };
 function chromeExecutable() {
@@ -36,9 +38,9 @@ async function evaluate(cdp,expression){const result=await cdp.send('Runtime.eva
 
 async function main() {
   const executable=chromeExecutable(); if(!executable)throw new Error('Chrome is required for authenticated Staff Access proof');
-  let incompatible=false; let policyWrites=0;
+  let incompatible=false; let policyWrites=0; let accessV2Writes=0;
   const sessionService={ validateSessionToken:async token=>token==='synthetic-access-session'?{ok:true,adminId:61,viewer:{calendarScope:'business_all_staff'}}:{ok:false}, validateCsrfToken:()=>false };
-  const accessService={ resolveManageAccess:async id=>id===61?{operatorAdminId:61}:null, enableWorkspaceAccess:async()=>{throw new Error('Proof must not enable access');} };
+  const accessService={ resolveManageAccess:async id=>id===61?{operatorAdminId:61}:null, requireManageAccess:async id=>{assert.equal(id,61);return{operatorAdminId:61,displayName:'Access administrator'};}, enableWorkspaceAccess:async()=>{throw new Error('Proof must not enable access');} };
   const accessPolicyService={
     getPolicy:async(adminId,staffId)=>{assert.equal(adminId,61);assert.equal(String(staffId),'17');return incompatible
       ? { supported:false, reason:'Existing access has a different role or scope and remains read-only in this bounded editor.' }
@@ -48,10 +50,18 @@ async function main() {
         ]};},
     updatePolicy:async()=>{policyWrites++;throw new Error('Browser proof must not perform policy writes');},
   };
+  const naomi=principalProjection({id:20,staff_id:17,display_name:'Naomi',role:'practitioner',active:true,permissions:{'appointment:view':true},business_role:'employee_practitioner',calendar_scope:'own_appointments',service_scope:'own_services',staff_display_name:'Naomi',staff_status:'active',staff_resource_type:'practitioner',staff_business_role:'employee_practitioner'});
+  const ilince=principalProjection({id:21,staff_id:18,display_name:'ILince',role:'practitioner',active:true,permissions:{'appointment:view':true,'booking:update':true},business_role:'employee_practitioner',calendar_scope:'own_appointments',service_scope:'own_services',staff_display_name:'ILince',staff_status:'active',staff_resource_type:'practitioner',staff_business_role:'employee_practitioner'});
+  const reception=principalProjection({id:30,staff_id:null,display_name:'Shiloh Reception',role:'receptionist',active:true,permissions:receptionPermissions(),business_role:'booking_operator',calendar_scope:'all_business',service_scope:'all_services'});
+  const accessV2Service={
+    listPrincipals:async()=>({authority:{operatorAdminId:61,displayName:'Access administrator'},staffLinked:[naomi,ilince],sharedOrOther:[reception],receptionPresent:true}),
+    getPrincipal:async({principalId})=>({principal:String(principalId)==='30'?reception:naomi,copySources:String(principalId)==='30'?[]:[ilince]}),
+    applyPreset:async()=>{accessV2Writes++;throw new Error('Browser proof must not mutate Access V2');},
+  };
   const staffService={ getStaffDetail:async({adminId})=>{assert.equal(adminId,61);return { staff:{id:17,display_name:'Synthetic Practitioner',status:'active',resource_type:'practitioner',business_role:'employee_practitioner',scheduling_type:'regular',client_bookable:true,revision:'synthetic-staff-revision'}, services:[{name:'Synthetic treatment',duration_minutes:60,status:'active'}], manageAllowed:false, access:incompatible?{businessRole:'business_admin',calendarScope:'all_business',serviceScope:'all_services',capabilities:['appointment:view','staff:manage']}:{businessRole:'employee_practitioner',calendarScope:'own_appointments',serviceScope:'own_services',capabilities:['appointment:view']} };} };
   const app=express();app.use(express.json());app.get('/calendar/staff/client.js',(_req,res)=>res.type('js').send(''));
-  app.use('/calendar/team',createWorkspaceStaffMutationRouter({env:ENV,sessionService,accessService,accessPolicyService,accessCompletionService:{completeWorkspaceAccess:async()=>{throw new Error('Proof must not complete access');}},service:{}}));
-  app.use('/calendar/team',createWorkspaceStaffRouter({env:ENV,sessionService,service:staffService,accessService,accessPolicyService,clientAccessService:{resolveAccess:async()=>null}}));
+  app.use('/calendar/team',createWorkspaceStaffMutationRouter({env:ENV,sessionService,accessService,accessPolicyService,accessV2Service,accessCompletionService:{completeWorkspaceAccess:async()=>{throw new Error('Proof must not complete access');}},service:{}}));
+  app.use('/calendar/team',createWorkspaceStaffRouter({env:ENV,sessionService,service:staffService,accessService,accessPolicyService,accessV2Service,clientAccessService:{resolveAccess:async()=>null}}));
   const directory=fs.mkdtempSync(path.join(os.tmpdir(),'shiloh-access-editor-proof-'));fs.mkdirSync(OUT_DIR,{recursive:true});let server,chrome,cdp;
   try {
     server=https.createServer(createCertificate(directory),app);server.listen(0,'127.0.0.1');await once(server,'listening');const origin=`https://127.0.0.1:${server.address().port}`;const port=await reservePort();
@@ -69,8 +79,19 @@ async function main() {
       if(width===390)assert.ok(geometry.targets.every(t=>t.height>=44&&t.width>=44));
       const result=await cdp.send('Page.captureScreenshot',{format:'png',captureBeyondViewport:false});const file=`${name}-${broader?'incompatible':'practitioner'}-access.png`;fs.writeFileSync(path.join(OUT_DIR,file),Buffer.from(result.data,'base64'));screenshots.push({file,width,height,sha256:fileSha256(path.join(OUT_DIR,file)),noOverflow:true,editor:geometry.editor,touchTargets:geometry.targets});
     }}
+    for(const [route,label] of [['/calendar/team/workspace-access','access-list'],['/calendar/team/workspace-access/20','practitioner-detail'],['/calendar/team/workspace-access/30','reception-detail']]){for(const [name,width,height] of [['desktop',1440,960],['phone',390,844]]){
+      await cdp.send('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile:width===390});await cdp.send('Page.navigate',{url:`${origin}${route}?proof=${name}`});
+      await poll(()=>evaluate(cdp,"document.readyState==='complete' && !!document.querySelector('[data-workspace-access-v2]')"),Boolean);
+      const geometry=await evaluate(cdp,`({width:innerWidth,overflow:document.documentElement.scrollWidth>innerWidth,text:document.body.innerText,groups:document.querySelectorAll('.capability-group').length,copy:!!document.querySelector('[data-access-copy-form]'),targets:Array.from(document.querySelectorAll('a.button,button,input,select')).filter(n=>{const r=n.getBoundingClientRect();return r.width>0&&r.height>0;}).map(n=>({width:n.getBoundingClientRect().width,height:n.getBoundingClientRect().height}))})`);
+      assert.equal(geometry.width,width);assert.equal(geometry.overflow,false);assert.doesNotMatch(geometry.text,/synthetic-access-session|27821234567|TOTP|recovery code/i);
+      if(label==='access-list'){assert.match(geometry.text,/Staff-linked access/);assert.match(geometry.text,/Other Workspace access/);}else{assert.ok(geometry.groups>0);assert.match(geometry.text,/Advanced capability details/);}
+      if(label==='practitioner-detail')assert.equal(geometry.copy,true);if(label==='reception-detail'){assert.match(geometry.text,/Shared operational principal/);assert.match(geometry.text,/Reception/);}
+      if(width===390)assert.ok(geometry.targets.every(t=>t.height>=43&&t.width>=43));
+      const result=await cdp.send('Page.captureScreenshot',{format:'png',captureBeyondViewport:false});const file=`${name}-${label}-v2.png`;fs.writeFileSync(path.join(OUT_DIR,file),Buffer.from(result.data,'base64'));screenshots.push({file,width,height,sha256:fileSha256(path.join(OUT_DIR,file)),noOverflow:true,groups:geometry.groups,copy:geometry.copy,touchTargets:geometry.targets});
+    }}
     incompatible=false;const rejected=await evaluate(cdp,`fetch('/calendar/team/17/access/policy',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({requestId:'proof',expectedAccessRevision:'synthetic-access-revision',capabilities:['booking:update']})}).then(r=>r.status)`);assert.equal(rejected,403);assert.equal(policyWrites,0);assert.equal(dialogs,0);
-    const exactHead=spawnSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).stdout.trim();fs.writeFileSync(path.join(OUT_DIR,'manifest.json'),JSON.stringify({exactHead,syntheticDataOnly:true,authenticated:true,productionReads:0,productionMutations:0,providerWrites:0,policyWrites,csrfRejectedStatus:rejected,nativeDialogs:dialogs,screenshots},null,2));console.log(`Authenticated Staff Access editor proof passed: ${screenshots.length} screenshots; CSRF denial ${rejected}; no policy writes.`);
+    const v2Rejected=await evaluate(cdp,`fetch('/calendar/team/workspace-access/20/preset',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({requestId:'proof',expectedRevision:'${naomi.revision}',preset:'employee_practitioner_v1'})}).then(r=>r.status)`);assert.equal(v2Rejected,403);assert.equal(accessV2Writes,0);
+    const exactHead=spawnSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).stdout.trim();fs.writeFileSync(path.join(OUT_DIR,'manifest.json'),JSON.stringify({exactHead,syntheticDataOnly:true,authenticated:true,productionReads:0,productionMutations:0,providerWrites:0,policyWrites,accessV2Writes,csrfRejectedStatus:rejected,accessV2CsrfRejectedStatus:v2Rejected,nativeDialogs:dialogs,screenshots},null,2));console.log(`Authenticated Staff Access proof passed: ${screenshots.length} screenshots; CSRF denials ${rejected}/${v2Rejected}; no access writes.`);
   } finally { cdp?.close();chrome?.kill('SIGTERM');if(server)await new Promise(r=>server.close(r));fs.rmSync(directory,{recursive:true,force:true}); }
 }
 if(require.main===module)main().catch(error=>{console.error(error);process.exitCode=1;});

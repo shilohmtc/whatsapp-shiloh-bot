@@ -2,6 +2,7 @@ const express = require('express');
 const workspaceStaff = require('../services/workspaceStaff');
 const workspaceStaffAccess = require('../services/workspaceStaffAccess');
 const workspaceStaffAccessPolicy = require('../services/workspaceStaffAccessPolicy');
+const workspaceAccessV2 = require('../services/workspaceAccessV2');
 const workspaceClients = require('../services/workspaceClients');
 const {
   renderStaffListPage,
@@ -13,6 +14,7 @@ const {
   decorateStaffDetailAccessHtml,
   workspaceStaffAccessClientScript,
 } = require('../presentation/workspaceStaffAccessUx');
+const { renderAccessListPage, renderAccessDetailPage, workspaceAccessV2ClientScript } = require('../presentation/workspaceAccessV2Ux');
 const { requireStaffSession } = require('../middleware/staffBrowserSession');
 
 function isWorkspaceStaffEnabled(env = process.env) {
@@ -74,6 +76,8 @@ function createWorkspaceStaffListHandler({
         status: req.query?.status,
         offset: req.query?.offset,
       });
+      try { model.accessManageAllowed = Boolean(await workspaceStaffAccess.resolveManageAccess(req.staffBrowserSession?.adminId)); }
+      catch (_error) { model.accessManageAllowed = false; }
       return res.status(200).type('html').send(renderPage(model, await pageOptions(req, clientAccessService, staffAccessPath)));
     } catch (error) {
       const safe = safeError(error);
@@ -132,6 +136,7 @@ function createWorkspaceStaffRouter({ sessionService, ...options } = {}) {
   const service = options.service || workspaceStaff;
   const accessService = options.accessService || workspaceStaffAccess;
   const accessPolicyService = options.accessPolicyService || workspaceStaffAccessPolicy;
+  const accessV2Service = options.accessV2Service || workspaceAccessV2;
   const router = express.Router();
   router.get('/nav.js', (_req, res) => {
     res.setHeader('Cache-Control', 'private, no-store, max-age=0');
@@ -169,6 +174,39 @@ function createWorkspaceStaffRouter({ sessionService, ...options } = {}) {
       return res.status(200).type('application/javascript').send(workspaceStaffAccessClientScript());
     } catch (_error) {
       return res.sendStatus(403);
+    }
+  });
+  router.get('/workspace-access/client.js', async (req, res) => {
+    setWorkspaceStaffSecurityHeaders(res);
+    if (!isWorkspaceStaffEnabled(options.env || process.env)) return res.sendStatus(404);
+    try {
+      if (!await accessService.resolveManageAccess(req.staffBrowserSession?.adminId)) return res.sendStatus(403);
+      return res.status(200).type('application/javascript').send(workspaceAccessV2ClientScript());
+    } catch (_error) { return res.sendStatus(403); }
+  });
+  router.get('/workspace-access', async (req, res) => {
+    setWorkspaceStaffSecurityHeaders(res);
+    if (!isWorkspaceStaffEnabled(options.env || process.env)) return res.sendStatus(404);
+    try {
+      const model = await accessV2Service.listPrincipals({ adminId: req.staffBrowserSession?.adminId });
+      Object.assign(model, await pageOptions(req, options.clientAccessService || workspaceClients, '/calendar/staff'));
+      return res.status(200).type('html').send(renderAccessListPage(model));
+    } catch (error) {
+      const safe = safeError(error);
+      return res.status(safe.status).type('html').send(renderStaffUnavailablePage({ code: error?.code, message: safe.message }));
+    }
+  });
+  router.get('/workspace-access/:id', async (req, res) => {
+    setWorkspaceStaffSecurityHeaders(res);
+    if (!isWorkspaceStaffEnabled(options.env || process.env)) return res.sendStatus(404);
+    try {
+      const model = await accessV2Service.getPrincipal({ adminId: req.staffBrowserSession?.adminId, principalId: req.params.id });
+      model.authority = await accessService.requireManageAccess(req.staffBrowserSession?.adminId);
+      Object.assign(model, await pageOptions(req, options.clientAccessService || workspaceClients, '/calendar/staff'));
+      return res.status(200).type('html').send(renderAccessDetailPage(model));
+    } catch (error) {
+      const safe = safeError(error);
+      return res.status(safe.status).type('html').send(renderStaffUnavailablePage({ code: error?.code, message: safe.message }));
     }
   });
   router.get('/', createWorkspaceStaffListHandler({ ...options, service }));
