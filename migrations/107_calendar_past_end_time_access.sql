@@ -1,10 +1,11 @@
 -- #769 owner-authorized operational access adjustment.
 -- Canonical IDs are durable production authority from #753 terminal reconciliation:
--- admin 1 (Marietjie), admin 2 (Christel), admin 4 (JP), admin 5 (Naomi).
+-- admin 1 (Marietjie / owner), admin 2 (Christel), admin 4 (JP).
 -- Existing role/calendar/service scopes remain unchanged. This migration only:
---   * enables appointment:record_past for the four authorized operators,
---   * removes JP's retired controlled-demo client restriction,
---   * enables appointment:adjust_end for the same bounded operator set.
+--   * enables ordinary appointment:record_past for the three explicitly authorized operators,
+--   * removes any retired controlled-demo client restriction for that operator set,
+--   * enables appointment:adjust_end for exactly that same bounded operator set.
+-- Other existing retrospective grants remain unchanged; future grants use canonical Staff → Access.
 -- Runtime enforcement remains scope/capability driven; no application code branches on identity.
 
 UPDATE staff_admin_accounts
@@ -17,4 +18,4 @@ UPDATE staff_admin_accounts
        ),
        updated_at = NOW()
  WHERE active = TRUE
-   AND id IN (1, 2, 4, 5);
+   AND id IN (1, 2, 4);
