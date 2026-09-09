@@ -5,8 +5,9 @@ const https = require('node:https');
 const net = require('node:net');
 const os = require('node:os');
 const path = require('node:path');
-const { spawnSync } = require('node:child_process');
+const { execFile, spawnSync } = require('node:child_process');
 const { once } = require('node:events');
+const { promisify } = require('node:util');
 const express = require('express');
 
 const requestContext = require('../src/middleware/requestContext');
@@ -27,6 +28,7 @@ const {
 } = require('../src/presentation/staffCalendarAccessUx');
 const { retireBrowserWhatsAppGuidance } = require('../src/routes/staffCalendarAccessUx');
 
+const execFileAsync = promisify(execFile);
 const OUT_DIR = path.join(process.cwd(), 'artifacts', 'workspace-pwa-v1');
 const SESSION_TOKEN = 'A'.repeat(43);
 const ENV = { NODE_ENV: 'production', SHILOH_STAFF_BROWSER_SESSION_CALENDAR_BRIDGE_ENABLED: 'true' };
@@ -60,13 +62,21 @@ async function reservePort() {
   return port;
 }
 
-function chromeRun(chrome, args) {
-  const result = spawnSync(chrome, [
+async function chromeRun(chrome, args) {
+  const chromeArgs = [
     '--headless=new', '--no-sandbox', '--disable-gpu', '--ignore-certificate-errors',
     '--allow-insecure-localhost', '--disable-dev-shm-usage', ...args,
-  ], { encoding: 'utf8', timeout: 60_000, maxBuffer: 10 * 1024 * 1024 });
-  if (result.status !== 0) throw new Error(`Chrome proof failed (${result.status}): ${result.stderr || result.stdout}`);
-  return result.stdout || '';
+  ];
+  try {
+    const result = await execFileAsync(chrome, chromeArgs, {
+      encoding: 'utf8',
+      timeout: 60_000,
+      maxBuffer: 10 * 1024 * 1024,
+    });
+    return result.stdout || '';
+  } catch (error) {
+    throw new Error(`Chrome proof failed: ${error.stderr || error.stdout || error.message}`);
+  }
 }
 
 function workspaceHtml() {
@@ -156,8 +166,8 @@ async function main() {
 
     const phoneProfile = path.join(temp, 'phone-profile');
     const phonePng = path.join(OUT_DIR, 'phone-390x844.png');
-    chromeRun(chrome, [`--user-data-dir=${phoneProfile}`, '--window-size=390,844', `--screenshot=${phonePng}`, `${origin}/proof-auth`]);
-    const phoneDom = chromeRun(chrome, [`--user-data-dir=${phoneProfile}`, '--window-size=390,844', '--virtual-time-budget=1600', '--dump-dom', `${origin}/proof-auth`]);
+    await chromeRun(chrome, [`--user-data-dir=${phoneProfile}`, '--window-size=390,844', `--screenshot=${phonePng}`, `${origin}/proof-auth`]);
+    const phoneDom = await chromeRun(chrome, [`--user-data-dir=${phoneProfile}`, '--window-size=390,844', '--virtual-time-budget=1600', '--dump-dom', `${origin}/proof-auth`]);
     assert.match(phoneDom, /data-authenticated-workspace/);
     assert.match(phoneDom, /data-root-overflow="false"/);
     assert.match(phoneDom, /manifest\.webmanifest\?v=791-v1/);
@@ -165,17 +175,17 @@ async function main() {
 
     const desktopProfile = path.join(temp, 'desktop-profile');
     const desktopPng = path.join(OUT_DIR, 'desktop-1440x900.png');
-    chromeRun(chrome, [`--user-data-dir=${desktopProfile}`, '--window-size=1440,900', `--screenshot=${desktopPng}`, `${origin}/proof-auth`]);
-    const desktopDom = chromeRun(chrome, [`--user-data-dir=${desktopProfile}`, '--window-size=1440,900', '--virtual-time-budget=1600', '--dump-dom', `${origin}/proof-auth`]);
+    await chromeRun(chrome, [`--user-data-dir=${desktopProfile}`, '--window-size=1440,900', `--screenshot=${desktopPng}`, `${origin}/proof-auth`]);
+    const desktopDom = await chromeRun(chrome, [`--user-data-dir=${desktopProfile}`, '--window-size=1440,900', '--virtual-time-budget=1600', '--dump-dom', `${origin}/proof-auth`]);
     assert.match(desktopDom, /data-authenticated-workspace/);
     assert.match(desktopDom, /data-root-overflow="false"/);
     assert.match(desktopDom, /Synthetic Practitioner/);
 
     const expiredProfile = path.join(temp, 'expired-profile');
     const expiredPng = path.join(OUT_DIR, 'expired-session.png');
-    chromeRun(chrome, [`--user-data-dir=${expiredProfile}`, '--window-size=390,844', `--screenshot=${expiredPng}`, `${origin}/proof-expired`]);
-    const expiredDom = chromeRun(chrome, [`--user-data-dir=${expiredProfile}`, '--window-size=390,844', '--virtual-time-budget=1000', '--dump-dom', `${origin}/proof-expired`]);
-    assert.match(expiredDom, /missing, expired, or revoked/i);
+    await chromeRun(chrome, [`--user-data-dir=${expiredProfile}`, '--window-size=390,844', `--screenshot=${expiredPng}`, `${origin}/proof-expired`]);
+    const expiredDom = await chromeRun(chrome, [`--user-data-dir=${expiredProfile}`, '--window-size=390,844', '--virtual-time-budget=1000', '--dump-dom', `${origin}/proof-expired`]);
+    assert.match(expiredDom, /data-shiloh-status data-state="session-ended"><\/div>/);
     assert.doesNotMatch(expiredDom, /data-authenticated-workspace/);
 
     const report = {
@@ -185,7 +195,7 @@ async function main() {
       manifest: { name: manifest.name, display: manifest.display, startUrl: manifest.start_url, scope: manifest.scope },
       authenticatedPhone: { viewport: '390x844', rootHorizontalOverflow: false, screenshot: path.basename(phonePng), sha256: sha256(phonePng) },
       authenticatedDesktop: { viewport: '1440x900', rootHorizontalOverflow: false, screenshot: path.basename(desktopPng), sha256: sha256(desktopPng) },
-      expiredSession: { redirectedToCanonicalEntry: true, screenshot: path.basename(expiredPng), sha256: sha256(expiredPng) },
+      expiredSession: { redirectedToCanonicalEntry: true, persistentStaleWarning: false, screenshot: path.basename(expiredPng), sha256: sha256(expiredPng) },
       standaloneLimitation: 'Headless Chromium proves manifest standalone metadata and the installed delivery shell, but cannot reproduce an OS home-screen installation window. Real-device install chrome remains a release acceptance check.',
     };
     fs.writeFileSync(path.join(OUT_DIR, 'report.json'), JSON.stringify(report, null, 2));
