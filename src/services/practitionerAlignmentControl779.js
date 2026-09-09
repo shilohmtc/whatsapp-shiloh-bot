@@ -83,14 +83,14 @@ async function loadServices(queryable, staffId) {
   return result.rows || [];
 }
 
-async function loadSnapshot(queryable, sourceName, targetName, { lock = false } = {}) {
+async function loadSnapshot(queryable, sourceName, targetName, { lock = false, validateSource = true } = {}) {
   const sourceStaff = assertOne(await loadNamedRows(queryable, 'staff', sourceName, { lock }), 'source Staff row');
   const sourceAccess = assertOne(await loadNamedRows(queryable, 'staff_admin_accounts', sourceName, { lock }), 'source access principal');
   const targetAccess = assertOne(await loadNamedRows(queryable, 'staff_admin_accounts', targetName, { lock }), 'target access principal');
   const targetStaffRows = await loadNamedRows(queryable, 'staff', targetName, { lock });
   if (targetStaffRows.length > 1) throw new Error(`#779 expected zero or one target Staff row; found ${targetStaffRows.length}`);
   const targetStaff = targetStaffRows[0] || null;
-  assertSourcePractitioner(sourceStaff, sourceAccess);
+  if (validateSource) assertSourcePractitioner(sourceStaff, sourceAccess);
   if (targetStaff && targetAccess.staff_id != null && Number(targetAccess.staff_id) !== Number(targetStaff.id)) {
     throw new Error('#779 target access is linked to a different Staff row');
   }
@@ -203,8 +203,13 @@ async function runConfiguredAlignment({ db = pool, env = process.env, log = logg
   if (!ALLOWED_MODES.has(mode)) throw new Error(`#779 unsupported mode: ${mode}`);
   const sourceName = normalizeName(env?.[SOURCE_KEY], 'source'); const targetName = normalizeName(env?.[TARGET_KEY], 'target');
   if (mode === 'audit') {
-    const snapshot = await loadSnapshot(db, sourceName, targetName);
-    const result = { status: 'audited', snapshot: sanitizedSnapshot(snapshot), alreadyAligned: alreadyAligned(snapshot) };
+    const snapshot = await loadSnapshot(db, sourceName, targetName, { validateSource: false });
+    let sourceValidationError = null;
+    try { assertSourcePractitioner(snapshot.sourceStaff, snapshot.sourceAccess); } catch (error) { sourceValidationError = String(error?.message || error); }
+    const result = {
+      status: 'audited', snapshot: sanitizedSnapshot(snapshot), sourceValidationError,
+      alreadyAligned: sourceValidationError ? false : alreadyAligned(snapshot),
+    };
     log.info(result, '#779 sanitized practitioner alignment audit'); return result;
   }
   const result = await applyAlignment({ db, sourceName, targetName });
