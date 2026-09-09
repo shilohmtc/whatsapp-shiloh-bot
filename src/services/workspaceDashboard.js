@@ -9,7 +9,7 @@ const {
 const { finalizeAppointment } = require('./adminAppointmentFinalization');
 const { canCertifyAppointment } = require('./attendanceFinalizationAuthority');
 const { dateKeyInBusinessTimezone } = require('./operationalCalendar');
-const bookingRequestResolution = require('./clientBookingApproval');
+const bookingRequestResolution = require('./workspaceBookingRequestRouting');
 
 const FINAL_STATUSES = new Set(['completed', 'cancelled', 'no_show']);
 const OWNER_ROLES = new Set(['owner', 'business_admin']);
