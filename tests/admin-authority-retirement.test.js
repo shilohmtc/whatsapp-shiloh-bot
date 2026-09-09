@@ -22,6 +22,9 @@ const owner = {
   display_name: 'Owner',
   business_role: 'owner',
   calendar_scope: 'all_business',
+  service_scope: 'all_services',
+  admin_active: true,
+  staff_status: 'active',
   permissions: { 'appointment:view': true },
 };
 
