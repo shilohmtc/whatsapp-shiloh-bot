@@ -5,13 +5,20 @@ on:
     paths:
       - 'migrations/111_staff_passkey_auth_v1.sql'
       - 'migrations/112_staff_passkey_auth_v1_production_schema_correction.sql'
+      - 'migrations/113_staff_whatsapp_passkey_bootstrap_v1.sql'
       - 'src/services/staffPasskeyAuth.js'
+      - 'src/services/staffWhatsAppPasskeyBootstrap.js'
+      - 'src/middleware/staffWhatsAppPasskeyBootstrap.js'
       - 'src/routes/staffPasskeyAuth.js'
+      - 'src/routes/staffPasskeyBootstrap.js'
       - 'src/routes/staffCalendarAccessUx.js'
       - 'src/routes/calendar.js'
+      - 'src/routes/webhook.js'
       - 'src/presentation/staffPasskeyUx.js'
+      - 'src/presentation/staffPasskeyBootstrapUx.js'
       - 'tests/staff-passkey-auth-v1.test.js'
       - 'tests/staff-passkey-auth-v1-production-schema.test.js'
+      - 'tests/staff-whatsapp-passkey-bootstrap-v1.test.js'
       - 'scripts/staff-passkey-auth-v1-browser-proof.js'
       - '.github/workflows/staff-passkey-auth-v1-proof.yml'
   workflow_dispatch:
@@ -31,8 +38,8 @@ jobs:
           node-version: 24.14.1
           cache: npm
       - run: npm ci
-      - name: Focused #794 security tests
-        run: node --test tests/staff-passkey-auth-v1.test.js tests/staff-passkey-auth-v1-production-schema.test.js
+      - name: Focused #794/#804 security tests
+        run: node --test tests/staff-passkey-auth-v1.test.js tests/staff-passkey-auth-v1-production-schema.test.js tests/staff-whatsapp-passkey-bootstrap-v1.test.js
       - name: Authenticated Desktop + Phone passkey proof
         run: node scripts/staff-passkey-auth-v1-browser-proof.js
       - uses: actions/upload-artifact@v4
