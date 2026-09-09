@@ -11,11 +11,31 @@ const interactive = read('src/services/adminInteractiveMenu.js');
 const mobile = read('src/services/adminMobileMenu.js');
 const {
   classifyRetiredAdminAction,
+  classifyWorkspaceEntry,
   processRetiredAdminAuthorityMessage,
 } = require('../src/services/adminAuthorityRetirement');
 const { getMenuOptions, menu } = require('../src/services/adminMobileMenu');
 
-const owner = { id: 1, staff_id: 10, display_name: 'Owner', business_role: 'owner', calendar_scope: 'all_business' };
+const owner = {
+  id: 1,
+  staff_id: 10,
+  display_name: 'Owner',
+  business_role: 'owner',
+  calendar_scope: 'all_business',
+  service_scope: 'all_services',
+  admin_active: true,
+  staff_status: 'active',
+  permissions: { 'appointment:view': true },
+};
+
+function oneAdminDb(admin = owner) {
+  return {
+    async query(sql) {
+      if (String(sql).includes('FROM staff_admin_accounts')) return { rows: [admin], rowCount: 1 };
+      throw new Error(`unexpected query: ${sql}`);
+    },
+  };
+}
 
 test('ordinary WhatsApp Admin menu is retired rather than retained as a parallel staff surface', () => {
   assert.deepEqual(getMenuOptions(owner), []);
@@ -36,14 +56,75 @@ test('stale staff payloads fail closed while normal client language remains avai
   }
 });
 
-test('ordinary webhook exposes client proposal handling and only a fail-closed retirement adapter', () => {
+test('recognized staff greetings restore only the Open Workspace launcher', async () => {
+  for (const greeting of ['hi', 'Hello!', 'howzit', 'good morning']) {
+    assert.deepEqual(classifyWorkspaceEntry(greeting), { kind: 'launcher' });
+    const result = await processRetiredAdminAuthorityMessage('27720000000', greeting, oneAdminDb());
+    assert.equal(result.handled, true);
+    assert.equal(result.interactive?.type, 'button');
+    assert.deepEqual(result.interactive?.buttons, [{ id: 'staff_open_workspace', title: 'Open Workspace' }]);
+    assert.doesNotMatch(JSON.stringify(result), /Pending approvals|admin_open_menu|Admin menu/);
+  }
+});
+
+test('recognized staff can request a secure one-time Workspace handoff directly', async () => {
+  const calls = [];
+  const handoffService = {
+    async issueForWhatsapp(input) {
+      calls.push(input);
+      return { ok: true, token: 'A'.repeat(43) };
+    },
+  };
+  const env = { SHILOH_CALENDAR_PUBLIC_ORIGIN: 'https://shiloh.example' };
+  for (const command of ['workspace', 'open workspace', 'staff_open_workspace']) {
+    const result = await processRetiredAdminAuthorityMessage(
+      '27720000000',
+      command,
+      oneAdminDb(),
+      { handoffService, env },
+    );
+    assert.equal(result.handled, true);
+    assert.match(result.reply, /Open Workspace/);
+    assert.match(result.reply, /https:\/\/shiloh\.example\/calendar\/staff\/handoff#handoff=/);
+  }
+  assert.deepEqual(calls, [
+    { whatsapp: '27720000000' },
+    { whatsapp: '27720000000' },
+    { whatsapp: '27720000000' },
+  ]);
+});
+
+test('non-staff greetings and Workspace terms continue through the client flow', async () => {
+  const noAdmin = { query: async () => ({ rows: [], rowCount: 0 }) };
+  for (const input of ['hi', 'workspace', 'open workspace', 'staff_open_workspace']) {
+    assert.deepEqual(await processRetiredAdminAuthorityMessage('27720000000', input, noAdmin), { handled: false });
+  }
+});
+
+test('ambiguous staff identity fails closed for Workspace entry', async () => {
+  const ambiguous = { query: async () => ({ rows: [{ id: 1 }, { id: 2 }], rowCount: 2 }) };
+  const blocked = await processRetiredAdminAuthorityMessage('27720000000', 'hi', ambiguous);
+  assert.equal(blocked.handled, true);
+  assert.match(blocked.reply, /could not be authorized/);
+  assert.match(blocked.reply, /No action was taken/);
+});
+
+test('staff without Workspace authority does not receive a launcher or handoff', async () => {
+  const noView = { ...owner, permissions: {} };
+  const result = await processRetiredAdminAuthorityMessage('27720000000', 'hi', oneAdminDb(noView));
+  assert.equal(result.handled, true);
+  assert.equal(result.interactive, undefined);
+  assert.match(result.reply, /Workspace access is not available/);
+});
+
+test('ordinary webhook exposes client proposal handling and only the bounded staff authority adapter', () => {
   assert.match(webhook, /processClientBookingProposalMessage\(from,text\)/);
   assert.match(webhook, /processAdminRetiredAuthorityMessage\(from,text\)/);
   assert.doesNotMatch(webhook, /processClientBookingApprovalMessage|processAdminInteractiveMenuMessage|commandForAdminButton/);
   assert.doesNotMatch(webhook, /booking_approval_(?:approve|decline)_/);
 });
 
-test('non-admin client sender is not intercepted and ambiguous staff authority fails closed', async () => {
+test('non-admin stale command is not intercepted and ambiguous staff authority fails closed', async () => {
   const noAdmin = { query: async () => ({ rows: [], rowCount: 0 }) };
   assert.deepEqual(await processRetiredAdminAuthorityMessage('27720000000', 'Services & pricing', noAdmin), { handled: false });
   const ambiguous = { query: async () => ({ rows: [{ id: 1 }, { id: 2 }], rowCount: 2 }) };

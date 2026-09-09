@@ -1,5 +1,13 @@
 const { pool } = require('../db/pool');
 const { normalizePhone } = require('./clientIdentityOnboarding');
+const {
+  buildCalendarHandoffUrl,
+  calendarHandoffPublicOrigin,
+  createStaffCalendarHandoffService,
+  isCalendarHandoffAuthority,
+} = require('./staffCalendarHandoff');
+
+const staffWorkspaceHandoff = createStaffCalendarHandoffService();
 
 const CALENDAR_EXACT = new Set([
   'appointments',
@@ -78,6 +86,17 @@ function normalizeAuthorityInput(value = '') {
   return String(value).trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
+function classifyWorkspaceEntry(value = '') {
+  const raw = String(value).trim();
+  if (/^(?:hi|hello|hey|howzit|hiya|good morning|good afternoon|good evening)[!. ]*$/i.test(raw)) {
+    return { kind: 'launcher' };
+  }
+  if (/^(?:workspace|open workspace|staff_open_workspace)$/i.test(raw)) {
+    return { kind: 'open' };
+  }
+  return null;
+}
+
 function classifyRetiredAdminAction(value = '') {
   const raw = String(value).trim();
   const normalized = normalizeAuthorityInput(raw);
@@ -144,10 +163,12 @@ function classifyRetiredAdminAction(value = '') {
 
 async function uniqueActiveAdmin(sender, db = pool) {
   const result = await db.query(
-    `SELECT id,staff_id,display_name,role,permissions,service_scope,business_role,calendar_scope
-       FROM staff_admin_accounts
-      WHERE normalized_whatsapp=$1 AND active=TRUE
-      ORDER BY id
+    `SELECT a.id,a.staff_id,a.display_name,a.role,a.permissions,a.service_scope,a.business_role,a.calendar_scope,
+            a.active AS admin_active,s.status AS staff_status
+       FROM staff_admin_accounts a
+       LEFT JOIN staff s ON s.id=a.staff_id
+      WHERE a.normalized_whatsapp=$1 AND a.active=TRUE
+      ORDER BY a.id
       LIMIT 2`,
     [normalizePhone(sender)],
   );
@@ -169,9 +190,42 @@ async function auditRetirement(admin, disposition, db = pool) {
   );
 }
 
-async function processRetiredAdminAuthorityMessage(sender, text, db = pool) {
+function workspaceLauncher(admin) {
+  const name = String(admin?.display_name || 'Shiloh staff').trim();
+  return {
+    handled: true,
+    admin,
+    interactive: {
+      type: 'button',
+      body: `*Shiloh Workspace 🌿*\n\nHello ${name}.`,
+      buttons: [{ id: 'staff_open_workspace', title: 'Open Workspace' }],
+    },
+  };
+}
+
+async function issueWorkspaceHandoff(sender, admin, handoffService = staffWorkspaceHandoff, env = process.env) {
+  if (!calendarHandoffPublicOrigin(env)) {
+    return { handled: true, admin, reply: 'Workspace access is not available right now. No WhatsApp mutation was attempted.' };
+  }
+  const issued = await handoffService.issueForWhatsapp({ whatsapp: sender });
+  if (!issued?.ok) {
+    return { handled: true, admin, reply: 'Workspace access is not available for this staff account. No WhatsApp mutation was attempted.' };
+  }
+  const url = buildCalendarHandoffUrl(issued.token, env);
+  if (!url) {
+    return { handled: true, admin, reply: 'Workspace access is not available right now. No WhatsApp mutation was attempted.' };
+  }
+  return {
+    handled: true,
+    admin,
+    reply: `*Open Workspace*\n\nTap this secure one-time link to open Shiloh Workspace:\n${url}\n\nIt expires shortly and can only be used once.`,
+  };
+}
+
+async function processRetiredAdminAuthorityMessage(sender, text, db = pool, options = {}) {
+  const workspaceEntry = classifyWorkspaceEntry(text);
   const disposition = classifyRetiredAdminAction(text);
-  if (!disposition) return { handled: false };
+  if (!workspaceEntry && !disposition) return { handled: false };
 
   const authority = await uniqueActiveAdmin(sender, db);
   if (authority.status === 'not_admin') return { handled: false };
@@ -181,6 +235,23 @@ async function processRetiredAdminAuthorityMessage(sender, text, db = pool) {
       disposition,
       reply: 'This staff action could not be authorized from the current WhatsApp identity. No action was taken.',
     };
+  }
+
+  if (workspaceEntry) {
+    if (!isCalendarHandoffAuthority(authority.admin)) {
+      return {
+        handled: true,
+        admin: authority.admin,
+        reply: 'Workspace access is not available for this staff account. No action was taken.',
+      };
+    }
+    if (workspaceEntry.kind === 'launcher') return workspaceLauncher(authority.admin);
+    return issueWorkspaceHandoff(
+      sender,
+      authority.admin,
+      options.handoffService || staffWorkspaceHandoff,
+      options.env || process.env,
+    );
   }
 
   await auditRetirement(authority.admin, disposition, db);
@@ -216,7 +287,10 @@ module.exports = {
   RETIRED_STAFF_EXACT,
   auditRetirement,
   classifyRetiredAdminAction,
+  classifyWorkspaceEntry,
+  issueWorkspaceHandoff,
   normalizeAuthorityInput,
   processRetiredAdminAuthorityMessage,
   uniqueActiveAdmin,
+  workspaceLauncher,
 };
