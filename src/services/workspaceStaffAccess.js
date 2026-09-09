@@ -30,6 +30,7 @@ function evaluateStaffAccessManageAuthority(rows = []) {
     capability: STAFF_ACCESS_MANAGE_CAPABILITY,
     operatorAdminId,
     staffId: positiveId(row.staff_id),
+    displayName: String(row.display_name || 'Staff').trim() || 'Staff',
   };
 }
 
@@ -66,7 +67,7 @@ function createWorkspaceStaffAccessService({ db = pool } = {}) {
     if (!id) return [];
     const result = await queryable.query(
       `/* workspaceStaffAccess:principal */
-       SELECT a.id, a.staff_id, a.permissions, a.active AS admin_active, s.status AS staff_status
+       SELECT a.id, a.staff_id, a.display_name, a.permissions, a.active AS admin_active, s.status AS staff_status
          FROM staff_admin_accounts a
          LEFT JOIN staff s ON s.id=a.staff_id
         WHERE a.id=$1

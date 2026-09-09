@@ -11,7 +11,7 @@ const logger = require('../lib/logger');
 const CLIENT_ACCEPT_PREFIX = 'booking_proposal_accept_';
 const CLIENT_ANOTHER_PREFIX = 'booking_proposal_another_';
 const ACTIVE_REQUEST_STATES = new Set(['pending', 'awaiting_client_confirmation']);
-const BUSINESS_WIDE_ROLES = new Set(['owner', 'business_admin']);
+const BUSINESS_WIDE_ROLES = new Set(['owner', 'business_admin', 'booking_operator']);
 const PROPOSAL_TTL_MS = 24 * 60 * 60 * 1000;
 
 class BookingRequestError extends Error {
@@ -80,7 +80,9 @@ function operatorCanResolve(principal, row) {
   if (!principal || !row) return false;
   const role = String(principal.business_role || principal.calendarAuthority?.businessRole || '').toLowerCase();
   const scope = String(principal.calendar_scope || principal.calendarAuthority?.calendarScope || '').toLowerCase();
-  if (BUSINESS_WIDE_ROLES.has(role) && scope === 'all_business') return true;
+  if (BUSINESS_WIDE_ROLES.has(role) && scope === 'all_business') {
+    return role !== 'booking_operator' || principal.permissions?.['appointment:create'] === true;
+  }
   if (principal.staff_id && Number(row.approver_staff_id) === Number(principal.staff_id)) return true;
   return false;
 }
@@ -88,7 +90,8 @@ function operatorCanResolve(principal, row) {
 function hasBusinessWideAuthority(principal) {
   const role = String(principal?.business_role || principal?.calendarAuthority?.businessRole || '').toLowerCase();
   const scope = String(principal?.calendar_scope || principal?.calendarAuthority?.calendarScope || '').toLowerCase();
-  return BUSINESS_WIDE_ROLES.has(role) && scope === 'all_business';
+  return BUSINESS_WIDE_ROLES.has(role) && scope === 'all_business'
+    && (role !== 'booking_operator' || principal.permissions?.['appointment:create'] === true);
 }
 
 function requestSnapshotMatches(row) {

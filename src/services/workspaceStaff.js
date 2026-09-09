@@ -150,6 +150,8 @@ function accessProjection(row) {
   if (!row) return null;
   const permissions = permissionSet(row.permissions);
   return {
+    id: positiveId(row.id),
+    active: row.active === true,
     businessRole: row.business_role || null,
     calendarScope: row.calendar_scope || null,
     serviceScope: row.service_scope || null,
@@ -294,10 +296,9 @@ function createWorkspaceStaffService({ db = pool } = {}) {
 
     const accessResult = await db.query(
       `/* workspaceStaff:linked_access */
-       SELECT a.business_role, a.calendar_scope, a.service_scope, a.permissions
+       SELECT a.id, a.active, a.business_role, a.calendar_scope, a.service_scope, a.permissions
          FROM staff_admin_accounts a
         WHERE a.staff_id=$1
-          AND a.active=TRUE
         ORDER BY a.id
         LIMIT 2`,
       [id]

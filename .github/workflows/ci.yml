@@ -82,7 +82,7 @@ jobs:
       - name: Run focused Workspace Clients tests
         run: node --test tests/workspace-clients-v1.test.js
       - name: Run focused Workspace Staff tests
-        run: node --test tests/workspace-staff-access-v1.test.js tests/workspace-staff-access-policy-boundary.test.js tests/workspace-staff-access-enablement.test.js tests/workspace-staff-access-legacy-completion.test.js
+        run: node --test tests/workspace-staff-access-v1.test.js tests/workspace-staff-access-policy-boundary.test.js tests/workspace-staff-access-enablement.test.js tests/workspace-staff-access-legacy-completion.test.js tests/workspace-access-v2.test.js
       - name: Run focused Workspace Services tests
         run: node --test tests/workspace-services-v1.test.js tests/workspace-services-stage-b.test.js tests/workspace-service-creation-v1.test.js
       - name: Run focused Workspace Mobile Polish tests
