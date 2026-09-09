@@ -1,3 +1,12 @@
+function escapeHtml(value = '') {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function signinPanel() {
   return `<section class="section" data-shiloh-passkey-panel>
     <span class="eyebrow">Fast secure re-entry</span><h2>Continue with a passkey</h2>
@@ -14,8 +23,26 @@ if(!window.PublicKeyCredential||!navigator.credentials){button.disabled=true;msg
 button.addEventListener('click',async function(){button.disabled=true;msg('Choose your Shiloh passkey…');try{var start=await fetch('/calendar/staff-auth/passkeys/authentication/options',{method:'POST',credentials:'same-origin',cache:'no-store',headers:{'Accept':'application/json','Content-Type':'application/json'},body:'{}'});if(!start.ok)throw new Error('unavailable');var body=await json(start);var options=body.options||{};options.challenge=bytes(options.challenge);var credential=await navigator.credentials.get({publicKey:options});if(!credential)throw new Error('cancelled');var finish=await fetch('/calendar/staff-auth/passkeys/authentication/finish',{method:'POST',credentials:'same-origin',cache:'no-store',headers:{'Accept':'application/json','Content-Type':'application/json'},body:JSON.stringify({response:{id:credential.id,rawId:enc(credential.rawId),type:credential.type,response:{clientDataJSON:enc(credential.response.clientDataJSON),authenticatorData:enc(credential.response.authenticatorData),signature:enc(credential.response.signature),userHandle:enc(credential.response.userHandle)}}})});var result=await json(finish);if(!finish.ok||!result.authenticated)throw new Error('invalid');msg('Signed in. Opening Workspace…');window.location.replace('/calendar/workspace');}catch(error){if(error&&error.name==='NotAllowedError')msg('Passkey prompt was cancelled or unavailable. You can use the authenticator sign-in below.');else msg('Passkey sign-in could not be verified. Use another passkey or the authenticator sign-in below.');button.disabled=false;}});
 })();`;
 }
-function managePage() {
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Shiloh passkeys</title><style>:root{color-scheme:light;--ink:#20322b;--muted:#6c7d75;--paper:#f7f5ef;--panel:#fffdf9;--line:#dfe5df;--leaf:#496b5a;--leaf-soft:#e7eee9;--error:#8a3f3f}*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.shell{max-width:760px;margin:0 auto;padding:28px 18px 40px}.card{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:20px}.eyebrow{font-size:.75rem;text-transform:uppercase;letter-spacing:.12em;color:var(--muted)}h1{margin:5px 0 8px;font-size:1.5rem}p{color:var(--muted);line-height:1.5}.actions{display:flex;gap:9px;flex-wrap:wrap;margin:16px 0}.button{border:1px solid var(--leaf);border-radius:999px;padding:10px 15px;background:var(--leaf);color:#fff;font:inherit;font-weight:700;cursor:pointer}.button.secondary{background:#fff;color:var(--leaf)}.button:disabled{opacity:.55}.list{display:grid;gap:10px;margin-top:16px}.credential{border:1px solid var(--line);border-radius:12px;padding:13px;background:#fff}.credential strong{display:block}.meta{font-size:.82rem;color:var(--muted);margin-top:5px}.status{min-height:1.4em;color:var(--muted)}a{color:var(--leaf)}@media(max-width:560px){.shell{padding:18px 12px}.card{padding:16px}.button{width:100%}}</style><script src="/calendar/staff-auth/passkeys/manage.js" defer></script></head><body><div class="shell"><main class="card"><span class="eyebrow">Shiloh security</span><h1>Passkeys</h1><p>Add more than one passkey if you use multiple devices. Revoking a passkey does not remove your existing authenticator or recovery fallback.</p><div class="actions"><button class="button" type="button" data-passkey-add>Add passkey</button><a class="button secondary" href="/calendar/workspace">Back to Workspace</a></div><div class="status" role="status" aria-live="polite" data-passkey-status></div><div class="list" data-passkey-list></div><p>Registration and revocation require a recent strong sign-in. If Shiloh asks you to sign in again, use your authenticator or an existing passkey.</p></main></div></body></html>`;
+
+function dateLabel(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return null;
+  return date.toISOString().slice(0, 10);
+}
+
+function initialCredentialList(credentials = []) {
+  if (!Array.isArray(credentials) || !credentials.length) return '<p>No passkeys enrolled yet.</p>';
+  return credentials.map((row) => {
+    const created = dateLabel(row?.createdAt) || 'unknown date';
+    const lastUsed = dateLabel(row?.lastUsedAt);
+    const backup = row?.backedUp === true ? ' · synced/backup capable' : '';
+    return `<div class="credential"><strong>${row?.revokedAt ? 'Revoked passkey' : 'Passkey'}</strong><div class="meta">Added ${escapeHtml(created)}${lastUsed ? ` · last used ${escapeHtml(lastUsed)}` : ''}${backup}</div></div>`;
+  }).join('');
+}
+
+function managePage({ credentials = [] } = {}) {
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Shiloh passkeys</title><style>:root{color-scheme:light;--ink:#20322b;--muted:#6c7d75;--paper:#f7f5ef;--panel:#fffdf9;--line:#dfe5df;--leaf:#496b5a;--leaf-soft:#e7eee9;--error:#8a3f3f}*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.shell{max-width:760px;margin:0 auto;padding:28px 18px 40px}.card{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:20px}.eyebrow{font-size:.75rem;text-transform:uppercase;letter-spacing:.12em;color:var(--muted)}h1{margin:5px 0 8px;font-size:1.5rem}p{color:var(--muted);line-height:1.5}.actions{display:flex;gap:9px;flex-wrap:wrap;margin:16px 0}.button{border:1px solid var(--leaf);border-radius:999px;padding:10px 15px;background:var(--leaf);color:#fff;font:inherit;font-weight:700;cursor:pointer}.button.secondary{background:#fff;color:var(--leaf)}.button:disabled{opacity:.55}.list{display:grid;gap:10px;margin-top:16px}.credential{border:1px solid var(--line);border-radius:12px;padding:13px;background:#fff}.credential strong{display:block}.meta{font-size:.82rem;color:var(--muted);margin-top:5px}.status{min-height:1.4em;color:var(--muted)}a{color:var(--leaf)}@media(max-width:560px){.shell{padding:18px 12px}.card{padding:16px}.button{width:100%}}</style><script src="/calendar/staff-auth/passkeys/manage.js" defer></script></head><body><div class="shell"><main class="card"><span class="eyebrow">Shiloh security</span><h1>Passkeys</h1><p>Add more than one passkey if you use multiple devices. Revoking a passkey does not remove your existing authenticator or recovery fallback.</p><div class="actions"><button class="button" type="button" data-passkey-add>Add passkey</button><a class="button secondary" href="/calendar/workspace">Back to Workspace</a></div><div class="status" role="status" aria-live="polite" data-passkey-status></div><div class="list" data-passkey-list>${initialCredentialList(credentials)}</div><p>Registration and revocation require a recent strong sign-in. If Shiloh asks you to sign in again, use your authenticator or an existing passkey.</p></main></div></body></html>`;
 }
 function manageScript() {
   return `(function(){'use strict';
@@ -28,4 +55,4 @@ async function revoke(id,button){button.disabled=true;try{await ensureCsrf();var
 if(add)add.addEventListener('click',register);load().catch(function(){msg('Passkeys could not be loaded.');});
 })();`;
 }
-module.exports = { signinPanel, signinScript, managePage, manageScript };
+module.exports = { signinPanel, signinScript, managePage, manageScript, initialCredentialList };
