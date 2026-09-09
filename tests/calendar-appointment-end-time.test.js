@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const {
   CALENDAR_CAPABILITIES,
   evaluateCalendarAuthority,
+  hasCapability,
   operationsForAuthority,
 } = require('../src/services/calendarAuthorization');
 const {
@@ -79,12 +80,13 @@ function fixture({ conflict = false, permissions, updatedEnd = '2026-09-08T08:30
   };
 }
 
-test('appointment:adjust_end is a distinct bounded Calendar operation', () => {
+test('appointment:adjust_end is a distinct bounded capability outside the legacy operation matrix', () => {
   const authority = evaluateCalendarAuthority(principalRow(), { allowedServiceIds: [] });
   assert.ok(authority);
-  assert.equal(authority.capabilities.includes(CALENDAR_CAPABILITIES.ADJUST_END), true);
-  assert.equal(operationsForAuthority(authority).includes('appointment:adjust_end'), true);
-  assert.equal(operationsForAuthority(evaluateCalendarAuthority(principalRow({}), { allowedServiceIds: [] })).includes('appointment:adjust_end'), false);
+  assert.equal(hasCapability(authority, CALENDAR_CAPABILITIES.ADJUST_END), true);
+  assert.equal(operationsForAuthority(authority).includes('appointment:adjust_end'), false);
+  const without = evaluateCalendarAuthority(principalRow({}), { allowedServiceIds: [] });
+  assert.equal(hasCapability(without, CALENDAR_CAPABILITIES.ADJUST_END), false);
 });
 
 test('shortening an appointment updates canonical end/lifecycle and preserves before/after audit', async () => {
@@ -141,9 +143,8 @@ test('stale revision and missing capability fail closed', async () => {
   );
 });
 
-test('end-time Workspace enhancer is capability-gated and keeps a 44px Phone target', () => {
+test('end-time Workspace enhancer is capability-served, CSRF-protected and keeps a 44px Phone target', () => {
   const script = calendarAppointmentEndTimeClientScript();
-  assert.match(script, /appointment:adjust_end/);
   assert.match(script, /Adjust end time/);
   assert.match(script, /min-height:44px/);
   assert.match(script, /window\.location\.reload/);
