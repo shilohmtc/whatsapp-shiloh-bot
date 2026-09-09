@@ -5,7 +5,7 @@ const path = require('node:path');
 
 const control = require('../src/services/practitionerAlignmentControl779');
 
-test('#779 source practitioner guard accepts own-scope practitioner and rejects broad mutation authority', () => {
+test('#779 source guard follows canonical practitioner preset and ignores raw staff_scope storage', () => {
   const staff = { id: 7, resource_type: 'practitioner', status: 'active' };
   const access = {
     staff_id: 7,
@@ -14,17 +14,21 @@ test('#779 source practitioner guard accepts own-scope practitioner and rejects 
     business_role: 'employee_practitioner',
     calendar_scope: 'own_appointments',
     service_scope: 'own_services',
-    staff_scope: 'own_staff',
+    staff_scope: '',
     permissions: { 'appointment:view': true },
   };
   assert.doesNotThrow(() => control.assertSourcePractitioner(staff, access));
   assert.throws(
     () => control.assertSourcePractitioner(staff, { ...access, permissions: { 'appointment:view': true, 'staff:manage': true } }),
-    /broadened capabilities/
+    /view-only capability preset|broadened capabilities/
+  );
+  assert.throws(
+    () => control.assertSourcePractitioner(staff, { ...access, permissions: {} }),
+    /view-only capability preset/
   );
 });
 
-test('#779 sanitized projections contain operational authority but no identity/auth material', () => {
+test('#779 sanitized projections expose raw scope only as evidence and no identity/auth material', () => {
   const access = control.sanitizeAccess({
     id: 3,
     staff_id: 9,
@@ -33,7 +37,7 @@ test('#779 sanitized projections contain operational authority but no identity/a
     business_role: 'employee_practitioner',
     calendar_scope: 'own_appointments',
     service_scope: 'own_services',
-    staff_scope: 'own_staff',
+    staff_scope: '',
     permissions: { 'appointment:view': true },
     whatsapp_number: '+27820000000',
     normalized_whatsapp: '27820000000',
@@ -41,23 +45,24 @@ test('#779 sanitized projections contain operational authority but no identity/a
     recovery_codes: 'never-log',
     session_token: 'never-log',
   });
-  assert.equal(access.staffScope, 'own_staff');
+  assert.equal(access.rawStaffScope, '');
   assert.deepEqual(access.capabilities, ['appointment:view']);
   const serialized = JSON.stringify(access);
   assert.doesNotMatch(serialized, /27820000000|never-log|whatsapp|totp|recovery|session/i);
 });
 
-test('#779 control source writes no identity/auth state, emits bounded audit evidence, and clones only staff service ids', () => {
+test('#779 control writes only canonical practitioner preset fields, not raw staff_scope or identity/auth state', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'services', 'practitionerAlignmentControl779.js'), 'utf8');
   const adminUpdate = source.match(/UPDATE staff_admin_accounts[\s\S]*?WHERE id=\$1`/i)?.[0] || '';
   assert.match(adminUpdate, /staff_id=\$2/);
   assert.match(adminUpdate, /permissions=\$4::jsonb/);
-  assert.match(adminUpdate, /staff_scope=\$8/);
+  assert.doesNotMatch(adminUpdate, /staff_scope\s*=/i);
   assert.doesNotMatch(adminUpdate, /whatsapp|totp|recovery|session|password|credential/i);
   assert.match(source, /INSERT INTO staff_services\(staff_id,service_id\)/i);
   assert.match(source, /DELETE FROM staff_services target/i);
   assert.match(source, /INSERT INTO staff_auth_security_events/i);
   assert.match(source, /VALUES\('practitioner_alignment',NULL,\$1,'control','Control issue #779'/);
+  assert.match(source, /rawStaffScopeManagedByCanonicalPreset: false/);
   assert.doesNotMatch(source, /UPDATE staff_auth_|DELETE FROM staff_auth_/i);
   assert.doesNotMatch(
     source,
