@@ -14,6 +14,7 @@ const customerExperienceService = require("./src/services/customerExperience");
 const clientIdentityService = require("./src/services/clientIdentityOnboarding");
 const clientDiscoveryService = require("./src/services/clientDiscoveryMenu");
 const { installClientNavigationPriority } = require("./src/services/clientNavigationPriority");
+const { submitWorkspaceBookingRequestAlertTemplate } = require("./src/services/workspaceBookingRequestAlertTemplateProvisioning");
 
 validateEnv();
 const processClientServiceFamilyMessage = clientFamilyService.processClientServiceFamilyMessage;
@@ -70,33 +71,43 @@ async function auditMetaTemplateInventoryIfExplicitlyEnabled() {
   if (String(process.env.META_TEMPLATE_INVENTORY_AUDIT_ON_START || '').toLowerCase() !== 'true') return;
   try {
     const report = await inspectMetaTemplateInventory();
-    logger.info({
-      ok: report?.ok === true,
-      reason: report?.reason || null,
-      templates: report?.templates || [],
-    }, "Sanitized Meta template inventory audit completed");
+    logger.info({ ok: report?.ok === true, reason: report?.reason || null, templates: report?.templates || [] }, "Sanitized Meta template inventory audit completed");
   } catch (error) {
     logger.error({ err: error, metaError: error.response?.data?.error }, "Sanitized Meta template inventory audit failed");
   }
 }
+
+async function provisionWorkspaceBookingRequestAlertIfExplicitlyEnabled() {
+  if (String(process.env.META_WORKSPACE_BOOKING_REQUEST_ALERT_PROVISION_ON_START || '').toLowerCase() !== 'true') return;
+  try {
+    const result = await submitWorkspaceBookingRequestAlertTemplate();
+    logger.info({
+      ok: result?.ok === true,
+      templateName: result?.templateName || null,
+      submitted: result?.submitted === true,
+      reason: result?.reason || null,
+      providerStatus: result?.provider?.status || result?.verification?.status || result?.template?.status || null,
+      providerCategory: result?.provider?.category || result?.verification?.category || result?.template?.category || null,
+      providerLanguage: result?.verification?.language || result?.template?.language || null,
+      exact: result?.verification?.exact ?? result?.template?.exact ?? null,
+      duplicateCount: result?.duplicateCount ?? null,
+    }, "Workspace booking request alert provisioning checked");
+  } catch (error) {
+    logger.error({ err: error, metaError: error.response?.data?.error }, "Workspace booking request alert provisioning failed");
+  }
+}
+
 const PORT = process.env.PORT || 3000; let server;
 async function start() {
   const migrationAuthority = await verifyMigrationState();
-  logger.info({
-    migrationFiles: migrationAuthority.migrationFiles,
-    ledgerRows: migrationAuthority.ledgerRows,
-    pending: migrationAuthority.pending.length,
-    checksumMismatches: migrationAuthority.checksumMismatches.length,
-    ledgerRowsAbsentFromRelease: migrationAuthority.ledgerRowsAbsentFromRelease.length,
-    mutationAuthority: 'npm run db:migrate',
-    startupMode: 'verify_only',
-  }, "Production migration authority verified");
+  logger.info({ migrationFiles: migrationAuthority.migrationFiles, ledgerRows: migrationAuthority.ledgerRows, pending: migrationAuthority.pending.length, checksumMismatches: migrationAuthority.checksumMismatches.length, ledgerRowsAbsentFromRelease: migrationAuthority.ledgerRowsAbsentFromRelease.length, mutationAuthority: 'npm run db:migrate', startupMode: 'verify_only' }, "Production migration authority verified");
   const staffAuthPilot = await reconcileStaffAuthResetPilotEligibility();
   logger.info(staffAuthPilot, "Provider-independent staff-auth pilot eligibility reconciled");
   try { const calendarAccess = await runCalendarAccessDiagnostic(); logger.info(calendarAccess, "Sanitized Calendar staff access diagnostic"); } catch (error) { logger.warn({ err: error }, "Sanitized Calendar staff access diagnostic failed"); }
   logger.info({ initialized: true, migrationAppliedNow: false, identityContractVersion: 'whatsapp_crm_identity_compat_v1', legacyCompatibility: true, crmV2RegistrationActive: true, registrationBoundary: 'crmV2ClientService.registerWhatsAppClient' }, "WhatsApp CRM V2 identity compatibility schema verified");
   await ensureBookingConfirmationDeliverySchema(); logger.info({ initialized: true, migrations: ['071_booking_confirmation_template_evidence.sql', '083_initial_booking_confirmation_guarantee.sql', '085_calendar_clean_crm_v2_cutover.sql'], migrationAppliedNow: false, checksumVerified: true, durableRetryColumns: true, crmV2RecipientSnapshots: true }, "Booking confirmation delivery evidence schema verified");
   try { await runConfiguredClientProvenanceAudit(logger); } catch (error) { logger.error({ err: error }, "Read-only CRM provenance audit failed"); }
+  await provisionWorkspaceBookingRequestAlertIfExplicitlyEnabled();
   await auditMetaTemplateInventoryIfExplicitlyEnabled();
   server = app.listen(PORT, () => { logger.info({ port: PORT }, "Shiloh started"); startConversationSessionCleanupScheduler(); startTemporarySessionCleanupScheduler(); startGoogleBusinessProfileSyncScheduler(); startAppointmentLifecycleScheduler(); startCustomerCareScheduler(); startBookingIntegrityScheduler(); startCustomerBookingConfirmationScheduler(); startMandatoryDemoCleanupScheduler(); startAttendanceFinalizationReminderScheduler(); startHistoricalFinalizationPromptScheduler(); });
 }
