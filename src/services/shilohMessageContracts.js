@@ -11,6 +11,7 @@ const definition = (key) => buildDefinition(key);
 
 const SOURCE_DEFINITIONS = Object.freeze({
   booking_update: () => definition('booking_update'),
+  booking_request_staff_alert: () => definition('booking_request_staff_alert'),
   staff_auth_otp: () => buildStaffAuthTemplateSubmissionDefinition(),
   staff_finalization_actions: () => buildStaffFinalizationActionTemplateDefinition(),
   appointment_followup_v2: () => definition('appointment_followup_actions'),
