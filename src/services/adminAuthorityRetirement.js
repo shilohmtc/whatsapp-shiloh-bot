@@ -163,10 +163,12 @@ function classifyRetiredAdminAction(value = '') {
 
 async function uniqueActiveAdmin(sender, db = pool) {
   const result = await db.query(
-    `SELECT id,staff_id,display_name,role,permissions,service_scope,business_role,calendar_scope
-       FROM staff_admin_accounts
-      WHERE normalized_whatsapp=$1 AND active=TRUE
-      ORDER BY id
+    `SELECT a.id,a.staff_id,a.display_name,a.role,a.permissions,a.service_scope,a.business_role,a.calendar_scope,
+            a.active AS admin_active,s.status AS staff_status
+       FROM staff_admin_accounts a
+       LEFT JOIN staff s ON s.id=a.staff_id
+      WHERE a.normalized_whatsapp=$1 AND a.active=TRUE
+      ORDER BY a.id
       LIMIT 2`,
     [normalizePhone(sender)],
   );
