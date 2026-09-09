@@ -12,6 +12,7 @@ const express = require('express');
 const requestContext = require('../src/middleware/requestContext');
 const { serializeSessionCookie } = require('../src/middleware/staffBrowserSession');
 const { createStaffCalendarAccessRouter } = require('../src/routes/staffCalendarAccessUx');
+const { renderStaffCalendarAccessPage } = require('../src/presentation/staffCalendarAccessUx');
 const { createStaffPasskeyAuthRouter } = require('../src/routes/staffPasskeyAuth');
 
 const execFileAsync = promisify(execFile);
@@ -33,7 +34,10 @@ function fixture(origin) {
     async listCredentials(){return {ok:true,credentials:[{id:1,transports:['internal'],backedUp:true,createdAt:'2026-09-09T12:00:00Z',lastUsedAt:'2026-09-09T13:00:00Z',revokedAt:null},{id:2,transports:['hybrid'],backedUp:false,createdAt:'2026-09-08T12:00:00Z',lastUsedAt:null,revokedAt:'2026-09-09T12:30:00Z'}]};}
   };
   const app=express(); app.use(requestContext); app.use(express.json());
-  app.use('/calendar/staff',createStaffCalendarAccessRouter({env}));
+  app.use('/calendar/staff',createStaffCalendarAccessRouter({
+    env,
+    renderPage(options){return renderStaffCalendarAccessPage({...options,providerIndependentAuthEnabled:true});},
+  }));
   app.use('/calendar/staff-auth/passkeys',createStaffPasskeyAuthRouter({env,sessionService,passkeyService}));
   app.get('/proof-auth',(_req,res)=>{res.setHeader('Set-Cookie',serializeSessionCookie(TOKEN,{env,maxAgeSeconds:3600}));res.redirect(302,'/calendar/staff-auth/passkeys/manage');});
   app.get('/calendar/workspace',(_req,res)=>res.type('html').send('<!doctype html><meta name="viewport" content="width=device-width"><title>Workspace</title><h1>Workspace</h1>'));
