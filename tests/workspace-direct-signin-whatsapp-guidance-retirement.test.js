@@ -21,14 +21,15 @@ function decoratedAccessPage(reason = null) {
   return retireBrowserWhatsAppGuidance(withAuthenticatorSetupGuidance(base));
 }
 
-test('direct Workspace sign-in retires the redundant WhatsApp helper block', () => {
+test('direct Workspace sign-in retires the redundant legacy WhatsApp helper while keeping recovery fallback', () => {
   const page = decoratedAccessPage();
 
   assert.match(page, /Direct browser sign-in/);
   assert.match(page, /Use your authenticator/);
   assert.match(page, /Use a recovery code/);
-  assert.match(page, /Need to enroll an authenticator\?/);
-  assert.match(page, /Staff-auth administrators: create enrollment link/);
+  assert.match(page, /Recovery administration/);
+  assert.match(page, /Authenticator enrollment/);
+  assert.match(page, /Staff-auth administrators: recovery enrollment/);
 
   assert.doesNotMatch(page, /Easiest access/i);
   assert.doesNotMatch(page, /Open from Shiloh WhatsApp/i);
@@ -36,6 +37,7 @@ test('direct Workspace sign-in retires the redundant WhatsApp helper block', () 
   assert.doesNotMatch(page, /send <code>calendar<\/code>/i);
   assert.doesNotMatch(page, /Authenticator and recovery credentials stay outside WhatsApp/i);
   assert.doesNotMatch(page, /open Workspace from your existing Shiloh WhatsApp conversation/i);
+  assert.doesNotMatch(page, /Need to enroll an authenticator\?/);
 
   assert.match(page, /data-shiloh-status data-state="ready"><\/div>/);
   assert.match(page, /\[data-shiloh-status\]:empty\{display:none\}/);
