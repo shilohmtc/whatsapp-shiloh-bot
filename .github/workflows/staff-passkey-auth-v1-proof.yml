@@ -1,0 +1,41 @@
+name: Staff Passkey Auth V1 Proof
+
+on:
+  pull_request:
+    paths:
+      - 'migrations/109_staff_passkey_auth_v1.sql'
+      - 'src/services/staffPasskeyAuth.js'
+      - 'src/routes/staffPasskeyAuth.js'
+      - 'src/routes/staffCalendarAccessUx.js'
+      - 'src/routes/calendar.js'
+      - 'src/presentation/staffPasskeyUx.js'
+      - 'tests/staff-passkey-auth-v1.test.js'
+      - 'scripts/staff-passkey-auth-v1-browser-proof.js'
+      - '.github/workflows/staff-passkey-auth-v1-proof.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  passkey_v1_proof:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24.14.1
+          cache: npm
+      - run: npm ci
+      - name: Focused #794 security tests
+        run: node --test tests/staff-passkey-auth-v1.test.js
+      - name: Authenticated Desktop + Phone passkey proof
+        run: node scripts/staff-passkey-auth-v1-browser-proof.js
+      - uses: actions/upload-artifact@v4
+        with:
+          name: staff-passkey-auth-v1
+          path: artifacts/staff-passkey-auth-v1
+          if-no-files-found: error
+          retention-days: 14
