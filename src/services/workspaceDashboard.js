@@ -56,7 +56,7 @@ function dashboardAuthority(principal) {
     return {
       mode: 'owner_overview',
       linkedStaffId: positiveId(authority.linkedStaffId),
-      canFinalize: principal.permissions?.['booking:update'] === true,
+      canFinalize: role !== 'booking_operator' && principal.permissions?.['booking:update'] === true,
       timelineViewer: { calendarScope: 'all_business' },
     };
   }
