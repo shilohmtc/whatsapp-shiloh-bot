@@ -56,6 +56,14 @@ function retireBrowserWhatsAppGuidance(html) {
   return output;
 }
 
+function withAccessChangedGuidance(html, reason) {
+  if (reason !== 'access') return html;
+  return String(html).replace(
+    'data-state="ready"></div>',
+    'data-state="session-ended">Your Shiloh Workspace access changed or no longer permits Workspace. Sign in again, or ask an authorized administrator if access should be restored.</div>',
+  );
+}
+
 function createStaffCalendarAccessPageHandler({
   env = process.env,
   renderPage = renderStaffCalendarAccessPage,
@@ -65,13 +73,15 @@ function createStaffCalendarAccessPageHandler({
     if (!isStaffCalendarAccessUxEnabled(env)) return res.status(404).type('text/plain').send('Not Found');
     const basePath = req.baseUrl || '/calendar/staff';
     const providerIndependentAuthEnabled = providerIndependentAuthPolicy(env).operational;
+    const reason = normalizeReason(req.query?.reason);
     let html = renderPage({
-      reason: normalizeReason(req.query?.reason),
+      reason,
       clientScriptPath: `${basePath}/client.js`,
       providerIndependentAuthEnabled,
     });
     if (providerIndependentAuthEnabled) html = withAuthenticatorSetupGuidance(html);
     html = retireBrowserWhatsAppGuidance(html);
+    html = withAccessChangedGuidance(html, reason);
     return res.status(200).type('html').send(html);
   };
 }
@@ -129,3 +139,4 @@ module.exports.setAccessSecurityHeaders = setAccessSecurityHeaders;
 module.exports.normalizeReason = normalizeReason;
 module.exports.withAuthenticatorSetupGuidance = withAuthenticatorSetupGuidance;
 module.exports.retireBrowserWhatsAppGuidance = retireBrowserWhatsAppGuidance;
+module.exports.withAccessChangedGuidance = withAccessChangedGuidance;
