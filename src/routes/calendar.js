@@ -16,7 +16,6 @@ const { createWorkspaceClientMutationRouter } = require('./workspaceClientMutati
 const { createWorkspaceClientNotificationRouter } = require('./workspaceClientNotifications');
 const { createWorkspaceStaffRouter } = require('./workspaceStaff');
 const { createWorkspaceStaffMutationRouter } = require('./workspaceStaffMutations');
-const { createWorkspaceReceptionSetupRouter } = require('./workspaceReceptionSetup');
 const { createWorkspaceServicesRouter } = require('./workspaceServices');
 const { createWorkspaceServicesMutationRouter } = require('./workspaceServicesMutations');
 const { createWorkspaceReportsRouter } = require('./workspaceReports');
@@ -59,7 +58,6 @@ router.use('/operations', createCalendarOperationalMutationRouter({ sessionServi
 router.use('/clients', createWorkspaceClientsRouter({ sessionService: staffBrowserSessionService }));
 router.use('/clients', createWorkspaceClientMutationRouter({ sessionService: staffBrowserSessionService }));
 router.use('/clients', createWorkspaceClientNotificationRouter({ sessionService: staffBrowserSessionService }));
-router.use('/team/reception-setup', createWorkspaceReceptionSetupRouter({ sessionService: staffBrowserSessionService }));
 router.use('/team', createWorkspaceStaffRouter({ sessionService: staffBrowserSessionService }));
 router.use('/team', createWorkspaceStaffMutationRouter({ sessionService: staffBrowserSessionService }));
 router.use('/services', createWorkspaceServicesRouter({ sessionService: staffBrowserSessionService }));
