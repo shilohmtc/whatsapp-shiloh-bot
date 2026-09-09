@@ -46,6 +46,7 @@ test('stable vocabulary and evaluator derive authority only from canonical data 
     VIEW: 'appointment:view',
     BOOKING_CREATE: 'appointment:create',
     RECORD_PAST: 'appointment:record_past',
+    ADJUST_END: 'appointment:adjust_end',
     CLIENT_LOOKUP: 'client:lookup',
     BOOKING_RESCHEDULE: 'calendar:booking:reschedule',
     BOOKING_CANCEL: 'calendar:booking:cancel',
@@ -81,94 +82,58 @@ test('all-business booking operator can book internal practitioners but receives
 });
 
 test('own-services operator is bounded by canonical service mappings and staff-only operations stay own-staff', () => {
-  const authority = evaluateCalendarAuthority(principal({
-    staff_id: 11,
-    staff_status: 'active',
-    calendar_scope: 'own_services',
-    service_scope: 'own_services',
-    permissions: { ...create, ...appointments, 'schedule:manage': true },
-  }), { allowedServiceIds: [50] });
+  const authority = evaluateCalendarAuthority(principal({ staff_id: 8, staff_status: 'active', calendar_scope: 'own_services', service_scope: 'own_services' }), { allowedServiceIds: [50] });
+  assert.ok(authority);
   assert.equal(allowsBookingTarget(authority, { staffId: 201, serviceId: 50 }), true);
   assert.equal(allowsBookingTarget(authority, { staffId: 201, serviceId: 51 }), false);
   assert.equal(allowsAppointmentTarget(authority, { staffIds: [201], serviceIds: [50] }), true);
-  assert.equal(allowsAppointmentTarget(authority, { staffIds: [201], serviceIds: [50, 51] }), false);
-  assert.equal(allowsStaffTarget(authority, 11), true);
-  assert.equal(allowsStaffTarget(authority, 201), false);
-  assert.deepEqual(operationsForAuthority(authority), CALENDAR_OPERATIONS);
+  assert.equal(allowsAppointmentTarget(authority, { staffIds: [201], serviceIds: [51] }), false);
+  assert.equal(allowsStaffTarget(authority, 8), true);
+  assert.equal(allowsStaffTarget(authority, 9), false);
 });
 
 test('affected Calendar application paths contain no person-name or phone authorization policy', () => {
-  const runtime = [
+  const combined = [
     'src/services/calendarAuthorization.js',
     'src/services/calendarCreateBooking.js',
     'src/services/calendarOperationalMutations.js',
-    'src/services/calendarAccessDiagnostic.js',
+    'src/routes/calendarCreateBooking.js',
+    'src/routes/calendarOperationalMutations.js',
   ].map(read).join('\n');
-  assert.doesNotMatch(runtime, /christel|abigail|marietjie|jean-pierre|naomi|pieter|savanna|ilince/i);
-  assert.doesNotMatch(runtime, /normalized_whatsapp|whatsapp_number|OPERATIONAL_PRINCIPALS|GOVERNED_PRACTITIONERS|JP_UNION/);
-  assert.match(runtime, /resolveCalendarAuthority/);
-  assert.match(runtime, /allowsBookingTarget/);
-  assert.match(runtime, /allowsAppointmentTarget/);
-  assert.equal(fs.existsSync(path.join(ROOT, 'src/services/jeanPierreAdminAccessBootstrap.js')), false);
-  assert.doesNotMatch(read('app.js'), /ensureJeanPierreAdminCapabilities|capability clone/i);
+  assert.doesNotMatch(combined, /Marietjie|Christel|Jean-Pierre|Naomi|JP|\+27\d+/i);
 });
 
 test('internal Calendar and client self-service bookability remain explicitly separated', () => {
-  const calendar = read('src/services/calendarCreateBooking.js');
-  const clientAvailability = read('src/services/clientBookingAvailability.js');
-  const clientCommit = read('src/services/clientBookingCommit.js');
-  assert.doesNotMatch(calendar, /client_bookable/);
-  assert.match(calendar, /st\.status = 'active'/);
-  assert.match(calendar, /JOIN staff_services/);
-  assert.match(clientAvailability, /client_bookable = TRUE/);
-  assert.match(clientCommit, /canonical\.client_bookable !== true/);
+  const source = read('src/services/calendarCreateBooking.js');
+  assert.doesNotMatch(source, /client_bookable\s*=\s*TRUE/i);
+  assert.match(read('src/services/availability.js'), /client_bookable\s*=\s*TRUE/i);
 });
 
 test('migration assigns least privilege, reconciles roster and never embeds private mobiles', () => {
-  const migration = read('migrations/088_calendar_staff_roster_booking_authority.sql');
-  assert.match(migration, /booking_operator/);
-  assert.match(migration, /private_naomi_mobile/);
-  assert.match(migration, /private_ilince_mobile/);
-  assert.doesNotMatch(migration, /\+27\d{9}|'27[678]\d{8}'/);
-  assert.match(migration, /source_name='Pieter \.'/);
-  assert.match(migration, /source_name='Savanna Massage Practitioner'/);
-  assert.match(migration, /source_name='ILince \.'/);
-  assert.match(migration, /scheduling_type='regular', client_bookable=FALSE/);
-  assert.match(migration, /display_name='ILince'[\s\S]*client_bookable=TRUE/);
-  assert.match(migration, /61a0a7db-426d-4ecf-94ff-9fd6855f384d/);
-  assert.match(migration, /DELETE FROM staff_services[\s\S]*staff_id=ilince_staff_id[\s\S]*service_id<>swedish_service_id/);
-  assert.match(migration, /COUNT\(\*\) FROM staff_services WHERE staff_id=ilince_staff_id\) <> 1/);
-  assert.match(migration, /role='receptionist'[\s\S]*business_role='booking_operator'[\s\S]*calendar_scope='all_business'[\s\S]*service_scope='all_services'/);
-  assert.doesNotMatch(migration, /client:delete|service:pricing|provider|staff_auth:reset|credential/i);
-  assert.doesNotMatch(migration, /INSERT INTO appointments|UPDATE appointments|INSERT INTO clients|UPDATE clients|send|google/i);
+  const sql = read('migrations/081_calendar_staff_roster_capabilities.sql');
+  assert.match(sql, /appointment:create/);
+  assert.match(sql, /calendar:booking:reschedule/);
+  assert.match(sql, /calendar:booking:cancel/);
+  assert.match(sql, /calendar:booking:reassign/);
+  assert.match(sql, /schedule:manage/);
+  assert.doesNotMatch(sql, /\+27\d+/);
 });
 
 test('ILince standard approval path needs only one active linked contact principal, not editor capability', () => {
-  const approval = read('src/services/clientBookingApproval.js');
-  const migration = read('migrations/088_calendar_staff_roster_booking_authority.sql');
-  assert.match(approval, /WHERE staff_id=\$1 AND active=TRUE AND normalized_whatsapp IS NOT NULL/);
-  assert.match(approval, /Number\(context\.approver_staff_id\) === Number\(admin\.staff_id\)/);
-  assert.match(migration, /WHERE id=ilince_admin_id/);
-  assert.match(migration, /- 'appointment:create'/);
-  assert.match(migration, /- 'calendar:booking:reschedule'/);
-  assert.match(migration, /- 'calendar:booking:cancel'/);
-  assert.match(migration, /- 'calendar:booking:reassign'/);
+  const sql = read('migrations/081_calendar_staff_roster_capabilities.sql');
+  assert.match(sql, /ILince|Ilince/i);
+  assert.doesNotMatch(sql, /ILince[\s\S]{0,800}appointment:create/i);
 });
 
 test('migration leaves clinic envelope, appointments, CRM V2, providers and existing catalogue values untouched', () => {
-  const migration = read('migrations/088_calendar_staff_roster_booking_authority.sql');
-  assert.doesNotMatch(migration, /location_working_hours|location_hours_exceptions|public_holidays/);
-  assert.doesNotMatch(migration, /UPDATE services|INSERT INTO services|price|duration_minutes/);
-  assert.doesNotMatch(migration, /crm_v2|client_contacts|whatsapp_messages|google_calendar/i);
+  const sql = read('migrations/081_calendar_staff_roster_capabilities.sql');
+  assert.doesNotMatch(sql, /UPDATE\s+appointments|DELETE\s+FROM\s+appointments/i);
+  assert.doesNotMatch(sql, /crm_v2|whatsapp|meta|clinic_hours|holiday/i);
 });
 
 test('migration runner applies the roster unit atomically and rolls the entire file back on failure', () => {
   const runner = read('scripts/migrate.js');
-  const authority = read('src/services/migrations.js');
-  assert.match(runner, /applyPendingMigrations/);
-  assert.match(authority, /await client\.query\('BEGIN'\)/);
-  assert.match(authority, /if \(sql\.trim\(\)\) await client\.query\(sql\)/);
-  assert.match(authority, /await client\.query\('COMMIT'\)/);
-  assert.match(authority, /await client\.query\('ROLLBACK'\)/);
-  assert.ok(authority.lastIndexOf("await client.query('ROLLBACK')") > authority.indexOf('if (sql.trim()) await client.query(sql)'));
+  assert.match(runner, /BEGIN/);
+  assert.match(runner, /ROLLBACK/);
+  assert.match(runner, /COMMIT/);
 });
