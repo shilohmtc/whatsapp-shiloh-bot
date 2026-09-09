@@ -19,6 +19,10 @@ const { createWorkspaceMessagesService } = require('../src/services/workspaceMes
 const { createWorkspaceNavigationService } = require('../src/services/workspaceNavigation');
 const { renderCalendarPage } = require('../src/presentation/calendarReadOnlyUx');
 const { renderServicesListPage } = require('../src/presentation/workspaceServicesUx');
+const { injectWorkspaceServiceCreateAction } = require('../src/presentation/workspaceServiceCreationUx');
+const { renderStaffListPage } = require('../src/presentation/workspaceStaffUx');
+const { renderReportsPage } = require('../src/presentation/workspaceReportsUx');
+const { renderClinicHoursPage } = require('../src/presentation/workspaceClinicHoursUx');
 const { applyCalendarResponsivePolish } = require('../src/routes/calendarReadOnlyUx');
 const { periodFor } = require('../src/services/calendarReadOnlyUx');
 
@@ -243,6 +247,7 @@ function createFixture() {
   };
   const navigationService = createWorkspaceNavigationService({
     clientAccessService: access, staffAccessService: access, servicesAccessService: access, reportsAccessService: access,
+    clinicHoursAccessService: access,
   });
   const clientService = {
     async listClients() {
@@ -274,8 +279,22 @@ function createFixture() {
   app.use('/calendar/clients', createWorkspaceClientsRouter({
     env: ENV, sessionService, service: clientService, notificationService: { async resolveAccess() { return null; } },
   }));
+  app.get('/calendar/team', requireStaffSession({ service: sessionService, env: ENV }), (_req, res) => {
+    return res.status(200).type('html').send(renderStaffListPage({
+      authority: { displayName: 'Clinic Owner' }, query: '', status: 'active', offset: 0, pageSize: 30, hasMore: false,
+      manageAllowed: true,
+      staff: Array.from({ length: 12 }, (_, index) => ({
+        id: 31 + index, display_name: `${['Cedar', 'Willow', 'Olive', 'Aloe'][index % 4]} Practitioner ${index + 1}`,
+        status: 'active', business_role: 'employee_practitioner', resource_type: 'practitioner',
+        service_count: 2, client_bookable: true, active_admin_count: 1,
+      })),
+    }, {
+      calendarNavigationAllowed: true, clientsNavigationAllowed: true, staffNavigationAllowed: true,
+      staffAccessScriptPath: '/calendar/staff/client.js', manageAllowed: true,
+    }));
+  });
   app.get('/calendar/services', requireStaffSession({ service: sessionService, env: ENV }), (_req, res) => {
-    return res.status(200).type('html').send(renderServicesListPage({
+    const html = renderServicesListPage({
       authority: { displayName: 'Clinic Owner' }, query: '', status: 'active', offset: 0, pageSize: 30, hasMore: false,
       services: [
         { id: 71, name: 'Synthetic treatment', category_name: 'Massage', duration_minutes: 60, total_minutes: 60, price: '700.00', status: 'active', assigned_staff_count: 2, booking_eligibility: { eligible: true, clientBookableStaffCount: 2 } },
@@ -284,8 +303,31 @@ function createFixture() {
     }, {
       calendarNavigationAllowed: true, clientsNavigationAllowed: true, staffNavigationAllowed: true,
       staffAccessScriptPath: '/calendar/staff/client.js', manageAllowed: true,
+    });
+    return res.status(200).type('html').send(injectWorkspaceServiceCreateAction(html));
+  });
+  app.get('/calendar/reports', requireStaffSession({ service: sessionService, env: ENV }), (_req, res) => {
+    return res.status(200).type('html').send(renderReportsPage({
+      authority: { displayName: 'Clinic Owner', reportScope: 'all_business' }, selectedStaffId: null,
+      permittedStaff: [{ id: 31, displayName: 'Cedar Practitioner' }, { id: 32, displayName: 'Willow Practitioner' }],
+      period: { preset: '7d', startKey: '2026-08-30', endInclusiveKey: '2026-09-05', dayCount: 7 },
+      appointments: { operational: 9, allRecorded: 10, statusCounts: { scheduled: 5, completed: 4, cancelled: 1 } },
+      services: [{ name: 'Synthetic treatment', category: 'Massage', appointments: 7 }],
+      capacity: [{ name: 'Cedar Practitioner', scheduledMinutes: 1800, bookedMinutes: 420, blockedMinutes: 60, leaveMinutes: 0, remainingMinutes: 1320, utilisationPct: 23 }],
+      totals: { bookedMinutes: 420, remainingMinutes: 1320, utilisationPct: 23 }, clients: { uniqueClients: 8, newClients: 2, returningClients: 6 },
+      trend: { delta: 2, currentOperationalAppointments: 9, previousOperationalAppointments: 7 }, closures: 0,
     }));
   });
+  app.get('/calendar/clinic-hours', requireStaffSession({ service: sessionService, env: ENV }), (_req, res) => {
+    return res.status(200).type('html').send(renderClinicHoursPage({
+      authority: { displayName: 'Clinic Owner' }, revision: 'synthetic-revision', location: { name: 'Shiloh' },
+      days: [
+        { dayOfWeek: 0, name: 'Sunday', permanent: true, open: false },
+        ...['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map((name, index) => ({ dayOfWeek: index + 1, name, open: index < 5, startsLocal: '08:00', endsLocal: index === 5 ? '14:00' : '17:00' })),
+      ],
+    }));
+  });
+  app.get('/calendar/clinic-hours/client.js', (_req, res) => res.type('application/javascript').send("'use strict';"));
   app.get('/calendar/read-only', requireStaffSession({ service: sessionService, env: ENV }), (_req, res) => {
     const html = renderCalendarPage(calendarModel(), {
       clientNavigationAllowed: true,
@@ -314,6 +356,7 @@ const METRICS_EXPRESSION = `(() => {
     active:active?.textContent.trim()||'',
     minNavTargetHeight:targets.length?Math.min(...targets.map(node=>node.getBoundingClientRect().height)):0,
     navHeight:nav?.getBoundingClientRect().height||0,
+    navWidth:nav?.getBoundingClientRect().width||0,
     navRight:nav?.getBoundingClientRect().right||0,
     drawerOpen:Boolean(nav?.classList.contains('open')),
     menuHeight:menuToggle?.getBoundingClientRect().height||0,
@@ -334,11 +377,15 @@ const METRICS_EXPRESSION = `(() => {
     bookingRequestText:Array.from(document.querySelectorAll('[data-booking-request]')).map(node=>node.textContent.trim()).join(' '),
     bookingActionLabels:Array.from(document.querySelectorAll('[data-booking-action]')).map(node=>node.textContent.trim()),
     minBookingActionHeight:(()=>{const nodes=Array.from(document.querySelectorAll('[data-booking-action]'));return nodes.length?Math.min(...nodes.map(node=>node.getBoundingClientRect().height)):0;})(),
-    minDashboardActionHeight:(()=>{const nodes=Array.from(document.querySelectorAll('[data-dashboard-finalize]')).filter(visible);return nodes.length?Math.min(...nodes.map(node=>node.getBoundingClientRect().height)):0;})(),
+    minDashboardActionHeight:(()=>{const nodes=Array.from(document.querySelectorAll('[data-dashboard-finalize]'));return nodes.length?Math.min(...nodes.map(node=>node.getBoundingClientRect().height)):0;})(),
     dashboardCommunicationText:document.querySelector('[data-dashboard-communications-panel]')?.textContent.trim()||'',
     accountFooterVisible:visible(document.querySelector('[data-workspace-account-footer]')),
     accountFooterText:document.querySelector('[data-workspace-account-footer]')?.textContent.trim()||'',
     servicesCopy:document.querySelector('[data-services-list-view]')?.parentElement?.textContent.trim()||'',
+    addServiceVisible:visible(document.querySelector('[data-service-primary-action] a')),
+    addStaffVisible:visible(document.querySelector('[data-staff-primary-action] a')),
+    clinicSaveVisible:visible(document.querySelector('[data-clinic-hours-save]')),
+    dashboardAttentionBeforeToday:(()=>{const attention=document.querySelector('[data-dashboard-attention-panel]'),today=document.querySelector('[data-dashboard-today]');return attention&&today?attention.getBoundingClientRect().top<today.getBoundingClientRect().top:null;})(),
   };
 })()`;
 
@@ -388,7 +435,7 @@ async function main() {
     async function navigate(url) {
       await cdp.send('Page.navigate', { url });
       await poll(() => evaluate(cdp, 'document.readyState'), value => value === 'complete');
-      await poll(() => evaluate(cdp, `Array.from(document.querySelectorAll('[data-workspace-destination]')).filter(n=>n.tagName==='A'||n.classList.contains('active')).length`), value => value === 7);
+      await poll(() => evaluate(cdp, `Array.from(document.querySelectorAll('[data-workspace-destination]')).filter(n=>n.tagName==='A'||n.classList.contains('active')).length`), value => value === 8);
     }
     async function screenshot(name) {
       const result = await cdp.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false, fromSurface: true });
@@ -423,7 +470,8 @@ async function main() {
         if (openDrawer) {
           assert.equal(metrics.drawerOpen, true);
           assert.deepEqual(metrics.primary, ['Dashboard', 'Calendar', 'Clients', 'Messages']);
-          assert.deepEqual(metrics.secondary, ['Staff', 'Services', 'Reports']);
+          assert.deepEqual(metrics.secondary, ['Staff', 'Services', 'Reports', 'Clinic hours']);
+          assert.ok(metrics.navWidth >= 170 && metrics.navWidth <= 190, `${name} drawer width is not compact: ${metrics.navWidth}px`);
           assert.equal(metrics.moreVisible, false);
           assert.equal(metrics.moreOpen, false);
           assert.ok(metrics.minNavTargetHeight >= 44, `${name} has a drawer target below 44px`);
@@ -437,7 +485,7 @@ async function main() {
           assert.deepEqual(metrics.secondary, []);
         }
       } else {
-        assert.deepEqual([...metrics.primary, ...metrics.secondary], ['Dashboard', 'Calendar', 'Clients', 'Messages', 'Staff', 'Services', 'Reports']);
+        assert.deepEqual([...metrics.primary, ...metrics.secondary], ['Dashboard', 'Calendar', 'Clients', 'Messages', 'Staff', 'Services', 'Reports', 'Clinic hours']);
         assert.equal(metrics.moreVisible, false);
         assert.equal(metrics.accountFooterVisible, true, `${name} does not show the Desktop account footer`);
       }
@@ -458,12 +506,16 @@ async function main() {
         assert.ok(metrics.bookingActionLabels.includes('Propose alternative'));
         assert.ok(metrics.bookingActionLabels.includes('Cannot accommodate'));
         assert.ok(metrics.minBookingActionHeight >= (phone ? 44 : 36), `${name} has undersized booking-request actions`);
+        if (phone) assert.equal(metrics.dashboardAttentionBeforeToday, true, `${name} does not put Needs attention before the appointment list`);
       }
       if (urlPath.startsWith('/calendar/services')) {
         assert.match(metrics.servicesCopy, /Manage services, pricing and practitioner assignments\./);
         assert.match(metrics.servicesCopy, /Available for booking/);
         assert.doesNotMatch(metrics.servicesCopy, /Canonical offerings|Results are bounded|Booking ready/);
+        assert.equal(metrics.addServiceVisible, true, `${name} does not expose Add service at the top`);
       }
+      if (urlPath.startsWith('/calendar/team')) assert.equal(metrics.addStaffVisible, true, `${name} does not expose Add staff at the top`);
+      if (urlPath.startsWith('/calendar/clinic-hours')) assert.equal(metrics.clinicSaveVisible, true, `${name} does not expose the clinic-hours Save action`);
       return { name, phone, viewport: { width, height }, active: metrics.active, metrics, ...(await screenshot(name)) };
     }
 
@@ -472,7 +524,8 @@ async function main() {
     await poll(() => evaluate(cdp, 'location.pathname'), value => value === '/calendar/workspace');
     const screenshots = [];
     const destinations = [
-      ['dashboard', '/calendar/workspace'], ['calendar', '/calendar/read-only'], ['clients', '/calendar/clients'], ['messages', '/calendar/messages?view=all'], ['services', '/calendar/services'],
+      ['dashboard', '/calendar/workspace'], ['calendar', '/calendar/read-only'], ['clients', '/calendar/clients'], ['messages', '/calendar/messages?view=all'],
+      ['staff', '/calendar/team'], ['services', '/calendar/services'], ['reports', '/calendar/reports'], ['clinic-hours', '/calendar/clinic-hours'],
     ];
     for (const [name, urlPath] of destinations) screenshots.push(await proof({ name: `desktop-${name}`, path: urlPath, width: 1440, height: 960, phone: false }));
     const ownerDashboard = screenshots.find(item => item.name === 'desktop-dashboard').metrics;
@@ -491,6 +544,19 @@ async function main() {
     await cdp.send('Page.navigate', { url: `${origin}/proof` });
     await poll(() => evaluate(cdp, 'location.pathname'), value => value === '/calendar/workspace');
     screenshots.push(await proof({ name: 'phone-drawer-open', path: '/calendar/workspace', width: 390, height: 844, phone: true, openDrawer: true }));
+
+    const navigationSequence = [
+      ['staff', '/calendar/team'], ['services', '/calendar/services'], ['reports', '/calendar/reports'],
+      ['clinicHours', '/calendar/clinic-hours'], ['calendar', '/calendar/read-only'],
+    ];
+    await navigate(`${origin}/calendar/workspace`);
+    for (const [key, expectedPath] of navigationSequence) {
+      await evaluate(cdp, `document.querySelector('[data-workspace-drawer-toggle]').click();true`);
+      await poll(() => evaluate(cdp, `document.querySelector('[data-workspace-navigation-drawer]').classList.contains('open')`), Boolean);
+      await evaluate(cdp, `document.querySelector('[data-workspace-destination="${key}"]').click();true`);
+      await poll(() => evaluate(cdp, 'location.pathname'), value => value === expectedPath);
+      await poll(() => evaluate(cdp, `!document.querySelector('[data-workspace-navigation-drawer]').classList.contains('open')`), Boolean);
+    }
 
     assert.deepEqual(browserExceptions, []);
     assert.deepEqual(externalRequests, []);
