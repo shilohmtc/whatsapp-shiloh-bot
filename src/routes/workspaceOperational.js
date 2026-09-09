@@ -29,8 +29,8 @@ function setWorkspaceOperationalSecurityHeaders(res) {
 }
 
 function stabilizeDashboardShell(html) {
-  const style = '<style data-dashboard-shell-stability>@media(min-width:901px){.workspace-nav{position:sticky;top:0;height:100vh;align-self:start;overflow-y:auto}}@media(max-width:850px){.booking-request [data-booking-action]{min-height:46px!important}}</style>';
-  const source = String(html || '').replace(/data-booking-action=/g, 'style="min-height:46px" data-booking-action=');
+  const style = '<style data-dashboard-shell-stability>@media(min-width:901px){.workspace-nav{position:sticky;top:0;height:100vh;align-self:start;overflow-y:auto}}@media(max-width:700px){.booking-request .action-button{min-height:46px!important}}</style>';
+  const source = String(html || '');
   return source.includes('</head>') ? source.replace('</head>', `${style}</head>`) : source;
 }
 
