@@ -122,10 +122,14 @@ test('status-only webhook is processed and acknowledged while mixed inbound payl
   assert.equal(mixedResponse.statusCode, 0);
 });
 
-test('webhook route places status processing before the unchanged inbound controller', () => {
+test('webhook route keeps status processing first, bounded staff bootstrap second, and existing inbound controller last', () => {
   const routeSource = fs.readFileSync(path.join(__dirname, '../src/routes/webhook.js'), 'utf8');
   const inboundSource = fs.readFileSync(path.join(__dirname, '../src/controllers/webhookController.js'), 'utf8');
-  assert.match(routeSource, /router\.post\("\/webhook", processWhatsAppStatusWebhook, receiveWebhook\)/);
+  const statusAt = routeSource.indexOf('processWhatsAppStatusWebhook');
+  const bootstrapAt = routeSource.indexOf('staffWhatsAppPasskeyBootstrapMiddleware');
+  const inboundAt = routeSource.indexOf('receiveWebhook');
+  assert.ok(statusAt >= 0 && bootstrapAt > statusAt && inboundAt > bootstrapAt);
+  assert.match(routeSource, /router\.post\("\/webhook", processWhatsAppStatusWebhook, staffWhatsAppPasskeyBootstrapMiddleware, receiveWebhook\)/);
   assert.match(inboundSource, /if\(!value\?\.messages\)return res\.sendStatus\(200\)/);
 });
 
