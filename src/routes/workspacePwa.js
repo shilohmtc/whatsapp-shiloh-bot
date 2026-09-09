@@ -64,10 +64,10 @@ function pwaLaunchDestination(session) {
   return '/calendar/workspace';
 }
 
-function createWorkspacePwaRouter({ sessionService } = {}) {
+function createWorkspacePwaRouter({ sessionService, env = process.env } = {}) {
   if (!sessionService) throw new Error('Workspace PWA requires the existing staff browser session service');
   const router = express.Router();
-  const optionalSession = createOptionalCalendarSessionMiddleware({ service: sessionService });
+  const optionalSession = createOptionalCalendarSessionMiddleware({ service: sessionService, env });
 
   router.get('/manifest.webmanifest', (_req, res) => {
     setPublicAssetHeaders(res);
