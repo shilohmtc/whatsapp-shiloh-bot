@@ -28,8 +28,8 @@ function setWorkspaceOperationalSecurityHeaders(res) {
   res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; script-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'");
 }
 
-function stabilizeDashboardDesktopNavigation(html) {
-  const style = '<style data-dashboard-desktop-nav-stability>@media(min-width:901px){.workspace-nav{position:sticky;top:0;height:100vh;align-self:start;overflow-y:auto}}</style>';
+function stabilizeDashboardShell(html) {
+  const style = '<style data-dashboard-shell-stability>@media(min-width:901px){.workspace-nav{position:sticky;top:0;height:100vh;align-self:start;overflow-y:auto}}@media(max-width:700px){.workspace-main .booking-request .action-button{min-height:44px!important}}</style>';
   const source = String(html || '');
   return source.includes('</head>') ? source.replace('</head>', `${style}</head>`) : source;
 }
@@ -94,7 +94,7 @@ function createWorkspaceOperationalRouter({
         adminId: req.staffBrowserSession?.adminId,
         viewer: req.staffBrowserSession?.viewer,
       });
-      return res.status(200).type('html').send(stabilizeDashboardDesktopNavigation(renderDashboard(model, {
+      return res.status(200).type('html').send(stabilizeDashboardShell(renderDashboard(model, {
         staffAccessScriptPath: `${staffAccessPath}/client.js`,
       })));
     } catch (error) {
@@ -151,7 +151,7 @@ function createWorkspaceOperationalRouter({
 module.exports = {
   isWorkspaceOperationalEnabled,
   setWorkspaceOperationalSecurityHeaders,
-  stabilizeDashboardDesktopNavigation,
+  stabilizeDashboardShell,
   dashboardSafeError,
   dashboardMutationError,
   createWorkspaceOperationalRouter,
