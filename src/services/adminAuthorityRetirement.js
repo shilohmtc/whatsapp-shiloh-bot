@@ -1,5 +1,13 @@
 const { pool } = require('../db/pool');
 const { normalizePhone } = require('./clientIdentityOnboarding');
+const {
+  buildCalendarHandoffUrl,
+  calendarHandoffPublicOrigin,
+  createStaffCalendarHandoffService,
+  isCalendarHandoffAuthority,
+} = require('./staffCalendarHandoff');
+
+const staffWorkspaceHandoff = createStaffCalendarHandoffService();
 
 const CALENDAR_EXACT = new Set([
   'appointments',
@@ -76,6 +84,17 @@ const RETIRED_STAFF_EXACT = new Set([
 
 function normalizeAuthorityInput(value = '') {
   return String(value).trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function classifyWorkspaceEntry(value = '') {
+  const raw = String(value).trim();
+  if (/^(?:hi|hello|hey|howzit|hiya|good morning|good afternoon|good evening)[!. ]*$/i.test(raw)) {
+    return { kind: 'launcher' };
+  }
+  if (/^(?:workspace|open workspace|staff_open_workspace)$/i.test(raw)) {
+    return { kind: 'open' };
+  }
+  return null;
 }
 
 function classifyRetiredAdminAction(value = '') {
@@ -169,9 +188,42 @@ async function auditRetirement(admin, disposition, db = pool) {
   );
 }
 
-async function processRetiredAdminAuthorityMessage(sender, text, db = pool) {
+function workspaceLauncher(admin) {
+  const name = String(admin?.display_name || 'Shiloh staff').trim();
+  return {
+    handled: true,
+    admin,
+    interactive: {
+      type: 'button',
+      body: `*Shiloh Workspace 🌿*\n\nHello ${name}.`,
+      buttons: [{ id: 'staff_open_workspace', title: 'Open Workspace' }],
+    },
+  };
+}
+
+async function issueWorkspaceHandoff(sender, admin, handoffService = staffWorkspaceHandoff, env = process.env) {
+  if (!calendarHandoffPublicOrigin(env)) {
+    return { handled: true, admin, reply: 'Workspace access is not available right now. No WhatsApp mutation was attempted.' };
+  }
+  const issued = await handoffService.issueForWhatsapp({ whatsapp: sender });
+  if (!issued?.ok) {
+    return { handled: true, admin, reply: 'Workspace access is not available for this staff account. No WhatsApp mutation was attempted.' };
+  }
+  const url = buildCalendarHandoffUrl(issued.token, env);
+  if (!url) {
+    return { handled: true, admin, reply: 'Workspace access is not available right now. No WhatsApp mutation was attempted.' };
+  }
+  return {
+    handled: true,
+    admin,
+    reply: `*Open Workspace*\n\nTap this secure one-time link to open Shiloh Workspace:\n${url}\n\nIt expires shortly and can only be used once.`,
+  };
+}
+
+async function processRetiredAdminAuthorityMessage(sender, text, db = pool, options = {}) {
+  const workspaceEntry = classifyWorkspaceEntry(text);
   const disposition = classifyRetiredAdminAction(text);
-  if (!disposition) return { handled: false };
+  if (!workspaceEntry && !disposition) return { handled: false };
 
   const authority = await uniqueActiveAdmin(sender, db);
   if (authority.status === 'not_admin') return { handled: false };
@@ -181,6 +233,23 @@ async function processRetiredAdminAuthorityMessage(sender, text, db = pool) {
       disposition,
       reply: 'This staff action could not be authorized from the current WhatsApp identity. No action was taken.',
     };
+  }
+
+  if (workspaceEntry) {
+    if (!isCalendarHandoffAuthority(authority.admin)) {
+      return {
+        handled: true,
+        admin: authority.admin,
+        reply: 'Workspace access is not available for this staff account. No action was taken.',
+      };
+    }
+    if (workspaceEntry.kind === 'launcher') return workspaceLauncher(authority.admin);
+    return issueWorkspaceHandoff(
+      sender,
+      authority.admin,
+      options.handoffService || staffWorkspaceHandoff,
+      options.env || process.env,
+    );
   }
 
   await auditRetirement(authority.admin, disposition, db);
@@ -216,7 +285,10 @@ module.exports = {
   RETIRED_STAFF_EXACT,
   auditRetirement,
   classifyRetiredAdminAction,
+  classifyWorkspaceEntry,
+  issueWorkspaceHandoff,
   normalizeAuthorityInput,
   processRetiredAdminAuthorityMessage,
   uniqueActiveAdmin,
+  workspaceLauncher,
 };
