@@ -32,6 +32,8 @@ const SOURCE_DEFINITIONS = Object.freeze({
 });
 
 const CONTRACT_LIFECYCLE = Object.freeze({
+  booking_approval_request: 'retired',
+  booking_approval_outcome: 'retired',
   birthday_v1: 'retired',
   appointment_followup_legacy: 'retired',
   appointment_reminder_legacy: 'retired',

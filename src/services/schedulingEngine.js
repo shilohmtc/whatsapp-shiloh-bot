@@ -104,6 +104,8 @@ function aggregateAppointments(rows, permittedStaffIds) {
           externalId: service.externalId || service.external_id || null,
         })) : [],
         revision: row.updated_at ? new Date(row.updated_at).toISOString() : null,
+        bookingRequestState: row.booking_request_status || null,
+        bookingProposalExpiresAt: row.booking_proposal_expires_at || null,
         staff: [],
         staffIds: [],
       });
@@ -268,6 +270,7 @@ function createSchedulingEngine({
     const appointmentResult = await query(`/* SchedulingTimeline:appointments */
       SELECT a.id AS appointment_id,
              a.starts_at, a.ends_at, a.status, a.source AS record_source, a.updated_at,
+             aba.status AS booking_request_status,aba.proposal_expires_at AS booking_proposal_expires_at,
              COALESCE(c.display_name,a.source_client_name,'Client') AS client_name,
              COALESCE((SELECT string_agg(aps.service_name_snapshot,' + ' ORDER BY aps.position)
                          FROM appointment_services aps WHERE aps.appointment_id=a.id),a.title,'Appointment') AS service_name,
@@ -287,6 +290,7 @@ function createSchedulingEngine({
         LEFT JOIN clients c ON c.id=a.client_id
         JOIN appointment_staff ast
           ON ast.appointment_id=a.id AND ast.staff_id = ANY($3::bigint[])
+        LEFT JOIN appointment_booking_approvals aba ON aba.appointment_id=a.id
        WHERE a.status <> 'cancelled'
          AND a.starts_at < $2::timestamptz
          AND a.ends_at > $1::timestamptz

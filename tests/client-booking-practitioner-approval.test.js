@@ -3,117 +3,44 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const root = path.join(__dirname, '..');
-const approvalPath = path.join(root, 'src', 'services', 'clientBookingApproval.js');
-const schemaPath = path.join(root, 'src', 'services', 'clientBookingApprovalSchema.js');
-const policyPath = path.join(root, 'src', 'services', 'bookingPolicy.js');
-const availabilityPath = path.join(root, 'src', 'services', 'availabilityService.js');
-const confirmationPath = path.join(root, 'src', 'services', 'customerBookingConfirmation.js');
-const webhookPath = path.join(root, 'src', 'controllers', 'webhookController.js');
-const resetPath = path.join(root, 'src', 'services', 'adminTestClientReset.js');
-const jpMigrationPath = path.join(root, 'migrations', '012_add_jean_pierre_admin.sql');
+const root = path.resolve(__dirname, '..');
+const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
+const approval = read('src/services/clientBookingApproval.js');
+const schema = read('src/services/clientBookingApprovalSchema.js');
+const policy = read('src/services/bookingPolicy.js');
+const availability = read('src/services/availabilityService.js');
+const webhook = read('src/controllers/webhookController.js');
 
-const approval = fs.readFileSync(approvalPath, 'utf8');
-const schema = fs.readFileSync(schemaPath, 'utf8');
-const policy = fs.readFileSync(policyPath, 'utf8');
-const availability = fs.readFileSync(availabilityPath, 'utf8');
-const confirmation = fs.readFileSync(confirmationPath, 'utf8');
-const webhook = fs.readFileSync(webhookPath, 'utf8');
-const reset = fs.readFileSync(resetPath, 'utf8');
-const jpMigration = fs.readFileSync(jpMigrationPath, 'utf8');
-
-test('client booking completion is converted to a durable pending-approval hold before client delivery', () => {
+test('client booking completion creates the canonical unresolved request without messaging staff', () => {
   assert.match(policy, /ensureBookingApprovalInfrastructure/);
   assert.match(policy, /createPendingBookingApproval/);
-  assert.match(policy, /requestPractitionerApproval/);
-  assert.match(policy, /status: ["']pending_approval["']/);
-  assert.match(policy, /not yet confirmed/);
-  assert.doesNotMatch(policy, /Booking created successfully\s*[—-]\s*appointment/);
+  assert.match(policy, /status: ['"]pending_resolution['"]/);
+  assert.match(policy, /in Workspace/);
+  assert.doesNotMatch(policy, /requestPractitionerApproval|shiloh_booking_approval_request_v1/);
 });
 
-test('pending-approval client copy names the actual authorized approver rather than blindly naming the assigned practitioner', () => {
-  assert.match(policy, /notification\?*\.approver/);
-  assert.match(policy, /authorized approver/i);
-  assert.doesNotMatch(policy, /while \$\{staff\.staff_name_snapshot\} reviews the request/);
-  assert.doesNotMatch(policy, /until the practitioner explicitly approves or declines/i);
-});
-
-test('approval hold is inserted atomically with client appointment staff and has no automatic expiry', () => {
+test('approval trigger captures canonical request snapshots with no name-based policy', () => {
   assert.match(schema, /CREATE TRIGGER trg_client_booking_approval_hold/);
   assert.match(schema, /AFTER INSERT ON appointment_staff/);
-  assert.match(schema, /shiloh_client_whatsapp/);
+  assert.match(schema, /requested_client_id|requested_staff_id|requested_service_id|requested_revision/);
   assert.match(schema, /appointment_booking_approvals/);
-  assert.match(schema, /'pending'/);
-  assert.doesNotMatch(schema, /expires_at|expiry|expirePending|setTimeout|TTL/i);
-  assert.doesNotMatch(approval, /expires_at|expiry|expirePending|setTimeout|TTL/i);
+  assert.doesNotMatch(schema, /dummy test|jean-pierre|abigail|christel|marietjie/i);
+  assert.doesNotMatch(approval, /dummy test|jean-pierre|abigail|christel|marietjie/i);
 });
 
-test('pending approval remains an availability conflict until an explicit decision', () => {
+test('unresolved request remains a canonical appointment conflict until explicit resolution', () => {
   assert.match(availability, /a\.status <> 'cancelled'/);
-  assert.match(approval, /status[^\n]*(pending|approved|declined)/i);
-});
-
-test('Dummy Test historical booking approval remains guarded even though Dummy reset eligibility is retired', () => {
-  assert.doesNotMatch(reset, /dummy_test:\s*'Dummy Test'/);
-  assert.doesNotMatch(reset, /Reset test client (?:CRM )?Dummy Test/i);
-  assert.match(approval, /resolveDummyTestApprovalPolicy/);
-  assert.match(approval, /Dummy Test approval blocked/i);
-  assert.match(approval, /Jean-Pierre/i);
-  assert.match(approval, /business_admin/i);
-  assert.match(approval, /all_business/i);
-  assert.match(approval, /all_services/i);
-  assert.match(schema, /LOWER\(TRIM\(COALESCE\(booking_client_name, ''\)\)\) = 'dummy test'/i);
-  assert.match(schema, /COUNT\(\*\)::int[\s\S]*FROM clients c[\s\S]*dummy test/i);
-  assert.match(schema, /Jean-Pierre/i);
-  assert.match(schema, /business_admin/i);
-  assert.match(schema, /RAISE EXCEPTION/i);
-});
-
-test('Dummy Test approval targets Jean-Pierre admin identity without requiring a clinic staff record', () => {
-  assert.match(jpMigration, /staff_id may remain NULL/i);
-  assert.match(jpMigration, /VALUES\s*\(\s*NULL,\s*'Jean-Pierre'/is);
-  assert.match(schema, /approver_admin_id/i);
-  assert.match(schema, /REFERENCES staff_admin_accounts\(id\)/i);
-  assert.match(schema, /approver_staff_id BIGINT REFERENCES staff\(id\)/i);
-  assert.doesNotMatch(schema, /approver_staff_id BIGINT NOT NULL REFERENCES staff\(id\)/i);
-  assert.match(schema, /required_approver_admin_id/i);
-  assert.match(schema, /MIN\(saa\.id\)/i);
-  assert.doesNotMatch(schema, /JOIN staff st ON st\.id = saa\.staff_id[\s\S]*Jean-Pierre/i);
-  assert.match(approval, /approverAdminId|approver_admin_id/);
-  assert.match(approval, /Number\(context\.approver_admin_id\) === Number\(admin\.id\)/);
-});
-
-test('normal Abigail bookings still allow either Abigail or Christel to make the first authoritative decision', () => {
-  assert.match(approval, /approver_staff_id/);
-  assert.match(approval, /observer_staff_id/);
-  assert.match(approval, /Abigail/i);
-  assert.match(approval, /Christel/i);
-  assert.match(approval, /isAuthorizedDecisionMaker|authorizedDecisionMaker/i);
-  assert.match(approval, /observer_staff_id[^\n]*admin\.staff_id|admin\.staff_id[^\n]*observer_staff_id/);
-  assert.match(approval, /observerStaffId|observer_staff_id/);
-  assert.match(approval, /sendApprovalRequest/);
-  assert.doesNotMatch(approval, /no approval is required from you/i);
-});
-
-test('normal Marietjie and Christel bookings remain self-approval only', () => {
-  assert.match(approval, /Number\(context\.approver_staff_id\) === Number\(admin\.staff_id\)/);
-  assert.match(approval, /context\.observer_staff_id/);
-});
-
-test('approval unlocks final customer confirmation while decline releases the canonical held slot', () => {
+  assert.match(approval, /pending|awaiting_client_confirmation/);
   assert.match(approval, /sendCustomerBookingConfirmationForAppointment/);
-  assert.match(approval, /status\s*=\s*'approved'/);
-  assert.match(approval, /status\s*=\s*'declined'/);
-  assert.match(approval, /SET status\s*=\s*'cancelled'/);
-  assert.doesNotMatch(approval, /cancelBookingEvent|cancelPractitionerBookingEvent|appointment_calendar_events/);
-  assert.match(confirmation, /Booking confirmed/);
+  assert.match(approval, /SET status='declined'/);
+  assert.match(approval, /SET status='approved'/);
+  assert.doesNotMatch(approval, /appointment_calendar_events|cancelBookingEvent|cancelPractitionerBookingEvent/);
 });
 
-test('approval decisions are authorized through WhatsApp admin identity and routed before generic admin handling', () => {
-  assert.match(approval, /staff_admin_accounts/);
-  assert.match(approval, /normalized_whatsapp/);
-  assert.match(webhook, /processClientBookingApprovalMessage/);
-  const approvalRoute = webhook.indexOf('processClientBookingApprovalMessage(from,text)');
-  const genericAdminRoute = webhook.indexOf('processAdminInteractiveMenuMessage(from,text)');
-  assert.ok(approvalRoute >= 0 && genericAdminRoute >= 0 && approvalRoute < genericAdminRoute);
+test('client proposal actions route before retired staff authority and bind exact payloads', () => {
+  assert.match(webhook, /processClientBookingProposalMessage/);
+  assert.match(approval, /booking_proposal_accept_/);
+  assert.match(approval, /booking_proposal_another_/);
+  assert.ok(webhook.indexOf('processClientBookingProposalMessage(from,text)') < webhook.indexOf('processAdminRetiredAuthorityMessage(from,text)'));
+  assert.doesNotMatch(webhook, /processClientBookingApprovalMessage/);
 });

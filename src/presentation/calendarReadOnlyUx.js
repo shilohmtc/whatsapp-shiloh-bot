@@ -102,6 +102,7 @@ function eventTitle(item) {
 }
 
 function eventKindLabel(item) {
+  if (item.kind === 'appointment' && ['pending', 'awaiting_client_confirmation'].includes(String(item.bookingRequestState || ''))) return 'Booking request';
   switch (item.kind) {
     case 'appointment': return 'Appointment';
     case 'calendar_block': return 'Block';
@@ -114,7 +115,9 @@ function eventKindLabel(item) {
 
 function eventDetailPieces(item, model) {
   const pieces = [];
-  if (item.kind === 'appointment' && item.status) pieces.push(String(item.status).replace(/_/g, ' '));
+  if (item.kind === 'appointment' && item.bookingRequestState === 'pending') pieces.push('Needs staff resolution');
+  else if (item.kind === 'appointment' && item.bookingRequestState === 'awaiting_client_confirmation') pieces.push('Awaiting client confirmation');
+  else if (item.kind === 'appointment' && item.status) pieces.push(String(item.status).replace(/_/g, ' '));
   if (item.kind === 'calendar_block' && item.blockType) pieces.push(String(item.blockType).replace(/_/g, ' '));
   if ((item.kind === 'approved_leave' || item.kind === 'operational_leave') && item.reason) pieces.push(item.reason);
   return pieces.join(' • ');
@@ -174,6 +177,7 @@ function appointmentOperationScope(item, model) {
 }
 
 function appointmentOperations(item, model) {
+  if (['pending', 'awaiting_client_confirmation'].includes(String(item.bookingRequestState || ''))) return [];
   if (!appointmentOperationScope(item, model)) return [];
   return ['appointment:reschedule', 'appointment:cancel', 'appointment:reassign']
     .filter((operation) => operationEnabled(model, operation));
@@ -202,6 +206,9 @@ function mutationAttributes(item, model) {
 }
 
 function renderMutationButton(item, model) {
+  if (item.kind === 'appointment' && ['pending', 'awaiting_client_confirmation'].includes(String(item.bookingRequestState || ''))) {
+    return `<a class="event-operation" href="/calendar/workspace#booking-request-${escapeHtml(item.id)}">Resolve request</a>`;
+  }
   if (!mutationEnabled(model)) return '';
   const action = item.kind === 'appointment' && appointmentOperations(item, model).length
     ? 'manage-appointment'

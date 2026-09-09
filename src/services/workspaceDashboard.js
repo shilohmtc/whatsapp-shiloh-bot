@@ -9,9 +9,13 @@ const {
 const { finalizeAppointment } = require('./adminAppointmentFinalization');
 const { canCertifyAppointment } = require('./attendanceFinalizationAuthority');
 const { dateKeyInBusinessTimezone } = require('./operationalCalendar');
+const bookingRequestResolution = require('./clientBookingApproval');
 
 const FINAL_STATUSES = new Set(['completed', 'cancelled', 'no_show']);
 const OWNER_ROLES = new Set(['owner', 'business_admin']);
+const NO_BOOKING_REQUESTS = {
+  async listUnresolvedBookingRequests() { return []; },
+};
 
 class WorkspaceDashboardError extends Error {
   constructor(code, message, httpStatus) {
@@ -130,6 +134,7 @@ function createWorkspaceDashboardService({
   resolvePrincipal = adminId => resolveCalendarAuthority(pool, adminId),
   finalizeAppointmentFn = finalizeAppointment,
   canCertifyAppointmentFn = canCertifyAppointment,
+  bookingRequestService = NO_BOOKING_REQUESTS,
 } = {}) {
   if (!calendarService || typeof calendarService.buildModel !== 'function') {
     throw new Error('Workspace Dashboard requires canonical CalendarReadOnlyUx authority');
@@ -140,6 +145,7 @@ function createWorkspaceDashboardService({
   if (typeof resolvePrincipal !== 'function') throw new Error('Workspace Dashboard requires current Calendar principal resolution');
   if (typeof finalizeAppointmentFn !== 'function') throw new Error('Workspace Dashboard requires the canonical appointment finalizer');
   if (typeof canCertifyAppointmentFn !== 'function') throw new Error('Workspace Dashboard requires canonical attendance-certification authority');
+  if (!bookingRequestService || typeof bookingRequestService.listUnresolvedBookingRequests !== 'function') throw new Error('Workspace Dashboard requires canonical booking-request resolution');
 
   async function resolveAuthority(adminId, viewer) {
     const principal = await resolvePrincipal(adminId);
@@ -180,6 +186,7 @@ function createWorkspaceDashboardService({
       .filter(item => ['completed', 'no_show'].includes(String(item.status || '').toLowerCase()))
       .sort((a, b) => new Date(b.endsAt).getTime() - new Date(a.endsAt).getTime())
       .slice(0, 6);
+    const bookingRequests = await bookingRequestService.listUnresolvedBookingRequests({ principal, now });
 
     let communications = null;
     let communicationsUnavailable = false;
@@ -204,6 +211,7 @@ function createWorkspaceDashboardService({
         ? groupOwnerAppointments(appointments, calendar.timeline?.staff || [])
         : [],
       awaitingFinalization,
+      bookingRequests,
       recentActivity,
       closures: calendar.timeline?.closures || [],
       communications,
@@ -235,10 +243,19 @@ function createWorkspaceDashboardService({
     throw new WorkspaceDashboardError('WORKSPACE_DASHBOARD_FINALIZE_INVALID', 'This appointment outcome cannot be recorded.', 400);
   }
 
-  return { buildModel, finalizeVisit };
+  async function resolveBookingRequest({ adminId, viewer, appointmentId, expectedRevision, action, startsAt, staffId, serviceId } = {}) {
+    const { principal } = await resolveAuthority(adminId, viewer);
+    const input = { principal, appointmentId, expectedRevision };
+    if (action === 'accept' && typeof bookingRequestService.acceptRequestedAppointment === 'function') return bookingRequestService.acceptRequestedAppointment(input);
+    if (action === 'propose' && typeof bookingRequestService.proposeAlternative === 'function') return bookingRequestService.proposeAlternative({ ...input, startsAt, staffId, serviceId });
+    if (action === 'cannot_accommodate' && typeof bookingRequestService.cannotAccommodate === 'function') return bookingRequestService.cannotAccommodate(input);
+    throw new WorkspaceDashboardError('WORKSPACE_BOOKING_REQUEST_INVALID', 'Choose a valid booking-request resolution.', 400);
+  }
+
+  return { buildModel, finalizeVisit, resolveBookingRequest };
 }
 
-const service = createWorkspaceDashboardService();
+const service = createWorkspaceDashboardService({ bookingRequestService: bookingRequestResolution });
 
 module.exports = {
   WorkspaceDashboardError,

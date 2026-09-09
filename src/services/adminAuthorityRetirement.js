@@ -84,6 +84,12 @@ function classifyRetiredAdminAction(value = '') {
   if (!normalized) return null;
 
   if (
+    /^(?:booking_approval_(?:approve|decline)_|resend_booking_approval_)\d+$/i.test(raw)
+    || /^admin_(?:open_(?:calendar|menu)|action_(?:pending_approvals|today|tomorrow|reports|earnings))$/i.test(raw)
+    || /^(?:admin|admin menu|pending approvals|reports|earnings)$/i.test(raw)
+  ) return { kind: 'retired', reason: 'workspace_replaces_whatsapp_admin' };
+
+  if (
     normalized === 'admin_retired_named_earnings'
     || /^(?:christel|abigail|marietjie)(?:'s)? earnings(?:\s|$)/i.test(raw)
     || /^admin_(?:christel|abigail|marietjie)_earnings_/i.test(raw)
@@ -123,7 +129,7 @@ function classifyRetiredAdminAction(value = '') {
     || CALENDAR_EXACT.has(normalized)
     || /^(?:admin_menu_appointments|admin_section_(?:appointments|schedule))$/i.test(raw)
     || /^admin_action_(?:availability|booking|manage_booking|schedule)$/i.test(raw)
-    || /^admin_appointment_(?:availability|booking|manage|block_time)$/i.test(raw)
+    || /^admin_appointment_(?:availability|booking|manage|block_time|today|tomorrow)$/i.test(raw)
     || /^(?:admin_booking_|admin_block_|schedule_(?:date_|leave_|own_|request_|slot|slots)|booking_(?:back|menu|select_))/i.test(raw)
     || /^(?:manage_|cancel_(?:back|confirm)$)/i.test(raw)
     || /^(?:check availability|available slots|next available|book client)\b/i.test(raw)
@@ -184,7 +190,7 @@ async function processRetiredAdminAuthorityMessage(sender, text, db = pool) {
       handled: true,
       admin: authority.admin,
       disposition,
-      reply: 'That WhatsApp staff action has been retired. No action was taken. Send *Menu* for the current Shiloh options.',
+      reply: 'That WhatsApp staff action has been retired. No action was taken. Use Shiloh Workspace for staff operations.',
     };
   }
 
@@ -197,7 +203,12 @@ async function processRetiredAdminAuthorityMessage(sender, text, db = pool) {
     };
   }
 
-  return { handled: true, admin: authority.admin, disposition };
+  return {
+    handled: true,
+    admin: authority.admin,
+    disposition,
+    reply: 'That WhatsApp staff action has moved to Shiloh Workspace. No action was taken here.',
+  };
 }
 
 module.exports = {

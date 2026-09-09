@@ -4,7 +4,9 @@ const { updateProfileFromMessage } = require("../services/profileExtractor");
 const { CLINIC_REDIRECT, evaluateClinicScope } = require("../services/scopeGuard");
 const { processBookingMessage } = require("../services/bookingIntent");
 const { processBookingPolicyMessage, sanitizeBookingReply } = require("../services/bookingPolicy");
-const { processClientBookingApprovalMessage } = require("../services/clientBookingApproval");
+const { processClientBookingProposalMessage } = require("../services/clientBookingApproval");
+const { processRescheduleApprovalDecision } = require("../services/clientRescheduleApproval");
+const { reconcileStalePendingRescheduleHolds } = require("../services/clientRescheduleHoldReconciliation");
 const { commandForClientBookingButton, decorateClientBookingResult } = require("../services/clientBookingInteractive");
 const { processClientAvailabilityMessage } = require("../services/clientBookingAvailability");
 const { applyAvailabilityAwareDateChoices } = require("../services/clientBookingDateChoices");
@@ -19,9 +21,8 @@ const { processClientIdentityMessage } = require("../services/clientIdentityOnbo
 const { processClientTransitionWelcome } = require("../services/clientTransitionWelcome");
 const { processClientServiceFamilyMessage } = require("../services/clientServiceFamilyDiscovery");
 const { processClientDiscoveryMessage } = require("../services/clientDiscoveryPackages");
-const { processAdminInteractiveMenuMessage, processAdminRetiredAuthorityMessage } = require("../services/adminInteractiveMenu");
+const { processRetiredAdminAuthorityMessage: processAdminRetiredAuthorityMessage } = require("../services/adminAuthorityRetirement");
 const { hybridizeChoiceInteractive } = require("../presentation/whatsappChoicePresentation");
-const { commandForAdminButton } = require("../services/adminEarningsButtons");
 const { forceMatchedClientNameConfirmation } = require("../services/identityOnboardingGuard");
 const logger = require("../lib/logger");
 function maskPhone(phone = "") { return phone.length > 4 ? `***${phone.slice(-4)}` : "***"; }
@@ -30,15 +31,15 @@ function inboundText(message){
   if(message?.type==="text") return message.text?.body?.trim()||null;
   if(message?.type==="button") {
     const id=message.button?.payload?.trim()||message.button?.text?.trim()||'';
-    return commandForAdminButton(id)||commandForClientBookingButton(id)||id||null;
+    return commandForClientBookingButton(id)||id||null;
   }
   if(message?.type==="interactive"&&message.interactive?.type==="button_reply") {
     const id=message.interactive.button_reply?.id?.trim()||'';
-    return commandForAdminButton(id)||commandForClientBookingButton(id)||id||null;
+    return commandForClientBookingButton(id)||id||null;
   }
   if(message?.type==="interactive"&&message.interactive?.type==="list_reply") {
     const id=message.interactive.list_reply?.id?.trim()||'';
-    return commandForAdminButton(id)||id||null;
+    return id||null;
   }
   return null;
 }
@@ -61,9 +62,10 @@ async function sendAdminResult(to,result){
 exports.verifyWebhook = (req,res)=>{const mode=req.query["hub.mode"],token=req.query["hub.verify_token"],challenge=req.query["hub.challenge"];if(mode==="subscribe"&&token===process.env.VERIFY_TOKEN){(req.log||logger).info("WhatsApp webhook verified");return res.status(200).send(challenge);}(req.log||logger).warn("WhatsApp webhook verification rejected");return res.sendStatus(403);};
 exports.receiveWebhook=async(req,res)=>{const log=req.log||logger;try{const value=req.body.entry?.[0]?.changes?.[0]?.value;if(!value?.messages)return res.sendStatus(200);const message=value.messages[0];const from=message.from,text=inboundText(message);if(!text){log.info({messageType:message.type},"Ignoring unsupported or unknown WhatsApp message");return res.sendStatus(200);}if(!from){log.warn("Received WhatsApp message without sender");return res.sendStatus(200);}log.info({from:maskPhone(from),messageType:message.type},"Processing incoming WhatsApp message");try{
 const language=await guardEnglishOnly(text);if(!language.allowed){log.info({from:maskPhone(from)},"Rejected non-English WhatsApp message");await sendWhatsAppMessage(from,language.reply);return res.sendStatus(200);}
-const bookingApproval=await processClientBookingApprovalMessage(from,text);if(bookingApproval.handled){log.info({from:maskPhone(from),status:bookingApproval.status||null},"Handled practitioner booking approval decision");await sendAdminResult(from,bookingApproval);return res.sendStatus(200);}
+const bookingProposal=await processClientBookingProposalMessage(from,text);if(bookingProposal.handled){log.info({from:maskPhone(from),status:bookingProposal.status||null},"Handled client booking proposal response");await sendAdminResult(from,bookingProposal);return res.sendStatus(200);}
+if(/^reschedule_approval_(?:approve|decline)_\d+$/i.test(String(text||'').trim()))await reconcileStalePendingRescheduleHolds();
+const rescheduleApproval=await processRescheduleApprovalDecision(from,text);if(rescheduleApproval.handled){log.info({from:maskPhone(from),status:rescheduleApproval.status||null},"Handled retained appointment-reschedule approval decision");await sendAdminResult(from,rescheduleApproval);return res.sendStatus(200);}
 const retiredAdminAuthority=await processAdminRetiredAuthorityMessage(from,text);if(retiredAdminAuthority.handled){log.info({from:maskPhone(from),disposition:retiredAdminAuthority.disposition?.kind||null},"Handled retired WhatsApp staff authority safely");await sendAdminResult(from,retiredAdminAuthority);return res.sendStatus(200);}
-const adminMobile=await processAdminInteractiveMenuMessage(from,text);if(adminMobile.handled){await sendAdminResult(from,adminMobile);return res.sendStatus(200);}
 const customerExperience=await processCustomerExperienceMessage(from,text);if(customerExperience.handled){await sendAdminResult(from,customerExperience);return res.sendStatus(200);}
 const customerCare=await processCustomerCareMessage(from,text);if(customerCare.handled){await sendAdminResult(from,customerCare);return res.sendStatus(200);}
 const transitionWelcome=await processClientTransitionWelcome(from,text);if(transitionWelcome.handled){await sendAdminResult(from,transitionWelcome);return res.sendStatus(200);}

@@ -27,12 +27,10 @@ test('service trends are permission gated, audited and descriptive only',()=>{
   assert.doesNotMatch(service,/UPDATE\s+appointments|DELETE\s+FROM\s+appointments|INSERT\s+INTO\s+appointments/i);
 });
 
-test('service trends route before the terminal retained staff router',()=>{
+test('service trends remain technical-only after WhatsApp Admin retirement',()=>{
   const interactive = fs.readFileSync(path.join(__dirname,'..','src','services','adminInteractiveMenu.js'),'utf8');
-  assert.match(webhook,/processAdminInteractiveMenuMessage\(from,text\)/);
-  const gate = interactive.indexOf('processAdminMobileMenuMessage(sender, text)');
-  const trends = interactive.indexOf('processAdminServiceTrendsMessage(sender, text)');
-  const fallback = interactive.indexOf('That staff WhatsApp action is unavailable');
-  assert.ok(gate >= 0 && trends > gate && fallback > trends);
+  assert.doesNotMatch(webhook,/processAdminInteractiveMenuMessage|processAdminServiceTrendsMessage/);
+  assert.doesNotMatch(interactive,/processAdminServiceTrendsMessage/);
+  assert.match(interactive,/processRetiredAdminAuthorityMessage/);
   assert.doesNotMatch(webhook,/processAdminAssistantMessage/);
 });

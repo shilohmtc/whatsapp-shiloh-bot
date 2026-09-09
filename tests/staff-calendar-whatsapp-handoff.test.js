@@ -10,10 +10,6 @@ const {
   createStaffCalendarHandoffService,
 } = require('../src/services/staffCalendarHandoff');
 const {
-  isWorkspaceLauncherTerm,
-  workspaceLauncherInteractive,
-} = require('../src/services/adminInteractiveMenu');
-const {
   renderStaffCalendarHandoffPage,
   staffCalendarHandoffClientScript,
 } = require('../src/presentation/staffCalendarHandoffUx');
@@ -155,20 +151,10 @@ function deterministicRandomBytes() {
   return (size) => Buffer.alloc(size, value++);
 }
 
-test('Workspace launcher uses Open Workspace while preserving Calendar command compatibility', () => {
-  const launcher = workspaceLauncherInteractive({ display_name: 'Synthetic Staff' });
-  assert.equal(launcher.type, 'button');
-  assert.deepEqual(launcher.buttons.map((button) => [button.id, button.title]), [
-    ['admin_open_calendar', 'Open Workspace'],
-    ['admin_open_menu', 'Admin'],
-  ]);
-  assert.equal(isWorkspaceLauncherTerm('Open Workspace'), false);
-  assert.equal(isWorkspaceLauncherTerm('Open Calendar'), false);
-  assert.equal(isWorkspaceLauncherTerm('Admin'), false);
+test('WhatsApp Workspace launcher is retired while the technical handoff service remains bounded', () => {
   const source = read('src/services/adminInteractiveMenu.js');
-  assert.match(source, /admin_open_calendar\|open workspace\|workspace\|open calendar\|calendar/);
-  assert.match(source, /\*Open Workspace\*/);
-  assert.match(source, /issueCalendarHandoffForSender\(sender, admin\)/);
+  assert.match(source, /processRetiredAdminAuthorityMessage/);
+  assert.doesNotMatch(source, /workspaceLauncherInteractive|issueCalendarHandoffForSender|admin_open_calendar/);
 });
 
 test('canonical inbound WhatsApp viewer gets hash-only short-lived handoff and one successful session exchange', async () => {

@@ -45,5 +45,5 @@ test('preload starts schema verification and gated table paths await it', () => 
   assert.match(patch, /Client reschedule approval schema verified/);
   assert.match(patch, /Client reschedule approval schema initialization failed; feature remains unusable/);
   const awaits = patch.match(/await schemaReady;/g) || [];
-  assert.ok(awaits.length >= 4, `expected gated paths to await schema readiness, found ${awaits.length}`);
+  assert.ok(awaits.length >= 3, `expected retained gated paths to await schema readiness, found ${awaits.length}`);
 });

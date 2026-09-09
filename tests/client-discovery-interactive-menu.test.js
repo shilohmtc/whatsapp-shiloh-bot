@@ -72,7 +72,8 @@ test('client service and practitioner selections are revalidated before entering
 
 test('non-admin interactive button IDs survive inbound normalization', () => {
   assert.match(webhook, /button_reply[\s\S]*commandForClientBookingButton\(id\)[\s\S]*\|\|id\|\|null/);
-  assert.match(webhook, /list_reply[\s\S]*commandForAdminButton\(id\)\|\|id\|\|null/);
+  assert.match(webhook, /list_reply[\s\S]*return id\|\|null/);
+  assert.doesNotMatch(webhook, /commandForAdminButton/);
 });
 
 test('client discovery runs after identity handling but before scope and booking fallthrough', () => {

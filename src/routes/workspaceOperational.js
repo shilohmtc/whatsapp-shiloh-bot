@@ -28,6 +28,12 @@ function setWorkspaceOperationalSecurityHeaders(res) {
   res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; script-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'");
 }
 
+function stabilizeDashboardShell(html) {
+  const style = '<style data-dashboard-shell-stability>@media(min-width:901px){.workspace-nav{position:sticky;top:0;height:100vh;align-self:start;overflow-y:auto}}@media(max-width:700px){.booking-request .action-button{min-height:46px!important}}</style>';
+  const source = String(html || '');
+  return source.includes('</head>') ? source.replace('</head>', `${style}</head>`) : source;
+}
+
 function dashboardSafeError(error) {
   if (Number(error?.httpStatus) === 403) return { status: 403, message: 'Your authenticated Shiloh access does not permit the operational Dashboard.' };
   return { status: 503, message: 'Canonical operational Dashboard data is temporarily unavailable.' };
@@ -38,7 +44,7 @@ function dashboardMutationError(error) {
   return {
     status,
     code: String(error?.code || 'WORKSPACE_DASHBOARD_UNAVAILABLE'),
-    message: status === 503 ? 'Canonical appointment finalization is temporarily unavailable.' : error.message,
+    message: status === 503 ? 'Canonical Workspace operation is temporarily unavailable.' : error.message,
   };
 }
 
@@ -88,9 +94,9 @@ function createWorkspaceOperationalRouter({
         adminId: req.staffBrowserSession?.adminId,
         viewer: req.staffBrowserSession?.viewer,
       });
-      return res.status(200).type('html').send(renderDashboard(model, {
+      return res.status(200).type('html').send(stabilizeDashboardShell(renderDashboard(model, {
         staffAccessScriptPath: `${staffAccessPath}/client.js`,
-      }));
+      })));
     } catch (error) {
       const safe = dashboardSafeError(error);
       return res.status(safe.status).type('html').send(renderUnavailable({ message: safe.message }));
@@ -113,12 +119,39 @@ function createWorkspaceOperationalRouter({
     }
   });
 
+  async function bookingRequestAction(req, res, action) {
+    try {
+      const result = await dashboardService.resolveBookingRequest({
+        adminId: req.staffBrowserSession?.adminId,
+        viewer: req.staffBrowserSession?.viewer,
+        appointmentId: req.params.appointmentId,
+        action,
+        expectedRevision: req.body?.expectedRevision,
+        startsAt: req.body?.startsAt,
+        staffId: req.body?.staffId,
+        serviceId: req.body?.serviceId,
+      });
+      return res.status(200).json(result);
+    } catch (error) {
+      const safe = dashboardMutationError(error);
+      return res.status(safe.status).json({ error: safe.message, code: safe.code, requestId: req.id });
+    }
+  }
+
+  router.post('/booking-requests/:appointmentId/accept', sameOrigin, requireCsrf,
+    (req, res) => bookingRequestAction(req, res, 'accept'));
+  router.post('/booking-requests/:appointmentId/propose', sameOrigin, requireCsrf,
+    (req, res) => bookingRequestAction(req, res, 'propose'));
+  router.post('/booking-requests/:appointmentId/cannot_accommodate', sameOrigin, requireCsrf,
+    (req, res) => bookingRequestAction(req, res, 'cannot_accommodate'));
+
   return router;
 }
 
 module.exports = {
   isWorkspaceOperationalEnabled,
   setWorkspaceOperationalSecurityHeaders,
+  stabilizeDashboardShell,
   dashboardSafeError,
   dashboardMutationError,
   createWorkspaceOperationalRouter,

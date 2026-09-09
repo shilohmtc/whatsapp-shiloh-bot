@@ -1,6 +1,7 @@
 const { pool } = require('../db/pool');
 const { checkClinicHours } = require('./clinicHours');
 const { checkAuthoritativeSchedule } = require('./adminAvailability');
+const { pendingBookingProposalConflicts } = require('./bookingRequestHolds');
 const { sendWhatsAppTemplate } = require('./whatsapp');
 const {
   IDENTITY_MODELS,
@@ -232,6 +233,14 @@ async function validateCandidate({ db = pool, appointment, proposedStartsAt, pro
     excludeRequestId,
   });
   if (holds.length) return { ok: false, reason: 'reschedule_hold_conflict' };
+  const bookingProposalHolds = await pendingBookingProposalConflicts({
+    db,
+    staffId: appointment.staff_id,
+    startsAt: proposedStartsAt,
+    endsAt: proposedEndsAt,
+    excludeAppointmentId: appointment.id,
+  });
+  if (bookingProposalHolds.length) return { ok: false, reason: 'booking_proposal_hold_conflict' };
   return { ok: true };
 }
 
@@ -242,6 +251,7 @@ function requestFailureReply(reason, staffName = 'the practitioner') {
     staff_schedule: `${staffName} is not available at that requested time.`,
     crm_conflict: 'That requested time is no longer available.',
     reschedule_hold_conflict: 'That requested time is already being held for another pending change.',
+    booking_proposal_hold_conflict: 'That requested time is already being held for a client booking proposal.',
     complex_practitioner_setup: 'This appointment has a complex practitioner setup, so the clinic team needs to help reschedule it safely.',
     complex_service_setup: 'This appointment has a complex service setup, so the clinic team needs to help reschedule it safely.',
     approver_whatsapp_unavailable: `I can’t safely send ${staffName} the required approval request right now.`,

@@ -5,7 +5,6 @@ const {
   featureEnabled,
   isClientConfirmation,
   createPendingRescheduleRequest,
-  processRescheduleApprovalDecision,
   supersedePendingRescheduleForAppointment,
 } = require('../services/clientRescheduleApproval');
 const {
@@ -53,7 +52,6 @@ adminAvailability.checkAvailability = async function checkAvailabilityWithResche
 
 // Load downstream services only after adminAvailability exports have been wrapped.
 const appointmentChange = require('../services/appointmentChange');
-const bookingApproval = require('../services/clientBookingApproval');
 
 const originalProcessAppointmentChangeMessage = appointmentChange.processAppointmentChangeMessage;
 appointmentChange.processAppointmentChangeMessage = async function practitionerApprovedClientReschedule(phone, text, ...rest) {
@@ -107,17 +105,4 @@ rescheduleAvailability.processClientRescheduleAvailabilityMessage = async functi
       'Your current appointment remains confirmed. The requested new time will only replace it after the practitioner approves the change.'
     );
   return { ...result, interactive: { ...result.interactive, body: nextBody, buttons: nextButtons } };
-};
-
-const originalProcessBookingApprovalMessage = bookingApproval.processClientBookingApprovalMessage;
-bookingApproval.processClientBookingApprovalMessage = async function bookingOrRescheduleApproval(sender, text, ...rest) {
-  const isRescheduleDecision = /^reschedule_approval_(?:approve|decline)_\d+$/i.test(String(text || '').trim());
-  if (isRescheduleDecision) {
-    await schemaReady;
-    // Approval/decline is a mutation boundary, so stale sibling holds may be retired here safely.
-    await reconcileStalePendingRescheduleHolds();
-  }
-  const reschedule = await processRescheduleApprovalDecision(sender, text);
-  if (reschedule.handled) return reschedule;
-  return originalProcessBookingApprovalMessage(sender, text, ...rest);
 };

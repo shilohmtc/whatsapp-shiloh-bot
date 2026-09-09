@@ -27,10 +27,12 @@ function fakeContract(id, lifecycle = 'current', sendable = true) {
 
 test('canonical reconnect scope contains only current sendable contracts', () => {
   const bindings = currentSendableBindings();
-  assert.equal(bindings.length, 16);
+  assert.equal(bindings.length, 14);
   assert.equal(bindings.some((item) => item.contractId === 'birthday_v1'), false);
   assert.equal(bindings.some((item) => item.contractId === 'appointment_followup_legacy'), false);
   assert.equal(bindings.some((item) => item.contractId === 'appointment_reminder_legacy'), false);
+  assert.equal(bindings.some((item) => item.contractId === 'booking_approval_request'), false);
+  assert.equal(bindings.some((item) => item.contractId === 'booking_approval_outcome'), false);
   for (const binding of bindings) {
     const contract = getShilohMessageContract(binding.contractId);
     assert.equal(contract.lifecycle, 'current');

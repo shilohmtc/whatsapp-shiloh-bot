@@ -217,10 +217,12 @@ function createCalendarOperationalMutationService({
   async function appointmentContext(client, appointmentId) {
     const id = positiveId(appointmentId, 'CALENDAR_OPERATION_APPOINTMENT_INVALID');
     const appointmentResult = await client.query(
-      `SELECT id, location_id, starts_at, ends_at, status, updated_at
-         FROM appointments
-        WHERE id=$1
-        FOR UPDATE`,
+      `SELECT a.id, a.location_id, a.starts_at, a.ends_at, a.status, a.updated_at,
+              aba.status AS booking_request_status
+         FROM appointments a
+         LEFT JOIN appointment_booking_approvals aba ON aba.appointment_id=a.id
+        WHERE a.id=$1
+        FOR UPDATE OF a`,
       [id]
     );
     const appointment = appointmentResult.rows[0];
@@ -273,6 +275,9 @@ function createCalendarOperationalMutationService({
   }
 
   function requireMutableAppointment(appointment, expectedRevision) {
+    if (['pending', 'awaiting_client_confirmation'].includes(String(appointment.booking_request_status || ''))) {
+      throw mutationError('CALENDAR_OPERATION_BOOKING_REQUEST_UNRESOLVED', 'Resolve this client booking request in Shiloh Workspace before changing its canonical appointment.');
+    }
     if (!MUTABLE_APPOINTMENT_STATUSES.has(String(appointment.status || ''))) {
       throw mutationError('CALENDAR_OPERATION_APPOINTMENT_FINAL', 'Only scheduled or confirmed appointments may be changed here.');
     }
@@ -297,6 +302,14 @@ function createCalendarOperationalMutationService({
              FROM calendar_blocks cb
             WHERE cb.staff_id=$1
               AND cb.starts_at<$3 AND cb.ends_at>$2
+           UNION ALL
+           SELECT 'booking_proposal_hold'::text, aba.appointment_id, aba.proposed_starts_at, aba.proposed_ends_at
+             FROM appointment_booking_approvals aba
+            WHERE aba.proposed_staff_ids @> ARRAY[$1::bigint]
+              AND aba.status='awaiting_client_confirmation'
+              AND aba.proposal_expires_at>NOW()
+              AND ($4::bigint IS NULL OR aba.appointment_id<>$4)
+              AND aba.proposed_starts_at<$3 AND aba.proposed_ends_at>$2
          ) conflicts
         ORDER BY starts_at, id`,
       [staffId, startsAt, endsAt, excludeAppointmentId]
@@ -469,6 +482,7 @@ function createCalendarOperationalMutationService({
       execute: async (client, operator, request) => {
         const context = await appointmentContext(client, id);
         requireAppointmentAuthority(operator, context);
+        requireMutableAppointment(context.appointment, expected);
         const cancelled = await cancelCanonicalAppointmentInTransaction(client, {
           appointmentId: id,
           actorAdminId: operator.id,

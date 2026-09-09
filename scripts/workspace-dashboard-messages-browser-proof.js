@@ -216,6 +216,24 @@ function createFixture() {
     },
     canCertifyAppointmentFn: async (principal, appointmentId) => !(Number(principal.id) === 78 && Number(appointmentId) === 8102),
     finalizeAppointmentFn: async () => { state.productionMutations += 1; return { status: 'updated' }; },
+    bookingRequestService: {
+      async listUnresolvedBookingRequests() {
+        return [
+          {
+            appointmentId: 8201, effectiveStatus: 'pending', clientName: 'Request Client', serviceName: 'Synthetic treatment',
+            staffName: 'Cedar Practitioner', requestedStartsAt: '2026-09-08T08:00:00.000Z', requestedRevision: '2026-09-05T06:40:00.000Z',
+          },
+          {
+            appointmentId: 8202, effectiveStatus: 'awaiting_client_confirmation', clientName: 'Awaiting Client', serviceName: 'Synthetic treatment',
+            staffName: 'Cedar Practitioner', proposedStaffName: 'Willow Practitioner', requestedStartsAt: '2026-09-09T08:00:00.000Z',
+            proposedStartsAt: '2026-09-10T09:00:00.000Z', requestedRevision: '2026-09-05T06:41:00.000Z',
+          },
+        ];
+      },
+      async acceptRequestedAppointment() { throw new Error('browser proof must not mutate'); },
+      async proposeAlternative() { throw new Error('browser proof must not mutate'); },
+      async cannotAccommodate() { throw new Error('browser proof must not mutate'); },
+    },
   });
   const dashboardService = {
     async buildModel(input) {
@@ -312,6 +330,10 @@ const METRICS_EXPRESSION = `(() => {
     dashboardAppointments:document.querySelectorAll('[data-dashboard-appointment]').length,
     dashboardTeamGroups:document.querySelectorAll('[data-dashboard-team-group]').length,
     dashboardActions:document.querySelectorAll('[data-dashboard-finalize]').length,
+    bookingRequests:document.querySelectorAll('[data-booking-request]').length,
+    bookingRequestText:Array.from(document.querySelectorAll('[data-booking-request]')).map(node=>node.textContent.trim()).join(' '),
+    bookingActionLabels:Array.from(document.querySelectorAll('[data-booking-action]')).map(node=>node.textContent.trim()),
+    minBookingActionHeight:(()=>{const nodes=Array.from(document.querySelectorAll('[data-booking-action]'));return nodes.length?Math.min(...nodes.map(node=>node.getBoundingClientRect().height)):0;})(),
     minDashboardActionHeight:(()=>{const nodes=Array.from(document.querySelectorAll('[data-dashboard-finalize]')).filter(visible);return nodes.length?Math.min(...nodes.map(node=>node.getBoundingClientRect().height)):0;})(),
     dashboardCommunicationText:document.querySelector('[data-dashboard-communications-panel]')?.textContent.trim()||'',
     accountFooterVisible:visible(document.querySelector('[data-workspace-account-footer]')),
@@ -429,6 +451,13 @@ async function main() {
         assert.equal(metrics.dashboardEyebrow, 'Today', `${name} does not prove the clinic-today state`);
         assert.match(metrics.dashboardCommunicationText, /Client notification needs attention/);
         if (metrics.dashboardActions) assert.ok(metrics.minDashboardActionHeight >= (phone ? 44 : 36), `${name} has undersized outcome actions`);
+        assert.equal(metrics.bookingRequests, 2, `${name} does not project both unresolved booking-request states`);
+        assert.match(metrics.bookingRequestText, /Needs staff resolution/);
+        assert.match(metrics.bookingRequestText, /Awaiting client/);
+        assert.ok(metrics.bookingActionLabels.includes('Accept requested appointment'));
+        assert.ok(metrics.bookingActionLabels.includes('Propose alternative'));
+        assert.ok(metrics.bookingActionLabels.includes('Cannot accommodate'));
+        assert.ok(metrics.minBookingActionHeight >= (phone ? 44 : 36), `${name} has undersized booking-request actions`);
       }
       if (urlPath.startsWith('/calendar/services')) {
         assert.match(metrics.servicesCopy, /Manage services, pricing and practitioner assignments\./);
@@ -470,7 +499,7 @@ async function main() {
     assert.match(exactHead, /^[0-9a-f]{40}$/);
     const manifest = {
       generatedAt: new Date().toISOString(), exactHead, authenticatedSession: true, syntheticDataOnly: true,
-      authority: 'Existing CalendarReadOnlyUx, Calendar principal/capability scope, canonical appointment finalization, client:lookup, client:notify and workspaceCommunicationEvidence composition',
+      authority: 'Existing CalendarReadOnlyUx, canonical appointment_booking_approvals lifecycle, Calendar principal/capability scope, canonical appointment finalization, client:lookup, client:notify and workspaceCommunicationEvidence composition',
       productionReads: 0, productionMutations: 0, providerNetworkCalls: 0, senderCalls: 0, realClientSends: 0,
       screenshots,
     };

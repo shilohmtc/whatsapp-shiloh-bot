@@ -170,12 +170,12 @@ test('ordinary commit carries the discriminator and writes no shadow client/cont
 
 test('practitioner approval preserves CRM V2 identity and server-owned notification snapshots', () => {
   const approval = read('src/services/clientBookingApproval.js');
-  assert.match(approval, /a\.client_id,a\.crm_v2_client_id/);
-  assert.match(approval, /CASE WHEN a\.crm_v2_client_id IS NOT NULL THEN 'crm_v2'/);
-  assert.match(approval, /COALESCE\(v2\.name,c\.display_name,a\.source_client_name\)/);
+  assert.match(approval, /a\.client_id AS current_client_id,a\.crm_v2_client_id AS current_crm_v2_client_id/);
+  assert.match(approval, /requested_client_id,requested_crm_v2_client_id,requested_client_phone/);
+  assert.match(approval, /COALESCE\(v2\.name,c\.display_name,a\.source_client_name,'Client'\)/);
   assert.match(approval, /v2\.normalized_mobile/);
   assert.match(approval, /sendCustomerBookingConfirmationForAppointment/);
-  assert.match(approval, /crmV2ClientId: locked\.crm_v2_client_id/);
+  assert.match(approval, /requested_crm_v2_client_id/);
   assert.doesNotMatch(approval, /INSERT INTO (?:clients|client_contacts)/);
 });
 

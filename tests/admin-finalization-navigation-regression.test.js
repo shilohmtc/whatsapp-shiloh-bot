@@ -23,5 +23,6 @@ test('Admin/Menu/Hi escape clears a stale Manage booking session before numeric 
 });
 
 test('unknown authenticated staff payloads fail closed after retained routing', () => {
-  assert.match(interactiveSource, /That staff WhatsApp action is unavailable\. No action was taken/);
+  assert.match(interactiveSource, /processRetiredAdminAuthorityMessage/);
+  assert.doesNotMatch(interactiveSource, /processAdminAssistantMessage|processAdminBookingUpdateMessage/);
 });

@@ -61,16 +61,11 @@ test('business-wide scope cannot be inferred for scoped practitioners', () => {
   assert.equal(isBusinessWide({ business_role: 'employee_practitioner', service_scope: 'own_services', calendar_scope: 'own_appointments' }), false);
 });
 
-test('role-specific Admin menu remains permission-gated and minimal', () => {
+test('ordinary role-specific WhatsApp Admin menu is retired', () => {
   const menu = source('src/services/adminMobileMenu.js');
-  assert.match(menu, /tenant_practitioner/);
-  assert.match(menu, /employee_practitioner/);
-  assert.match(menu, /My appointments today/);
-  assert.match(menu, /has\(admin, 'appointment:view'\)/);
-  assert.match(menu, /key: 'reports'/);
-  assert.match(menu, /key: 'earnings'/);
-  assert.doesNotMatch(menu, /My services & pricing|service:pricing|client:lookup|walkin:create|staff:services:view/);
-  assert.doesNotMatch(menu, /has\(admin, 'schedule:manage'\)|key: 'schedule'/);
+  assert.match(menu, /WhatsApp Admin has retired/);
+  assert.match(menu, /function getMenuOptions\(\) \{ return \[\]; \}/);
+  assert.doesNotMatch(menu, /appointment:view|service:pricing|client:lookup|schedule:manage|key:/);
 });
 
 test('booking updates retain clinic, staff and canonical Shiloh conflict guards', () => {

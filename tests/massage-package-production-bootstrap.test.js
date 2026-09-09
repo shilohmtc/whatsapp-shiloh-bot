@@ -24,11 +24,6 @@ test('ordinary startup verifies migration authority without applying package boo
   assert.doesNotMatch(app, /ensureMassagePackageSchema/);
 });
 
-test('Sports Massage activation delegates before the generic Admin assistant fallback is captured by webhook routes', () => {
-  const delegate = app.indexOf('adminAssistantService.processAdminAssistantMessage = async');
-  const webhookLoad = app.indexOf('const webhookRoutes = require(".\/src\/routes\/webhook")');
-  assert.ok(delegate >= 0 && webhookLoad > delegate, 'Admin package delegation must be installed before webhook routes load');
-  assert.match(app, /activate\|grant/);
-  assert.match(app, /sports massage/);
-  assert.match(app, /activateSportsPackage\(sender, activation\[1\]\)/);
+test('ordinary startup exposes no WhatsApp Admin package-activation delegation after Workspace cutover', () => {
+  assert.doesNotMatch(app, /adminAssistantService|processAdminAssistantMessage|activateSportsPackage/);
 });

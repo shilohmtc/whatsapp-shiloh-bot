@@ -70,7 +70,7 @@ function appointmentHandler(overrides = {}) {
     if (sql.includes('FROM appointments') && (sql.includes('WHERE id=$1') || sql.includes('WHERE a.id=$1')) && sql.includes('FOR UPDATE')) {
       return result([{
         id: 592, location_id: 1, starts_at: FUTURE_START, ends_at: FUTURE_END,
-        status: 'scheduled', updated_at: REVISION,
+        status: 'scheduled', updated_at: REVISION, booking_request_status: overrides.bookingRequestStatus || null,
       }]);
     }
     if (sql.includes('FROM appointment_staff ast')) {
@@ -219,6 +219,37 @@ test('cockpit exposes bounded canonical controls only with mutation capability',
   assert.match(capable, /data-calendar-operation="add-leave"/);
   assert.match(capable, /data-calendar-operation="manage-schedule"/);
   assert.match(capable, /@media\(max-width:700px\)[\s\S]*min-height:44px/);
+});
+
+test('unresolved booking requests are labelled and cannot expose generic Calendar appointment controls', () => {
+  for (const state of ['pending', 'awaiting_client_confirmation']) {
+    const model = dayModel(true);
+    model.timeline.appointments[0].bookingRequestState = state;
+    const html = renderCalendarPage(model);
+    assert.match(html, /Booking request/);
+    assert.match(html, state === 'pending' ? /Needs staff resolution/ : /Awaiting client confirmation/);
+    assert.match(html, /href="\/calendar\/workspace#booking-request-592"/);
+    assert.doesNotMatch(html, /data-appointment-id="592"/);
+    assert.doesNotMatch(html, /data-calendar-operation="manage-appointment"/);
+  }
+});
+
+test('reschedule, reassignment and cancellation fail closed while booking request resolution is active', async () => {
+  for (const bookingRequestStatus of ['pending', 'awaiting_client_confirmation']) {
+    for (const action of ['reschedule', 'reassign', 'cancel']) {
+      const fake = fakeDatabase(appointmentHandler({ bookingRequestStatus }));
+      const service = createCalendarOperationalMutationService({ db: fake.db, now: () => new Date('2026-08-27T00:00:00Z') });
+      const common = { adminId: 71, appointmentId: 592, expectedRevision: REVISION, requestId: `${action}_${bookingRequestStatus}` };
+      const input = action === 'reschedule'
+        ? { ...common, startsAt: '2026-09-10T06:00:00.000Z' }
+        : action === 'reassign'
+          ? { ...common, destinationStaffId: 2 }
+          : { ...common, confirmation: { confirmed: true, appointmentId: 592, revision: REVISION }, reason: 'Clinic decision' };
+      await assert.rejects(service[action](input), error => error.code === 'CALENDAR_OPERATION_BOOKING_REQUEST_UNRESOLVED');
+      assert.equal(fake.calls.some(call => call.sql.startsWith('UPDATE appointments')), false);
+      assert.ok(fake.calls.some(call => call.sql === 'ROLLBACK'));
+    }
+  }
 });
 
 test('cockpit renders only data-granted operation families for a booking operator', () => {

@@ -5,7 +5,6 @@ const {
 } = require("./clientBookingCommit");
 const {
   createPendingBookingApproval,
-  requestPractitionerApproval,
 } = require("./clientBookingApproval");
 const { ensureBookingApprovalInfrastructure } = require("./clientBookingApprovalSchema");
 const logger = require("../lib/logger");
@@ -86,14 +85,9 @@ async function declinePolicy(phone) { await ensurePolicySchema(); await pool.que
 
 async function stageCreatedBookingForApproval(result) {
   if (!result?.handled || result.status !== "created" || !result.appointmentId) return result;
-  const staffResult = await pool.query(`SELECT ast.staff_id, ast.staff_name_snapshot FROM appointment_staff ast WHERE ast.appointment_id = $1 ORDER BY ast.position, ast.staff_id LIMIT 1`, [result.appointmentId]);
-  const staff = staffResult.rows[0] || null;
-  if (!staff) { logger.error({ appointmentId: result.appointmentId }, "Client booking hold created without resolvable assigned practitioner"); return { ...result, status: "approval_setup_failed", reply: `Your appointment request #${result.appointmentId} has been placed on hold, but I could not safely start practitioner approval. The time remains held and no final confirmation has been sent. Shiloh needs to review this request manually.` }; }
-  await createPendingBookingApproval(pool, { appointmentId: result.appointmentId, staffId: staff.staff_id, staffName: staff.staff_name_snapshot });
-  let notification = { sent: false, reason: "not_attempted" };
-  try { notification = await requestPractitionerApproval({ appointmentId: result.appointmentId }); } catch (error) { logger.error({ err: error, appointmentId: result.appointmentId }, "Practitioner approval request notification failed; booking remains held"); notification = { sent: false, reason: "notification_failed" }; }
-  const reviewerName = notification?.approver || "an authorized approver";
-  return { ...result, status: "pending_approval", approvalNotification: notification, reply: [`*Booking request received — #${result.appointmentId}*`, "", `Your selected time is now being held while ${reviewerName} reviews the request.`, "The time will remain held until an authorized approver explicitly approves or declines it; there is no automatic expiry.", "", "Your appointment is not yet confirmed. I’ll send the final confirmation and calendar links after approval. 🌿"].join("\n") };
+  const approval = await createPendingBookingApproval(pool, { appointmentId: result.appointmentId });
+  if (!approval) { logger.error({ appointmentId: result.appointmentId }, "Client booking hold created without resolvable canonical assignments"); return { ...result, status: "resolution_setup_failed", reply: `Your appointment request #${result.appointmentId} has been placed on hold, but I could not safely assign it for Workspace resolution. The time remains held and no final confirmation has been sent. Shiloh needs to review this request manually.` }; }
+  return { ...result, status: "pending_resolution", reply: [`*Booking request received — #${result.appointmentId}*`, "", "Your selected time is being held while the Shiloh team resolves your request in Workspace.", "", "Your appointment is not yet confirmed. I’ll send the final details after the requested appointment is accepted, or ask you to confirm if the team proposes a materially different option. 🌿"].join("\n") };
 }
 
 async function finalizeAcceptedBooking(phone) {
