@@ -50,6 +50,10 @@ function retireBrowserWhatsAppGuidance(html) {
     '>Use your authenticator here, or open Workspace from your existing Shiloh WhatsApp conversation.</div>',
     '></div>',
   );
+  output = output.replace(
+    '>Your staff session is missing, expired, or revoked. Sign in again to continue.</div>',
+    '></div>',
+  );
   if (!output.includes('[data-shiloh-status]:empty{display:none}')) {
     output = output.replace('<style>', '<style>[data-shiloh-status]:empty{display:none}');
   }
