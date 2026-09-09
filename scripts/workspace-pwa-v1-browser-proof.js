@@ -79,6 +79,15 @@ async function chromeRun(chrome, args) {
   }
 }
 
+async function captureScreenshot(chrome, args, filePath) {
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    fs.rmSync(filePath, { force: true });
+    await chromeRun(chrome, args);
+    if (fs.existsSync(filePath) && fs.statSync(filePath).size > 0) return;
+  }
+  throw new Error(`Chrome proof did not materialize screenshot: ${path.basename(filePath)}`);
+}
+
 function workspaceHtml() {
   const nav = renderWorkspaceNavigation({
     active: 'dashboard',
@@ -166,7 +175,7 @@ async function main() {
 
     const phoneProfile = path.join(temp, 'phone-profile');
     const phonePng = path.join(OUT_DIR, 'phone-390x844.png');
-    await chromeRun(chrome, [`--user-data-dir=${phoneProfile}`, '--window-size=390,844', `--screenshot=${phonePng}`, `${origin}/proof-auth`]);
+    await captureScreenshot(chrome, [`--user-data-dir=${phoneProfile}`, '--window-size=390,844', `--screenshot=${phonePng}`, `${origin}/proof-auth`], phonePng);
     const phoneDom = await chromeRun(chrome, [`--user-data-dir=${phoneProfile}`, '--window-size=390,844', '--virtual-time-budget=1600', '--dump-dom', `${origin}/proof-auth`]);
     assert.match(phoneDom, /data-authenticated-workspace/);
     assert.match(phoneDom, /data-root-overflow="false"/);
@@ -175,7 +184,7 @@ async function main() {
 
     const desktopProfile = path.join(temp, 'desktop-profile');
     const desktopPng = path.join(OUT_DIR, 'desktop-1440x900.png');
-    await chromeRun(chrome, [`--user-data-dir=${desktopProfile}`, '--window-size=1440,900', `--screenshot=${desktopPng}`, `${origin}/proof-auth`]);
+    await captureScreenshot(chrome, [`--user-data-dir=${desktopProfile}`, '--window-size=1440,900', `--screenshot=${desktopPng}`, `${origin}/proof-auth`], desktopPng);
     const desktopDom = await chromeRun(chrome, [`--user-data-dir=${desktopProfile}`, '--window-size=1440,900', '--virtual-time-budget=1600', '--dump-dom', `${origin}/proof-auth`]);
     assert.match(desktopDom, /data-authenticated-workspace/);
     assert.match(desktopDom, /data-root-overflow="false"/);
@@ -183,7 +192,7 @@ async function main() {
 
     const expiredProfile = path.join(temp, 'expired-profile');
     const expiredPng = path.join(OUT_DIR, 'expired-session.png');
-    await chromeRun(chrome, [`--user-data-dir=${expiredProfile}`, '--window-size=390,844', `--screenshot=${expiredPng}`, `${origin}/proof-expired`]);
+    await captureScreenshot(chrome, [`--user-data-dir=${expiredProfile}`, '--window-size=390,844', `--screenshot=${expiredPng}`, `${origin}/proof-expired`], expiredPng);
     const expiredDom = await chromeRun(chrome, [`--user-data-dir=${expiredProfile}`, '--window-size=390,844', '--virtual-time-budget=1000', '--dump-dom', `${origin}/proof-expired`]);
     assert.match(expiredDom, /data-shiloh-status(?:="")? data-state="session-ended"><\/div>/);
     assert.doesNotMatch(expiredDom, /data-authenticated-workspace/);
