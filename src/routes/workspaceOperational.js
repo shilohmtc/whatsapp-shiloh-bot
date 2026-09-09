@@ -19,6 +19,15 @@ function isWorkspaceOperationalEnabled(env = process.env) {
     && String(env.SHILOH_STAFF_BROWSER_SESSION_CALENDAR_BRIDGE_ENABLED || '').trim().toLowerCase() === 'true';
 }
 
+function isStaffPasskeyAuthEnabled(env = process.env) {
+  return String(env.SHILOH_STAFF_PASSKEY_AUTH_ENABLED || '').trim().toLowerCase() === 'true';
+}
+
+function passkeyNavigationClientScript(env = process.env) {
+  if (!isStaffPasskeyAuthEnabled(env)) return '';
+  return `(()=>{'use strict';const account=document.querySelector('[data-workspace-account-footer]');if(!account||account.querySelector('[data-workspace-passkey-security]'))return;const link=document.createElement('a');link.className='workspace-account-signout';link.href='/calendar/staff-auth/passkeys/manage';link.dataset.workspacePasskeySecurity='true';link.textContent='Sign-in security';const signout=account.querySelector('[data-shiloh-logout]');if(signout)account.insertBefore(link,signout);else account.appendChild(link);})();`;
+}
+
 function setWorkspaceOperationalSecurityHeaders(res) {
   res.setHeader('Cache-Control', 'private, no-store, max-age=0');
   res.setHeader('Pragma', 'no-cache');
@@ -66,7 +75,7 @@ function createWorkspaceOperationalRouter({
   router.get('/nav.js', (_req, res) => {
     res.setHeader('Cache-Control', 'private, no-store, max-age=0');
     res.setHeader('X-Content-Type-Options', 'nosniff');
-    return res.status(200).type('application/javascript').send(`${workspaceNavigationClientScript()}\n${clinicHoursNavigationClientScript()}`);
+    return res.status(200).type('application/javascript').send(`${workspaceNavigationClientScript()}\n${clinicHoursNavigationClientScript()}\n${passkeyNavigationClientScript(env)}`);
   });
 
   router.use((req, res, next) => {
@@ -150,6 +159,8 @@ function createWorkspaceOperationalRouter({
 
 module.exports = {
   isWorkspaceOperationalEnabled,
+  isStaffPasskeyAuthEnabled,
+  passkeyNavigationClientScript,
   setWorkspaceOperationalSecurityHeaders,
   stabilizeDashboardShell,
   dashboardSafeError,
