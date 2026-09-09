@@ -27,6 +27,7 @@ function fakeAlertDb() {
           display_name: 'Reception',
           effective_scope: 'global',
           team_id: null,
+          pending_count: 4,
         }] };
       }
       if (sql.includes('INSERT INTO booking_request_staff_alerts')) {
@@ -61,27 +62,29 @@ function fakeAlertDb() {
   };
 }
 
-test('booking-request staff alert is a current proactive utility template with only Open Workspace action', () => {
-  const contract = getShilohMessageContract('booking_request_staff_alert');
+test('booking-request staff alert reuses the canonical current proactive Utility contract with only Open Workspace action', () => {
+  const contract = getShilohMessageContract('workspace_booking_request_alert');
   assert.equal(contract.lifecycle, 'current');
   assert.equal(contract.sendable, true);
   assert.equal(contract.message.category, 'UTILITY');
-  const binding = getMetaTemplateBindingSpec('booking_request_staff_alert');
-  assert.equal(binding.templateName, 'shiloh_booking_request_staff_alert_v1');
-  assert.equal(binding.defaultWhenUnset, true);
-  const definition = buildMetaTemplateContractView('booking_request_staff_alert');
+  const binding = getMetaTemplateBindingSpec('workspace_booking_request_alert');
+  assert.equal(binding.templateName, 'shiloh_workspace_booking_request_alert_v1');
+  assert.equal(binding.defaultWhenUnset, false);
+  const definition = buildMetaTemplateContractView('workspace_booking_request_alert');
   const buttons = definition.components.find(component => String(component.type).toUpperCase() === 'BUTTONS')?.buttons || [];
   assert.deepEqual(buttons.map(button => button.text), ['Open Workspace']);
   assert.doesNotMatch(JSON.stringify(definition), /Approve|Decline|booking_approval_(?:approve|decline)/i);
 });
 
-test('default staff alert sender uses template delivery with staff_open_workspace payload', async () => {
-  assert.equal(alerts.STAFF_ALERT_TEMPLATE, 'shiloh_booking_request_staff_alert_v1');
+test('default staff alert sender uses canonical template delivery with staff_open_workspace payload', async () => {
+  assert.equal(alerts.STAFF_ALERT_TEMPLATE, 'shiloh_workspace_booking_request_alert_v1');
   const source = require('node:fs').readFileSync(require('node:path').join(__dirname, '../src/services/bookingRequestStaffAlerts.js'), 'utf8');
   assert.match(source, /sendWhatsAppTemplate/);
   assert.match(source, /staff_open_workspace/);
+  assert.match(source, /pending_count/);
   assert.doesNotMatch(source, /sendWhatsAppReplyButtons/);
   assert.doesNotMatch(source, /booking_approval_(?:approve|decline)/);
+  assert.doesNotMatch(source, /shiloh_booking_request_staff_alert_v1/);
 });
 
 test('one successful initial alert per request/recipient is replay-safe', async () => {
