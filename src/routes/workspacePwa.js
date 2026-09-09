@@ -1,0 +1,116 @@
+'use strict';
+
+const express = require('express');
+const { createOptionalCalendarSessionMiddleware } = require('../middleware/staffBrowserSession');
+const {
+  PWA_BASE,
+  workspacePwaManifest,
+  workspacePwaIconSvg,
+  decorateWorkspacePwaHtml,
+  augmentWorkspacePwaCsp,
+  workspacePwaServiceWorkerScript,
+  workspacePwaClientScript,
+} = require('../presentation/workspacePwa');
+
+const HTML_PATH_PREFIXES = Object.freeze([
+  '/staff',
+  '/staff-auth',
+  '/workspace',
+  '/clients',
+  '/messages',
+  '/team',
+  '/services',
+  '/reports',
+  '/clinic-hours',
+  '/read-only',
+  '/book',
+  '/operations',
+]);
+
+function setPublicAssetHeaders(res, { immutable = false } = {}) {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  res.setHeader('Cache-Control', immutable
+    ? 'public, max-age=31536000, immutable'
+    : 'no-cache, max-age=0, must-revalidate');
+}
+
+function shouldDecoratePwaHtmlPath(pathname) {
+  const path = String(pathname || '').split('?')[0];
+  return HTML_PATH_PREFIXES.some(prefix => path === prefix || path.startsWith(`${prefix}/`));
+}
+
+function createWorkspacePwaHtmlMiddleware() {
+  return function workspacePwaHtmlMiddleware(req, res, next) {
+    if (req.method !== 'GET' || !shouldDecoratePwaHtmlPath(req.path || req.url)) return next();
+    const originalSend = res.send.bind(res);
+    res.send = function pwaAwareSend(body) {
+      const type = String(res.getHeader('Content-Type') || '').toLowerCase();
+      if (typeof body === 'string' && type.includes('text/html')) {
+        body = decorateWorkspacePwaHtml(body);
+        const csp = res.getHeader('Content-Security-Policy');
+        if (csp) res.setHeader('Content-Security-Policy', augmentWorkspacePwaCsp(csp));
+      }
+      return originalSend(body);
+    };
+    return next();
+  };
+}
+
+function pwaLaunchDestination(session) {
+  if (!session?.ok) return '/calendar/staff?reason=session';
+  if (session.recoveryRequired === true) return '/calendar/staff-auth/totp/manage';
+  if (!session.viewer) return '/calendar/staff?reason=access';
+  return '/calendar/workspace';
+}
+
+function createWorkspacePwaRouter({ sessionService } = {}) {
+  if (!sessionService) throw new Error('Workspace PWA requires the existing staff browser session service');
+  const router = express.Router();
+  const optionalSession = createOptionalCalendarSessionMiddleware({ service: sessionService });
+
+  router.get('/manifest.webmanifest', (_req, res) => {
+    setPublicAssetHeaders(res);
+    return res.status(200).type('application/manifest+json').send(JSON.stringify(workspacePwaManifest()));
+  });
+
+  router.get('/sw.js', (_req, res) => {
+    setPublicAssetHeaders(res);
+    res.setHeader('Service-Worker-Allowed', '/calendar/');
+    return res.status(200).type('application/javascript').send(workspacePwaServiceWorkerScript());
+  });
+
+  router.get('/client.js', (_req, res) => {
+    setPublicAssetHeaders(res);
+    return res.status(200).type('application/javascript').send(workspacePwaClientScript());
+  });
+
+  router.get('/icon-192.svg', (_req, res) => {
+    setPublicAssetHeaders(res, { immutable: true });
+    return res.status(200).type('image/svg+xml').send(workspacePwaIconSvg(192));
+  });
+
+  router.get('/icon-512.svg', (_req, res) => {
+    setPublicAssetHeaders(res, { immutable: true });
+    return res.status(200).type('image/svg+xml').send(workspacePwaIconSvg(512));
+  });
+
+  router.get('/launch', optionalSession, (req, res) => {
+    res.setHeader('Cache-Control', 'private, no-store, max-age=0');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Referrer-Policy', 'no-referrer');
+    return res.redirect(302, pwaLaunchDestination(req.staffBrowserSession || null));
+  });
+
+  return router;
+}
+
+module.exports = {
+  PWA_BASE,
+  HTML_PATH_PREFIXES,
+  setPublicAssetHeaders,
+  shouldDecoratePwaHtmlPath,
+  createWorkspacePwaHtmlMiddleware,
+  pwaLaunchDestination,
+  createWorkspacePwaRouter,
+};
