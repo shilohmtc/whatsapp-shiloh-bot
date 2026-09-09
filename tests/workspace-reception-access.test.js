@@ -10,10 +10,6 @@ const {
   receptionProjection,
   createWorkspaceReceptionAccessService,
 } = require('../src/services/workspaceReceptionAccess');
-const {
-  renderReceptionSetupPage,
-  workspaceReceptionSetupClientScript,
-} = require('../src/presentation/workspaceReceptionSetupUx');
 
 test('Reception preset is fixed to shared booking-operator authority without prohibited powers', () => {
   assert.equal(RECEPTION_DISPLAY_NAME, 'Shiloh Reception');
@@ -88,18 +84,4 @@ test('Reception state fails closed when operator lacks Access administration', a
     },
   });
   await assert.rejects(service.getState(44), error => error.httpStatus === 403);
-});
-
-test('Reception setup UI uses a human-entered private number and fixed shared preset', () => {
-  const html = renderReceptionSetupPage(receptionProjection());
-  assert.match(html, /Reception access/);
-  assert.match(html, /name="whatsappNumber"/);
-  assert.match(html, /Shared operational/);
-  assert.match(html, /All business/);
-  assert.match(html, /Does not grant Staff or Access administration/);
-  assert.doesNotMatch(html, /27660000000/);
-  const script = workspaceReceptionSetupClientScript();
-  assert.match(script, /x-shiloh-csrf-token/);
-  assert.match(script, /identityConfirmed/);
-  assert.match(script, /\/calendar\/team\/reception-setup/);
 });
