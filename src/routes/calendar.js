@@ -7,6 +7,7 @@ const { createCalendarRetrospectiveBookingRouter } = require('./calendarRetrospe
 const { createStaffBrowserSessionService } = require('../services/staffBrowserSession');
 const { createStaffBrowserSessionRouter } = require('./staffBrowserSession');
 const { createStaffAuthBrowserEnrollmentRouter } = require('./staffAuthBrowserEnrollment');
+const { createStaffPasskeyBootstrapRouter } = require('./staffPasskeyBootstrap');
 const { createStaffPasskeyAuthRouter } = require('./staffPasskeyAuth');
 const { createOptionalCalendarSessionMiddleware } = require('../middleware/staffBrowserSession');
 const { createOperatorContactAuthorityRouter } = require('./operatorContactAuthority');
@@ -52,6 +53,7 @@ router.get('/:token.ics',async(req,res,next)=>{try{
 router.use(createWorkspacePwaHtmlMiddleware());
 router.use('/pwa', createWorkspacePwaRouter({ sessionService: staffBrowserSessionService }));
 router.use('/staff-auth/admin-enrollment', createStaffAuthBrowserEnrollmentRouter({ sessionService: staffBrowserSessionService }));
+router.use('/staff-auth/passkeys', createStaffPasskeyBootstrapRouter());
 router.use('/staff-auth/passkeys', createStaffPasskeyAuthRouter({ sessionService: staffBrowserSessionService }));
 router.use('/staff-auth', createStaffBrowserSessionRouter({ service: staffBrowserSessionService }));
 router.use('/staff', staffCalendarAccessUxRoutes);

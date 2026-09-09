@@ -9,6 +9,7 @@ const {
 } = require('../presentation/staffCalendarHandoffUx');
 const { providerIndependentAuthPolicy } = require('../services/providerIndependentStaffAuth');
 const { passkeyPolicy } = require('../services/staffPasskeyAuth');
+const { bootstrapPolicy } = require('../services/staffWhatsAppPasskeyBootstrap');
 const { signinPanel, signinScript } = require('../presentation/staffPasskeyUx');
 
 function isStaffCalendarAccessUxEnabled(env = process.env) {
@@ -31,10 +32,12 @@ function normalizeReason(value) {
   return ['logout', 'session', 'access'].includes(reason) ? reason : null;
 }
 
+// Retained only for exceptional recovery/admin tooling compatibility. #804 no longer
+// inserts this into the normal staff journey.
 function withAuthenticatorSetupGuidance(html) {
   const marker = '<section class="section" data-shiloh-whatsapp-handoff-guidance>';
   if (!String(html || '').includes(marker)) return html;
-  const guidance = `<section class="section" data-shiloh-authenticator-setup-guidance><span class="eyebrow">First-time setup / new phone</span><h2>Need to enroll an authenticator?</h2><p class="lead">Ask an authorized Shiloh staff-auth administrator for a private one-time enrollment link. The link expires after five minutes, works once, and does not use WhatsApp or Meta.</p><div class="actions"><a class="button secondary" href="/calendar/staff-auth/admin-enrollment">Staff-auth administrators: create enrollment link</a></div></section>`;
+  const guidance = `<section class="section" data-shiloh-authenticator-setup-guidance><span class="eyebrow">Recovery administration</span><h2>Authenticator enrollment</h2><p class="lead">Authenticator enrollment is retained for exceptional recovery. Normal first-device setup now starts from the staff member’s canonical Shiloh WhatsApp conversation.</p><div class="actions"><a class="button secondary" href="/calendar/staff-auth/admin-enrollment">Open recovery enrollment tools</a></div></section>`;
   return String(html).replace(marker, `${guidance}${marker}`);
 }
 
@@ -45,6 +48,26 @@ function withPasskeyReentry(html) {
   if (String(html || '').includes(marker)) return String(html).replace(marker, `${panel}${marker}`);
   if (String(html || '').includes(fallbackMarker)) return String(html).replace(fallbackMarker, `${panel}${fallbackMarker}`);
   return html;
+}
+
+function withWhatsAppBootstrapGuidance(html) {
+  const output = String(html || '');
+  const providerMarker = '<section data-shiloh-provider-independent-auth>';
+  const fallbackMarker = '<section class="section" data-shiloh-whatsapp-handoff-guidance>';
+  const guidance = `<section class="section" data-shiloh-passkey-bootstrap-guidance><span class="eyebrow">First time / new device</span><h2>Set up Shiloh from WhatsApp</h2><p class="lead">From the WhatsApp number already enabled for your Shiloh Workspace access, send <code>Hi</code> to Shiloh. We’ll reply with a private one-time setup link for this device.</p></section>`;
+  if (output.includes(providerMarker)) return output.replace(providerMarker, `${guidance}${providerMarker}`);
+  if (output.includes(fallbackMarker)) return output.replace(fallbackMarker, `${guidance}${fallbackMarker}`);
+  return output;
+}
+
+function withFallbackDisclosure(html) {
+  let output = String(html || '');
+  const start = '<section data-shiloh-provider-independent-auth>';
+  if (!output.includes(start)) return output;
+  output = output.replace(start, `<details class="section" data-shiloh-fallback-auth><summary><strong>Use another sign-in method</strong></summary>${start}`);
+  const end = '</details>\n      </section>';
+  if (output.includes(end)) output = output.replace(end, `${end}</details>`);
+  return output;
 }
 
 function retireBrowserWhatsAppGuidance(html) {
@@ -62,6 +85,16 @@ function withAccessChangedGuidance(html, reason) {
   return String(html).replace('data-state="ready"></div>', 'data-state="session-ended">Your Shiloh Workspace access changed or no longer permits Workspace. Sign in again, or ask an authorized administrator if access should be restored.</div>');
 }
 
+function bootstrapAwareSigninScript(env = process.env) {
+  let script = signinScript();
+  if (!bootstrapPolicy(env).operational) return script;
+  script = script
+    .replace(/Use the authenticator sign-in below\./g, 'Send “Hi” to Shiloh on WhatsApp to set up this device, or use another sign-in method below.')
+    .replace(/Use the authenticator below, then add it under Sign-in security\./g, 'Send “Hi” to Shiloh on WhatsApp to set up this device, or use another sign-in method below.')
+    .replace(/You can use the authenticator sign-in below\./g, 'You can use another sign-in method below.');
+  return script;
+}
+
 function createStaffCalendarAccessPageHandler({ env = process.env, renderPage = renderStaffCalendarAccessPage } = {}) {
   return function staffCalendarAccessPage(req, res) {
     setAccessSecurityHeaders(res);
@@ -69,10 +102,12 @@ function createStaffCalendarAccessPageHandler({ env = process.env, renderPage = 
     const basePath = req.baseUrl || '/calendar/staff';
     const providerIndependentAuthEnabled = providerIndependentAuthPolicy(env).operational;
     const passkeyEnabled = passkeyPolicy(env).operational;
+    const whatsappBootstrapEnabled = bootstrapPolicy(env).operational;
     const reason = normalizeReason(req.query?.reason);
     let html = renderPage({ reason, clientScriptPath: `${basePath}/client.js`, providerIndependentAuthEnabled });
     if (passkeyEnabled) html = withPasskeyReentry(html);
-    if (providerIndependentAuthEnabled) html = withAuthenticatorSetupGuidance(html);
+    if (whatsappBootstrapEnabled) html = withWhatsAppBootstrapGuidance(html);
+    if (providerIndependentAuthEnabled) html = withFallbackDisclosure(html);
     html = retireBrowserWhatsAppGuidance(html);
     html = withAccessChangedGuidance(html, reason);
     return res.status(200).type('html').send(html);
@@ -90,7 +125,7 @@ function createStaffPasskeySigninClientHandler({ env = process.env } = {}) {
   return function staffPasskeySigninClient(_req, res) {
     setAccessSecurityHeaders(res);
     if (!isStaffCalendarAccessUxEnabled(env) || !passkeyPolicy(env).operational) return res.status(404).type('text/plain').send('Not Found');
-    return res.status(200).type('application/javascript').send(signinScript());
+    return res.status(200).type('application/javascript').send(bootstrapAwareSigninScript(env));
   };
 }
 function createStaffCalendarHandoffPageHandler({ env = process.env, renderPage = renderStaffCalendarHandoffPage } = {}) {
@@ -128,5 +163,8 @@ module.exports.setAccessSecurityHeaders = setAccessSecurityHeaders;
 module.exports.normalizeReason = normalizeReason;
 module.exports.withAuthenticatorSetupGuidance = withAuthenticatorSetupGuidance;
 module.exports.withPasskeyReentry = withPasskeyReentry;
+module.exports.withWhatsAppBootstrapGuidance = withWhatsAppBootstrapGuidance;
+module.exports.withFallbackDisclosure = withFallbackDisclosure;
+module.exports.bootstrapAwareSigninScript = bootstrapAwareSigninScript;
 module.exports.retireBrowserWhatsAppGuidance = retireBrowserWhatsAppGuidance;
 module.exports.withAccessChangedGuidance = withAccessChangedGuidance;

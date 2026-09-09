@@ -6,8 +6,9 @@ const {
   receiveWebhook,
 } = require("../controllers/webhookController");
 const { processWhatsAppStatusWebhook } = require("../controllers/whatsappStatusWebhookController");
+const { staffWhatsAppPasskeyBootstrapMiddleware } = require("../middleware/staffWhatsAppPasskeyBootstrap");
 
 router.get("/webhook", verifyWebhook);
-router.post("/webhook", processWhatsAppStatusWebhook, receiveWebhook);
+router.post("/webhook", processWhatsAppStatusWebhook, staffWhatsAppPasskeyBootstrapMiddleware, receiveWebhook);
 
 module.exports = router;
