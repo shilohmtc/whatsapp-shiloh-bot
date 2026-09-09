@@ -333,7 +333,7 @@ const METRICS_EXPRESSION = `(() => {
     bookingRequests:document.querySelectorAll('[data-booking-request]').length,
     bookingRequestText:Array.from(document.querySelectorAll('[data-booking-request]')).map(node=>node.textContent.trim()).join(' '),
     bookingActionLabels:Array.from(document.querySelectorAll('[data-booking-action]')).map(node=>node.textContent.trim()),
-    minBookingActionHeight:(()=>{const nodes=Array.from(document.querySelectorAll('[data-booking-action]')).filter(visible);return nodes.length?Math.min(...nodes.map(node=>node.getBoundingClientRect().height)):0;})(),
+    minBookingActionHeight:(()=>{const nodes=Array.from(document.querySelectorAll('[data-booking-action]'));return nodes.length?Math.min(...nodes.map(node=>node.getBoundingClientRect().height)):0;})(),
     minDashboardActionHeight:(()=>{const nodes=Array.from(document.querySelectorAll('[data-dashboard-finalize]')).filter(visible);return nodes.length?Math.min(...nodes.map(node=>node.getBoundingClientRect().height)):0;})(),
     dashboardCommunicationText:document.querySelector('[data-dashboard-communications-panel]')?.textContent.trim()||'',
     accountFooterVisible:visible(document.querySelector('[data-workspace-account-footer]')),
