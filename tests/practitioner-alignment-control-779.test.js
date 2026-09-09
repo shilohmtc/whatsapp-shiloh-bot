@@ -65,6 +65,14 @@ test('#779 control source writes no identity/auth state, emits bounded audit evi
   );
 });
 
+test('#779 audit mode observes raw canonical source state without weakening apply validation', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'services', 'practitionerAlignmentControl779.js'), 'utf8');
+  assert.match(source, /loadSnapshot\(db, sourceName, targetName, \{ validateSource: false \}\)/);
+  assert.match(source, /sourceValidationError/);
+  assert.match(source, /const before = await loadSnapshot\(client, source, target, \{ lock: true \}\)/);
+  assert.match(source, /if \(validateSource\) assertSourcePractitioner\(sourceStaff, sourceAccess\)/);
+});
+
 test('#779 exact service comparison is order-independent', () => {
   assert.equal(control.sameServiceIds([{ service_id: 2 }, { service_id: 1 }], [{ service_id: 1 }, { service_id: 2 }]), true);
   assert.equal(control.sameServiceIds([{ service_id: 1 }], [{ service_id: 2 }]), false);
