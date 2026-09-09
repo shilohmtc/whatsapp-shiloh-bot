@@ -73,7 +73,7 @@ function createStaffPasskeyAuthRouter({
       const result = await passkeyService.listCredentials({ session: req.staffBrowserSession });
       if (!result.ok) return error(res, result);
       secure(res);
-      return res.status(200).type('html').send(managePage());
+      return res.status(200).type('html').send(managePage({ credentials: result.credentials }));
     } catch (e) { return next(e); }
   });
   router.get('/manage.js', requireSession, async (req, res, next) => {
