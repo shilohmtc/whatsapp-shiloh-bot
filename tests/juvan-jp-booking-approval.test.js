@@ -22,10 +22,10 @@ test('migration 095 retired future Juvan special-case authority without rewritin
 });
 
 test('#765 future booking requests use canonical assignment snapshots with no person policy', () => {
-  const migration107 = read('migrations/107_workspace_booking_request_resolution.sql');
+  const migration108 = read('migrations/108_workspace_booking_request_resolution.sql');
   const schema = read('src/services/clientBookingApprovalSchema.js');
   const approval = read('src/services/clientBookingApproval.js');
-  for (const source of [migration107, schema]) {
+  for (const source of [migration108, schema]) {
     assert.match(source, /requested_staff_id/);
     assert.match(source, /requested_service_id/);
     assert.doesNotMatch(source, /juvan|dummy test|jean-pierre|abigail|christel/i);

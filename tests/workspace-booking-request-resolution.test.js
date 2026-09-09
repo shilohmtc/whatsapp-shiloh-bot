@@ -99,7 +99,7 @@ function fakePool(initialRow) {
 }
 
 test('migration adapts the one canonical approval record with bounded state and expiring proposal fields', () => {
-  const migration = fs.readFileSync(path.join(__dirname, '..', 'migrations', '107_workspace_booking_request_resolution.sql'), 'utf8');
+  const migration = fs.readFileSync(path.join(__dirname, '..', 'migrations', '108_workspace_booking_request_resolution.sql'), 'utf8');
   assert.match(migration, /awaiting_client_confirmation/);
   assert.match(migration, /proposal_version INTEGER NOT NULL DEFAULT 0/);
   assert.match(migration, /proposal_expires_at TIMESTAMPTZ/);
