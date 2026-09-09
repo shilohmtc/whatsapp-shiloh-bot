@@ -15,7 +15,7 @@ const CAPABILITY_LABELS = Object.freeze({
   'client:delete': 'Permanently delete clients',
   'services:view': 'View services',
   'services:create': 'Add services',
-  'services:manage': 'Edit services and assignments',
+  'services:manage': 'Manage the business-wide service catalogue and practitioner assignments',
   'service:pricing': 'Manage pricing',
   'staff:services:view': 'View staff service assignments',
   'schedule:manage': 'Manage clinic hours, closures and schedules',
