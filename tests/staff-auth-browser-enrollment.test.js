@@ -109,14 +109,15 @@ test('issuance fails closed for stale, recovery, unauthorized, and inactive-subj
   assert.equal(result.code, 'STAFF_ENROLLMENT_SUBJECT_INVALID');
 });
 
-test('staff sign-in UX surfaces first-time/new-phone guidance without changing direct authenticator sign-in', () => {
+test('staff sign-in UX retains authenticator enrollment only as recovery administration', () => {
   const base = renderStaffCalendarAccessPage({ providerIndependentAuthEnabled: true });
   const html = withAuthenticatorSetupGuidance(base);
-  assert.match(html, /First-time setup \/ new phone/);
-  assert.match(html, /five minutes/);
-  assert.match(html, /does not use WhatsApp or Meta/);
+  assert.match(html, /Recovery administration/);
+  assert.match(html, /Authenticator enrollment/);
+  assert.match(html, /exceptional recovery/i);
   assert.match(html, /Sign in with authenticator/);
   assert.match(html, /\/calendar\/staff-auth\/admin-enrollment/);
+  assert.doesNotMatch(html, /First-time setup \/ new phone/);
 });
 
 test('browser enrollment management UX keeps the enrollment token in the one-time response surface', () => {
