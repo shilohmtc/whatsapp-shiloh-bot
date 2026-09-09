@@ -22,6 +22,7 @@ const { createWorkspaceReportsRouter } = require('./workspaceReports');
 const { createWorkspaceClinicHoursRouter } = require('./workspaceClinicHours');
 const { createWorkspaceOperationalRouter } = require('./workspaceOperational');
 const { createWorkspaceMessagesRouter } = require('./workspaceMessages');
+const { createWorkspacePwaRouter, createWorkspacePwaHtmlMiddleware } = require('./workspacePwa');
 const router = express.Router();
 
 const staffBrowserSessionService = createStaffBrowserSessionService({ db: pool });
@@ -47,6 +48,8 @@ router.get('/:token.ics',async(req,res,next)=>{try{
   res.setHeader('Content-Type','text/calendar; charset=utf-8');res.setHeader('Content-Disposition',`inline; filename="shiloh-appointment-${a.id}.ics"`);res.send(body);
 }catch(e){next(e);}});
 
+router.use(createWorkspacePwaHtmlMiddleware());
+router.use('/pwa', createWorkspacePwaRouter({ sessionService: staffBrowserSessionService }));
 router.use('/staff-auth/admin-enrollment', createStaffAuthBrowserEnrollmentRouter({ sessionService: staffBrowserSessionService }));
 router.use('/staff-auth', createStaffBrowserSessionRouter({ service: staffBrowserSessionService }));
 router.use('/staff', staffCalendarAccessUxRoutes);
