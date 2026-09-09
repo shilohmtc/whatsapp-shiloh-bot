@@ -1,10 +1,11 @@
 const { pool } = require('../db/pool');
-const { sendWhatsAppReplyButtons } = require('./whatsapp');
+const { sendWhatsAppTemplate } = require('./whatsapp');
 const logger = require('../lib/logger');
 
 const MAX_ATTEMPTS = 3;
 const RETRY_AFTER_MS = 15 * 60 * 1000;
 const GLOBAL_COORDINATION_ROLES = ['owner', 'business_admin', 'booking_operator'];
+const STAFF_ALERT_TEMPLATE = 'shiloh_booking_request_staff_alert_v1';
 
 function positiveId(value) {
   const id = Number(value);
@@ -119,15 +120,18 @@ function alertBody(context) {
     `Requested: ${formatRequestTime(context.requested_starts_at)}`,
     `Booking #${context.appointment_id}`,
     '',
-    'Open Shiloh Workspace to accept the requested appointment, propose an alternative, or record that it cannot be accommodated.',
+    'Open Shiloh Workspace to review and resolve it. WhatsApp is only the alert doorway.',
   ].join('\n');
 }
 
 async function defaultSendAlert(recipient, context) {
-  return sendWhatsAppReplyButtons(
+  const owner = context.team_name || context.staff_name || 'Shiloh team';
+  return sendWhatsAppTemplate(
     recipient.normalized_whatsapp,
-    alertBody(context),
-    [{ id: 'staff_open_workspace', title: 'Open Workspace' }],
+    STAFF_ALERT_TEMPLATE,
+    [owner, formatRequestTime(context.requested_starts_at), String(context.appointment_id)],
+    'en',
+    ['staff_open_workspace'],
   );
 }
 
@@ -165,11 +169,13 @@ module.exports = {
   MAX_ATTEMPTS,
   RETRY_AFTER_MS,
   GLOBAL_COORDINATION_ROLES,
+  STAFF_ALERT_TEMPLATE,
   formatRequestTime,
   requestAlertContext,
   alertRecipients,
   ensureAlertRows,
   claimAlert,
   alertBody,
+  defaultSendAlert,
   dispatchBookingRequestAlerts,
 };
