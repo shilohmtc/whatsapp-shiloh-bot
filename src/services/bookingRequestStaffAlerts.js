@@ -1,11 +1,13 @@
 const { pool } = require('../db/pool');
 const { sendWhatsAppTemplate } = require('./whatsapp');
 const { TEMPLATE_NAME: STAFF_ALERT_TEMPLATE } = require('./workspaceBookingRequestAlertTemplateProvisioning');
+const { configuredMetaTemplateName } = require('./metaTemplateAdapter');
 const logger = require('../lib/logger');
 
 const MAX_ATTEMPTS = 3;
 const RETRY_AFTER_MS = 15 * 60 * 1000;
 const GLOBAL_COORDINATION_ROLES = ['owner', 'business_admin', 'booking_operator'];
+const ALERT_CONTRACT_ID = 'workspace_booking_request_alert';
 
 function positiveId(value) {
   const id = Number(value);
@@ -20,6 +22,21 @@ function formatRequestTime(value) {
     weekday: 'short', day: '2-digit', month: 'short',
     hour: '2-digit', minute: '2-digit', hour12: false,
   }).format(date);
+}
+
+function configuredAlertTemplate(environment = process.env) {
+  const template = configuredMetaTemplateName(ALERT_CONTRACT_ID, environment);
+  if (!template) {
+    const error = new Error('Workspace booking-request alert template is not configured.');
+    error.code = 'WORKSPACE_BOOKING_REQUEST_ALERT_TEMPLATE_UNCONFIGURED';
+    throw error;
+  }
+  if (template !== STAFF_ALERT_TEMPLATE) {
+    const error = new Error('Workspace booking-request alert template selector does not match the canonical contract.');
+    error.code = 'WORKSPACE_BOOKING_REQUEST_ALERT_TEMPLATE_MISMATCH';
+    throw error;
+  }
+  return template;
 }
 
 async function requestAlertContext(db, appointmentId) {
@@ -143,9 +160,10 @@ function alertBody(context) {
 async function defaultSendAlert(recipient) {
   const recipientName = String(recipient.display_name || 'Shiloh team').trim() || 'Shiloh team';
   const pendingCount = Math.max(1, Number(recipient.pending_count) || 1);
+  const template = configuredAlertTemplate();
   return sendWhatsAppTemplate(
     recipient.normalized_whatsapp,
-    STAFF_ALERT_TEMPLATE,
+    template,
     [recipientName, String(pendingCount)],
     'en',
     ['staff_open_workspace'],
@@ -186,8 +204,10 @@ module.exports = {
   MAX_ATTEMPTS,
   RETRY_AFTER_MS,
   GLOBAL_COORDINATION_ROLES,
+  ALERT_CONTRACT_ID,
   STAFF_ALERT_TEMPLATE,
   formatRequestTime,
+  configuredAlertTemplate,
   requestAlertContext,
   alertRecipients,
   ensureAlertRows,
