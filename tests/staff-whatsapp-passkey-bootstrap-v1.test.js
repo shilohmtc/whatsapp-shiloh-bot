@@ -224,16 +224,18 @@ test('#804 bootstrap route cannot issue a Workspace session until successful pas
   assert.doesNotMatch(service, /UPDATE staff_admin_accounts|INSERT INTO staff_admin_accounts|permissions\s*=|calendar_scope\s*=|service_scope\s*=/i);
 });
 
-test('#804 sign-in UX makes WhatsApp bootstrap normal and Authenticator/Recovery secondary', () => {
+test('#829 simplified sign-in removes bootstrap explainer while preserving fallback and bootstrap authority', () => {
   const base = '<section data-shiloh-provider-independent-auth><h2>Use your authenticator</h2><details><summary>Use a recovery code</summary></details>\n      </section>';
   const guided = withWhatsAppBootstrapGuidance(base);
-  assert.match(guided, /First time \/ new device/);
-  assert.match(guided, /send <code>Hi<\/code> to Shiloh/);
+  assert.equal(guided, base);
+  assert.doesNotMatch(guided, /First time \/ new device|Set up Shiloh from WhatsApp|send <code>Hi<\/code> to Shiloh/);
   const folded = withFallbackDisclosure(guided);
   assert.match(folded, /Use another sign-in method/);
   assert.match(folded, /data-shiloh-fallback-auth/);
   const script = bootstrapAwareSigninScript(ENV);
-  assert.match(script, /Send “Hi” to Shiloh on WhatsApp/);
+  assert.match(script, /\/calendar\/staff-auth\/passkeys\/authentication\/options/);
+  assert.match(script, /\/calendar\/staff-auth\/passkeys\/authentication\/finish/);
+  assert.doesNotMatch(script, /Device sign-in is not set up in this app yet|Send “Hi” to Shiloh on WhatsApp/);
 });
 
 test('#804 bootstrap presentation persists no browser authority or setup token', () => {
