@@ -47,6 +47,7 @@ test('Desktop Week becomes selected-day practitioner columns with a Mon-Sat cont
   assert.match(script, /desktop-practitioner-grid/);
   assert.match(script, /--desktop-practitioner-count/);
   assert.match(script, /data-desktop-source-week/);
+  assert.match(script, /\.view-practitioner\[data-staff-id\]/);
   assert.match(script, /CSS\.escape\(selected\)/);
 });
 
