@@ -94,9 +94,10 @@ function appointmentCanBeFinalized(item, authority, now) {
   return staffIds.every(id => id === authority.linkedStaffId);
 }
 
-function projectAppointment(item, authority, now) {
+function projectAppointment(item, authority, now, operationalDateKey = null) {
   return {
     ...item,
+    operationalDateKey: operationalDateKey || null,
     needsFinalization: appointmentNeedsFinalization(item, now),
     canFinalize: appointmentCanBeFinalized(item, authority, now),
   };
@@ -124,6 +125,19 @@ function addCalendarDay(dateKey) {
   const date = new Date(`${dateKey}T12:00:00+02:00`);
   date.setUTCDate(date.getUTCDate() + 1);
   return dateKeyInBusinessTimezone(date);
+}
+
+function subtractCalendarDay(dateKey) {
+  const date = new Date(`${dateKey}T12:00:00+02:00`);
+  date.setUTCDate(date.getUTCDate() - 1);
+  return dateKeyInBusinessTimezone(date);
+}
+
+function previousClinicDateKey(dateKey) {
+  let previous = subtractCalendarDay(dateKey);
+  const date = new Date(`${previous}T12:00:00+02:00`);
+  if (date.getUTCDay() === 0) previous = subtractCalendarDay(previous);
+  return previous;
 }
 
 function operationalDayWindow(dateKey) {
@@ -168,18 +182,36 @@ function createWorkspaceDashboardService({
   async function buildModel({ adminId, viewer, now = new Date() } = {}) {
     const { principal, authority } = await resolveAuthority(adminId, viewer);
     const requestedDateKey = dateKeyInBusinessTimezone(now);
-    const calendar = await calendarService.buildModel({
-      view: 'day',
-      date: requestedDateKey,
-      staff: 'all',
-      viewer: authority.timelineViewer,
-      now,
-    });
+    const carryOverDateKey = previousClinicDateKey(requestedDateKey);
+    const [calendar, carryOverCalendar] = await Promise.all([
+      calendarService.buildModel({
+        view: 'day',
+        date: requestedDateKey,
+        staff: 'all',
+        viewer: authority.timelineViewer,
+        now,
+      }),
+      calendarService.buildModel({
+        view: 'day',
+        date: carryOverDateKey,
+        staff: 'all',
+        viewer: authority.timelineViewer,
+        now,
+      }),
+    ]);
     const appointments = [...(calendar.timeline?.appointments || [])]
       .filter(item => item?.canonical !== false)
       .sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime())
-      .map(item => projectAppointment(item, authority, now));
-    await Promise.all(appointments.map(async (item) => {
+      .map(item => projectAppointment(item, authority, now, calendar.dateKey));
+    const carryOverSource = String(carryOverCalendar?.dateKey || '') === carryOverDateKey
+      ? (carryOverCalendar.timeline?.appointments || [])
+      : [];
+    const carryOver = [...carryOverSource]
+      .filter(item => item?.canonical !== false)
+      .sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime())
+      .map(item => projectAppointment(item, authority, now, carryOverDateKey))
+      .filter(item => item.needsFinalization);
+    await Promise.all([...appointments, ...carryOver].map(async (item) => {
       if (!item.canFinalize) return;
       item.canFinalize = await canCertifyAppointmentFn(principal, item.id, pool, {
         workspace: true,
@@ -207,12 +239,14 @@ function createWorkspaceDashboardService({
       generatedAt: now.toISOString(),
       requestedDateKey,
       operationalDateKey: calendar.dateKey,
+      carryOverDateKey,
       displayName: String(principal.display_name || 'Shiloh practitioner').trim(),
       mode: authority.mode,
       canFinalizeAllBusiness: authority.canFinalizeAllBusiness === true,
       linkedStaffId: authority.linkedStaffId,
       calendar,
       appointments,
+      carryOver,
       teamGroups: ['owner_overview', 'business_overview'].includes(authority.mode)
         ? groupOwnerAppointments(appointments, calendar.timeline?.staff || [])
         : [],
@@ -225,16 +259,23 @@ function createWorkspaceDashboardService({
     };
   }
 
-  async function finalizeVisit({ adminId, viewer, appointmentId, expectedRevision, outcome, now = new Date() } = {}) {
+  async function finalizeVisit({ adminId, viewer, appointmentId, expectedRevision, outcome, operationalDateKey, now = new Date() } = {}) {
     const { principal, authority } = await resolveAuthority(adminId, viewer);
     const id = positiveId(appointmentId);
     const targetStatus = String(outcome || '').trim().toLowerCase();
     const revisionTime = new Date(expectedRevision).getTime();
-    if (!id || !['completed', 'no_show'].includes(targetStatus) || !Number.isFinite(revisionTime) || !authority.canFinalize) {
+    const currentDateKey = dateKeyInBusinessTimezone(now);
+    const carryOverDateKey = previousClinicDateKey(currentDateKey);
+    const requestedWindowDateKey = String(operationalDateKey || currentDateKey).trim();
+    if (!id
+      || !['completed', 'no_show'].includes(targetStatus)
+      || !Number.isFinite(revisionTime)
+      || !authority.canFinalize
+      || ![currentDateKey, carryOverDateKey].includes(requestedWindowDateKey)) {
       throw new WorkspaceDashboardError('WORKSPACE_DASHBOARD_FINALIZE_INVALID', 'This finalization request is invalid.', 400);
     }
     const result = await finalizeAppointmentFn(principal, id, targetStatus, {
-      ...operationalDayWindow(dateKeyInBusinessTimezone(now)),
+      ...operationalDayWindow(requestedWindowDateKey),
       expectedRevision: String(expectedRevision),
       workspace: true,
       allowBusinessBackup: authority.canFinalizeAllBusiness === true,
@@ -271,6 +312,7 @@ module.exports = {
   appointmentCanBeFinalized,
   appointmentNeedsFinalization,
   groupOwnerAppointments,
+  previousClinicDateKey,
   operationalDayWindow,
   createWorkspaceDashboardService,
   ...service,
