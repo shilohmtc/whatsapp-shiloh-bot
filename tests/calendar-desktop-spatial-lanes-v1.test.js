@@ -135,7 +135,7 @@ test('3+ Desktop lanes keep readable minimum widths, scroll within the canvas an
   assert.match(css, /\.day-time-grid \.lane>header\{position:sticky;top:0;z-index:4/);
 });
 
-test('right-side management sheet preserves lane markup and canonical mutation attributes', () => {
+test('right-side management sheet preserves lane markup and whole-card mutation attributes', () => {
   const timeline = timelineFixture();
   const model = modelFor(timeline, [11, 12], {
     mutationCapability: {
@@ -151,7 +151,8 @@ test('right-side management sheet preserves lane markup and canonical mutation a
   assert.match(html, /\.management-card\{position:absolute;right:0;top:0/);
   assert.match(html, /data-appointment-id="8101"/);
   assert.match(html, /data-revision="rev-8101"/);
-  assert.match(html, /data-calendar-operation="manage-appointment"/);
+  assert.match(html, /data-appointment-management-target="true" role="button" tabindex="0"/);
+  assert.doesNotMatch(html, /data-calendar-operation="manage-appointment"/);
 });
 
 test('Phone default remains the canonical focused single practitioner lane', async () => {

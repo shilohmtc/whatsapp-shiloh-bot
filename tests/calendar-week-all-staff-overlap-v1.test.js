@@ -107,7 +107,7 @@ test('spatial Phone appointments remain whole-card touch targets', () => {
   assert.match(phoneCss, /min-width:44px!important;min-height:44px!important/);
 });
 
-test('Week visibility layout leaves Manage/detail mutation semantics unchanged', () => {
+test('Week visibility layout keeps the card-bound management data contract', () => {
   const item = appointment();
   const html = renderEventCard(item, model(item));
 
@@ -117,7 +117,8 @@ test('Week visibility layout leaves Manage/detail mutation semantics unchanged',
   assert.match(html, /data-client-name="Week Client"/);
   assert.match(html, /data-service-name="Full Body Swedish"/);
   assert.match(html, /data-allowed-operations="appointment:reschedule,appointment:cancel,appointment:reassign"/);
-  assert.match(html, /data-calendar-operation="manage-appointment">Manage<\/button>/);
+  assert.match(html, /data-appointment-management-target="true"/);
+  assert.doesNotMatch(html, /data-calendar-operation="manage-appointment">Manage<\/button>/);
   assert.match(html, /Week Client/);
   assert.match(html, /\+27 82 123 4567/);
   assert.match(html, /Full Body Swedish/);

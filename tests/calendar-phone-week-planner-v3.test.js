@@ -95,12 +95,11 @@ test('Phone Week Planner renders Mon-Sat strip and all permitted practitioner to
   assert.equal((html.match(/data-phone-week-date=/g) || []).length, 6);
   assert.equal((html.match(/data-phone-week-staff-id=/g) || []).length, 3);
   assert.match(html, /data-phone-active-date="2026-09-11"/);
-  assert.match(html, /data-phone-week-staff-all/);
   const script = calendarPhoneCompactV2ClientScript();
-  assert.match(script, /phoneVisibleStaffCount|--phone-visible-staff-count/);
-  assert.match(script, /if\(visibleStaff\.size<=1\)return/);
+  assert.match(script, /\[data-week-date-lane\]/);
+  assert.match(script, /eventStaffIds/);
   assert.match(script, /body\.dataset\.phoneActiveStaffId/);
-  assert.match(script, /reloadWith\(selectedIds\(\),next\)/);
+  assert.match(script, /activeStaff=id;applyPlanner\(\)/);
   assert.doesNotMatch(script, /fetch\(/);
 });
 
@@ -112,15 +111,15 @@ test('Phone Month receives one capacity band per date and retains public-holiday
   assert.doesNotMatch(html, /data-phone-public-holiday="Heritage Day"[^>]*data-kind="clinic_closure"/);
 });
 
-test('Phone Week layout is practitioner-column based and drawer stays compact', () => {
+test('Phone Week layout is active-practitioner filtered inside one date lane and drawer stays compact', () => {
   const css = phoneCalendarV2Styles();
-  assert.match(css, /--phone-visible-staff-count/);
-  assert.match(css, /data-phone-active-day="true"\]\[data-phone-staff-visible="true"\]/);
+  assert.match(css, /week-date-lane\[data-phone-active-day="true"\]/);
+  assert.match(css, /positioned-event\[data-phone-staff-visible="false"\]/);
   assert.match(css, /phone-week-date-strip/);
   assert.match(css, /phone-week-staff-toggle/);
   assert.doesNotMatch(css, /\.week-day-date\{display:grid!important/);
   const shellCss = workspaceShellStyles();
   assert.match(shellCss, /width:clamp\(176px,48vw,190px\)/);
   const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'presentation', 'calendarReadOnlyUx.js'), 'utf8');
-  assert.match(source, /queryHref\(basePath, 'week', day, visibleStaffIds/);
+  assert.match(source, /data-week-date-lane/);
 });

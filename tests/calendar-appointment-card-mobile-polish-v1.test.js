@@ -117,7 +117,7 @@ test('Calendar appointment card uses the Workspace no-mobile convention', () => 
   assert.match(html, /class="event-client-mobile">Contact unavailable<\/p>/);
 });
 
-test('Manage appointment contract remains unchanged while mobile stays presentation-only', () => {
+test('whole appointment card preserves the canonical management contract', () => {
   const appointment = baseAppointment();
   const model = baseModel(appointment);
   model.mutationCapability = {
@@ -132,8 +132,9 @@ test('Manage appointment contract remains unchanged while mobile stays presentat
   assert.match(html, /data-client-name="Demo Client"/);
   assert.match(html, /data-service-name="Bamboo Sports Massage - Area Specific"/);
   assert.match(html, /data-allowed-operations="appointment:reschedule"/);
-  assert.match(html, /data-calendar-operation="manage-appointment">Manage<\/button>/);
-  assert.doesNotMatch(html, /data-(?:client-)?mobile=/);
+  assert.match(html, /data-appointment-management-target="true" role="button" tabindex="0"/);
+  assert.match(html, /data-client-mobile="\+27 82 123 4567"/);
+  assert.doesNotMatch(html, /data-calendar-operation="manage-appointment">Manage<\/button>/);
 });
 
 test('mobile hierarchy remains present inside existing narrow-screen Calendar contract', () => {

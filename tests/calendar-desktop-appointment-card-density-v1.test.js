@@ -90,7 +90,7 @@ test('Phone touch contract keeps 44px Manage while very short cards preserve tre
   assert.doesNotMatch(shortRule, /\.event-meta\{display:none!important\}/);
 });
 
-test('Desktop density leaves Manage/detail mutation semantics unchanged', () => {
+test('Desktop density leaves whole-card detail mutation semantics unchanged', () => {
   const item = appointment();
   const html = renderEventCard(item, model(item));
 
@@ -100,7 +100,8 @@ test('Desktop density leaves Manage/detail mutation semantics unchanged', () => 
   assert.match(html, /data-client-name="Desktop Client"/);
   assert.match(html, /data-service-name="Full Body Swedish"/);
   assert.match(html, /data-allowed-operations="appointment:reschedule,appointment:cancel,appointment:reassign"/);
-  assert.match(html, /data-calendar-operation="manage-appointment">Manage<\/button>/);
+  assert.match(html, /data-appointment-management-target="true" role="button" tabindex="0"/);
+  assert.doesNotMatch(html, /data-calendar-operation="manage-appointment">Manage<\/button>/);
   assert.match(html, /10:00–11:30/);
   assert.match(html, /Desktop Client/);
   assert.match(html, /\+27 82 123 4567/);

@@ -207,7 +207,8 @@ const METRICS_EXPRESSION = `(() => {
     ownerLabelCount: visibleAll('.event-practitioners').length,
     sharedCopies: document.querySelectorAll('[data-event-id="appointment-9503"]').length,
     weekColumnCount: weekGrid ? getComputedStyle(weekGrid).gridTemplateColumns.split(' ').filter(Boolean).length : 0,
-    weekPractitionerHeaderCount: visibleAll('[data-week-practitioner-name]').length,
+    weekDateLaneCount: document.querySelectorAll('[data-week-date-lane]').length,
+    visibleWeekDateLaneCount: visibleAll('[data-week-date-lane]').length,
     weekEventPosition: firstWeekEvent ? getComputedStyle(firstWeekEvent).position : null,
     agendaCardCount: visibleAll('.agenda-view .event-card').length,
     monthCellCount: document.querySelectorAll('.month-day').length,
@@ -247,12 +248,11 @@ function assertMetrics(proof, metrics) {
   }
   if (proof.expectShared && metrics.sharedCopies !== 1) throw new Error(`${proof.name} did not retain one shared canonical booking`);
   if (proof.view === 'week') {
-    const expectedWeekLanes = proof.staffCount * 6;
-    if (proof.phone && (metrics.weekColumnCount !== 6 || metrics.weekEventPosition !== 'absolute' || metrics.weekPractitionerHeaderCount !== 0)) {
+    if (metrics.weekDateLaneCount !== 6) throw new Error(`${proof.name} did not retain exactly six Monday-Saturday date lanes`);
+    if (proof.phone && (metrics.visibleWeekDateLaneCount !== 1 || metrics.weekEventPosition !== 'absolute')) {
       throw new Error(`${proof.name} did not render the spatial Phone Week treatment`);
     }
-    if (!proof.phone && metrics.weekColumnCount !== expectedWeekLanes) throw new Error(`${proof.name} did not retain the Desktop Monday-Saturday practitioner Week model`);
-    if (!proof.phone && metrics.weekPractitionerHeaderCount !== expectedWeekLanes) throw new Error(`${proof.name} lost persistent Week practitioner headers`);
+    if (!proof.phone && metrics.weekColumnCount !== 6) throw new Error(`${proof.name} did not retain the Desktop Monday-Saturday date-first Week model`);
   }
   if (proof.view === 'agenda' && metrics.agendaCardCount < 2) throw new Error(`${proof.name} Agenda is missing canonical items`);
   if (proof.view === 'month') {

@@ -112,11 +112,10 @@ test('Phone Week preserves all permitted appointments from the canonical filtere
 
   assert.match(html, /data-view="week"/);
   assert.match(html, /data-spatial-week="true"/);
-  assert.equal((html.match(/data-week-practitioner-lane/g) || []).length, 12);
+  assert.equal((html.match(/data-week-date-lane(?:\s|>)/g) || []).length, 6);
   assert.doesNotMatch(html, /data-date="2026-09-13"/);
   assert.match(html, /data-view-practitioner-context|People in view/);
-  assert.match(html, /data-week-practitioner-name>Abigail</);
-  assert.match(html, /data-week-practitioner-name>ILince</);
+  assert.doesNotMatch(html, /data-week-practitioner-name/);
   assert.match(html, /Helen/);
   assert.match(html, /Melindi/);
   assert.match(html, /Elani Greyling F/);
@@ -137,7 +136,7 @@ test('Phone Week uses readable compact event content and the whole block as the 
   assert.match(css, /\.event-time\{display:block!important;font-size:\.65rem!important/);
   assert.match(css, /\.event-practitioner-full[^}]*\.event-service-context[^}]*\{display:none!important\}/);
   assert.match(css, /\.event-practitioner-compact\{display:block!important/);
-  assert.match(css, /\.event-operation\{position:absolute!important;inset:0!important;[^}]*min-width:44px!important;min-height:44px!important;[^}]*opacity:0!important/);
+  assert.match(renderCalendarPage(weekModel()), /data-appointment-management-target="true"/);
 });
 
 test('taller Phone Week appointments progressively reveal service context', () => {
@@ -174,7 +173,8 @@ test('Manage/detail data contract remains unchanged for Phone cards', () => {
   assert.match(html, /data-staff-ids="2"/);
   assert.match(html, /data-client-name="Julalie"/);
   assert.match(html, /data-service-name="Bamboo Sports Massage"/);
-  assert.match(html, /data-calendar-operation="manage-appointment">Manage<\/button>/);
+  assert.match(html, /data-appointment-management-target="true"/);
+  assert.doesNotMatch(html, /data-calendar-operation="manage-appointment">Manage<\/button>/);
   assert.match(html, /Bamboo Sports Massage/);
 });
 

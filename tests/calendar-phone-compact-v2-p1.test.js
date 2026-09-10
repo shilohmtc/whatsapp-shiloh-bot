@@ -45,21 +45,17 @@ test('Phone V2 controls collapse Calendar navigation to compact date, view and p
   assert.match(html, /phone-date-weekdays[\s\S]*>M<[\s\S]*>S</);
 });
 
-test('Phone V2 floating plus reuses canonical booking and schedule mutation actions in operational order', () => {
+test('Phone V2 multi-practitioner launcher offers booking without guessing a practitioner', () => {
   const html = renderPhoneCalendarDock(model(), {
     basePath: '/calendar/read-only',
     bookingPath: '/calendar/book',
     bookingAllowed: true,
   });
   assert.match(html, /phone-today-fab/);
-  assert.match(html, /data-calendar-operation="add-leave"/);
-  assert.match(html, />Time off</);
-  assert.match(html, /data-calendar-operation="add-block"/);
-  assert.match(html, />Block time</);
-  assert.match(html, /\/calendar\/book\?date=2026-09-05&amp;staff=22/);
+  assert.match(html, /\/calendar\/book\?date=2026-09-05/);
+  assert.doesNotMatch(html, /\/calendar\/book\?[^"']*staff=/);
   assert.match(html, />Appointment</);
-  assert.ok(html.indexOf('>Appointment</') < html.indexOf('>Block time</'));
-  assert.ok(html.indexOf('>Block time</') < html.indexOf('>Time off</'));
+  assert.doesNotMatch(html, /data-calendar-operation="(?:add-leave|add-block)"/);
 });
 
 test('Phone V2 action launcher fails closed when mutation and booking authority are absent', () => {

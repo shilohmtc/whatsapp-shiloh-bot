@@ -144,14 +144,14 @@ function renderPhoneWeekPlannerHeader(model, { basePath = '/calendar/read-only' 
   const rendered = new Set(visibleIds);
   const permitted = Array.isArray(model?.permittedStaff) ? model.permittedStaff : (model?.timeline?.staff || []);
   const dayLinks = days.map(day => `<a class="phone-week-date${day === activeDate ? ' active' : ''}" data-phone-week-date="${escapeHtml(day)}" href="${escapeHtml(calendarStaffHref(basePath, { view: 'week', date: day, staffIds: visibleIds, activeStaffId: active }))}"${day === activeDate ? ' aria-current="date"' : ''}>${escapeHtml(phoneWeekDayLabel(day))}</a>`).join('');
-  const allActive = permitted.length > 0 && permitted.every(person => rendered.has(positiveId(person.id)));
   const staffButtons = permitted.map(person => {
     const id = positiveId(person.id);
     if (!id) return '';
     const isRendered = rendered.has(id);
-    return `<button type="button" class="phone-week-staff-toggle${isRendered ? ' active' : ''}" data-phone-week-staff-id="${id}" data-phone-week-staff-rendered="${isRendered ? 'true' : 'false'}" aria-pressed="${isRendered ? 'true' : 'false'}">${escapeHtml(person.displayName || `Staff ${id}`)}</button>`;
+    const isActive = id === active;
+    return `<button type="button" class="phone-week-staff-toggle${isActive ? ' active' : ''}" data-phone-week-staff-id="${id}" data-phone-week-staff-rendered="${isRendered ? 'true' : 'false'}" aria-pressed="${isActive ? 'true' : 'false'}">${escapeHtml(person.displayName || `Staff ${id}`)}</button>`;
   }).join('');
-  return `<section class="phone-week-planner-header" data-phone-week-planner aria-label="Week planner"><nav class="phone-week-date-strip" aria-label="Week dates">${dayLinks}</nav><div class="phone-week-staff-strip" aria-label="Visible practitioners"><button type="button" class="phone-week-staff-toggle phone-week-staff-all${allActive ? ' active' : ''}" data-phone-week-staff-all aria-pressed="${allActive ? 'true' : 'false'}">All</button>${staffButtons}</div></section>`;
+  return `<section class="phone-week-planner-header" data-phone-week-planner aria-label="Week planner"><nav class="phone-week-date-strip" aria-label="Week dates">${dayLinks}</nav><div class="phone-week-staff-strip" aria-label="Active practitioner">${staffButtons}</div></section>`;
 }
 
 function clockMinutes(value) {
@@ -363,7 +363,8 @@ function renderPhoneCalendarDock(model, {
   bookingAllowed = false,
 } = {}) {
   const active = resolveActiveStaff(model);
-  const staffId = positiveId(active?.id);
+  const visibleStaffIds = visibleStaffIdsForPhone(model);
+  const staffId = visibleStaffIds.length === 1 ? positiveId(active?.id) : null;
   const date = String(model?.dateKey || '');
   const todayHref = calendarStaffHref(basePath, { view: model?.view === 'month' ? 'month' : 'week', date: businessToday(), staffIds: visibleStaffIdsForPhone(model), activeStaffId: staffId });
   const actions = [];
@@ -416,14 +417,15 @@ body[data-phone-calendar-v2="true"] .workspace-main .day-view .lane h3{font-size
 body[data-phone-calendar-v2="true"] .workspace-main .day-view .lane-actions{display:none!important}
 .phone-week-planner-header{display:grid;gap:2px;border-bottom:1px solid var(--line);background:#fafbf8}.phone-week-date-strip{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:2px;padding:2px}.phone-week-date{display:grid;place-items:center;min-width:0;min-height:44px;padding:3px 1px;border-radius:8px;color:var(--muted);font-size:.62rem;font-weight:800}.phone-week-date.active{background:var(--leaf-deep);color:#fff}.phone-week-staff-strip{display:flex;gap:3px;min-height:46px;padding:1px 3px 3px;overflow-x:auto;scrollbar-width:none}.phone-week-staff-strip::-webkit-scrollbar{display:none}.phone-week-staff-toggle{flex:0 0 auto;min-height:44px;padding:6px 9px;border:1px solid var(--line);border-radius:9px;background:#fff;color:var(--muted);font:inherit;font-size:.66rem;font-weight:800;cursor:pointer}.phone-week-staff-toggle.active{border-color:var(--leaf);background:var(--leaf-soft);color:var(--leaf-deep)}
 body[data-phone-calendar-v2="true"] .workspace-main .week-time-grid{grid-template-columns:32px minmax(0,1fr)!important;overflow:auto!important}
-body[data-phone-calendar-v2="true"] .workspace-main .week-time-grid .time-rail{width:32px!important;margin-top:44px!important}
-body[data-phone-calendar-v2="true"] .workspace-main .week-grid{display:grid!important;grid-template-columns:repeat(var(--phone-visible-staff-count,1),minmax(88px,1fr))!important;min-width:max(100%,calc(var(--phone-visible-staff-count,1) * 88px))!important;width:100%!important;gap:0!important}
-body[data-phone-calendar-v2="true"] .workspace-main .week-day.week-practitioner-lane{display:none!important}body[data-phone-calendar-v2="true"] .workspace-main .week-day.week-practitioner-lane[data-phone-active-day="true"][data-phone-staff-visible="true"]{display:block!important}
+body[data-phone-calendar-v2="true"] .workspace-main .week-time-grid .time-rail{width:32px!important;margin-top:0!important}
+body[data-phone-calendar-v2="true"] .workspace-main .week-grid{display:block!important;min-width:0!important;width:100%!important}
+body[data-phone-calendar-v2="true"] .workspace-main .week-day.week-date-lane{display:none!important}body[data-phone-calendar-v2="true"] .workspace-main .week-day.week-date-lane[data-phone-active-day="true"]{display:block!important}
 body[data-phone-calendar-v2="true"] .workspace-main .week-day{display:block!important;min-width:0!important;width:auto!important;border:0!important;border-right:1px solid var(--line)!important;border-radius:0!important}
 body[data-phone-calendar-v2="true"] .workspace-main .week-day:last-child{border-right:0!important}
-body[data-phone-calendar-v2="true"] .workspace-main .week-day>header{height:44px!important;min-height:44px!important;padding:3px 2px!important;display:grid!important;place-items:center!important}
+body[data-phone-calendar-v2="true"] .workspace-main .week-day>header{display:none!important}
 body[data-phone-calendar-v2="true"] .workspace-main .week-practitioner-hours,body[data-phone-calendar-v2="true"] .workspace-main .week-day-date,body[data-phone-calendar-v2="true"] .workspace-main .week-day>header small,body[data-phone-calendar-v2="true"] .workspace-main .week-day-month{display:none!important}body[data-phone-calendar-v2="true"] .workspace-main .week-practitioner-name{display:block!important;max-width:100%!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important;text-align:center!important;font-size:.64rem!important;line-height:1.05!important}
 body[data-phone-calendar-v2="true"] .workspace-main .positioned-event{top:var(--phone-event-top,var(--event-top))!important;height:var(--phone-event-height,var(--event-height))!important;min-height:28px!important;overflow:visible!important}
+body[data-phone-calendar-v2="true"] .workspace-main .week-view .positioned-event[data-phone-staff-visible="false"]{display:none!important}
 body[data-phone-calendar-v2="true"] .workspace-main .day-view .positioned-event{left:2px!important;right:2px!important;width:auto!important}
 body[data-phone-calendar-v2="true"] .workspace-main .positioned-event .event-card{height:100%!important;min-height:28px!important;padding:2px 4px!important;border-left-width:2px!important;border-radius:4px!important;box-shadow:none!important}
 body[data-phone-calendar-v2="true"] .workspace-main .positioned-event .event-card-top{min-height:0!important;padding:0!important}body[data-phone-calendar-v2="true"] .workspace-main .positioned-event .event-time{font-size:.5rem!important;line-height:1!important}body[data-phone-calendar-v2="true"] .workspace-main .positioned-event .event-time-range{display:none!important}body[data-phone-calendar-v2="true"] .workspace-main .positioned-event .event-time-start{display:inline!important}
@@ -455,28 +457,25 @@ all('.positioned-event').forEach(node=>{const top=px(node,'--event-top'),height=
 const dayLanes=all('.day-view .lane[data-staff-id]');
 let activeLane=dayLanes.find(node=>String(node.dataset.staffId)===active)||dayLanes[0]||null;
 dayLanes.forEach(node=>node.dataset.phoneActivePractitioner=String(node===activeLane));
-const weekLanes=all('[data-week-practitioner-lane]');
+const weekLanes=all('[data-week-date-lane]');
 if(weekLanes.length){
   const activeDay=String(body.dataset.phoneActiveDate||weekLanes[0]?.dataset.date||'');
-  const renderedStaff=new Set(weekLanes.map(node=>String(node.dataset.staffId||'')).filter(Boolean));
-  let visibleStaff=new Set(renderedStaff);
-  const grid=document.querySelector('.week-grid');
   const staffButtons=all('[data-phone-week-staff-id]');
-  const allButton=document.querySelector('[data-phone-week-staff-all]');
   const permittedIds=staffButtons.map(button=>String(button.dataset.phoneWeekStaffId||'')).filter(Boolean);
-  const selectedIds=()=>Array.from(visibleStaff);
+  const renderedStaff=new Set(staffButtons.filter(button=>button.dataset.phoneWeekStaffRendered==='true').map(button=>String(button.dataset.phoneWeekStaffId||'')));
+  let activeStaff=renderedStaff.has(active)?active:(Array.from(renderedStaff)[0]||'');
+  const selectedIds=()=>Array.from(renderedStaff);
   function withStaff(href,ids,activeOverride){const url=new URL(href,location.origin);url.searchParams.delete('staff');ids.forEach(id=>url.searchParams.append('staff',id));if(activeOverride)url.searchParams.set('activeStaff',String(activeOverride));return url.pathname+'?'+url.searchParams.toString();}
-  function syncPlannerLinks(){const ids=selectedIds();all('[data-phone-week-date],.phone-view-option,.phone-date-cell,.phone-today-fab').forEach(node=>node.setAttribute('href',withStaff(node.getAttribute('href')||location.href,ids)));all('.phone-staff-option').forEach(node=>node.setAttribute('href',withStaff(node.getAttribute('href')||location.href,ids,node.dataset.phoneStaffId)));}
-  function syncUrl(){const url=new URL(location.href);url.searchParams.delete('staff');selectedIds().forEach(id=>url.searchParams.append('staff',id));history.replaceState(null,'',url.pathname+'?'+url.searchParams.toString());}
-  function applyPlanner(){weekLanes.forEach(node=>{node.dataset.phoneActiveDay=String(node.dataset.date===activeDay);node.dataset.phoneStaffVisible=String(visibleStaff.has(String(node.dataset.staffId)));});if(grid)grid.style.setProperty('--phone-visible-staff-count',String(Math.max(1,visibleStaff.size)));staffButtons.forEach(button=>{const selected=visibleStaff.has(String(button.dataset.phoneWeekStaffId));button.classList.toggle('active',selected);button.setAttribute('aria-pressed',String(selected));});if(allButton){const allSelected=permittedIds.length>0&&permittedIds.every(id=>visibleStaff.has(id));allButton.classList.toggle('active',allSelected);allButton.setAttribute('aria-pressed',String(allSelected));}syncUrl();syncPlannerLinks();}
+  function syncPlannerLinks(){const ids=selectedIds();all('[data-phone-week-date],.phone-view-option,.phone-date-cell,.phone-today-fab').forEach(node=>node.setAttribute('href',withStaff(node.getAttribute('href')||location.href,ids,activeStaff)));all('.phone-staff-option').forEach(node=>node.setAttribute('href',withStaff(node.getAttribute('href')||location.href,ids,node.dataset.phoneStaffId)));}
+  function syncUrl(){const url=new URL(location.href);url.searchParams.delete('staff');selectedIds().forEach(id=>url.searchParams.append('staff',id));if(activeStaff)url.searchParams.set('activeStaff',activeStaff);history.replaceState(null,'',url.pathname+'?'+url.searchParams.toString());}
+  function applyPlanner(){weekLanes.forEach(node=>{node.dataset.phoneActiveDay=String(node.dataset.date===activeDay);all('.positioned-event',node).forEach(eventNode=>{const card=eventNode.querySelector('[data-event-staff-ids]');const ids=String(card?.dataset.eventStaffIds||'').split(',').filter(Boolean);const visible=!ids.length||ids.includes(activeStaff);eventNode.dataset.phoneStaffVisible=String(visible);if(visible){eventNode.style.setProperty('--week-event-left','2px');eventNode.style.setProperty('--week-event-width','calc(100% - 4px)');}});});body.dataset.phoneActiveStaffId=activeStaff;staffButtons.forEach(button=>{const selected=String(button.dataset.phoneWeekStaffId)===activeStaff;button.classList.toggle('active',selected);button.setAttribute('aria-pressed',String(selected));});const activeButton=staffButtons.find(button=>String(button.dataset.phoneWeekStaffId)===activeStaff),activeLabel=document.querySelector('[data-phone-active-staff]');if(activeButton&&activeLabel){activeLabel.dataset.phoneActiveStaff=activeStaff;activeLabel.textContent=activeButton.textContent.trim();}all('.phone-staff-option').forEach(option=>{const selected=String(option.dataset.phoneStaffId)===activeStaff;option.classList.toggle('active',selected);if(selected)option.setAttribute('aria-current','true');else option.removeAttribute('aria-current');});syncUrl();syncPlannerLinks();}
   function reloadWith(ids,activeOverride){const url=new URL(location.href);url.searchParams.set('view','week');url.searchParams.set('date',activeDay);url.searchParams.delete('staff');ids.forEach(id=>url.searchParams.append('staff',id));if(activeOverride)url.searchParams.set('activeStaff',String(activeOverride));location.assign(url.pathname+'?'+url.searchParams.toString());}
-  staffButtons.forEach(button=>button.addEventListener('click',()=>{const id=String(button.dataset.phoneWeekStaffId||'');if(!id)return;if(!renderedStaff.has(id)){reloadWith([...new Set([...selectedIds(),id])]);return;}if(visibleStaff.has(id)){if(visibleStaff.size<=1)return;visibleStaff.delete(id);if(String(body.dataset.phoneActiveStaffId||'')===id){const next=selectedIds()[0]||'';reloadWith(selectedIds(),next);return;}}else visibleStaff.add(id);applyPlanner();}));
-  if(allButton)allButton.addEventListener('click',()=>{if(permittedIds.some(id=>!renderedStaff.has(id))){reloadWith(permittedIds);return;}visibleStaff=new Set(renderedStaff);applyPlanner();});
+  staffButtons.forEach(button=>button.addEventListener('click',()=>{const id=String(button.dataset.phoneWeekStaffId||'');if(!id)return;if(!renderedStaff.has(id)){reloadWith([...new Set([...selectedIds(),id])],id);return;}activeStaff=id;applyPlanner();}));
   applyPlanner();
 }
 all('.month-day[data-phone-capacity-band]').forEach(day=>{const link=day.querySelector('.month-day-link');if(!link||link.querySelector('.phone-month-density'))return;const density=document.createElement('span');density.className='phone-month-density';density.dataset.band=String(day.dataset.phoneCapacityBand||'light');density.title=String(day.dataset.phoneCapacityLabel||'Capacity');density.setAttribute('aria-hidden','true');density.appendChild(document.createElement('i'));link.appendChild(density);});
 document.addEventListener('toggle',event=>{const opened=event.target;if(!opened?.matches?.('[data-phone-calendar-menu]')||!opened.open)return;all('[data-phone-calendar-menu][open]').forEach(menu=>{if(menu!==opened)menu.open=false;});},true);
-function laneContext(column){const lane=column.closest('[data-staff-id][data-date]');if(!lane)return null;const staffId=Number(lane.dataset.staffId),date=lane.dataset.date;if(!Number.isSafeInteger(staffId)||staffId<1||!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(String(date||'')))return null;return{staffId,date};}
+function laneContext(column){const lane=column.closest('[data-date]');if(!lane)return null;const staffId=Number(lane.dataset.staffId||lane.dataset.bookingStaffId),date=lane.dataset.date;if(!Number.isSafeInteger(staffId)||staffId<1||!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(String(date||'')))return null;return{staffId,date};}
 function formatTime(minutes){const h=Math.floor(minutes/60),m=minutes%60;return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0');}
 if(bookingPath){all('.day-view .time-column,.week-view .time-column').forEach(column=>{column.addEventListener('click',event=>{if(event.defaultPrevented||event.button>0||event.target.closest('a,button,.positioned-event,.event-card'))return;const context=laneContext(column);if(!context)return;const rect=column.getBoundingClientRect();if(rect.height<=0)return;const y=Math.max(0,Math.min(rect.height-1,event.clientY-rect.top));const raw=gridStart+(y/pxPerHour)*60;const snapped=Math.max(gridStart,Math.min(gridEnd-30,Math.round(raw/30)*30));const params=new URLSearchParams({date:context.date,time:formatTime(snapped),staff:String(context.staffId)});location.assign(bookingPath+'?'+params.toString());});});}
 })();`;

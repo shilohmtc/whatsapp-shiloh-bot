@@ -60,7 +60,7 @@ function decorateUnavailableContract(html, error) {
 
 function bookingOperationalActions(dateKey, bookingPath = '/calendar/book') {
   const href = `${bookingPath}?date=${encodeURIComponent(String(dateKey || ''))}`;
-  return [{ label: '+ Appointment', ariaLabel: 'Create booking', href, tone: 'primary' }];
+  return [{ label: '+ New appointment', ariaLabel: 'Create booking', href, tone: 'primary' }];
 }
 
 function escapeHtml(value = '') {

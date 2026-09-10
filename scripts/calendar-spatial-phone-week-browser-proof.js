@@ -338,16 +338,18 @@ async function main() {
       viewport:{width:innerWidth,height:innerHeight,screenWidth:screen.width,screenHeight:screen.height},
       weekColumns:getComputedStyle(document.querySelector('.week-grid')).gridTemplateColumns.split(' ').filter(Boolean).length,
       dayColumns:document.querySelectorAll('.week-day').length,
-      uniqueDates:new Set(Array.from(document.querySelectorAll('[data-week-practitioner-lane]')).map(node=>node.dataset.date)).size,
-      staffIds:Array.from(new Set(Array.from(document.querySelectorAll('[data-week-practitioner-lane]')).map(node=>node.dataset.staffId))),
+      uniqueDates:new Set(Array.from(document.querySelectorAll('[data-week-date-lane]')).map(node=>node.dataset.date)).size,
+      practitionerLaneCount:document.querySelectorAll('[data-week-practitioner-lane]').length,
+      eventStaffIds:Array.from(new Set(Array.from(document.querySelectorAll('[data-event-staff-ids]')).flatMap(node=>String(node.dataset.eventStaffIds||'').split(',').filter(Boolean)))),
       sundayColumns:Array.from(document.querySelectorAll('.week-day')).filter(node=>new Date(node.dataset.date+'T12:00:00Z').getUTCDay()===0).length,
       phoneControlsDisplay:getComputedStyle(document.querySelector('[data-phone-calendar-v2-controls]')).display,
     }))()`);
     assert.deepEqual(desktopMetrics.viewport, { width: 1440, height: 1000, screenWidth: 1440, screenHeight: 1000 });
-    assert.equal(desktopMetrics.weekColumns, 18);
-    assert.equal(desktopMetrics.dayColumns, 18);
+    assert.equal(desktopMetrics.weekColumns, 6);
+    assert.equal(desktopMetrics.dayColumns, 6);
     assert.equal(desktopMetrics.uniqueDates, 6);
-    assert.deepEqual(desktopMetrics.staffIds, ['51', '52', '53']);
+    assert.equal(desktopMetrics.practitionerLaneCount, 0);
+    assert.deepEqual(desktopMetrics.eventStaffIds, ['51', '52', '53']);
     assert.equal(desktopMetrics.sundayColumns, 0);
     assert.equal(desktopMetrics.phoneControlsDisplay, 'none');
     screenshots.push({ ...(await capture('desktop-week-authority-preserved')), viewport: desktopMetrics.viewport, metrics: desktopMetrics });
@@ -374,12 +376,11 @@ async function main() {
       const visible=node=>{if(!node)return false;const style=getComputedStyle(node),rect=node.getBoundingClientRect();return style.display!=='none'&&style.visibility!=='hidden'&&rect.width>0&&rect.height>0;};
       const scroller=document.querySelector('.week-time-grid');
       const grid=document.querySelector('.week-grid');
-      const lanes=Array.from(document.querySelectorAll('[data-week-practitioner-lane]'));
+      const lanes=Array.from(document.querySelectorAll('[data-week-date-lane]'));
       const visibleLanes=lanes.filter(visible);
       const visibleColumns=visibleLanes.map(node=>node.querySelector('.time-column')).filter(Boolean);
       const dateButtons=Array.from(document.querySelectorAll('[data-phone-week-date]'));
       const staffButtons=Array.from(document.querySelectorAll('[data-phone-week-staff-id]'));
-      const allButton=document.querySelector('[data-phone-week-staff-all]');
       const plus=document.querySelector('.phone-plus-menu>summary');
       const today=document.querySelector('.phone-today-fab');
       const menuToggle=document.querySelector('[data-workspace-drawer-toggle]');
@@ -395,17 +396,16 @@ async function main() {
         weekScrollerScrollWidth:scroller?.scrollWidth||0,
         firstColumnWidth:visibleLanes[0]?.getBoundingClientRect().width||0,
         visibleColumns:visibleLanes.length,
-        visibleStaffIds:Array.from(new Set(visibleLanes.map(node=>node.dataset.staffId))),
         visibleDates:Array.from(new Set(visibleLanes.map(node=>node.dataset.date))),
-        allStaffIds:Array.from(new Set(lanes.map(node=>node.dataset.staffId))),
+        practitionerLaneCount:document.querySelectorAll('[data-week-practitioner-lane]').length,
+        visibleAppointmentStaffIds:Array.from(document.querySelectorAll('.week-view .positioned-event')).filter(visible).map(node=>node.querySelector('[data-event-staff-ids]')?.dataset.eventStaffIds||''),
         sundayColumns:Array.from(document.querySelectorAll('.week-day')).filter(node=>new Date(node.dataset.date+'T12:00:00Z').getUTCDay()===0).length,
         plannerVisible:visible(document.querySelector('[data-phone-week-planner]')),
         dateButtonCount:dateButtons.length,
         activeDateButtons:dateButtons.filter(node=>node.classList.contains('active')).map(node=>node.dataset.phoneWeekDate),
-        staffNames:visibleLanes.map(node=>node.querySelector('.week-practitioner-name')?.textContent.trim()||''),
         visibleRepeatedDateHeaders:visibleLanes.flatMap(node=>Array.from(node.querySelectorAll('.week-day-date'))).filter(visible).length,
-        allSelected:allButton?.classList.contains('active')||false,
-        minStaffToggleHeight:Math.min(...[allButton,...staffButtons].filter(Boolean).map(node=>node.getBoundingClientRect().height)),
+        activeStaffButtons:staffButtons.filter(node=>node.classList.contains('active')).map(node=>node.dataset.phoneWeekStaffId),
+        minStaffToggleHeight:Math.min(...staffButtons.map(node=>node.getBoundingClientRect().height)),
         actionStaffId:document.body.dataset.phoneActiveStaffId||'',
         activeStaffName:document.querySelector('[data-phone-active-staff]')?.textContent.trim()||'',
         currentView:document.querySelector('.phone-view-menu>summary strong')?.textContent.trim()||'',
@@ -426,26 +426,24 @@ async function main() {
     })()`);
     assert.deepEqual(weekMetrics.viewport, { width: 390, height: 844, screenWidth: 390, screenHeight: 844 });
     assert.ok(weekMetrics.rootScrollWidth <= 391, 'Phone Week Planner leaked horizontal overflow');
-    assert.equal(weekMetrics.weekColumns, 3);
-    assert.equal(weekMetrics.visibleColumns, 3);
-    assert.deepEqual(weekMetrics.visibleStaffIds, ['51', '52', '53']);
+    assert.equal(weekMetrics.weekColumns, 1);
+    assert.equal(weekMetrics.visibleColumns, 1);
     assert.deepEqual(weekMetrics.visibleDates, [DATE_KEY]);
-    assert.deepEqual(weekMetrics.allStaffIds, ['51', '52', '53']);
-    assert.deepEqual(weekMetrics.staffNames, ['Amber Room', 'Birch Room', 'Cedar Room']);
-    assert.ok(weekMetrics.firstColumnWidth >= 88, `Phone Week practitioner column is too narrow: ${weekMetrics.firstColumnWidth}px`);
+    assert.equal(weekMetrics.practitionerLaneCount, 0);
+    assert.ok(weekMetrics.visibleAppointmentStaffIds.every(ids=>ids.split(',').includes('51')), 'Phone Week showed an appointment outside the active practitioner');
+    assert.ok(weekMetrics.firstColumnWidth >= 300, `Phone Week active date lane is too narrow: ${weekMetrics.firstColumnWidth}px`);
     assert.ok(weekMetrics.weekScrollerScrollWidth <= weekMetrics.weekScrollerClientWidth + 2, 'Phone Week Planner requires horizontal panning');
     assert.equal(weekMetrics.sundayColumns, 0);
     assert.equal(weekMetrics.plannerVisible, true);
     assert.equal(weekMetrics.dateButtonCount, 6);
     assert.deepEqual(weekMetrics.activeDateButtons, [DATE_KEY]);
     assert.equal(weekMetrics.visibleRepeatedDateHeaders, 0);
-    assert.equal(weekMetrics.allSelected, true);
+    assert.deepEqual(weekMetrics.activeStaffButtons, ['51']);
     assert.ok(weekMetrics.minStaffToggleHeight >= 44, 'Phone Week practitioner toggle is below 44px');
     assert.equal(weekMetrics.actionStaffId, '51');
     assert.equal(weekMetrics.activeStaffName, 'Amber Room');
     assert.equal(weekMetrics.currentView, 'Week');
     assert.deepEqual(weekMetrics.normalPhoneViews, ['week', 'month']);
-    assert.ok(weekMetrics.maxColumnTopDelta <= 1, 'Phone Week practitioner time columns are not vertically aligned');
     assert.ok(weekMetrics.minColumnHeight >= 778 && weekMetrics.maxColumnHeight <= 782, 'Phone Week does not use the 60px/hour compact grid');
     assert.equal(weekMetrics.plusVisible, true);
     assert.ok(weekMetrics.plusWidth >= 44 && weekMetrics.plusHeight >= 44, 'Phone + launcher is below 44px');
@@ -464,7 +462,7 @@ async function main() {
       const targets=Array.from(document.querySelectorAll('.phone-plus-popover>a,.phone-plus-popover button')).filter(visible);
       return {labels:targets.map(node=>node.textContent.trim()),minHeight:Math.min(...targets.map(node=>node.getBoundingClientRect().height))};
     })()`);
-    assert.deepEqual(plusMetrics.labels, ['Appointment', 'Block time', 'Time off']);
+    assert.deepEqual(plusMetrics.labels, ['Appointment']);
     assert.ok(plusMetrics.minHeight >= 44, 'Phone + action target is below 44px');
     screenshots.push({ ...(await capture('phone-plus-actions')), viewport: { width: 390, height: 844 }, metrics: plusMetrics });
     await evaluate(cdp, `document.querySelector('.phone-plus-menu>summary').click();true`);
@@ -496,81 +494,45 @@ async function main() {
     await poll(() => evaluate(cdp, `!document.querySelector('[data-workspace-navigation-drawer]').classList.contains('open')`), Boolean);
     await poll(() => evaluate(cdp, `document.querySelector('[data-workspace-navigation-drawer]').getBoundingClientRect().right`), value => value <= 1);
 
-    await evaluate(cdp, `document.querySelector('[data-phone-week-staff-id="53"]').click();true`);
-    await poll(() => evaluate(cdp, `Array.from(document.querySelectorAll('[data-week-practitioner-lane]')).filter(node=>getComputedStyle(node).display!=='none'&&node.getBoundingClientRect().width>0).length`), value => value === 2);
-    const hiddenMetrics = await evaluate(cdp, `(() => {
-      const visible=node=>getComputedStyle(node).display!=='none'&&node.getBoundingClientRect().width>0;
-      const lanes=Array.from(document.querySelectorAll('[data-week-practitioner-lane]')).filter(visible);
-      return {
-        visibleStaffIds:lanes.map(node=>node.dataset.staffId),
-        minWidth:Math.min(...lanes.map(node=>node.getBoundingClientRect().width)),
-        allSelected:document.querySelector('[data-phone-week-staff-all]')?.classList.contains('active')||false,
-      };
-    })()`);
-    assert.deepEqual(hiddenMetrics.visibleStaffIds, ['51', '52']);
-    assert.ok(hiddenMetrics.minWidth > weekMetrics.firstColumnWidth, 'Remaining practitioner columns did not expand after hiding a colleague');
-    assert.equal(hiddenMetrics.allSelected, false);
-    screenshots.push({ ...(await capture('phone-week-hide-practitioner')), viewport: { width: 390, height: 844 }, metrics: hiddenMetrics });
-
-    await evaluate(cdp, `document.querySelector('[data-phone-week-staff-id="51"]').click();true`);
+    await evaluate(cdp, `document.querySelector('[data-phone-week-staff-id="52"]').click();true`);
     await poll(() => evaluate(cdp, `document.body.dataset.phoneActiveStaffId`), value => value === '52');
-    await poll(() => evaluate(cdp, `Array.from(document.querySelectorAll('[data-week-practitioner-lane]')).filter(node=>getComputedStyle(node).display!=='none'&&node.getBoundingClientRect().width>0).length`), value => value === 1);
     const safeTargetMetrics = await evaluate(cdp, `(() => {
       const visible=node=>getComputedStyle(node).display!=='none'&&node.getBoundingClientRect().width>0;
-      const lanes=Array.from(document.querySelectorAll('[data-week-practitioner-lane]')).filter(visible);
+      const events=Array.from(document.querySelectorAll('.week-view .positioned-event')).filter(visible);
       const operationStaff=Array.from(document.querySelectorAll('.phone-plus-popover [data-staff-id]')).map(node=>node.dataset.staffId);
       const appointmentHref=document.querySelector('.phone-plus-popover a')?.getAttribute('href')||'';
       return {
         activeStaff:document.body.dataset.phoneActiveStaffId||'',
         activeStaffName:document.querySelector('[data-phone-active-staff]')?.textContent.trim()||'',
-        visibleStaffIds:lanes.map(node=>node.dataset.staffId),
+        visibleAppointmentStaffIds:events.map(node=>node.querySelector('[data-event-staff-ids]')?.dataset.eventStaffIds||''),
         operationStaff,
         appointmentHref,
       };
     })()`);
     assert.equal(safeTargetMetrics.activeStaff, '52');
     assert.equal(safeTargetMetrics.activeStaffName, 'Birch Room');
-    assert.deepEqual(safeTargetMetrics.visibleStaffIds, ['52']);
-    assert.ok(safeTargetMetrics.operationStaff.length >= 2 && safeTargetMetrics.operationStaff.every(id => id === '52'), 'Phone mutation actions still target a hidden practitioner');
-    assert.match(safeTargetMetrics.appointmentHref, /staff=52/);
-    screenshots.push({ ...(await capture('phone-week-action-target-follows-visible')), viewport: { width: 390, height: 844 }, metrics: safeTargetMetrics });
-
-    await evaluate(cdp, `document.querySelector('[data-phone-week-staff-all]').click();true`);
-    await poll(() => evaluate(cdp, `Array.from(document.querySelectorAll('[data-week-practitioner-lane]')).filter(node=>getComputedStyle(node).display!=='none'&&node.getBoundingClientRect().width>0).length`), value => value === 3);
-    const restoredMetrics = await evaluate(cdp, `(() => ({
-      activeStaff:document.body.dataset.phoneActiveStaffId||'',
-      visibleStaffIds:Array.from(document.querySelectorAll('[data-week-practitioner-lane]')).filter(node=>getComputedStyle(node).display!=='none'&&node.getBoundingClientRect().width>0).map(node=>node.dataset.staffId),
-      allSelected:document.querySelector('[data-phone-week-staff-all]')?.classList.contains('active')||false,
-    }))()`);
-    assert.equal(restoredMetrics.activeStaff, '52');
-    assert.deepEqual([...restoredMetrics.visibleStaffIds].sort(), ['51', '52', '53']);
-    assert.equal(restoredMetrics.allSelected, true);
-    screenshots.push({ ...(await capture('phone-week-all-restored')), viewport: { width: 390, height: 844 }, metrics: restoredMetrics });
+    assert.ok(safeTargetMetrics.visibleAppointmentStaffIds.every(ids=>ids.split(',').includes('52')), 'Phone practitioner switch did not filter canonical event ownership');
+    assert.deepEqual(safeTargetMetrics.operationStaff, []);
+    assert.doesNotMatch(safeTargetMetrics.appointmentHref, /staff=/);
+    screenshots.push({ ...(await capture('phone-week-active-practitioner-switch')), viewport: { width: 390, height: 844 }, metrics: safeTargetMetrics });
 
     await evaluate(cdp, `document.querySelector('[data-phone-week-date="2026-09-07"]').click();true`);
     await poll(() => evaluate(cdp, `document.body.dataset.phoneActiveDate`), value => value === '2026-09-07');
-    await poll(() => evaluate(cdp, `Array.from(document.querySelectorAll('[data-week-practitioner-lane]')).filter(node=>getComputedStyle(node).display!=='none'&&node.getBoundingClientRect().width>0).length`), value => value === 3);
+    await poll(() => evaluate(cdp, `Array.from(document.querySelectorAll('[data-week-date-lane]')).filter(node=>getComputedStyle(node).display!=='none'&&node.getBoundingClientRect().width>0).length`), value => value === 1);
     screenshots.push({ ...(await capture('phone-week-active-monday')), viewport: { width: 390, height: 844 } });
 
     await evaluate(cdp, `(() => {
-      const column=document.querySelector('[data-week-practitioner-lane][data-date="2026-09-07"][data-staff-id="52"] .time-column');
+      const column=document.querySelector('[data-week-date-lane][data-date="2026-09-07"] .time-column');
       const rect=column.getBoundingClientRect();
       column.dispatchEvent(new MouseEvent('click',{bubbles:true,clientX:rect.left+Math.max(2,rect.width/2),clientY:rect.top+240,button:0}));
       return true;
     })()`);
-    await poll(() => evaluate(cdp, 'location.pathname'), value => value === '/calendar/book');
-    const weekPrefill = await evaluate(cdp, `(() => ({
-      date:document.querySelector('#booking-date')?.value||'',
-      time:document.querySelector('#booking-time')?.value||'',
-      prefill:JSON.parse(document.querySelector('#calendar-booking-options')?.textContent||'{}').prefill,
-    }))()`);
-    assert.equal(weekPrefill.date, '2026-09-07');
-    assert.equal(weekPrefill.time, '11:00');
-    assert.deepEqual(weekPrefill.prefill, { date: '2026-09-07', time: '11:00', staffId: 52 });
-    screenshots.push({ ...(await capture('phone-week-empty-time-prefill')), viewport: { width: 390, height: 844 }, metrics: weekPrefill });
+    await new Promise(resolve => setTimeout(resolve, 100));
+    assert.equal(await evaluate(cdp, 'location.pathname'), '/calendar/read-only');
+    screenshots.push({ ...(await capture('phone-week-multi-staff-empty-slot-safe')), viewport: { width: 390, height: 844 }, metrics: { guessedPractitioner: false } });
 
     await navigate(`${origin}/calendar/read-only?view=week&date=${DATE_KEY}&staff=51&staff=52&staff=53&activeStaff=51`, '.week-grid');
-    await evaluate(cdp, `document.querySelector('[data-event-id="appointment-9804"] [data-calendar-operation="manage-appointment"]').click();true`);
+    await evaluate(cdp, `document.querySelector('[data-event-id="appointment-9804"][data-appointment-management-target="true"]').click();true`);
     await poll(() => evaluate(cdp, `document.querySelector('[data-calendar-management-panel]')?.open`), Boolean);
     screenshots.push({ ...(await capture('phone-appointment-manage-sheet')), viewport: { width: 390, height: 844 } });
     await evaluate(cdp, `document.querySelector('[data-panel-close]').click();true`);
