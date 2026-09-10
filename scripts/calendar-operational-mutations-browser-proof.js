@@ -474,7 +474,7 @@ async function main() {
     ]) {
       await navigate(identity);
       const page = await evaluate(cdp, `({
-        controls:document.querySelectorAll('[data-calendar-operation]').length,
+        controls:document.querySelectorAll('[data-calendar-operation],[data-appointment-management-target="true"]').length,
         draggable:document.querySelectorAll('[data-appointment-id][draggable="true"]').length,
         readOnly:document.body.dataset.calendarReadonly,
         hasGoogle:/google/i.test(document.body.innerText),
