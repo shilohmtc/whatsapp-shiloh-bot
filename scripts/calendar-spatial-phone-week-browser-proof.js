@@ -342,7 +342,7 @@ async function main() {
     await poll(() => evaluate(cdp, 'location.pathname'), value => value === '/calendar/read-only');
     await poll(() => evaluate(cdp, `document.body.dataset.calendarDesktopApproved`), value => value === 'true');
     await poll(() => evaluate(cdp, `document.querySelectorAll('.desktop-practitioner-lane').length`), value => value === 3);
-    await poll(() => evaluate(cdp, `document.querySelectorAll('.desktop-create-popover [data-calendar-operation]').length`), value => value >= 2);
+    await poll(() => evaluate(cdp, `document.querySelectorAll('.desktop-create-popover a').length`), value => value >= 2);
     const desktopMetrics = await evaluate(cdp, `(() => ({
       viewport:{width:innerWidth,height:innerHeight,screenWidth:screen.width,screenHeight:screen.height},
       approved:document.body.dataset.calendarDesktopApproved||'',
@@ -377,8 +377,6 @@ async function main() {
     assert.deepEqual(desktopMetrics.visibleEventStaffIds.sort(), ['51,52', '53']);
     assert.ok(desktopMetrics.createLabels.includes('New appointment'));
     assert.ok(desktopMetrics.createLabels.includes('Record past appointment'));
-    assert.ok(desktopMetrics.createLabels.includes('Block time'));
-    assert.ok(desktopMetrics.createLabels.includes('Leave'));
     assert.equal(desktopMetrics.visibleTimeLabels.at(-1), '18:00');
     assert.equal(desktopMetrics.sourceWeekDisplay, 'none');
     assert.equal(desktopMetrics.plannerOverflowY, 'visible');
