@@ -87,7 +87,7 @@ test('#831 Workspace browser navigation redirects to existing sign-in while JSON
     const workspace = `${base}/calendar/workspace`;
     const browser = await fetch(workspace, {
       redirect: 'manual',
-      headers: { accept: 'text/html,application/xhtml+xml', 'sec-fetch-mode': 'navigate', 'sec-fetch-dest': 'document' },
+      headers: { accept: 'text/html,application/xhtml+xml' },
     });
     assert.equal(browser.status, 302);
     assert.equal(browser.headers.get('location'), '/calendar/staff?reason=session');
@@ -119,7 +119,7 @@ test('#831 Workspace browser navigation redirects to existing sign-in while JSON
 
     const expired = await fetch(workspace, {
       redirect: 'manual',
-      headers: { cookie: 'shiloh_staff_session=expired', accept: 'text/html', 'sec-fetch-mode': 'navigate' },
+      headers: { cookie: 'shiloh_staff_session=expired', accept: 'text/html' },
     });
     assert.equal(expired.status, 302);
     assert.equal(expired.headers.get('set-cookie'), null);
