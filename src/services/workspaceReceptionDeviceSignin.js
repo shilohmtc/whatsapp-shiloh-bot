@@ -1,6 +1,7 @@
 'use strict';
 
 const { pool } = require('../db/pool');
+const { sha256 } = require('./staffBrowserSession');
 const { isRecentAuthentication, createProviderIndependentStaffAuthService } = require('./providerIndependentStaffAuth');
 const { createStaffWhatsAppPasskeyBootstrapService } = require('./staffWhatsAppPasskeyBootstrap');
 const { isExactReceptionPrincipal } = require('./workspaceReceptionAccess');
@@ -54,7 +55,7 @@ function createWorkspaceReceptionDeviceSigninService({
     await db.query(
       `INSERT INTO staff_auth_security_events
          (event_type, operator_admin_id, subject_admin_id, auth_method, reason, request_fingerprint_hash, metadata)
-       VALUES ('passkey_admin_bootstrap_issued', $1, $2, 'passkey', $3, $4, $5::jsonb)`,
+       VALUES ('passkey_admin_bootstrap_issued', $1, $2, 'control', $3, $4, $5::jsonb)`,
       [
         positiveId(operatorAdminId),
         positiveId(subjectAdminId),
@@ -62,6 +63,19 @@ function createWorkspaceReceptionDeviceSigninService({
         requestFingerprintHash,
         JSON.stringify({ controlReference: CONTROL_REFERENCE, target: 'shiloh_reception', additiveCredentialEnrollment: true }),
       ]
+    );
+  }
+
+  async function revokeIssuedToken({ targetAdminId, token }) {
+    if (!token || !positiveId(targetAdminId)) return;
+    await db.query(
+      `UPDATE staff_auth_passkey_bootstraps
+          SET revoked_at = COALESCE(revoked_at, $3)
+        WHERE admin_id = $1
+          AND token_hash = $2
+          AND consumed_at IS NULL
+          AND revoked_at IS NULL`,
+      [positiveId(targetAdminId), sha256(token), now()]
     );
   }
 
@@ -85,22 +99,15 @@ function createWorkspaceReceptionDeviceSigninService({
     if (!issued?.ok || issued.handled !== true || issued.eligible !== true) {
       return resultError('RECEPTION_DEVICE_SIGNIN_BOOTSTRAP_UNAVAILABLE');
     }
-    if (issued.rateLimited === true || !issued.url) {
+    if (issued.rateLimited === true || !issued.url || !issued.token) {
       return resultError('RECEPTION_DEVICE_SIGNIN_RATE_LIMITED');
     }
 
     try {
       await auditIssued({ operatorAdminId: operatorId, subjectAdminId: targetId, requestFingerprintHash });
     } catch (error) {
-      // Do not hand out an unaudited admin-issued setup token. Revoke any still-open token for this target.
-      try {
-        await db.query(
-          `UPDATE staff_auth_passkey_bootstraps
-              SET revoked_at = COALESCE(revoked_at, $2)
-            WHERE admin_id = $1 AND consumed_at IS NULL AND revoked_at IS NULL`,
-          [targetId, now()]
-        );
-      } catch (_) {}
+      // Do not hand out an unaudited admin-issued setup token. Revoke only the token created by this request.
+      try { await revokeIssuedToken({ targetAdminId: targetId, token: issued.token }); } catch (_) {}
       throw error;
     }
 
@@ -113,7 +120,7 @@ function createWorkspaceReceptionDeviceSigninService({
     };
   }
 
-  return { issue, loadReception };
+  return { issue, loadReception, revokeIssuedToken };
 }
 
 module.exports = {
