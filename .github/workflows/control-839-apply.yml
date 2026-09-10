@@ -1,0 +1,67 @@
+name: Control 839 Apply
+on:
+  push:
+    branches:
+      - work/839-calendar-availability-practitioner-selector
+permissions:
+  contents: write
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: work/839-calendar-availability-practitioner-selector
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.14.1
+      - name: Apply bounded source edit
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path('src/presentation/calendarOperationalMutationsUx.js')
+          lines = path.read_text().splitlines()
+          out = []
+          replaced = {'panel': 0, 'show': 0, 'submit': 0, 'targets': 0}
+
+          panel_line = r'''function ensureAvailabilityPanel(){var panel=availabilityPanel();if(panel)return panel;var holder=document.createElement('div');holder.innerHTML='<dialog class="availability-dialog" data-calendar-availability-panel aria-labelledby="availability-title"><section class="availability-card"><header class="panel-head"><div><span class="eyebrow">Availability</span><h2 id="availability-title" data-availability-title>Manage availability</h2><span class="panel-hint">Every change is revalidated by canonical Calendar authority.</span></div><button class="panel-close" type="button" data-availability-close aria-label="Close">×</button></header><div class="availability-summary"><strong data-availability-practitioner></strong><span data-availability-context></span></div><form class="availability-form" data-availability-form="block"><label data-availability-practitioner-field>Practitioner<select name="staffId" required></select></label><label>Date<input name="date" type="date" required></label><div class="availability-time-row"><label>Start time<input name="starts" type="time" required></label><label>End time<input name="ends" type="time" required></label></div><label>Label<input name="title" type="text" maxlength="120" required placeholder="e.g. Team meeting"></label><button class="availability-submit" type="submit">Save block</button><button class="availability-remove" type="button" data-availability-remove="block" hidden>Remove block</button></form><form class="availability-form" data-availability-form="leave" hidden><label data-availability-practitioner-field>Practitioner<select name="staffId" required></select></label><label>Leave date<input name="date" type="date" required></label><label>Reason<textarea name="reason" maxlength="240" required placeholder="e.g. Annual leave"></textarea></label><span class="panel-hint">Leave is currently a canonical whole-day record in Shiloh.</span><button class="availability-submit" type="submit">Save leave</button><button class="availability-remove" type="button" data-availability-remove="leave" hidden>Remove leave</button></form></section></dialog>';panel=holder.firstElementChild;document.body.appendChild(panel);one('[data-availability-close]',panel).addEventListener('click',closeAvailabilityPanel);panel.addEventListener('click',function(event){if(event.target===panel)closeAvailabilityPanel();});panel.addEventListener('cancel',function(){availabilityState=null;});all('[data-availability-form]',panel).forEach(function(form){form.addEventListener('submit',submitAvailabilityForm);});all('[data-availability-remove]',panel).forEach(function(button){button.addEventListener('click',removeAvailability);});return panel;}'''
+
+          show_line = r'''function showAvailabilityForm(kind,state,source){var panel=ensureAvailabilityPanel();availabilityState=state;all('[data-availability-form]',panel).forEach(function(form){form.hidden=form.dataset.availabilityForm!==kind;});var form=one('[data-availability-form="'+kind+'"]',panel);one('[data-availability-title]',panel).textContent=state.mode==='edit'?(kind==='block'?'Edit block':'Edit leave'):(kind==='block'?'Block time':'Add leave');var practitioner=one('[data-availability-practitioner]',panel);practitioner.textContent=practitionerName(source,state.staffId);one('[data-availability-context]',panel).textContent=state.mode==='edit'?'Editing canonical Shiloh availability.':'Adding canonical Shiloh availability.';var field=one('[data-availability-practitioner-field]',form);var select=form.elements.staffId;var submit=one('.availability-submit',form);field.hidden=state.mode!=='create';select.disabled=state.mode!=='create';submit.disabled=false;select.innerHTML='';if(state.mode==='create'){var targets=availabilityTargets(kind);targets.forEach(function(target){var option=document.createElement('option');option.value=String(target.id);option.textContent=target.name;select.appendChild(option);});var preferred=targets.some(function(target){return target.id===state.staffId;})?state.staffId:(targets[0]?targets[0].id:null);if(preferred!==null)select.value=String(preferred);if(!targets.length){submit.disabled=true;status('No practitioner is available in your current Calendar scope.','error');}else{var syncPractitioner=function(){var selected=targets.find(function(target){return target.id===Number(select.value);});if(selected)practitioner.textContent=selected.name;};select.onchange=syncPractitioner;syncPractitioner();}}else{select.onchange=null;}var remove=one('[data-availability-remove="'+kind+'"]',form);remove.hidden=state.mode!=='edit';if(kind==='block'){var start=state.mode==='edit'?splitLocal(state.startsAt):{date:state.date,time:'08:00'};var end=state.mode==='edit'?splitLocal(state.endsAt):{date:state.date,time:'09:00'};form.elements.date.value=start.date||state.date||'';form.elements.starts.value=start.time||'08:00';form.elements.ends.value=end.time||'09:00';form.elements.title.value=state.title||'Operational block';}else{form.elements.date.value=state.date||'';form.elements.reason.value=state.reason||'Operational leave';}panel.showModal();var first=one('select:not([disabled]),input,textarea',form);if(first)window.setTimeout(function(){first.focus();},0);}'''
+
+          submit_line = r'''function submitAvailabilityForm(event){event.preventDefault();var form=event.currentTarget;var kind=form.dataset.availabilityForm;var state=availabilityState;if(!state||state.kind&&state.kind!==kind)return;var selectedStaffId=state.mode==='create'?Number(form.elements.staffId.value):state.staffId;if(state.mode==='create'&&(!Number.isSafeInteger(selectedStaffId)||selectedStaffId<=0))return status('Choose a practitioner before saving.','error');var work;if(kind==='block'){var startsAt=isoStart(form.elements.date.value,form.elements.starts.value);var endsAt=isoStart(form.elements.date.value,form.elements.ends.value);if(new Date(endsAt).getTime()<=new Date(startsAt).getTime())return status('Block end time must be after the start time.','error');var payload={staffId:selectedStaffId,locationId:state.locationId,startsAt:startsAt,endsAt:endsAt,blockType:state.blockType||'other',title:String(form.elements.title.value||'').trim(),requestId:operationId()};if(!payload.title)return status('Add a short block label before saving.','error');if(state.mode==='edit'){payload.expectedRevision=state.revision;work=function(){return request('/blocks/'+state.id,'PATCH',payload);};}else{work=function(){return request('/blocks','POST',payload);};}}else{var leavePayload={staffId:selectedStaffId,locationId:state.locationId,date:form.elements.date.value,reason:String(form.elements.reason.value||'').trim(),requestId:operationId()};if(!leavePayload.reason)return status('Add a leave reason before saving.','error');if(state.mode==='edit'){leavePayload.expectedRevision=state.revision;work=function(){return request('/leave/'+state.id,'PATCH',leavePayload);};}else{work=function(){return request('/leave','POST',leavePayload);};}}finish(work,kind==='block'?'Block saved. Refreshing canonical Calendar…':'Leave saved. Refreshing canonical Calendar…');}'''
+
+          targets_line = r'''function availabilityTargets(kind){var operation=kind==='block'?'add-block':'add-leave';var seen={};return all('[data-calendar-operation="'+operation+'"][data-staff-id]').map(function(button){var id=Number(button.dataset.staffId);if(!Number.isSafeInteger(id)||id<=0||seen[id])return null;seen[id]=true;return{id:id,name:practitionerName(button,id)};}).filter(Boolean);}'''
+
+          for line in lines:
+              if line.startswith('function practitionerName('):
+                  out.append(line)
+                  out.append(targets_line)
+                  replaced['targets'] += 1
+              elif line.startswith('function ensureAvailabilityPanel('):
+                  out.append(panel_line)
+                  replaced['panel'] += 1
+              elif line.startswith('function showAvailabilityForm('):
+                  out.append(show_line)
+                  replaced['show'] += 1
+              elif line.startswith('function submitAvailabilityForm('):
+                  out.append(submit_line)
+                  replaced['submit'] += 1
+              else:
+                  out.append(line)
+
+          if replaced != {'panel': 1, 'show': 1, 'submit': 1, 'targets': 1}:
+              raise SystemExit(f'bounded replacement failed: {replaced}')
+          path.write_text('\n'.join(out) + '\n')
+      - name: Run focused regression
+        run: node --test tests/calendar-availability-practitioner-selector-839.test.js
+      - name: Commit bounded implementation and retire temporary workflow
+        run: |
+          git config user.name "Shiloh Control"
+          git config user.email "actions@users.noreply.github.com"
+          git rm .github/workflows/control-839-apply.yml
+          git add src/presentation/calendarOperationalMutationsUx.js
+          git commit -m "#839 Select practitioner for block time and leave"
+          git push origin HEAD:work/839-calendar-availability-practitioner-selector
