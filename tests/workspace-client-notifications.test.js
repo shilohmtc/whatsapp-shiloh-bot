@@ -20,7 +20,7 @@ function previewRow(overrides = {}) {
   return {
     client_id: 41, client_name: 'Client One', normalized_mobile: '27821234567',
     mobile_verified_at: new Date('2026-01-01T00:00:00Z'), client_status: 'active',
-    appointment_id: 501, starts_at: new Date('2026-09-10T08:00:00Z'), ends_at: new Date('2026-09-10T09:00:00Z'),
+    appointment_id: 501, starts_at: new Date('2099-09-10T08:00:00Z'), ends_at: new Date('2099-09-10T09:00:00Z'),
     appointment_status: 'confirmed', source: 'shiloh', location_name: 'Shiloh', service_name: 'Treatment',
     staff_name: 'Practitioner', already_sent: false, ...overrides,
   };

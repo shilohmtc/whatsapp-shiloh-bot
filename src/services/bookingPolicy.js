@@ -6,6 +6,7 @@ const {
 const {
   createPendingBookingApproval,
 } = require("./clientBookingApproval");
+const { dispatchBookingRequestAlerts } = require('./bookingRequestStaffAlerts');
 const { ensureBookingApprovalInfrastructure } = require("./clientBookingApprovalSchema");
 const logger = require("../lib/logger");
 
@@ -87,6 +88,12 @@ async function stageCreatedBookingForApproval(result) {
   if (!result?.handled || result.status !== "created" || !result.appointmentId) return result;
   const approval = await createPendingBookingApproval(pool, { appointmentId: result.appointmentId });
   if (!approval) { logger.error({ appointmentId: result.appointmentId }, "Client booking hold created without resolvable canonical assignments"); return { ...result, status: "resolution_setup_failed", reply: `Your appointment request #${result.appointmentId} has been placed on hold, but I could not safely assign it for Workspace resolution. The time remains held and no final confirmation has been sent. Shiloh needs to review this request manually.` }; }
+  try {
+    const alertResult = await dispatchBookingRequestAlerts({ appointmentId: result.appointmentId });
+    logger.info({ appointmentId: result.appointmentId, recipients: alertResult.recipients, sent: alertResult.sent, failed: alertResult.failed }, 'Booking request Workspace staff alert dispatch completed');
+  } catch (error) {
+    logger.error({ err: error, appointmentId: result.appointmentId }, 'Booking request created but staff alert routing failed');
+  }
   return { ...result, status: "pending_resolution", reply: [`*Booking request received — #${result.appointmentId}*`, "", "Your selected time is being held while the Shiloh team resolves your request in Workspace.", "", "Your appointment is not yet confirmed. I’ll send the final details after the requested appointment is accepted, or ask you to confirm if the team proposes a materially different option. 🌿"].join("\n") };
 }
 
