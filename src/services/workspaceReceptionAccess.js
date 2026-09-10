@@ -16,20 +16,27 @@ const RECEPTION_PRESET = Object.freeze({
     'calendar:booking:cancel',
     'calendar:booking:reassign',
     'client:lookup',
+    'client:delete',
     'client:manage',
+    'client:notify',
+    'walkin:create',
+    'booking:update',
+    'appointment:record_past',
+    'appointment:adjust_end',
+    'loyalty:redeem',
+    'service:pricing',
+    'staff:services:view',
     'services:view',
     'services:manage',
+    'services:create',
     'schedule:manage',
     'staff:view',
+    'staff:manage',
+    'staff_access:manage',
+    'staff_auth:reset',
   ]),
 });
-const FORBIDDEN_RECEPTION_CAPABILITIES = Object.freeze([
-  'staff:manage',
-  'staff_access:manage',
-  'staff_auth:reset',
-  'client:notify',
-  'client:delete',
-]);
+const FORBIDDEN_RECEPTION_CAPABILITIES = Object.freeze([]);
 
 function enabledCapabilities(permissions) {
   const normalized = permissionSet(permissions);

@@ -89,4 +89,7 @@ test('owner backup is capability/scope-bound and only activates in explicit Work
   assert.equal(await canCertifyAppointment(owner, 80, authorityDb([44]), { workspace: true, allowBusinessBackup: true }), true);
   assert.equal(await canCertifyAppointment(owner, 81, authorityDb([44])), false);
   assert.equal(await canCertifyAppointment({ ...owner, permissions: { 'appointment:view': true } }, 82, authorityDb([44]), { workspace: true, allowBusinessBackup: true }), false);
+  const reception = { ...owner, display_name: 'Shiloh Reception', business_role: 'booking_operator' };
+  assert.equal(canAccessWorkspaceBackupFinalization(reception), true);
+  assert.equal(await canCertifyAppointment(reception, 83, authorityDb([44]), { workspace: true, allowBusinessBackup: true }), true);
 });

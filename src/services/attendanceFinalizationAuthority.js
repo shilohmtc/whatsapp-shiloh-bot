@@ -35,9 +35,7 @@ function canAccessWorkspaceOwnFinalization(admin) {
 }
 
 function canAccessWorkspaceBackupFinalization(admin) {
-  const role = String(admin?.business_role || '').trim().toLowerCase();
-  return ['owner', 'business_admin'].includes(role)
-    && String(admin?.calendar_scope || '').trim().toLowerCase() === 'all_business'
+  return String(admin?.calendar_scope || '').trim().toLowerCase() === 'all_business'
     && permissions(admin)['appointment:view'] === true
     && permissions(admin)['booking:update'] === true
     && admin?.admin_active !== false
@@ -94,7 +92,7 @@ async function canCertifyAppointment(admin, appointmentId, db = pool, { workspac
 }
 
 function authorityDescription(admin, { workspace = false, allowBusinessBackup = false } = {}) {
-  if (workspace && allowBusinessBackup && canAccessWorkspaceBackupFinalization(admin)) return 'owner/business-admin Workspace backup';
+  if (workspace && allowBusinessBackup && canAccessWorkspaceBackupFinalization(admin)) return 'all-business Workspace finalization';
   if (workspace && canAccessWorkspaceOwnFinalization(admin)) return `${String(admin.display_name).trim()} appointments`;
   if (canAccessOwnFinalization(admin)) return `${String(admin.display_name).trim()} appointments`;
   return 'review only';

@@ -56,10 +56,12 @@ function dashboardAuthority(principal) {
     && authority.calendarScope === 'all_business'
     && principal.permissions?.['appointment:view'] === true;
   if (isBusinessOverview) {
+    const canFinalizeAllBusiness = principal.permissions?.['booking:update'] === true;
     return {
       mode: OWNER_ROLES.has(role) ? 'owner_overview' : 'business_overview',
       linkedStaffId: positiveId(authority.linkedStaffId),
-      canFinalize: OWNER_ROLES.has(role) && principal.permissions?.['booking:update'] === true,
+      canFinalize: canFinalizeAllBusiness,
+      canFinalizeAllBusiness,
       timelineViewer: { calendarScope: 'all_business' },
     };
   }
@@ -88,7 +90,7 @@ function appointmentCanBeFinalized(item, authority, now) {
   if (!authority?.canFinalize || !appointmentNeedsFinalization(item, now)) return false;
   const staffIds = [...new Set((item.staffIds || []).map(Number).filter(Number.isSafeInteger))];
   if (!staffIds.length) return false;
-  if (authority.mode === 'owner_overview') return true;
+  if (authority.canFinalizeAllBusiness) return true;
   return staffIds.every(id => id === authority.linkedStaffId);
 }
 
@@ -181,7 +183,7 @@ function createWorkspaceDashboardService({
       if (!item.canFinalize) return;
       item.canFinalize = await canCertifyAppointmentFn(principal, item.id, pool, {
         workspace: true,
-        allowBusinessBackup: authority.mode === 'owner_overview',
+        allowBusinessBackup: authority.canFinalizeAllBusiness === true,
       });
     }));
     const awaitingFinalization = appointments.filter(item => item.needsFinalization);
@@ -207,6 +209,7 @@ function createWorkspaceDashboardService({
       operationalDateKey: calendar.dateKey,
       displayName: String(principal.display_name || 'Shiloh practitioner').trim(),
       mode: authority.mode,
+      canFinalizeAllBusiness: authority.canFinalizeAllBusiness === true,
       linkedStaffId: authority.linkedStaffId,
       calendar,
       appointments,
@@ -234,7 +237,7 @@ function createWorkspaceDashboardService({
       ...operationalDayWindow(dateKeyInBusinessTimezone(now)),
       expectedRevision: String(expectedRevision),
       workspace: true,
-      allowBusinessBackup: authority.mode === 'owner_overview',
+      allowBusinessBackup: authority.canFinalizeAllBusiness === true,
     });
     if (result?.status === 'updated') return { ok: true, appointmentId: id, outcome: targetStatus };
     if (result?.status === 'certification_forbidden') {

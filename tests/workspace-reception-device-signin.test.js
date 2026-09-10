@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { sha256 } = require('../src/services/staffBrowserSession');
 const { createWorkspaceReceptionDeviceSigninService } = require('../src/services/workspaceReceptionDeviceSignin');
+const { expectedPermissions } = require('../src/services/workspaceReceptionAccess');
 
 const NOW = new Date('2026-09-10T18:50:00.000Z');
 const RECEPTION = {
@@ -17,19 +18,7 @@ const RECEPTION = {
   service_scope: 'all_services',
   active: true,
   staff_status: null,
-  permissions: {
-    'appointment:view': true,
-    'appointment:create': true,
-    'calendar:booking:reschedule': true,
-    'calendar:booking:cancel': true,
-    'calendar:booking:reassign': true,
-    'client:lookup': true,
-    'client:manage': true,
-    'services:view': true,
-    'services:manage': true,
-    'schedule:manage': true,
-    'staff:view': true,
-  },
+  permissions: expectedPermissions(),
 };
 
 function recentSession(overrides = {}) {

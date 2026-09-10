@@ -57,13 +57,13 @@ function fakeDb(seed = []) {
   return { state, db: { query, connect: async () => ({ query, release() {} }) } };
 }
 
-test('Reception is one exact bounded server preset and excludes protected authority', () => {
+test('Reception is one exact shared-principal preset with Christel capability parity', () => {
   assert.deepEqual({ role: RECEPTION_ACCESS_PRESET.role, businessRole: RECEPTION_ACCESS_PRESET.businessRole, calendarScope: RECEPTION_ACCESS_PRESET.calendarScope, serviceScope: RECEPTION_ACCESS_PRESET.serviceScope },
     { role: 'receptionist', businessRole: 'booking_operator', calendarScope: 'all_business', serviceScope: 'all_services' });
-  for (const key of ['staff:manage', 'staff_access:manage', 'staff_auth:reset', 'client:delete', 'service:pricing']) assert.equal(RECEPTION_ACCESS_PRESET.capabilities.includes(key), false);
+  for (const key of ['staff:manage', 'staff_access:manage', 'staff_auth:reset', 'client:delete', 'service:pricing']) assert.equal(RECEPTION_ACCESS_PRESET.capabilities.includes(key), true);
   for (const key of RECEPTION_FORBIDDEN_CAPABILITIES) assert.equal(RECEPTION_ACCESS_PRESET.capabilities.includes(key), false);
   assert.equal(isReceptionPreset(reception()), true);
-  assert.equal(isReceptionPreset(reception({ permissions: { ...receptionPermissions(), 'staff:manage': true } })), false);
+  assert.equal(isReceptionPreset(reception({ permissions: { ...receptionPermissions(), 'staff:manage': false } })), false);
   assert.equal(isReceptionPreset(reception({ permissions: { ...receptionPermissions(), 'unknown:power': true } })), false);
 });
 
@@ -156,10 +156,10 @@ test('Reception creation is fixed, transactional, idempotent and audits no mobil
   assert.equal(repeated.status, 'unchanged'); assert.equal(fake.state.rows.size, 1); assert.equal(fake.state.audits.length, 1);
 });
 
-test('Reception gets all-business Dashboard and Needs Attention only from explicit view/create capabilities', () => {
+test('Reception gets all-business Dashboard and Christel-equivalent finalization from explicit capabilities', () => {
   const principal = { ...reception(), calendarAuthority: { businessRole: 'booking_operator', calendarScope: 'all_business', capabilities: ['appointment:view'], linkedStaffId: null } };
   const authority = dashboardAuthority(principal);
-  assert.equal(authority.mode, 'business_overview'); assert.equal(authority.canFinalize, false);
+  assert.equal(authority.mode, 'business_overview'); assert.equal(authority.canFinalize, true);
   assert.equal(operatorCanResolve(principal, { approver_staff_id: 99 }), true);
   const denied = { ...principal, permissions: { ...principal.permissions, 'appointment:create': false } };
   assert.equal(operatorCanResolve(denied, { approver_staff_id: 99 }), false);
