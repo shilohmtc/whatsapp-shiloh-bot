@@ -1,0 +1,245 @@
+name: Temporary Lucide implementation 835
+
+on:
+  push:
+    branches:
+      - work/835-lucide-calendar-polish
+
+permissions:
+  contents: write
+
+jobs:
+  implement:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: work/835-lucide-calendar-polish
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24.14.1
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Implement shared Lucide source and bounded Calendar polish
+        run: |
+          cat > src/presentation/lucideIcons.js <<'EOF'
+          const {
+            LayoutDashboard,
+            CalendarDays,
+            Users,
+            MessageSquare,
+            UserRoundPlus,
+            Sparkles,
+            ChartNoAxesColumnIncreasing,
+            Clock3,
+            LogOut,
+            LockKeyhole,
+            Plus,
+            CalendarPlus,
+            History,
+            CircleSlash,
+            CalendarMinus,
+            ChevronLeft,
+            ChevronRight,
+            CalendarCheck,
+          } = require('lucide');
+
+          const ICONS = Object.freeze({
+            dashboard: LayoutDashboard,
+            calendar: CalendarDays,
+            clients: Users,
+            messages: MessageSquare,
+            staff: UserRoundPlus,
+            services: Sparkles,
+            reports: ChartNoAxesColumnIncreasing,
+            clinicHours: Clock3,
+            logout: LogOut,
+            lock: LockKeyhole,
+            plus: Plus,
+            calendarPlus: CalendarPlus,
+            history: History,
+            block: CircleSlash,
+            leave: CalendarMinus,
+            chevronLeft: ChevronLeft,
+            chevronRight: ChevronRight,
+            today: CalendarCheck,
+          });
+
+          const ALLOWED_TAGS = new Set(['path', 'rect', 'circle', 'line', 'polyline', 'polygon', 'ellipse']);
+          const ATTR_NAME = /^[A-Za-z_:][A-Za-z0-9_.:-]*$/;
+          const CLASS_NAME = /^[A-Za-z0-9 _-]+$/;
+
+          function escapeAttribute(value) {
+            return String(value)
+              .replace(/&/g, '&amp;')
+              .replace(/"/g, '&quot;')
+              .replace(/</g, '&lt;')
+              .replace(/>/g, '&gt;');
+          }
+
+          function renderNode(node) {
+            if (!Array.isArray(node) || node.length < 2) throw new Error('Invalid Lucide icon node');
+            const [tag, attributes, children] = node;
+            if (!ALLOWED_TAGS.has(tag)) throw new Error(`Unsupported Lucide SVG tag: ${tag}`);
+            const attrs = Object.entries(attributes || {})
+              .filter(([name, value]) => name !== 'key' && value != null)
+              .map(([name, value]) => {
+                if (!ATTR_NAME.test(name)) throw new Error(`Invalid Lucide SVG attribute: ${name}`);
+                return `${name}="${escapeAttribute(value)}"`;
+              })
+              .join(' ');
+            const inner = Array.isArray(children) ? children.map(renderNode).join('') : '';
+            return `<${tag}${attrs ? ` ${attrs}` : ''}>${inner}</${tag}>`;
+          }
+
+          function renderLucideIcon(name, { className = 'shiloh-icon', size = 24, strokeWidth = 2 } = {}) {
+            const iconNode = ICONS[name];
+            if (!iconNode) throw new Error(`Unknown Shiloh Lucide icon: ${name}`);
+            const numericSize = Number(size);
+            const numericStroke = Number(strokeWidth);
+            if (!Number.isFinite(numericSize) || numericSize < 8 || numericSize > 96) throw new Error('Invalid Lucide icon size');
+            if (!Number.isFinite(numericStroke) || numericStroke <= 0 || numericStroke > 4) throw new Error('Invalid Lucide stroke width');
+            if (!CLASS_NAME.test(className)) throw new Error('Invalid Lucide icon class');
+            const body = iconNode.map(renderNode).join('');
+            return `<svg class="${escapeAttribute(className)}" aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="${numericSize}" height="${numericSize}" fill="none" stroke="currentColor" stroke-width="${numericStroke}" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`;
+          }
+
+          module.exports = { ICONS, renderLucideIcon };
+          EOF
+
+          cat > src/presentation/workspaceIconClient.js <<'EOF'
+          const { renderLucideIcon } = require('./lucideIcons');
+
+          function workspaceIconClientScript() {
+            const icons = JSON.stringify({
+              dashboard: renderLucideIcon('dashboard', { className: 'workspace-nav-icon', size: 18 }),
+              calendar: renderLucideIcon('calendar', { className: 'workspace-nav-icon', size: 18 }),
+              clients: renderLucideIcon('clients', { className: 'workspace-nav-icon', size: 18 }),
+              messages: renderLucideIcon('messages', { className: 'workspace-nav-icon', size: 18 }),
+              staff: renderLucideIcon('staff', { className: 'workspace-nav-icon', size: 18 }),
+              services: renderLucideIcon('services', { className: 'workspace-nav-icon', size: 18 }),
+              reports: renderLucideIcon('reports', { className: 'workspace-nav-icon', size: 18 }),
+              clinicHours: renderLucideIcon('clinicHours', { className: 'workspace-nav-icon', size: 18 }),
+              logout: renderLucideIcon('logout', { className: 'workspace-nav-icon', size: 18 }),
+              lock: renderLucideIcon('lock', { className: 'workspace-nav-icon', size: 18 }),
+            });
+            return `(()=>{'use strict';
+          const ICONS=${icons};
+          function label(node){const existing=node.querySelector('.workspace-link-label');return existing?existing.textContent.trim():node.textContent.trim();}
+          function decorateDestination(node){const key=node.dataset.workspaceDestination;if(!ICONS[key]||node.querySelector('.workspace-nav-icon'))return;const text=label(node);node.innerHTML=ICONS[key]+'<span class="workspace-link-label">'+text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</span>';}
+          function decorateAccount(){const button=document.querySelector('[data-shiloh-logout]');if(!button||button.querySelector('.workspace-nav-icon'))return;const text=button.textContent.trim()||'Sign out';const key=/lock/i.test(text)?'lock':'logout';button.innerHTML=ICONS[key]+'<span class="workspace-link-label">'+text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</span>';}
+          function paint(){document.querySelectorAll('[data-workspace-destination]').forEach(decorateDestination);decorateAccount();}
+          const style=document.createElement('style');style.dataset.workspaceIconStyles='true';style.textContent='.workspace-nav-icon{width:18px;height:18px;flex:0 0 18px}.workspace-link-label{min-width:0}.workspace-account-signout{gap:8px}.workspace-link{gap:9px}@media(max-width:700px){.workspace-nav-icon{width:17px;height:17px;flex-basis:17px}}';document.head.appendChild(style);paint();
+          const nav=document.querySelector('[data-workspace-navigation-drawer]');if(nav)new MutationObserver(()=>queueMicrotask(paint)).observe(nav,{childList:true,subtree:true,characterData:true});
+          })();`;
+          }
+
+          module.exports = { workspaceIconClientScript };
+          EOF
+
+          python3 <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path('src/presentation/calendarDesktopApprovedUx.js')
+          text = path.read_text()
+          if "require('./lucideIcons')" not in text:
+              text = "const { renderLucideIcon } = require('./lucideIcons');\n" + text
+          text, count = re.subn(
+              r"function lucidePath\(name\) \{.*?\n\}\n\nfunction iconSvg\(name\) \{\n  return `<svg class=\\\"calendar-action-icon\\\".*?\n\}\n",
+              "function iconSvg(name) {\n  return renderLucideIcon(name, { className: 'calendar-action-icon', size: 16 });\n}\n",
+              text,
+              flags=re.S,
+          )
+          if count != 1:
+              raise SystemExit(f'Expected to replace one Lucide path block, replaced {count}')
+
+          replacements = {
+              ".desktop-week-day.selected,body[data-calendar-desktop-approved=\"true\"] .desktop-week-day.today{border-color:#294c3c}": ".desktop-week-day.selected,body[data-calendar-desktop-approved=\"true\"] .desktop-week-day.today{border-color:#294c3c}",
+              ".desktop-week-day.selected{background:#294c3c;color:#fff}": ".desktop-week-day.selected{background:#234f3b;color:#fff;font-weight:850;box-shadow:0 2px 8px rgba(35,79,59,.18),inset 0 0 0 1px rgba(255,255,255,.18)}",
+              ".desktop-week-day.today:not(.selected){background:#e7eee9;color:#294c3c}": ".desktop-week-day.today:not(.selected){background:#dfeae3;color:#234f3b;border-color:#5d7f6c;box-shadow:inset 0 0 0 1px rgba(41,76,60,.08)}",
+              ".event-card{height:100%;min-width:0;padding:6px 7px;border:1px solid #cfe0d5;border-left:4px solid #4f7d64;border-radius:8px;background:#eef6f0;box-shadow:0 2px 6px rgba(32,50,43,.05);overflow:hidden}": ".event-card{height:100%;min-width:0;padding:7px 8px;border:1px solid #c7dccf;border-left:4px solid #4f7d64;border-radius:8px;background:#eef6f0;box-shadow:0 2px 8px rgba(32,50,43,.08);overflow:hidden}",
+              ".event-time{font-size:.68rem;color:#315b47;font-weight:850}": ".event-time{font-size:.71rem;color:#315b47;font-weight:850;letter-spacing:.01em}",
+              ".kind-pill{font-size:.57rem;color:#52655c}": ".kind-pill{font-size:.58rem;color:#52655c;font-weight:750}",
+              ".event-card h4{margin:2px 0;font-size:.75rem;line-height:1.12;padding:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}": ".event-card h4{margin:3px 0 2px;font-size:.78rem;line-height:1.15;padding:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}",
+              ".event-meta{display:block;margin:2px 0 0;padding:0;font-size:.61rem;line-height:1.08;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#53665d}": ".event-meta{display:block;margin:3px 0 0;padding:0;font-size:.64rem;line-height:1.12;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#53665d}",
+          }
+          for old, new in replacements.items():
+              if old not in text:
+                  raise SystemExit(f'Missing expected CSS fragment: {old[:80]}')
+              text = text.replace(old, new, 1)
+          text = text.replace("  lucidePath,\n", "")
+          path.write_text(text)
+
+          test_path = Path('tests/calendar-desktop-approved-ux.test.js')
+          test = test_path.read_text()
+          old = "test('Workspace iconography covers approved sidebar destinations and sign-out without an added package dependency', () => {\n  const script = workspaceIconClientScript();\n  for (const key of ['dashboard', 'calendar', 'clients', 'messages', 'staff', 'services', 'reports', 'clinicHours', 'logout']) {\n    assert.match(script, new RegExp(`${key}:`));\n  }\n  assert.match(script, /workspace-nav-icon/);\n  assert.match(script, /data-shiloh-logout/);\n  assert.match(script, /MutationObserver/);\n});"
+          new = "test('Workspace iconography covers approved sidebar destinations and sign-out through the shared Lucide source', () => {\n  const script = workspaceIconClientScript();\n  for (const key of ['dashboard', 'calendar', 'clients', 'messages', 'staff', 'services', 'reports', 'clinicHours', 'logout']) {\n    assert.match(script, new RegExp(`\\\"${key}\\\":`));\n  }\n  assert.match(script, /workspace-nav-icon/);\n  assert.match(script, /data-shiloh-logout/);\n  assert.match(script, /MutationObserver/);\n});"
+          if old not in test:
+              raise SystemExit('Expected #832 icon test block not found')
+          test_path.write_text(test.replace(old, new, 1))
+          PY
+
+          cat > tests/workspace-lucide-icon-standard-v1.test.js <<'EOF'
+          const test = require('node:test');
+          const assert = require('node:assert/strict');
+          const fs = require('node:fs');
+          const path = require('node:path');
+
+          const { ICONS, renderLucideIcon } = require('../src/presentation/lucideIcons');
+          const { workspaceIconClientScript } = require('../src/presentation/workspaceIconClient');
+          const { iconSvg, desktopApprovedStyles, DESKTOP_GRID_END_MINUTES } = require('../src/presentation/calendarDesktopApprovedUx');
+
+          test('#835 pins official Lucide and npm lockfile at one exact version', () => {
+            const pkg = require('../package.json');
+            assert.equal(pkg.dependencies.lucide, '1.43.0');
+            const lock = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package-lock.json'), 'utf8'));
+            assert.equal(lock.packages[''].dependencies.lucide, '1.43.0');
+            assert.equal(lock.packages['node_modules/lucide'].version, '1.43.0');
+          });
+
+          test('#835 shared renderer consumes upstream Lucide node data and emits accessible currentColor SVG', () => {
+            assert.ok(Array.isArray(ICONS.dashboard));
+            const svg = renderLucideIcon('dashboard', { className: 'workspace-nav-icon', size: 18 });
+            assert.match(svg, /^<svg class="workspace-nav-icon"/);
+            assert.match(svg, /aria-hidden="true"/);
+            assert.match(svg, /focusable="false"/);
+            assert.match(svg, /viewBox="0 0 24 24"/);
+            assert.match(svg, /stroke="currentColor"/);
+            assert.match(svg, /<rect width="7" height="9" x="3" y="3" rx="1"><\/rect>/);
+            assert.throws(() => renderLucideIcon('not-a-shiloh-icon'), /Unknown Shiloh Lucide icon/);
+          });
+
+          test('#835 Workspace and Calendar icons come from the shared renderer, not handwritten path registries', () => {
+            const workspaceSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'presentation', 'workspaceIconClient.js'), 'utf8');
+            const calendarSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'presentation', 'calendarDesktopApprovedUx.js'), 'utf8');
+            assert.doesNotMatch(workspaceSource, /const PATHS=/);
+            assert.doesNotMatch(calendarSource, /function lucidePath/);
+            assert.match(workspaceSource, /renderLucideIcon/);
+            assert.match(calendarSource, /renderLucideIcon/);
+            assert.match(workspaceIconClientScript(), /lucide/);
+            assert.match(iconSvg('calendarPlus'), /calendar-action-icon/);
+          });
+
+          test('#835 polish strengthens selected-day and appointment-card hierarchy without changing #832 geometry', () => {
+            const css = desktopApprovedStyles();
+            assert.match(css, /desktop-week-day\.selected\{background:#234f3b/);
+            assert.match(css, /box-shadow:0 2px 8px rgba\(35,79,59,.18\)/);
+            assert.match(css, /event-card\{[^}]*padding:7px 8px[^}]*box-shadow:0 2px 8px rgba\(32,50,43,.08\)/);
+            assert.match(css, /event-card h4\{[^}]*font-size:.78rem/);
+            assert.equal(DESKTOP_GRID_END_MINUTES, 18 * 60);
+            assert.doesNotMatch(css, /overflow-y:auto/);
+          });
+          EOF
+
+          node --test tests/calendar-desktop-approved-ux.test.js tests/workspace-lucide-icon-standard-v1.test.js
+      - name: Remove temporary workflow and commit implementation
+        run: |
+          rm -f .github/workflows/lucide-implement-835.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json package-lock.json src/presentation/lucideIcons.js src/presentation/workspaceIconClient.js src/presentation/calendarDesktopApprovedUx.js tests/calendar-desktop-approved-ux.test.js tests/workspace-lucide-icon-standard-v1.test.js .github/workflows/lucide-implement-835.yml
+          git commit -m "#835 standardize Workspace icons on Lucide and polish Calendar"
+          git push origin HEAD:work/835-lucide-calendar-polish
