@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const express = require('express');
 const fs = require('node:fs');
+const http = require('node:http');
 const { execFile } = require('node:child_process');
 const { promisify } = require('node:util');
 
@@ -25,6 +26,31 @@ const ENV = {
 function chromeExecutable() {
   return [process.env.CHROME_BIN, '/usr/bin/google-chrome', '/usr/bin/google-chrome-stable', '/usr/bin/chromium', '/usr/bin/chromium-browser']
     .find(candidate => candidate && fs.existsSync(candidate)) || null;
+}
+
+function rawRequest(url, { method = 'GET', headers = {}, body = null } = {}) {
+  return new Promise((resolve, reject) => {
+    const target = new URL(url);
+    const request = http.request({
+      hostname: target.hostname,
+      port: target.port,
+      path: `${target.pathname}${target.search}`,
+      method,
+      headers,
+    }, response => {
+      let responseBody = '';
+      response.setEncoding('utf8');
+      response.on('data', chunk => { responseBody += chunk; });
+      response.on('end', () => resolve({
+        status: response.statusCode,
+        headers: response.headers,
+        body: responseBody,
+      }));
+    });
+    request.on('error', reject);
+    if (body != null) request.write(body);
+    request.end();
+  });
 }
 
 async function withServer(app, work) {
@@ -85,48 +111,48 @@ test('#831 navigation classification distinguishes document navigation from inte
 test('#831 Workspace browser navigation redirects to existing sign-in while JSON/API requests remain 401', async () => {
   await withServer(fixture(), async base => {
     const workspace = `${base}/calendar/workspace`;
-    const browser = await fetch(workspace, {
-      redirect: 'manual',
+    const browser = await rawRequest(workspace, {
       headers: { accept: 'text/html,application/xhtml+xml' },
     });
     assert.equal(browser.status, 302);
-    assert.equal(browser.headers.get('location'), '/calendar/staff?reason=session');
-    assert.equal(browser.headers.get('set-cookie'), null);
+    assert.equal(browser.headers.location, '/calendar/staff?reason=session');
+    assert.equal(browser.headers['set-cookie'], undefined);
 
-    const signIn = await fetch(`${base}${browser.headers.get('location')}`);
-    const signInHtml = await signIn.text();
+    const signIn = await rawRequest(`${base}${browser.headers.location}`, { headers: { accept: 'text/html' } });
+    const signInHtml = signIn.body;
     assert.equal(signIn.status, 200);
     assert.match(signInHtml, /<title>Shiloh Workspace sign-in<\/title>/);
     assert.doesNotMatch(signInHtml, /\{"error":"Unauthorized"/);
     assert.doesNotMatch(signInHtml, /First Time|New Device|device not set up|permissions\/governance/i);
     assert.match(signInHtml, /Use another sign-in method/);
 
-    const json = await fetch(workspace, { headers: { accept: 'application/json' } });
+    const json = await rawRequest(workspace, { headers: { accept: 'application/json' } });
     assert.equal(json.status, 401);
-    assert.equal((await json.json()).error, 'Unauthorized');
+    assert.equal(JSON.parse(json.body).error, 'Unauthorized');
 
-    const ajaxHtml = await fetch(workspace, { headers: { accept: 'text/html', 'sec-fetch-mode': 'same-origin' } });
+    const ajaxHtml = await rawRequest(workspace, { headers: { accept: 'text/html', 'sec-fetch-mode': 'same-origin' } });
     assert.equal(ajaxHtml.status, 401);
-    assert.equal((await ajaxHtml.json()).error, 'Unauthorized');
+    assert.equal(JSON.parse(ajaxHtml.body).error, 'Unauthorized');
 
-    const api = await fetch(`${workspace}/appointments/501/finalize`, {
+    const api = await rawRequest(`${workspace}/appointments/501/finalize`, {
       method: 'POST',
       headers: { accept: 'application/json', 'content-type': 'application/json' },
       body: JSON.stringify({ outcome: 'completed' }),
     });
     assert.equal(api.status, 401);
-    assert.equal((await api.json()).error, 'Unauthorized');
+    assert.equal(JSON.parse(api.body).error, 'Unauthorized');
 
-    const expired = await fetch(workspace, {
-      redirect: 'manual',
+    const expired = await rawRequest(workspace, {
       headers: { cookie: 'shiloh_staff_session=expired', accept: 'text/html' },
     });
     assert.equal(expired.status, 302);
-    assert.equal(expired.headers.get('set-cookie'), null);
+    assert.equal(expired.headers['set-cookie'], undefined);
 
-    const authenticated = await fetch(workspace, { headers: { cookie: 'shiloh_staff_session=valid', accept: 'text/html' } });
+    const authenticated = await rawRequest(workspace, {
+      headers: { cookie: 'shiloh_staff_session=valid', accept: 'text/html' },
+    });
     assert.equal(authenticated.status, 200);
-    assert.match(await authenticated.text(), /data-authenticated-workspace/);
+    assert.match(authenticated.body, /data-authenticated-workspace/);
   });
 });
 
