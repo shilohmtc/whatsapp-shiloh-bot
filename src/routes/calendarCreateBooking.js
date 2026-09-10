@@ -1,6 +1,7 @@
 const express = require('express');
 const { pool } = require('../db/pool');
 const { createCalendarCreateBookingService } = require('../services/calendarCreateBooking');
+const { createCalendarRetrospectiveBookingService } = require('../services/calendarRetrospectiveBooking');
 const { confirmCalendarV2BookingDirect } = require('../services/calendarDirectBookingConfirmation');
 const { createCalendarBookingClientDirectory } = require('../services/calendarBookingClientDirectory');
 const workspaceServiceCreation = require('../services/workspaceServiceCreation');
@@ -95,10 +96,30 @@ function bookingPrefillFromQuery(query = {}, options = { staff: [] }) {
   return { date, time, staffId };
 }
 
+function calendarPastHandoffClientScript({ pastPath = '/calendar/book/past' } = {}) {
+  return `(function(){
+'use strict';
+var PAST=${JSON.stringify(String(pastPath || '/calendar/book/past'))};
+function el(selector){return document.querySelector(selector);}
+function options(){try{return JSON.parse((document.getElementById('calendar-booking-options')||{}).textContent||'{}');}catch(_error){return {};}}
+function selectedService(){var id=Number((el('#service-select')||{}).value);return (options().services||[]).find(function(item){return Number(item.id)===id;})||null;}
+function endedWindow(){var date=String((el('#booking-date')||{}).value||'');var time=String((el('#booking-time')||{}).value||'');var service=selectedService();if(!/^\\d{4}-\\d{2}-\\d{2}$/.test(date)||!/^([01]\\d|2[0-3]):[0-5]\\d$/.test(time)||!service)return null;var duration=Number(service.durationMinutes);if(!Number.isFinite(duration)||duration<=0)return null;var start=new Date(date+'T'+time+':00+02:00');if(Number.isNaN(start.getTime()))return null;var end=new Date(start.getTime()+duration*60000);return end.getTime()<Date.now()?{date:date,time:time,staff:Number((el('#staff-select')||{}).value)||null}:null;}
+function href(context){var params=new URLSearchParams();params.set('date',context.date);params.set('time',context.time);if(context.staff)params.set('staff',String(context.staff));return PAST+'?'+params.toString();}
+function show(context){var status=el('[data-booking-status]');if(!status)return;status.textContent='';status.classList.remove('error','ready');status.classList.add('warn');status.append(document.createTextNode('This appointment has already ended. Record it as a past appointment instead. '));var action=document.createElement('a');action.className='button secondary';action.setAttribute('data-record-past-handoff','');action.href=href(context);action.textContent='Record past appointment';status.append(action);}
+document.addEventListener('click',function(event){var target=event.target&&event.target.closest?event.target.closest('[data-review-booking]'):null;if(!target)return;var context=endedWindow();if(!context)return;event.preventDefault();event.stopImmediatePropagation();show(context);},true);
+})();`;
+}
+
+function injectPastHandoffScript(html, scriptPath) {
+  if (!scriptPath) return String(html);
+  return String(html).replace('</head>', `<script src="${String(scriptPath).replace(/"/g, '&quot;')}" defer></script></head>`);
+}
+
 function createCalendarCreateBookingRouter({
   env = process.env,
   sessionService,
   bookingService = createCalendarCreateBookingService({ db: pool, env, confirmBooking: confirmCalendarV2BookingDirect }),
+  retrospectiveService = createCalendarRetrospectiveBookingService({ db: pool }),
   clientDirectory = createCalendarBookingClientDirectory(),
   creationService = workspaceServiceCreation,
   renderPage = renderCalendarCreateBookingPage,
@@ -134,6 +155,12 @@ function createCalendarCreateBookingRouter({
         clientScriptPath: `${req.baseUrl || '/calendar/book'}/client.js`,
       });
       try {
+        await retrospectiveService.resolveOperator(req.staffBrowserSession.adminId);
+        html = injectPastHandoffScript(html, `${req.baseUrl || '/calendar/book'}/past-handoff.js`);
+      } catch (_retrospectiveAuthorityError) {
+        // Unauthorized principals receive no retrospective hint, teaser or client script.
+      }
+      try {
         if (await creationService.resolveCreateAccess(req.staffBrowserSession.adminId)) html = injectServiceCreation(html);
       } catch (_error) {}
       html = injectAppointmentNotes(html);
@@ -154,6 +181,18 @@ function createCalendarCreateBookingRouter({
       return res.status(200).type('application/javascript').send(source);
     } catch (error) {
       if (statusForError(error) !== 503) return res.status(statusForError(error)).type('text/plain').send('Not Found');
+      return next(error);
+    }
+  });
+
+  router.get('/past-handoff.js', requireSession, async (req, res, next) => {
+    try {
+      await retrospectiveService.resolveOperator(req.staffBrowserSession.adminId);
+      return res.status(200).type('application/javascript').send(calendarPastHandoffClientScript());
+    } catch (error) {
+      if (Number(error?.httpStatus) === 403 || String(error?.code || '').includes('FORBIDDEN')) {
+        return res.status(404).type('text/plain').send('Not Found');
+      }
       return next(error);
     }
   });
@@ -240,4 +279,6 @@ module.exports = {
   statusForError,
   customerConfirmationState,
   bookingPrefillFromQuery,
+  calendarPastHandoffClientScript,
+  injectPastHandoffScript,
 };

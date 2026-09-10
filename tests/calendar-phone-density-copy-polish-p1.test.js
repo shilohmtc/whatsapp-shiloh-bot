@@ -15,8 +15,8 @@ test('Phone Day compatibility retains the #723 density base while #727 makes Wee
     /day-time-grid \.lane\{min-width:210px!important;width:210px!important;border-right:1px solid var\(--line\)!important\}/,
   );
   assert.doesNotMatch(source, /minmax\(270px,calc\(100vw - 76px\)\)/);
-  assert.match(proof, /weekMetrics\.visibleColumns, 3/);
-  assert.match(proof, /weekMetrics\.firstColumnWidth >= 88/);
+  assert.match(proof, /weekMetrics\.visibleColumns, 1/);
+  assert.match(proof, /weekMetrics\.firstColumnWidth >= 300/);
   assert.match(proof, /weekMetrics\.weekScrollerScrollWidth <= weekMetrics\.weekScrollerClientWidth \+ 2/);
 });
 

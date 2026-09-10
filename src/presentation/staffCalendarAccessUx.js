@@ -136,9 +136,11 @@ function applyWeekOverlapLayout(){
   if(!grid)return;
   resetWeekOverlapLayout();
   var desktop=!window.matchMedia||window.matchMedia('(min-width: 701px)').matches;
+  var dateFirst=grid.closest('[data-date-first-week="true"]');
 
   var days=Array.prototype.slice.call(grid.querySelectorAll('.week-day'));
   if(!days.length)return;
+  if(!desktop&&dateFirst){grid.setAttribute('data-week-overlap-layout','phone');return;}
   var laneCounts=days.map(function(day){
     var nodes=Array.prototype.slice.call(day.querySelectorAll('.time-column > .positioned-event'));
     var rectangles=nodes.map(function(node){
@@ -172,6 +174,13 @@ function applyWeekOverlapLayout(){
     return;
   }
 
+  if(dateFirst){
+    var dateLaneWidth=150;
+    grid.style.gridTemplateColumns='repeat('+days.length+',minmax('+dateLaneWidth+'px,1fr))';
+    grid.style.minWidth=(days.length*dateLaneWidth)+'px';
+    grid.setAttribute('data-week-overlap-layout','desktop');
+    return;
+  }
   var baseLaneWidth=190;
   grid.style.gridTemplateColumns=laneCounts.map(function(count){
     return 'minmax('+(baseLaneWidth*count)+'px,'+count+'fr)';

@@ -194,7 +194,7 @@ function mutationAttributes(item, model) {
     const operations = appointmentOperations(item, model);
     if (!operations.length) return '';
     const draggable = operations.includes('appointment:reschedule') ? ' draggable="true"' : '';
-    return ` data-appointment-id="${escapeHtml(item.id)}" data-revision="${revision}" data-staff-ids="${escapeHtml(eventStaffIds(item).join(','))}" data-starts-at="${escapeHtml(item.startsAt || '')}" data-ends-at="${escapeHtml(item.endsAt || '')}" data-client-name="${escapeHtml(item.clientName || 'Client')}" data-service-name="${escapeHtml(item.serviceName || '')}" data-allowed-operations="${escapeHtml(operations.join(','))}"${draggable}`;
+    return ` data-appointment-id="${escapeHtml(item.id)}" data-appointment-management-target="true" role="button" tabindex="0" aria-label="Manage appointment for ${escapeHtml(item.clientName || 'Client')}" data-revision="${revision}" data-staff-ids="${escapeHtml(eventStaffIds(item).join(','))}" data-starts-at="${escapeHtml(item.startsAt || '')}" data-ends-at="${escapeHtml(item.endsAt || '')}" data-client-name="${escapeHtml(item.clientName || 'Client')}" data-client-mobile="${escapeHtml(formatClientMobile(item.clientMobile))}" data-service-name="${escapeHtml(item.serviceName || '')}" data-practitioner-names="${escapeHtml(staffNamesFor(item, model).join(' + '))}" data-appointment-status="${escapeHtml(eventDetailPieces(item, model) || 'Scheduled')}" data-allowed-operations="${escapeHtml(operations.join(','))}"${draggable}`;
   }
   if (item.kind === 'calendar_block' && staffOperationEnabled(model, 'calendar_block:manage', eventStaffIds(item)[0])) {
     return ` data-block-id="${escapeHtml(item.id)}" data-revision="${revision}" data-staff-ids="${escapeHtml(eventStaffIds(item)[0] || '')}" data-location-id="${escapeHtml(item.locationId || '')}" data-starts-at="${escapeHtml(item.startsAt || '')}" data-ends-at="${escapeHtml(item.endsAt || '')}" data-block-type="${escapeHtml(item.blockType || 'other')}" data-title="${escapeHtml(item.title || 'Operational block')}"`;
@@ -210,9 +210,7 @@ function renderMutationButton(item, model) {
     return `<a class="event-operation" href="/calendar/workspace#booking-request-${escapeHtml(item.id)}">Resolve request</a>`;
   }
   if (!mutationEnabled(model)) return '';
-  const action = item.kind === 'appointment' && appointmentOperations(item, model).length
-    ? 'manage-appointment'
-    : item.kind === 'calendar_block' && staffOperationEnabled(model, 'calendar_block:manage', eventStaffIds(item)[0])
+  const action = item.kind === 'calendar_block' && staffOperationEnabled(model, 'calendar_block:manage', eventStaffIds(item)[0])
       ? 'manage-block'
       : item.kind === 'operational_leave' && staffOperationEnabled(model, 'operational_leave:manage', eventStaffIds(item)[0])
         ? 'manage-leave'
@@ -225,7 +223,7 @@ function renderEventCard(item, model) {
   const shared = item.kind === 'appointment' && eventStaffIds(item).length > 1;
   const id = `${item.kind || 'event'}-${item.id || 'unknown'}`;
   const meta = renderEventMeta(item, model);
-  return `<article class="event-card event-canonical ${shared ? 'event-shared' : ''}" data-event-id="${escapeHtml(id)}" data-kind="${escapeHtml(item.kind || '')}" data-canonical="true"${mutationAttributes(item, model)}>
+  return `<article class="event-card event-canonical ${shared ? 'event-shared' : ''}" data-event-id="${escapeHtml(id)}" data-kind="${escapeHtml(item.kind || '')}" data-canonical="true" data-event-staff-ids="${escapeHtml(eventStaffIds(item).join(','))}"${mutationAttributes(item, model)}>
     <div class="event-card-top"><div class="event-time"><span class="event-time-range">${escapeHtml(formatRange(item))}</span><span class="event-time-start" aria-hidden="true">${escapeHtml(item.allDay ? 'All day' : formatTime(item.startsAt))}</span></div><span class="kind-pill">${escapeHtml(eventKindLabel(item))}</span></div>
     <h4>${escapeHtml(eventTitle(item))}</h4>
     ${item.kind === 'appointment' ? `<p class="event-client-mobile">${escapeHtml(formatClientMobile(item.clientMobile))}</p>` : ''}
@@ -289,7 +287,7 @@ function bookingHref(bookingPath, { date, time, staffId } = {}) {
   return `${bookingPath}${query ? `?${query}` : ''}`;
 }
 
-function renderControls(model, basePath) {
+function renderControls(model, basePath, operationalActions = []) {
   const today = normalizeOperationalDateKey(dateKey(new Date()));
   const permittedStaff = model.permittedStaff || [];
   const visibleStaffIds = visibleStaffIdsForModel(model);
@@ -307,13 +305,16 @@ function renderControls(model, basePath) {
     ? `<details class="people-picker" data-people-picker><summary><span>People</span><strong data-people-selection-summary>${escapeHtml(peopleSummary)}</strong></summary><form class="people-form" method="get" action="${escapeHtml(basePath)}" data-practitioner-visibility-form><input type="hidden" name="view" value="${escapeHtml(model.view)}"><input type="hidden" name="date" value="${escapeHtml(model.dateKey)}">${model.activeStaffId ? `<input type="hidden" name="activeStaff" value="${escapeHtml(model.activeStaffId)}">` : ''}<fieldset><legend class="sr-only">Visible practitioners</legend>${permittedStaff.map(person => `<label><input type="checkbox" name="staff" value="${escapeHtml(person.id)}"${visible.has(Number(person.id)) ? ' checked' : ''}><span>${escapeHtml(person.displayName)}</span></label>`).join('')}</fieldset><div class="people-actions"><button class="filter" type="submit">Apply</button><a class="filter" href="${escapeHtml(queryHref(basePath, model.view, model.dateKey, permittedStaff.map(person => person.id), { activeStaffId: model.activeStaffId }))}">Show all</a></div><p data-people-selection-status>${selectedPermittedStaff.length} of ${permittedStaff.length} visible</p></form></details>`
     : `<span class="scope-pill">${escapeHtml(permittedStaff[0]?.displayName || 'Permitted practitioner')} • your permitted timeline</span>`;
   const viewLinks = ['week', 'agenda', 'month'].map(view => `<a class="view-tab ${model.view === view ? 'active' : ''}" data-calendar-view-option="${view}" ${model.view === view ? 'aria-current="page"' : ''} href="${escapeHtml(queryHref(basePath, view, model.dateKey, visibleStaffIds, { activeStaffId: model.activeStaffId }))}">${view[0].toUpperCase()}${view.slice(1)}</a>`).join('');
+  const periodContext = model.view === 'month'
+    ? formatMonth(model.period.startKey)
+    : `${formatDay(model.period.dateKeys[0] || model.dateKey, { weekday: 'short', month: 'short' })} – ${formatDay(model.period.dateKeys.at(-1) || model.dateKey, { weekday: 'short', month: 'short', year: 'numeric' })}`;
   return `<section class="controls" aria-label="Calendar controls">
-    <div class="control-group"><span class="control-label">Date</span><div class="period-nav">
-      <a class="nav-button" href="${escapeHtml(queryHref(basePath, model.view, model.period.previousAnchor, visibleStaffIds, { activeStaffId: model.activeStaffId }))}" aria-label="Previous period"><span aria-hidden="true">←</span><span class="nav-word">Previous</span></a>
-      <a class="nav-button today" href="${escapeHtml(queryHref(basePath, model.view, today, visibleStaffIds, { activeStaffId: model.activeStaffId }))}">Today</a>
-      <a class="nav-button" href="${escapeHtml(queryHref(basePath, model.view, model.period.nextAnchor, visibleStaffIds, { activeStaffId: model.activeStaffId }))}" aria-label="Next period"><span class="nav-word">Next</span><span aria-hidden="true">→</span></a>
+    <div class="control-group period-control"><span class="control-label">Date</span><div class="period-nav">
+      <a class="nav-button period-arrow" href="${escapeHtml(queryHref(basePath, model.view, model.period.previousAnchor, visibleStaffIds, { activeStaffId: model.activeStaffId }))}" aria-label="Previous period"><span aria-hidden="true">←</span></a>
+      <strong class="period-context">${escapeHtml(periodContext)}</strong>
+      <a class="nav-button period-arrow" href="${escapeHtml(queryHref(basePath, model.view, model.period.nextAnchor, visibleStaffIds, { activeStaffId: model.activeStaffId }))}" aria-label="Next period"><span aria-hidden="true">→</span></a>
     </div></div>
-    <div class="control-group"><span class="control-label">View</span><nav class="view-tabs" aria-label="Calendar view">${viewLinks}</nav></div>
+    <div class="control-group view-control"><span class="control-label">View</span><div class="view-actions"><nav class="view-tabs" aria-label="Calendar view">${viewLinks}</nav><a class="nav-button today" href="${escapeHtml(queryHref(basePath, model.view, today, visibleStaffIds, { activeStaffId: model.activeStaffId }))}">Today</a>${renderOperationalActions(operationalActions)}</div></div>
     <div class="control-group practitioner-control"><span class="control-label">Practitioners</span><div class="filters" style="overflow:visible" aria-label="Practitioner visibility">${filterContent}</div></div>
   </section>`;
 }
@@ -452,26 +453,24 @@ function renderWeek(model, booking = {}, basePath = '/calendar/read-only') {
   const activeStaffId = sourceStaff.some(person => Number(person.id) === Number(model.activeStaffId))
     ? Number(model.activeStaffId)
     : Number(sourceStaff[0]?.id);
-  const staff = [...sourceStaff].sort((a, b) => Number(b.id) === activeStaffId ? 1 : Number(a.id) === activeStaffId ? -1 : 0);
-  const visibleStaffIds = staff.map(person => Number(person.id));
+  const staff = sourceStaff;
   const operationalDays = model.period.dateKeys.filter(day => new Date(`${day}T12:00:00+02:00`).getUTCDay() !== 0);
-  const lanes = operationalDays.flatMap((day, dayIndex) => staff.map((person, practitionerIndex) => {
-    const items = eventsForDate(model, day).filter(item => item.kind !== 'clinic_closure' && eventBelongsInStaffLane(item, person.id, visibleStaffIds));
-    const context = workingContext(model, person.id, day);
-    const unavailable = context === 'Not scheduled' || context === 'No working window';
+  const unambiguousStaff = staff.length === 1 ? staff[0] : null;
+  const lanes = operationalDays.map((day, dayIndex) => {
+    const items = eventsForDate(model, day).filter(item => item.kind !== 'clinic_closure');
     const month = new Intl.DateTimeFormat('en-ZA', { timeZone: BUSINESS_TIMEZONE, month: 'short' }).format(new Date(`${day}T12:00:00+02:00`));
-    return `<section class="week-day week-practitioner-lane" data-week-practitioner-lane data-date="${escapeHtml(day)}" data-staff-id="${escapeHtml(person.id)}" data-active-practitioner="${Number(person.id) === activeStaffId ? 'true' : 'false'}" data-day-index="${dayIndex}" data-practitioner-index="${practitionerIndex}" ${operationEnabled(model, 'appointment:reschedule') ? 'data-calendar-drop-target="true"' : ''}>
-      <header><div class="week-lane-heading"><span class="week-day-date"><span class="week-day-weekday">${escapeHtml(formatDay(day, { weekday: 'short', month: undefined }).split(',')[0])}</span><strong class="week-day-number">${Number(day.slice(-2))}</strong><span class="week-day-month">${escapeHtml(month)}</span></span><strong class="week-practitioner-name" data-week-practitioner-name>${escapeHtml(person.displayName)}</strong><span class="week-practitioner-hours"><span class="status-dot ${unavailable ? 'off' : ''}" aria-hidden="true"></span>${escapeHtml(context)}</span></div><small>${items.length} item${items.length === 1 ? '' : 's'}</small></header>
+    return `<section class="week-day week-date-lane" data-week-date-lane data-date="${escapeHtml(day)}" data-day-index="${dayIndex}"${unambiguousStaff ? ` data-booking-staff-id="${escapeHtml(unambiguousStaff.id)}"` : ''} ${operationEnabled(model, 'appointment:reschedule') ? 'data-calendar-drop-target="true"' : ''}>
+      <header><div class="week-lane-heading"><span class="week-day-date"><span class="week-day-weekday">${escapeHtml(formatDay(day, { weekday: 'short', month: undefined }).split(',')[0])}</span><strong class="week-day-number">${Number(day.slice(-2))}</strong><span class="week-day-month">${escapeHtml(month)}</span></span></div><small>${items.length} item${items.length === 1 ? '' : 's'}</small></header>
       ${renderClosureStrip(model, day)}
-      <div class="time-column">${renderBookingSlotLayer({ date: day, staffId: person.id, staffName: person.displayName, bookingPath: booking.path, enabled: booking.enabled })}${items.map(item => renderPositionedEvent(item, model)).join('')}</div>
+      <div class="time-column">${renderBookingSlotLayer({ date: day, staffId: unambiguousStaff?.id, staffName: unambiguousStaff?.displayName, bookingPath: booking.path, enabled: booking.enabled })}${items.map(item => renderPositionedEvent(item, model)).join('')}</div>
     </section>`;
-  })).join('');
-  const laneCount = operationalDays.length * staff.length;
-  return `<main class="calendar-view week-view" data-view="week" data-spatial-week="true">
+  }).join('');
+  const laneCount = operationalDays.length;
+  return `<main class="calendar-view week-view" data-view="week" data-spatial-week="true" data-date-first-week="true">
     <div class="view-heading"><div><span class="eyebrow">Week</span><h2>${escapeHtml(formatDay(operationalDays[0] || model.period.startKey, { weekday: 'short', month: 'long' }))} – ${escapeHtml(formatDay(operationalDays.at(-1) || model.period.startKey, { weekday: 'short', month: 'long', year: 'numeric' }))}</h2></div>${renderPhoneWeekPractitionerPicker({ ...model, timeline: { ...model.timeline, staff } }, basePath)}<span class="read-only-badge">${mutationEnabled(model) ? 'Calendar actions' : 'Read-only'}</span></div>
     ${renderViewPractitionerContext(model)}
     ${booking.enabled ? '<p class="calendar-booking-hint">Tap an empty time to start an appointment.</p>' : ''}
-    <div class="time-grid week-time-grid">${renderTimeRail()}<div class="week-grid" style="--week-lane-count:${Math.max(laneCount, 1)}">${lanes || '<div class="empty large">No permitted practitioner lanes</div>'}</div></div>
+    <div class="time-grid week-time-grid">${renderTimeRail()}<div class="week-grid" data-week-date-lane-count="${laneCount}" style="--week-lane-count:${Math.max(laneCount, 1)}">${lanes || '<div class="empty large">No operational dates</div>'}</div></div>
   </main>`;
 }
 
@@ -765,7 +764,11 @@ function desktopSpatialLaneStyles() {
 function renderManagementPanel(model) {
   if (!mutationEnabled(model)) return '';
   const options = (model.permittedStaff || []).map(person => `<option value="${escapeHtml(person.id)}">${escapeHtml(person.displayName)}</option>`).join('');
-  return `<dialog class="management-panel" data-calendar-management-panel aria-labelledby="management-title"><section class="management-card"><header class="panel-head"><div><span class="eyebrow">Appointment</span><h2 id="management-title" data-panel-title>Manage appointment</h2></div><button class="panel-close" type="button" data-panel-close aria-label="Close">×</button></header><div class="panel-summary"><strong data-panel-client></strong><span data-panel-service></span><span data-panel-time></span></div><div class="panel-actions"><form class="panel-action" data-panel-action="appointment:reschedule"><label>Date<input name="date" type="date" required></label><label>Start time<input name="time" type="time" required></label><button type="submit">Save new time</button></form><form class="panel-action" data-panel-action="appointment:reassign"><label>Practitioner<select name="destinationStaffId" required>${options}</select></label><button type="submit">Reassign</button></form><form class="panel-action danger" data-panel-action="appointment:cancel"><label><input name="confirmed" type="checkbox" required> I confirm this exact appointment should be cancelled.</label><button type="submit">Cancel appointment</button></form></div></section></dialog>`;
+  return `<dialog class="management-panel" data-calendar-management-panel aria-labelledby="management-title"><section class="management-card"><header class="panel-head"><div><span class="eyebrow">Appointment</span><h2 id="management-title" data-panel-title>Manage appointment</h2></div><button class="panel-close" type="button" data-panel-close aria-label="Close">×</button></header><div class="panel-summary"><strong data-panel-client></strong><span data-panel-mobile></span><span data-panel-service></span><span data-panel-practitioners></span><span data-panel-time></span><span data-panel-status></span></div><div class="panel-actions"><form class="panel-action" data-panel-action="appointment:reschedule"><label>Date<input name="date" type="date" required></label><label>Start time<input name="time" type="time" required></label><button type="submit">Save new time</button></form><form class="panel-action" data-panel-action="appointment:reassign"><label>Practitioner<select name="destinationStaffId" required>${options}</select></label><button type="submit">Reassign</button></form><form class="panel-action danger" data-panel-action="appointment:cancel"><label><input name="confirmed" type="checkbox" required> I confirm this exact appointment should be cancelled.</label><button type="submit">Cancel appointment</button></form></div></section></dialog>`;
+}
+
+function calendar823Styles() {
+  return `.event-card[data-appointment-management-target="true"]{cursor:pointer}.event-card[data-appointment-management-target="true"]:focus-visible{outline:3px solid var(--leaf);outline-offset:2px}.view-actions{display:flex;align-items:center;justify-content:flex-end;gap:6px}.period-context{display:block;min-width:0;flex:1;text-align:center;font-size:.88rem;white-space:nowrap}.period-arrow{flex:0 0 auto}.panel-summary span:empty{display:none}.panel-actions .danger{margin-top:10px;padding-top:20px;border-top:2px solid #d7b7ad}@media(min-width:701px){.controls{grid-template-columns:minmax(330px,1.25fr) auto minmax(220px,.75fr)}.period-nav{width:100%}.week-grid{grid-template-columns:repeat(var(--week-lane-count),minmax(150px,1fr))!important;min-width:calc(var(--week-lane-count) * 150px)!important;width:100%!important}.week-date-lane{min-width:150px!important}.positioned-event .event-card h4,.positioned-event .event-card p{padding-right:0}.positioned-event .event-card-actions{position:static;margin-top:4px}.management-card{width:min(460px,100%)}}@media(max-width:700px){.management-card{top:auto;bottom:0;height:min(92dvh,760px);width:100%;border-radius:18px 18px 0 0;padding:16px}.event-card[data-appointment-management-target="true"]{touch-action:manipulation}.view-actions{display:grid;grid-template-columns:1fr auto}.period-context{font-size:.72rem}}`;
 }
 
 function renderCalendarPage(model, {
@@ -789,9 +792,9 @@ function renderCalendarPage(model, {
         : renderDay(model, booking);
   const canMutate = mutationEnabled(model);
   const operationScript = canMutate ? `<script src="${escapeHtml(operationalMutationsScriptPath)}" defer></script>` : '';
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Calendar — Shiloh Workspace</title><style>${serviceFamilyAccentCss()}${styles()}${workspaceShellStyles()}${workspaceV1Styles()}${desktopSpatialLaneStyles()}${calendarViewParityStyles()}${calendarViewParityResponsiveStyles()}${canMutate ? operationalStyles() : ''}${calendarFirstPhoneStyles()}${goldieDensityPhoneStyles()}</style><script src="${escapeHtml(staffAccessScriptPath)}" defer></script>${operationScript}</head><body data-calendar-view="${escapeHtml(model.view)}" data-calendar-readonly="${canMutate ? 'false' : 'true'}"><div class="workspace-frame">${renderWorkspaceNavigation({ active: 'calendar', clientsHref: clientNavigationAllowed ? clientsPath : null })}<div class="workspace-main"><div class="shell">
-    <header class="topbar"><div class="brand"><h1>Calendar</h1><p>Your clinic schedule, at a glance.</p></div><div class="topbar-side">${renderOperationalActions(operationalActions)}<div class="access-controls"></div></div></header>
-    ${renderControls(model, basePath)}${renderOperationalSummary(model)}${canMutate ? '<span class="operation-status" role="status" aria-live="polite" data-calendar-operation-status></span>' : ''}${content}
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Calendar — Shiloh Workspace</title><style>${serviceFamilyAccentCss()}${styles()}${workspaceShellStyles()}${workspaceV1Styles()}${desktopSpatialLaneStyles()}${calendarViewParityStyles()}${calendarViewParityResponsiveStyles()}${canMutate ? operationalStyles() : ''}${calendarFirstPhoneStyles()}${goldieDensityPhoneStyles()}${calendar823Styles()}</style><script src="${escapeHtml(staffAccessScriptPath)}" defer></script>${operationScript}</head><body data-calendar-view="${escapeHtml(model.view)}" data-calendar-readonly="${canMutate ? 'false' : 'true'}"><div class="workspace-frame">${renderWorkspaceNavigation({ active: 'calendar', clientsHref: clientNavigationAllowed ? clientsPath : null })}<div class="workspace-main"><div class="shell">
+    <header class="topbar"><div class="brand"><h1>Calendar</h1><p>Your clinic schedule, at a glance.</p></div><div class="topbar-side"><div class="access-controls"></div></div></header>
+    ${renderControls(model, basePath, operationalActions)}${canMutate ? '<span class="operation-status" role="status" aria-live="polite" data-calendar-operation-status></span>' : ''}${content}${renderOperationalSummary(model)}
     <div class="footer-note">${escapeHtml(timelineReadOnlyMessage)}</div>${renderManagementPanel(model)}
   </div></div></div></body></html>`;
 }
@@ -822,4 +825,5 @@ module.exports = {
   spatialPhoneWeekStyles,
   calendarFirstPhoneStyles,
   goldieDensityPhoneStyles,
+  calendar823Styles,
 };

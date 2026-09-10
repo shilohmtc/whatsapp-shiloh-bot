@@ -457,7 +457,7 @@ async function main() {
     async function panelOperation(action, setup, expectedType, adminId = 71) {
       const beforeOperations = state.operations.length;
       const beforeRenders = Number(state.renders.get(adminId) || 0);
-      await evaluate(cdp, `(()=>{document.querySelector('[data-calendar-operation="manage-appointment"]').click();const form=document.querySelector('[data-panel-action="${action}"]');${setup};form.requestSubmit();return true;})()`);
+      await evaluate(cdp, `(()=>{document.querySelector('[data-appointment-management-target="true"]').click();const form=document.querySelector('[data-panel-action="${action}"]');${setup};form.requestSubmit();return true;})()`);
       await poll(() => state.operations.slice(beforeOperations), (items) => items.some((item) => item.type === expectedType));
       assert.equal(state.operations.slice(beforeOperations).at(-1).type, expectedType);
       await poll(() => Number(state.renders.get(adminId) || 0), (value) => value > beforeRenders);
@@ -474,7 +474,7 @@ async function main() {
     ]) {
       await navigate(identity);
       const page = await evaluate(cdp, `({
-        controls:document.querySelectorAll('[data-calendar-operation]').length,
+        controls:document.querySelectorAll('[data-calendar-operation],[data-appointment-management-target="true"]').length,
         draggable:document.querySelectorAll('[data-appointment-id][draggable="true"]').length,
         readOnly:document.body.dataset.calendarReadonly,
         hasGoogle:/google/i.test(document.body.innerText),
@@ -528,7 +528,7 @@ async function main() {
     await panelOperation('appointment:reassign', `form.elements.destinationStaffId.value='2'`, 'reassign');
 
     const beforeDecline = state.operations.length;
-    await evaluate(cdp, `(()=>{document.querySelector('[data-calendar-operation="manage-appointment"]').click();const form=document.querySelector('[data-panel-action="appointment:cancel"]');form.requestSubmit();return true;})()`);
+    await evaluate(cdp, `(()=>{document.querySelector('[data-appointment-management-target="true"]').click();const form=document.querySelector('[data-panel-action="appointment:cancel"]');form.requestSubmit();return true;})()`);
     await new Promise((resolve) => setTimeout(resolve, 150));
     assert.equal(state.operations.length, beforeDecline, 'unchecked cancellation confirmation must not submit');
     await evaluate(cdp, `document.querySelector('[data-panel-close]').click();true`);

@@ -104,15 +104,14 @@ test('cockpit exposes labelled controls, scan summary and lane state', () => {
   assert.match(html, /class="positioned-event" style="--event-top:72px;--event-height:69px"/);
 });
 
-test('Week uses one shared vertical time rail and readable Monday-Saturday practitioner lanes', () => {
+test('Week uses one shared vertical time rail and six readable Monday-Saturday date lanes', () => {
   const html = renderCalendarPage(model('week'));
   assert.match(html, /class="time-grid week-time-grid"/);
-  assert.equal((html.match(/data-week-practitioner-lane/g) || []).length, 12);
-  assert.equal((html.match(/data-week-practitioner-name/g) || []).length, 12);
+  assert.equal((html.match(/data-week-date-lane(?=[ >])/g) || []).length, 6);
+  assert.doesNotMatch(html, /<section class="week-day week-practitioner-lane"/);
   assert.match(html, /class="time-rail"/);
-  assert.match(html, /grid-template-columns:repeat\(var\(--week-lane-count\),minmax\(190px,1fr\)\)/);
+  assert.match(html, /grid-template-columns:repeat\(var\(--week-lane-count\),minmax\(150px,1fr\)\)!important/);
   assert.match(html, /data-spatial-week="true"/);
-  assert.match(html, /@media\(max-width:700px\)[\s\S]*grid-template-columns:repeat\(var\(--week-lane-count\),220px\)!important;min-width:calc\(var\(--week-lane-count\) \* 220px\)!important/);
 });
 
 test('appointment management surface exposes only server-granted operations', () => {
@@ -144,14 +143,14 @@ test('legacy non-canonical events are excluded from day/week/agenda data project
 test('operational action contract exposes only guarded Create booking', () => {
   assert.deepEqual(bookingOperationalActions('2026-08-27'), [
     {
-      label: '+ Appointment',
+      label: '+ New appointment',
       ariaLabel: 'Create booking',
       href: '/calendar/book?date=2026-08-27',
       tone: 'primary',
     },
   ]);
   const html = renderOperationalActions(bookingOperationalActions('2026-08-27'));
-  assert.match(html, /aria-label="Create booking"[^>]*>\+ Appointment<\/a>/);
+  assert.match(html, /aria-label="Create booking"[^>]*>\+ New appointment<\/a>/);
   assert.doesNotMatch(html, /Confirm client contact|client-authority/);
   const routeSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'routes', 'calendarReadOnlyUx.js'), 'utf8');
   assert.doesNotMatch(routeSource, /Confirm client contact|\/calendar\/client-authority/);

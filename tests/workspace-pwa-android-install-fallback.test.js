@@ -8,10 +8,10 @@ const { workspacePwaClientScript } = require('../src/presentation/workspacePwa')
 test('#816 Android always gets an install path when not standalone', () => {
   const client = workspacePwaClientScript();
   assert.match(client, /function androidDevice\(\).*Android/s);
-  assert.match(client, /if\(!deferredInstallPrompt&&!androidDevice\(\)\)return/);
+  assert.match(client, /function installAction\(\)\{if\(!androidDevice\(\)\|\|standalone\(\)\)return/);
   assert.match(client, /Install Shiloh on this Android phone/);
   assert.match(client, /tap the ⋮ menu, then choose Install app or Add to Home screen/);
-  assert.match(client, /if\(iosDevice\(\)\|\|standalone\(\)\)return/);
+  assert.match(client, /beforeinstallprompt',event=>\{if\(!androidDevice\(\)\|\|standalone\(\)\)return/);
 });
 
 test('#816 native Chromium prompt upgrades the Android fallback instead of duplicating it', () => {

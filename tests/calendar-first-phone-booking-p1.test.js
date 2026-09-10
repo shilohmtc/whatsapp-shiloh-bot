@@ -91,34 +91,26 @@ test('Day and Week expose touch-safe empty-time links into the existing Create B
   assert.doesNotMatch(render('day', [31], false), /data-calendar-booking-slot/);
 });
 
-test('multi-practitioner Week slots preserve People and identify practitioner date and time', () => {
+test('multi-practitioner Week preserves People without guessing practitioner on empty slots', () => {
   const html = render('week', [31, 33]);
   assert.match(html, /data-people-selection-summary>2 staff/);
   assert.doesNotMatch(html, /data-calendar-view-option="day"/);
   assert.match(html, /data-calendar-view-option="week"[^>]*staff=31&amp;staff=33/);
   assert.match(html, /data-calendar-view-option="month"[^>]*staff=31&amp;staff=33/);
-  assert.equal((html.match(/data-week-practitioner-lane/g) || []).length, 12);
-  assert.equal((html.match(/data-calendar-booking-slot data-date/g) || []).length, 156);
-  assert.match(html, /data-date="2026-09-07" data-staff-id="31"[\s\S]*?data-calendar-booking-slot[^>]*href="\/calendar\/book\?date=2026-09-07&amp;time=07%3A00&amp;staff=31"/);
-  assert.match(html, /data-date="2026-09-07" data-staff-id="33"[\s\S]*?data-calendar-booking-slot[^>]*href="\/calendar\/book\?date=2026-09-07&amp;time=07%3A00&amp;staff=33"/);
-  assert.match(html, /aria-label="Create booking on Monday, 07 September 2026 at 07:00 for Amber Room"/);
+  assert.equal((html.match(/data-week-date-lane(?:\s|>)/g) || []).length, 6);
+  assert.equal((html.match(/data-calendar-booking-slot data-date/g) || []).length, 78);
+  assert.doesNotMatch(html, /data-calendar-booking-slot[^>]*staff=/);
 
   const day = render('day', [31, 33]);
   assert.match(day, /data-staff-id="31"[\s\S]*?data-calendar-booking-slot[^>]*href="\/calendar\/book\?date=2026-09-07&amp;time=07%3A00&amp;staff=31"/);
   assert.match(day, /data-staff-id="33"[\s\S]*?data-calendar-booking-slot[^>]*href="\/calendar\/book\?date=2026-09-07&amp;time=07%3A00&amp;staff=33"/);
 });
 
-test('Phone Week uses one active practitioner with six readable spatial day columns', () => {
-  const css = goldieDensityPhoneStyles();
-  assert.match(css, /week-time-grid\{grid-template-columns:42px max-content!important;max-height:calc\(100dvh - 158px\)!important/);
-  assert.match(css, /week-grid\{grid-template-columns:repeat\(6,170px\)!important;min-width:1020px!important/);
-  assert.match(css, /data-active-practitioner="false"\]\{display:none!important\}/);
-  assert.match(css, /week-day\{min-width:170px!important;width:170px!important/);
-  assert.match(css, /compact-week-practitioner-picker\{position:relative;display:block/);
+test('Phone Week uses one active practitioner over six canonical date lanes', () => {
   assert.match(calendarFirstPhoneStyles(), /event-card h4[^}]*white-space:nowrap!important[^}]*overflow-wrap:normal!important;word-break:normal!important/);
   const html = render('week', [31, 33]);
-  assert.equal((html.match(/<section class="week-day week-practitioner-lane"[^>]*data-active-practitioner="true"/g) || []).length, 6);
-  assert.equal((html.match(/<section class="week-day week-practitioner-lane"[^>]*data-active-practitioner="false"/g) || []).length, 6);
+  assert.equal((html.match(/data-week-date-lane(?:\s|>)/g) || []).length, 6);
+  assert.doesNotMatch(html, /<section class="week-day week-practitioner-lane"/);
 });
 
 test('Phone Calendar keeps Week and Month primary while Month remains overview navigation only', () => {
@@ -136,13 +128,11 @@ test('Phone Calendar keeps Week and Month primary while Month remains overview n
   assert.match(month, /data-shiloh-logout>Sign out<\/button>/);
 });
 
-test('appointment cards remain canonical and the Phone Day and Week card is the Manage target', () => {
+test('appointment cards remain canonical and the whole Phone Day and Week card is the management target', () => {
   const week = render('week', [31, 32]);
   assert.equal((week.match(/data-event-id="appointment-9902"/g) || []).length, 1);
-  assert.match(week, /data-calendar-operation="manage-appointment">Manage<\/button>/);
-  const css = calendarFirstPhoneStyles();
-  assert.match(css, /data-calendar-view="day"[^}]*\.event-operation[^}]*position:absolute!important;inset:0!important/);
-  assert.match(css, /data-calendar-view="week"[^}]*\.event-operation[^}]*min-width:44px!important;min-height:44px!important/);
+  assert.match(week, /data-appointment-management-target="true"/);
+  assert.doesNotMatch(week, /data-calendar-operation="manage-appointment">Manage<\/button>/);
 });
 
 test('canonical Create Booking prefill accepts only operational date, five-minute time and permitted staff', () => {
@@ -181,10 +171,10 @@ test('Create Booking renders calendar prefill and selects practitioner only when
 
 test('one compact fallback launcher reuses canonical booking authority and mobile overview is retired from runtime', () => {
   const actions = bookingOperationalActions('2026-09-07');
-  assert.deepEqual(actions, [{ label: '+ Appointment', ariaLabel: 'Create booking', href: '/calendar/book?date=2026-09-07', tone: 'primary' }]);
+  assert.deepEqual(actions, [{ label: '+ New appointment', ariaLabel: 'Create booking', href: '/calendar/book?date=2026-09-07', tone: 'primary' }]);
   const actionsHtml = renderOperationalActions(actions);
   assert.equal((actionsHtml.match(/class="action-link primary"/g) || []).length, 1);
-  assert.match(actionsHtml, /aria-label="Create booking">\+ Appointment/);
+  assert.match(actionsHtml, /aria-label="Create booking">\+ New appointment/);
   const polished = applyCalendarResponsivePolish(render('day', [31, 32]));
   assert.doesNotMatch(polished, /data-calendar-mobile-overview|mobile-all-staff-overview/);
   assert.match(polished, /class="time-grid day-time-grid"/);

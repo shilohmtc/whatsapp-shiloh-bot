@@ -255,13 +255,11 @@ test('Week, Agenda and Month navigation preserve the complete selected People se
   }
 });
 
-test('Week retains top People selector plus persistent practitioner lanes and Agenda context', () => {
+test('Week retains top People selector plus date lanes and practitioner attribution', () => {
   const week = renderCalendarPage(model('week', [21, 22, 23]));
   assert.match(week, /data-view-practitioner-context|People in view/);
-  assert.equal((week.match(/data-week-practitioner-name/g) || []).length, 18);
-  assert.match(week, /data-week-practitioner-name>Amber Studio</);
-  assert.match(week, /data-week-practitioner-name>Birch Studio</);
-  assert.match(week, /data-week-practitioner-name>Cedar Studio</);
+  assert.equal((week.match(/data-week-date-lane(?=[ >])/g) || []).length, 6);
+  assert.doesNotMatch(week, /<section class="week-day week-practitioner-lane"/);
   assert.match(week, /data-people-selection-summary>All staff<\/strong>/);
   assert.match(week, /class="event-practitioners"/);
   assert.match(week, /Amber Studio \+ Birch Studio/);
@@ -340,10 +338,9 @@ test('Phone Week, Agenda and Month retain scan-first layouts and touch-safe Mont
     assert.match(html, new RegExp(`data-calendar-view="${view}"`));
     if (view === 'week') {
       assert.match(html, /data-view-practitioner-context|People in view/);
-      assert.match(html, /data-week-practitioner-name/);
+      assert.equal((html.match(/data-week-date-lane(?=[ >])/g) || []).length, 6);
       assert.match(html, /data-spatial-week="true"/);
-      assert.match(html, /grid-template-columns:repeat\(var\(--week-lane-count\),220px\)!important;min-width:calc\(var\(--week-lane-count\) \* 220px\)!important/);
-      assert.match(html, /\.week-time-grid\{display:grid!important;grid-template-columns:44px max-content!important;overflow-x:auto!important/);
+      assert.doesNotMatch(html, /<section class="week-day week-practitioner-lane"/);
     } else {
       assert.match(html, /data-view-practitioner-context/);
     }

@@ -40,9 +40,15 @@ function shouldDecoratePwaHtmlPath(pathname) {
   return HTML_PATH_PREFIXES.some(prefix => path === prefix || path.startsWith(`${prefix}/`));
 }
 
+function isMobilePwaRequest(req) {
+  const userAgent = String(req?.get?.('user-agent') || req?.headers?.['user-agent'] || '');
+  const clientHint = String(req?.get?.('sec-ch-ua-mobile') || req?.headers?.['sec-ch-ua-mobile'] || '');
+  return clientHint === '?1' || /Android|iPhone|iPad|iPod|Mobile\//i.test(userAgent);
+}
+
 function createWorkspacePwaHtmlMiddleware() {
   return function workspacePwaHtmlMiddleware(req, res, next) {
-    if (req.method !== 'GET' || !shouldDecoratePwaHtmlPath(req.path || req.url)) return next();
+    if (req.method !== 'GET' || !shouldDecoratePwaHtmlPath(req.path || req.url) || !isMobilePwaRequest(req)) return next();
     const originalSend = res.send.bind(res);
     res.send = function pwaAwareSend(body) {
       const type = String(res.getHeader('Content-Type') || '').toLowerCase();
@@ -110,6 +116,7 @@ module.exports = {
   HTML_PATH_PREFIXES,
   setPublicAssetHeaders,
   shouldDecoratePwaHtmlPath,
+  isMobilePwaRequest,
   createWorkspacePwaHtmlMiddleware,
   pwaLaunchDestination,
   createWorkspacePwaRouter,

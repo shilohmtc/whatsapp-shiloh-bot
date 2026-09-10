@@ -105,7 +105,8 @@ test('People summary and controls never disclose a crafted unauthorized practiti
 test('Week retains practitioner context and lane headers while Agenda and Month retain attribution context', () => {
   const week = renderCalendarPage(model('week'));
   assert.match(week, /data-view-practitioner-context|People in view/);
-  assert.equal((week.match(/data-week-practitioner-name/g) || []).length, 18);
+  assert.equal((week.match(/data-week-date-lane(?:\s|>)/g) || []).length, 6);
+  assert.doesNotMatch(week, /data-week-practitioner-name/);
   assert.match(week, /class="event-practitioners"/);
   for (const view of ['agenda', 'month']) {
     assert.match(renderCalendarPage(model(view)), /data-view-practitioner-context/);
@@ -114,8 +115,8 @@ test('Week retains practitioner context and lane headers while Agenda and Month 
 
 test('Week stays Monday-Saturday even when handed a crafted Sunday display key', () => {
   const html = renderCalendarPage(model('week', [31, 32, 33], { includeSundayInCraftedPeriod: true }));
-  assert.equal((html.match(/data-week-practitioner-lane/g) || []).length, 18);
-  assert.equal(new Set(Array.from(html.matchAll(/data-week-practitioner-lane data-date="([^"]+)"/g), match => match[1])).size, 6);
+  assert.equal((html.match(/data-week-date-lane(?:\s|>)/g) || []).length, 6);
+  assert.equal(new Set(Array.from(html.matchAll(/data-week-date-lane data-date="([^"]+)"/g), match => match[1])).size, 6);
   assert.match(html, /data-date="2026-09-07"/);
   assert.match(html, /data-date="2026-09-12"/);
   assert.doesNotMatch(html, /data-date="2026-09-13"|Crafted Sunday Client/);
@@ -137,13 +138,13 @@ test('shared Week appointments remain one canonical event with compact practitio
 test('Phone Week active practitioner is bounded to selected server-permitted People state', () => {
   const selected = model('week', [31, 32], { activeStaffId: 32 });
   const html = renderCalendarPage(selected);
-  assert.equal((html.match(/data-active-practitioner="true"/g) || []).length, 6);
+  assert.equal((html.match(/data-week-date-lane(?:\s|>)/g) || []).length, 6);
   assert.match(html, /data-compact-week-active-staff="32">Birch Room/);
   assert.match(html, /data-compact-week-practitioner-option="31"/);
   assert.match(html, /activeStaff=31/);
   assert.match(html, /activeStaff=32/);
   assert.equal((html.match(/data-event-id="appointment-9702"/g) || []).length, 1);
-  assert.match(html, /data-date="2026-09-11" data-staff-id="32" data-active-practitioner="true"[\s\S]*?data-event-id="appointment-9702"/);
+  assert.match(html, /data-week-date-lane data-date="2026-09-11"[\s\S]*?data-event-id="appointment-9702"/);
 
   assert.equal(resolveActiveWeekStaffId('32', selected), 32);
   assert.equal(resolveActiveWeekStaffId('999', selected), 31);
@@ -160,10 +161,11 @@ test('Day keeps the established practitioner lane model unchanged', () => {
   assert.doesNotMatch(html, /data-spatial-week/);
 });
 
-test('spatial Phone Week reuses the canonical management button as a whole-event target', () => {
+test('spatial Phone Week uses the canonical card as the whole-event management target', () => {
   const html = renderCalendarPage(model('week', [31, 32], { mutationEnabled: true }));
   const css = calendarFirstPhoneStyles();
-  assert.match(html, /data-calendar-operation="manage-appointment">Manage<\/button>/);
+  assert.match(html, /data-appointment-management-target="true"/);
+  assert.doesNotMatch(html, /data-calendar-operation="manage-appointment">Manage<\/button>/);
   assert.match(html, /data-calendar-management-panel/);
   assert.match(css, /\.event-operation\{position:absolute!important;inset:0!important/);
   assert.match(css, /min-width:44px!important;min-height:44px!important/);
@@ -184,14 +186,15 @@ test('authenticated browser proof mounts canonical Calendar and Create Booking r
   assert.match(source, /createCalendarReadOnlyRouter\(\{/);
   assert.match(source, /createCalendarCreateBookingRouter\(\{/);
   assert.doesNotMatch(source, /phone-day-empty-time-prefill/);
-  assert.match(source, /phone-week-empty-time-prefill/);
+  assert.match(source, /phone-week-multi-staff-empty-slot-safe/);
   assert.match(source, /phone-narrow-direct-drawer/);
   assert.match(source, /phone-plus-actions/);
   assert.match(source, /phone-week-planner-all-practitioners/);
-  assert.match(source, /phone-week-hide-practitioner/);
+  assert.match(source, /phone-week-active-practitioner-switch/);
   assert.match(source, /phone-appointment-manage-sheet/);
   assert.match(source, /calendarViewportShare >= 0\.76/);
-  assert.match(source, /data-week-practitioner-lane/);
+  assert.match(source, /data-week-date-lane/);
+  assert.match(source, /practitionerLaneCount, 0/);
   assert.match(source, /phone-month-capacity-overview/);
   assert.match(source, /desktop-week-authority-preserved/);
   assert.doesNotMatch(source, /calendarReadOnlyRoutes\(\{/);

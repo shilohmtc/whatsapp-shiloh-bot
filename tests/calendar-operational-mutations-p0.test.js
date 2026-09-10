@@ -263,7 +263,8 @@ test('cockpit renders only data-granted operation families for a booking operato
   };
   const html = renderCalendarPage(dayModel(capability));
   assert.match(html, /data-allowed-operations="appointment:reschedule,appointment:cancel,appointment:reassign"/);
-  assert.match(html, /data-calendar-operation="manage-appointment"/);
+  assert.match(html, /data-appointment-management-target="true" role="button" tabindex="0"/);
+  assert.doesNotMatch(html, /data-calendar-operation="manage-appointment"/);
   assert.doesNotMatch(html, /data-calendar-operation="(?:add-block|add-leave|manage-schedule|manage-block|manage-leave)"/);
   assert.doesNotMatch(html, /data-block-id=|data-leave-id=/);
 });
