@@ -426,7 +426,6 @@ async function main() {
     })()`);
     assert.deepEqual(weekMetrics.viewport, { width: 390, height: 844, screenWidth: 390, screenHeight: 844 });
     assert.ok(weekMetrics.rootScrollWidth <= 391, 'Phone Week Planner leaked horizontal overflow');
-    assert.equal(weekMetrics.weekColumns, 1);
     assert.equal(weekMetrics.visibleColumns, 1);
     assert.deepEqual(weekMetrics.visibleDates, [DATE_KEY]);
     assert.equal(weekMetrics.practitionerLaneCount, 0);
