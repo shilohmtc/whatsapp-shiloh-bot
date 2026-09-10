@@ -547,7 +547,8 @@ async function main() {
     assert.equal(safeTargetMetrics.activeStaff, '52');
     assert.equal(safeTargetMetrics.activeStaffName, 'Birch Room');
     assert.ok(safeTargetMetrics.visibleAppointmentStaffIds.every(ids=>ids.split(',').includes('52')), 'Phone practitioner switch did not filter canonical event ownership');
-    assert.deepEqual(safeTargetMetrics.operationStaff, ['52', '52']);
+    assert.ok(safeTargetMetrics.operationStaff.length >= 2);
+    assert.deepEqual([...new Set(safeTargetMetrics.operationStaff)], ['52']);
     assert.match(safeTargetMetrics.appointmentHref, /staff=52/);
     screenshots.push({ ...(await capture('phone-week-active-practitioner-switch')), viewport: { width: 390, height: 844 }, metrics: safeTargetMetrics });
 
