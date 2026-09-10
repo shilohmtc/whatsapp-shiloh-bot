@@ -20,6 +20,8 @@ const { createCalendarReadOnlyUxService } = require('../src/services/calendarRea
 const { staffCalendarAccessClientScript } = require('../src/presentation/staffCalendarAccessUx');
 const { calendarOperationalMutationsClientScript } = require('../src/presentation/calendarOperationalMutationsUx');
 const { workspaceNavigationClientScript } = require('../src/presentation/workspaceShell');
+const { workspaceIconClientScript } = require('../src/presentation/workspaceIconClient');
+const { calendarDesktopApprovedClientScript } = require('../src/presentation/calendarDesktopApprovedUx');
 
 const OUT_DIR = path.join(process.cwd(), 'artifacts', 'calendar-phone-week-planner-v3');
 const SESSION_TOKEN = 'synthetic-phone-v2-session';
@@ -228,7 +230,11 @@ function createFixture() {
   });
   app.get('/calendar/staff/client.js', (_req, res) => res.type('application/javascript').send(staffCalendarAccessClientScript()));
   app.get('/calendar/operations/client.js', (_req, res) => res.type('application/javascript').send(calendarOperationalMutationsClientScript()));
-  app.get('/calendar/workspace/nav.js', (_req, res) => res.type('application/javascript').send(workspaceNavigationClientScript()));
+  app.get('/calendar/workspace/nav.js', (_req, res) => res.type('application/javascript').send([
+    workspaceNavigationClientScript(),
+    workspaceIconClientScript(),
+    calendarDesktopApprovedClientScript(),
+  ].join('\n')));
   app.get('/calendar/workspace/navigation', (_req, res) => res.json({
     dashboard: { allowed: true, href: '/calendar/workspace' },
     calendar: { allowed: true, href: '/calendar/read-only' },
@@ -333,26 +339,53 @@ async function main() {
     await cdp.send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false, screenWidth: 1440, screenHeight: 1000 });
     await cdp.send('Page.navigate', { url: `${origin}/proof` });
     await poll(() => evaluate(cdp, 'location.pathname'), value => value === '/calendar/read-only');
-    await poll(() => evaluate(cdp, `document.querySelector('.week-grid')?.getAttribute('data-week-overlap-layout')`), value => value === 'desktop');
+    await poll(() => evaluate(cdp, `document.body.dataset.calendarDesktopApproved`), value => value === 'true');
+    await poll(() => evaluate(cdp, `document.querySelectorAll('.desktop-practitioner-lane').length`), value => value === 3);
+    await poll(() => evaluate(cdp, `document.querySelectorAll('.desktop-create-popover [data-calendar-operation]').length`), value => value >= 2);
     const desktopMetrics = await evaluate(cdp, `(() => ({
       viewport:{width:innerWidth,height:innerHeight,screenWidth:screen.width,screenHeight:screen.height},
-      weekColumns:getComputedStyle(document.querySelector('.week-grid')).gridTemplateColumns.split(' ').filter(Boolean).length,
-      dayColumns:document.querySelectorAll('.week-day').length,
-      uniqueDates:new Set(Array.from(document.querySelectorAll('[data-week-date-lane]')).map(node=>node.dataset.date)).size,
-      practitionerLaneCount:document.querySelectorAll('[data-week-practitioner-lane]').length,
-      eventStaffIds:Array.from(new Set(Array.from(document.querySelectorAll('[data-event-staff-ids]')).flatMap(node=>String(node.dataset.eventStaffIds||'').split(',').filter(Boolean)))),
-      sundayColumns:Array.from(document.querySelectorAll('.week-day')).filter(node=>new Date(node.dataset.date+'T12:00:00Z').getUTCDay()===0).length,
+      approved:document.body.dataset.calendarDesktopApproved||'',
+      compactPeriod:document.querySelector('.desktop-calendar-toolbar .period-context')?.textContent.trim()||'',
+      weekStripDays:document.querySelectorAll('.desktop-week-day').length,
+      selectedDates:Array.from(document.querySelectorAll('.desktop-week-day[aria-current="date"]')).map(node=>new URL(node.href).searchParams.get('date')),
+      practitionerLaneCount:document.querySelectorAll('.desktop-practitioner-lane').length,
+      practitionerNames:Array.from(document.querySelectorAll('.desktop-practitioner-lane>header h3')).map(node=>node.textContent.trim()),
+      visibleEventIds:Array.from(document.querySelectorAll('.desktop-practitioner-grid [data-event-id]')).map(node=>node.dataset.eventId),
+      visibleEventStaffIds:Array.from(document.querySelectorAll('.desktop-practitioner-grid [data-event-staff-ids]')).map(node=>node.dataset.eventStaffIds),
+      createLabels:Array.from(document.querySelectorAll('.desktop-create-popover a,.desktop-create-popover button,.desktop-create-submenu>summary')).map(node=>node.textContent.trim()),
+      visibleTimeLabels:Array.from(document.querySelectorAll('.week-time-grid>.time-rail span')).filter(node=>getComputedStyle(node).display!=='none').map(node=>node.textContent.trim()),
+      sourceWeekDisplay:getComputedStyle(document.querySelector('.week-grid')).display,
+      plannerOverflowY:getComputedStyle(document.querySelector('.week-time-grid')).overflowY,
+      plannerMaxHeight:getComputedStyle(document.querySelector('.week-time-grid')).maxHeight,
+      rootScrollWidth:document.documentElement.scrollWidth,
+      navIconCount:document.querySelectorAll('.workspace-nav-icon').length,
+      signoutHasIcon:Boolean(document.querySelector('[data-shiloh-logout] .workspace-nav-icon')),
+      visibleInlineManage:Array.from(document.querySelectorAll('.desktop-practitioner-grid .event-operation')).filter(node=>getComputedStyle(node).display!=='none').length,
       phoneControlsDisplay:getComputedStyle(document.querySelector('[data-phone-calendar-v2-controls]')).display,
     }))()`);
     assert.deepEqual(desktopMetrics.viewport, { width: 1440, height: 1000, screenWidth: 1440, screenHeight: 1000 });
-    assert.equal(desktopMetrics.weekColumns, 6);
-    assert.equal(desktopMetrics.dayColumns, 6);
-    assert.equal(desktopMetrics.uniqueDates, 6);
-    assert.equal(desktopMetrics.practitionerLaneCount, 0);
-    assert.deepEqual(desktopMetrics.eventStaffIds, ['51', '52', '53']);
-    assert.equal(desktopMetrics.sundayColumns, 0);
+    assert.equal(desktopMetrics.approved, 'true');
+    assert.equal(desktopMetrics.compactPeriod, '7–12 Sep 2026');
+    assert.equal(desktopMetrics.weekStripDays, 6);
+    assert.deepEqual(desktopMetrics.selectedDates, [DATE_KEY]);
+    assert.equal(desktopMetrics.practitionerLaneCount, 3);
+    assert.deepEqual(desktopMetrics.practitionerNames, ['Amber Room', 'Birch Room', 'Cedar Room']);
+    assert.deepEqual(desktopMetrics.visibleEventIds.sort(), ['appointment-9804', 'appointment-9805']);
+    assert.deepEqual(desktopMetrics.visibleEventStaffIds.sort(), ['51,52', '53']);
+    assert.ok(desktopMetrics.createLabels.includes('New appointment'));
+    assert.ok(desktopMetrics.createLabels.includes('Record past appointment'));
+    assert.ok(desktopMetrics.createLabels.includes('Block time'));
+    assert.ok(desktopMetrics.createLabels.includes('Leave'));
+    assert.equal(desktopMetrics.visibleTimeLabels.at(-1), '18:00');
+    assert.equal(desktopMetrics.sourceWeekDisplay, 'none');
+    assert.equal(desktopMetrics.plannerOverflowY, 'visible');
+    assert.equal(desktopMetrics.plannerMaxHeight, 'none');
+    assert.ok(desktopMetrics.rootScrollWidth <= 1440);
+    assert.ok(desktopMetrics.navIconCount >= 8);
+    assert.equal(desktopMetrics.signoutHasIcon, true);
+    assert.equal(desktopMetrics.visibleInlineManage, 0);
     assert.equal(desktopMetrics.phoneControlsDisplay, 'none');
-    screenshots.push({ ...(await capture('desktop-week-authority-preserved')), viewport: desktopMetrics.viewport, metrics: desktopMetrics });
+    screenshots.push({ ...(await capture('desktop-approved-calendar-contract')), viewport: desktopMetrics.viewport, metrics: desktopMetrics });
     const desktopViewOptions = await evaluate(cdp, `Array.from(document.querySelectorAll('[data-calendar-view-option]')).map(node=>node.dataset.calendarViewOption)`);
     assert.deepEqual(desktopViewOptions, ['week', 'agenda', 'month']);
     await navigate(`${origin}/calendar/read-only?view=month&date=${DATE_KEY}&staff=51&staff=52&staff=53&activeStaff=51`, '.month-grid');

@@ -64,8 +64,8 @@ test('one New appointment menu reuses authorized booking, retrospective, block a
   assert.match(script, /desktop-create-menu/);
   assert.match(script, /New appointment/);
   assert.match(script, /Record past appointment/);
-  assert.match(script, /data-calendar-operation=\\"add-block\\"/);
-  assert.match(script, /data-calendar-operation=\\"add-leave\\"/);
+  assert.match(script, /data-calendar-operation="add-block"/);
+  assert.match(script, /data-calendar-operation="add-leave"/);
   assert.match(script, /fetch\(url\.pathname/);
   assert.match(script, /credentials:'same-origin'/);
   assert.match(script, /all\('\.operational-actions'\)\.forEach\(node=>node\.remove\(\)\)/);
@@ -91,8 +91,8 @@ test('Desktop planner delegates vertical scrolling to page and avoids structural
 
 test('#823 canonical appointment card remains the management target without inline Manage clutter', () => {
   const css = desktopApprovedStyles();
-  assert.match(css, /event-card\[data-appointment-management-target=\\"true\\"\]\{cursor:pointer\}/);
-  assert.match(css, /event-card\[data-appointment-management-target=\\"true\\"\] \.event-operation\{display:none!important\}/);
+  assert.match(css, /event-card\[data-appointment-management-target="true"\]\{cursor:pointer\}/);
+  assert.match(css, /event-card\[data-appointment-management-target="true"\] \.event-operation\{display:none!important\}/);
   const script = calendarDesktopApprovedClientScript();
   assert.doesNotMatch(script, /Adjust end time/);
 });

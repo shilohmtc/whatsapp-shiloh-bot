@@ -196,6 +196,8 @@ test('authenticated browser proof mounts canonical Calendar and Create Booking r
   assert.match(source, /data-week-date-lane/);
   assert.match(source, /practitionerLaneCount, 0/);
   assert.match(source, /phone-month-capacity-overview/);
-  assert.match(source, /desktop-week-authority-preserved/);
+  assert.match(source, /desktop-approved-calendar-contract/);
+  assert.match(source, /calendarDesktopApprovedClientScript/);
+  assert.match(source, /workspaceIconClientScript/);
   assert.doesNotMatch(source, /calendarReadOnlyRoutes\(\{/);
 });
