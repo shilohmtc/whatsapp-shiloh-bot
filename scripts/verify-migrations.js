@@ -7,6 +7,10 @@ const {
   CONTROLLED_RELEASE_MIGRATION_ENV,
   runControlledReleaseMigration,
 } = require('../src/services/controlledReleaseMigration');
+const {
+  MODE_ENV: CHRISTEL_RECORD_PAST_MODE_ENV,
+  runConfigured: runConfiguredChristelRecordPast,
+} = require('../src/services/christelRecordPastProvisioning824');
 
 async function run() {
   const controlled = await runControlledReleaseMigration();
@@ -24,6 +28,20 @@ async function run() {
     checksumMismatches: state.checksumMismatches,
     ledgerRowsAbsentFromRelease: state.ledgerRowsAbsentFromRelease,
   }));
+
+  const christelRecordPast = await runConfiguredChristelRecordPast();
+  if (christelRecordPast.status !== 'disabled') {
+    console.log(JSON.stringify({
+      event: 'christel_record_past_824_control_operation',
+      configuredBy: CHRISTEL_RECORD_PAST_MODE_ENV,
+      ...christelRecordPast,
+    }));
+  }
+  if (christelRecordPast.status === 'refused') {
+    const error = new Error(`Christel #824 control operation refused: ${(christelRecordPast.reasons || []).join(',')}`);
+    error.code = 'CHRISTEL_RECORD_PAST_824_REFUSED';
+    throw error;
+  }
 }
 
 run()
