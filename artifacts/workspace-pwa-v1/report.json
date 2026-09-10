@@ -1,0 +1,40 @@
+{
+  "issue": 791,
+  "syntheticOnly": true,
+  "productionCredentialMutation": false,
+  "manifest": {
+    "name": "Shiloh",
+    "display": "standalone",
+    "startUrl": "/calendar/pwa/launch",
+    "scope": "/calendar/"
+  },
+  "authenticatedPhone": {
+    "viewport": "390x844",
+    "rootHorizontalOverflow": false,
+    "screenshot": "phone-390x844.png",
+    "sha256": "a573131c6ba62d9f639f5e5b2c4780aefa9342b457543a313eeb318cbd0249a3"
+  },
+  "authenticatedDesktop": {
+    "viewport": "1440x900",
+    "rootHorizontalOverflow": false,
+    "pwaExposed": false,
+    "screenshot": "desktop-1440x900.png",
+    "sha256": "55acf307e370de0f07857bfb555b8e85d12a31eb78387d121787d0b395f67582"
+  },
+  "expiredSession": {
+    "redirectedToCanonicalEntry": true,
+    "persistentStaleWarning": false,
+    "screenshot": "expired-session.png",
+    "sha256": "a02271570241c9231dd718c2de41b27269a21b006a5d6f55c4b6af822ea6adc2"
+  },
+  "installabilityPrerequisites": {
+    "raster192": true,
+    "raster512": true,
+    "maskable512": true,
+    "serviceWorkerReady": true,
+    "stableId": "/calendar/pwa/launch",
+    "stableStartUrl": "/calendar/pwa/launch",
+    "stableScope": "/calendar/"
+  },
+  "standaloneLimitation": "Headless Chromium proves raster manifest prerequisites, service-worker readiness and standalone metadata, but cannot prove Android OS/WebAPK Home-screen installation. Real-device standalone launch remains the final acceptance check."
+}

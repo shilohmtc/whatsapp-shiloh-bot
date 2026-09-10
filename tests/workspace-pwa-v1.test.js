@@ -42,7 +42,7 @@ test('#791 PWA metadata decorates existing HTML idempotently and only expands CS
   assert.match(once, new RegExp(`${PWA_BASE.replaceAll('/', '\\/')}\\/manifest\\.webmanifest`));
   assert.match(once, /apple-mobile-web-app-capable/);
   assert.match(once, /theme-color/);
-  assert.match(once, /client\.js\?v=791-v1/);
+  assert.match(once, /client\.js\?v=837-v1/);
 
   const original = "default-src 'none'; style-src 'unsafe-inline'; script-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
   const expanded = augmentWorkspacePwaCsp(original);
@@ -54,7 +54,7 @@ test('#791 PWA metadata decorates existing HTML idempotently and only expands CS
 
 test('#791 service worker caches only inert versioned icon assets and never protected Workspace/API responses', () => {
   const worker = workspacePwaServiceWorkerScript();
-  assert.match(STATIC_CACHE_NAME, /^shiloh-pwa-static-791-v1$/);
+  assert.match(STATIC_CACHE_NAME, /^shiloh-pwa-static-837-v1$/);
   assert.match(worker, /cache\.addAll\(STATIC_URLS\)/);
   assert.match(worker, /STATIC_URLS\.includes\(url\.pathname\+url\.search\)/);
   assert.match(worker, /request\.mode==='navigate'.*url\.pathname\.startsWith\('\/calendar\/'\)/s);
@@ -123,4 +123,27 @@ test('#791 integration is a delivery shell only: no auth/session/permission sour
   assert.match(pwaRoute, /createOptionalCalendarSessionMiddleware/);
   assert.doesNotMatch(pwaRoute + pwaPresentation, /INSERT INTO|UPDATE staff_|DELETE FROM|CREATE TABLE|ALTER TABLE|staff_admin_accounts|permissions\s*=|calendar_scope\s*=|service_scope\s*=/i);
   assert.doesNotMatch(pwaRoute + pwaPresentation, /passkey|webauthn|pushManager|showNotification|background sync|React Native|Flutter/i);
+});
+
+
+test('#837 Android manifest uses real raster install icons and never suggests a plain Chrome shortcut fallback', () => {
+  const manifest = workspacePwaManifest();
+  assert.deepEqual(manifest.icons.map(icon => [icon.sizes, icon.type, icon.purpose]), [
+    ['192x192', 'image/png', 'any'],
+    ['512x512', 'image/png', 'any'],
+    ['512x512', 'image/png', 'maskable'],
+  ]);
+  const dimensions = (filename) => {
+    const buffer = fs.readFileSync(path.join(__dirname, '..', 'public', 'assets', 'pwa', filename));
+    assert.equal(buffer.subarray(0, 8).toString('hex'), '89504e470d0a1a0a');
+    return [buffer.readUInt32BE(16), buffer.readUInt32BE(20)];
+  };
+  assert.deepEqual(dimensions('shiloh-pwa-192.png'), [192, 192]);
+  assert.deepEqual(dimensions('shiloh-pwa-512.png'), [512, 512]);
+  assert.deepEqual(dimensions('shiloh-pwa-maskable-512.png'), [512, 512]);
+  const client = workspacePwaClientScript();
+  assert.match(client, /beforeinstallprompt/);
+  assert.match(client, /appinstalled/);
+  assert.match(client, /!deferredInstallPrompt/);
+  assert.doesNotMatch(client, /In Chrome, tap the .*Add to Home screen/);
 });

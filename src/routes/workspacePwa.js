@@ -1,6 +1,8 @@
 'use strict';
 
 const express = require('express');
+const path = require('path');
+const PWA_ICON_ASSET_DIR = path.join(__dirname, '../../public/assets/pwa');
 const { createOptionalCalendarSessionMiddleware } = require('../middleware/staffBrowserSession');
 const {
   PWA_BASE,
@@ -33,6 +35,12 @@ function setPublicAssetHeaders(res, { immutable = false } = {}) {
   res.setHeader('Cache-Control', immutable
     ? 'public, max-age=31536000, immutable'
     : 'no-cache, max-age=0, must-revalidate');
+}
+
+function sendPwaPng(res, filename) {
+  setPublicAssetHeaders(res, { immutable: true });
+  res.type('image/png');
+  return res.sendFile(path.join(PWA_ICON_ASSET_DIR, filename));
 }
 
 function shouldDecoratePwaHtmlPath(pathname) {
@@ -90,6 +98,12 @@ function createWorkspacePwaRouter({ sessionService, env = process.env } = {}) {
     setPublicAssetHeaders(res);
     return res.status(200).type('application/javascript').send(workspacePwaClientScript());
   });
+
+  router.get('/icon-192.png', (_req, res) => sendPwaPng(res, 'shiloh-pwa-192.png'));
+
+  router.get('/icon-512.png', (_req, res) => sendPwaPng(res, 'shiloh-pwa-512.png'));
+
+  router.get('/icon-maskable-512.png', (_req, res) => sendPwaPng(res, 'shiloh-pwa-maskable-512.png'));
 
   router.get('/icon-192.svg', (_req, res) => {
     setPublicAssetHeaders(res, { immutable: true });
