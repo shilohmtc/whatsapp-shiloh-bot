@@ -76,9 +76,25 @@ test('booking-request staff alert reuses the canonical current proactive Utility
   assert.doesNotMatch(JSON.stringify(definition), /Approve|Decline|booking_approval_(?:approve|decline)/i);
 });
 
-test('default staff alert sender uses canonical template delivery with staff_open_workspace payload', async () => {
+test('runtime staff-alert selector is default-off and accepts only the canonical configured template', () => {
+  assert.throws(
+    () => alerts.configuredAlertTemplate({}),
+    error => error.code === 'WORKSPACE_BOOKING_REQUEST_ALERT_TEMPLATE_UNCONFIGURED',
+  );
+  assert.throws(
+    () => alerts.configuredAlertTemplate({ WHATSAPP_WORKSPACE_BOOKING_REQUEST_ALERT_TEMPLATE: 'wrong_template' }),
+    error => error.code === 'WORKSPACE_BOOKING_REQUEST_ALERT_TEMPLATE_MISMATCH',
+  );
+  assert.equal(
+    alerts.configuredAlertTemplate({ WHATSAPP_WORKSPACE_BOOKING_REQUEST_ALERT_TEMPLATE: 'shiloh_workspace_booking_request_alert_v1' }),
+    'shiloh_workspace_booking_request_alert_v1',
+  );
+});
+
+test('default staff alert sender uses selector-gated canonical template delivery with staff_open_workspace payload', async () => {
   assert.equal(alerts.STAFF_ALERT_TEMPLATE, 'shiloh_workspace_booking_request_alert_v1');
   const source = require('node:fs').readFileSync(require('node:path').join(__dirname, '../src/services/bookingRequestStaffAlerts.js'), 'utf8');
+  assert.match(source, /configuredAlertTemplate/);
   assert.match(source, /sendWhatsAppTemplate/);
   assert.match(source, /staff_open_workspace/);
   assert.match(source, /pending_count/);
