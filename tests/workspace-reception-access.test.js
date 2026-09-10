@@ -11,7 +11,7 @@ const {
   createWorkspaceReceptionAccessService,
 } = require('../src/services/workspaceReceptionAccess');
 
-test('Reception preset is fixed to shared booking-operator authority without prohibited powers', () => {
+test('Reception preset preserves shared identity while matching Christel capability authority', () => {
   assert.equal(RECEPTION_DISPLAY_NAME, 'Shiloh Reception');
   assert.equal(RECEPTION_PRESET.role, 'receptionist');
   assert.equal(RECEPTION_PRESET.businessRole, 'booking_operator');
@@ -21,6 +21,9 @@ test('Reception preset is fixed to shared booking-operator authority without pro
   for (const key of RECEPTION_PRESET.capabilities) assert.equal(permissions[key], true);
   for (const key of FORBIDDEN_RECEPTION_CAPABILITIES) {
     assert.equal(Object.prototype.hasOwnProperty.call(permissions, key), false, `${key} must not be granted`);
+  }
+  for (const key of ['staff:view', 'staff:manage', 'staff_access:manage', 'staff_auth:reset', 'client:delete']) {
+    assert.equal(permissions[key], true, `${key} must match Christel`);
   }
 });
 
@@ -40,7 +43,7 @@ test('exact Reception principal must be active, non-Staff and exact-scope', () =
   assert.equal(isExactReceptionPrincipal(exact, '27660000000'), true);
   assert.equal(isExactReceptionPrincipal({ ...exact, staff_id: 5 }, '27660000000'), false);
   assert.equal(isExactReceptionPrincipal({ ...exact, business_role: 'business_admin' }, '27660000000'), false);
-  assert.equal(isExactReceptionPrincipal({ ...exact, permissions: { ...expectedPermissions(), 'staff_access:manage': true } }, '27660000000'), false);
+  assert.equal(isExactReceptionPrincipal({ ...exact, permissions: { ...expectedPermissions(), 'unknown:power': true } }, '27660000000'), false);
 });
 
 test('Reception projection never exposes private identity material', () => {

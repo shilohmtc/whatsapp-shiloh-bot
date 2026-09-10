@@ -89,7 +89,6 @@ function dashboardClientScript() {
 
 function renderDashboardPage(model, { staffAccessScriptPath = '/calendar/staff/client.js', dashboardScriptPath = '/calendar/workspace/client.js', navigation = {} } = {}) {
   const nextOperationalDay = model.requestedDateKey !== model.operationalDateKey;
-  const isOwner = model.mode === 'owner_overview';
   const isBusinessOverview = ['owner_overview', 'business_overview'].includes(model.mode);
   const heading = isBusinessOverview ? 'Today across the team' : 'My day';
   const closures = (model.closures || []).map((item) => `<div class="closure">Closed · ${escapeHtml(item.reason || 'Clinic closure')}</div>`).join('');
@@ -98,7 +97,7 @@ function renderDashboardPage(model, { staffAccessScriptPath = '/calendar/staff/c
   const actionableCount = (model.awaitingFinalization || []).filter((item) => item.canFinalize).length;
   const requestCards = bookingRequests.map(item => bookingRequestItem(item, model)).join('');
   const finalizationCount = (model.awaitingFinalization || []).length;
-  const finalizationSummary = finalizationCount ? `<div class="attention-summary"><strong>${finalizationCount} ${finalizationCount === 1 ? 'visit is' : 'visits are'} awaiting practitioner finalization.</strong><br>${isOwner ? 'Assigned practitioners can finalize their visits; authorized owner backup actions are available on the relevant cards.' : isBusinessOverview ? 'Assigned practitioners finalize their own visits.' : actionableCount === finalizationCount ? 'Record Completed or No-show on the relevant visit card.' : `${actionableCount} can be finalized here; shared visits must be completed by their assigned practitioner.`}</div>` : '';
+  const finalizationSummary = finalizationCount ? `<div class="attention-summary"><strong>${finalizationCount} ${finalizationCount === 1 ? 'visit is' : 'visits are'} awaiting practitioner finalization.</strong><br>${model.canFinalizeAllBusiness ? 'Authorized all-business backup actions are available on the relevant cards.' : isBusinessOverview ? 'Assigned practitioners finalize their own visits.' : actionableCount === finalizationCount ? 'Record Completed or No-show on the relevant visit card.' : `${actionableCount} can be finalized here; shared visits must be completed by their assigned practitioner.`}</div>` : '';
   const attention = requestCards || finalizationSummary ? `${requestCards}${finalizationSummary}` : '<div class="empty">No booking request or past visit currently needs staff action.</div>';
   const activity = (model.recentActivity || []).map((item) => activityItem(item, model)).join('') || '<div class="empty">No completed or no-show visits are recorded today yet.</div>';
   let communications = '<div class="empty">No client-notification issue is currently available in this access.</div>';
