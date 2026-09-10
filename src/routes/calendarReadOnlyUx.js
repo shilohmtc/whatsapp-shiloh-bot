@@ -8,6 +8,7 @@ const {
 } = require('../presentation/calendarPhoneCompactV2');
 const { isCalendarBridgeEnabled } = require('../middleware/staffBrowserSession');
 const { createCalendarCreateBookingService } = require('../services/calendarCreateBooking');
+const { createCalendarRetrospectiveBookingService } = require('../services/calendarRetrospectiveBooking');
 const { createCalendarOperationalMutationService } = require('../services/calendarOperationalMutations');
 const workspaceClients = require('../services/workspaceClients');
 
@@ -58,9 +59,23 @@ function decorateUnavailableContract(html, error) {
   );
 }
 
-function bookingOperationalActions(dateKey, bookingPath = '/calendar/book') {
-  const href = `${bookingPath}?date=${encodeURIComponent(String(dateKey || ''))}`;
-  return [{ label: '+ New appointment', ariaLabel: 'Create booking', href, tone: 'primary' }];
+function bookingOperationalActions(
+  dateKey,
+  bookingPath = '/calendar/book',
+  retrospectiveAllowed = false,
+  retrospectiveBookingPath = '/calendar/book/past',
+) {
+  const date = encodeURIComponent(String(dateKey || ''));
+  const actions = [{ label: '+ New appointment', ariaLabel: 'Create booking', href: `${bookingPath}?date=${date}`, tone: 'primary' }];
+  if (retrospectiveAllowed) {
+    actions.push({
+      label: 'Record past appointment',
+      ariaLabel: 'Record past appointment',
+      href: `${retrospectiveBookingPath}?date=${date}`,
+      tone: 'secondary',
+    });
+  }
+  return actions;
 }
 
 function escapeHtml(value = '') {
@@ -240,7 +255,9 @@ function createCalendarReadOnlyHandler({
   resolveViewer = resolveServerViewer,
   staffAccessPath = '/calendar/staff',
   bookingPath = '/calendar/book',
+  retrospectiveBookingPath = '/calendar/book/past',
   bookingService = createCalendarCreateBookingService({ db: pool, env }),
+  retrospectiveBookingService = createCalendarRetrospectiveBookingService({ db: pool }),
   mutationService = createCalendarOperationalMutationService({ db: pool }),
   clientAccessService = workspaceClients,
   clientsPath = '/calendar/clients',
@@ -277,6 +294,17 @@ function createCalendarReadOnlyHandler({
       } catch (_bookingAuthorityError) {
         // Timeline remains safe. Booking entry fails closed while /calendar/book
         // independently revalidates current operator capability and scope.
+      }
+
+      let retrospectiveBookingAllowed = false;
+      if (req.staffBrowserSession?.adminId != null) {
+        try {
+          await retrospectiveBookingService.resolveOperator(req.staffBrowserSession.adminId);
+          retrospectiveBookingAllowed = true;
+        } catch (_retrospectiveAuthorityError) {
+          // Retrospective entry remains absent unless canonical appointment:record_past
+          // authority resolves; /calendar/book/past revalidates independently.
+        }
       }
 
       let mutationCapability = null;
@@ -317,7 +345,7 @@ function createCalendarReadOnlyHandler({
         bookingEnabled: bookingAllowed,
         bookingPath,
         operationalActions: [
-          ...(bookingAllowed ? bookingOperationalActions(model.dateKey, bookingPath) : []),
+          ...(bookingAllowed ? bookingOperationalActions(model.dateKey, bookingPath, retrospectiveBookingAllowed, retrospectiveBookingPath) : []),
         ],
         timelineReadOnlyMessage: mutationCapability
           ? 'Calendar changes are checked again against the current appointment, schedule and conflicts before saving. These controls do not send client messages.'
