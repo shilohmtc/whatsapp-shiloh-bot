@@ -1,10 +1,15 @@
 'use strict';
 
-const PWA_VERSION = '791-v1';
+const PWA_VERSION = '837-v1';
 const PWA_BASE = '/calendar/pwa';
 const STATIC_CACHE_PREFIX = 'shiloh-pwa-static-';
 const STATIC_CACHE_NAME = `${STATIC_CACHE_PREFIX}${PWA_VERSION}`;
 const ICON_URLS = Object.freeze([
+  `${PWA_BASE}/icon-192.png?v=${PWA_VERSION}`,
+  `${PWA_BASE}/icon-512.png?v=${PWA_VERSION}`,
+  `${PWA_BASE}/icon-maskable-512.png?v=${PWA_VERSION}`,
+]);
+const SVG_ICON_URLS = Object.freeze([
   `${PWA_BASE}/icon-192.svg?v=${PWA_VERSION}`,
   `${PWA_BASE}/icon-512.svg?v=${PWA_VERSION}`,
 ]);
@@ -21,8 +26,9 @@ function workspacePwaManifest() {
     background_color: '#f7f5ef',
     theme_color: '#17382d',
     icons: [
-      { src: ICON_URLS[0], sizes: '192x192', type: 'image/svg+xml', purpose: 'any' },
-      { src: ICON_URLS[1], sizes: '512x512', type: 'image/svg+xml', purpose: 'any maskable' },
+      { src: ICON_URLS[0], sizes: '192x192', type: 'image/png', purpose: 'any' },
+      { src: ICON_URLS[1], sizes: '512x512', type: 'image/png', purpose: 'any' },
+      { src: ICON_URLS[2], sizes: '512x512', type: 'image/png', purpose: 'maskable' },
     ],
   };
 }
@@ -49,7 +55,7 @@ function workspacePwaHeadMarkup() {
     '<meta name="apple-mobile-web-app-capable" content="yes">',
     '<meta name="apple-mobile-web-app-status-bar-style" content="default">',
     '<meta name="apple-mobile-web-app-title" content="Shiloh">',
-    `<link rel="icon" href="${ICON_URLS[0]}" type="image/svg+xml">`,
+    `<link rel="icon" href="${SVG_ICON_URLS[0]}" type="image/svg+xml">`,
     `<script src="${PWA_BASE}/client.js?v=${PWA_VERSION}" defer></script>`,
   ].join('');
 }
@@ -95,7 +101,7 @@ function androidDevice(){return /Android/i.test(String(window.navigator.userAgen
 function protectedPath(){return PROTECTED_PREFIXES.some(prefix=>location.pathname===prefix||location.pathname.startsWith(prefix+'/'));}
 function removeInstallCard(selector){const node=document.querySelector(selector);if(node)node.remove();}
 function installGuidance(){if(!iosDevice()||standalone()||document.querySelector('[data-shiloh-ios-install]'))return;const card=document.createElement('section');card.setAttribute('data-shiloh-ios-install','');card.setAttribute('role','note');card.style.cssText='box-sizing:border-box;margin:14px auto 0;width:min(calc(100% - 28px),680px);padding:16px 18px 16px 44px;border:1px solid #cfdad3;border-radius:16px;background:#f4f8f5;color:#20322b;box-shadow:0 6px 20px rgba(20,45,35,.08);font:400 .94rem/1.45 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';const eyebrow=document.createElement('div');eyebrow.textContent='INSTALL SHILOH';eyebrow.style.cssText='margin-bottom:5px;color:#496b5a;font-size:.72rem;font-weight:800;letter-spacing:.12em';const title=document.createElement('strong');title.textContent='Add Shiloh to this iPhone';title.style.cssText='display:block;margin-bottom:5px;font-size:1.05rem';const copy=document.createElement('div');copy.textContent='Tap Share, choose Add to Home Screen, then tap Add. After that, open Shiloh from the new Home Screen icon.';card.append(eyebrow,title,copy);const target=document.body.firstElementChild;document.body.insertBefore(card,target||null);}
-function installAction(){if(!androidDevice()||standalone())return;let card=document.querySelector('[data-shiloh-browser-install]');if(card)return;card=document.createElement('section');card.setAttribute('data-shiloh-browser-install','');card.setAttribute('role','note');card.style.cssText='box-sizing:border-box;margin:14px auto 0;width:min(calc(100% - 28px),680px);padding:16px 18px 16px 44px;border:1px solid #cfdad3;border-radius:16px;background:#f4f8f5;color:#20322b;box-shadow:0 6px 20px rgba(20,45,35,.08);font:400 .94rem/1.45 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';const eyebrow=document.createElement('div');eyebrow.textContent='INSTALL SHILOH';eyebrow.style.cssText='margin-bottom:5px;color:#496b5a;font-size:.72rem;font-weight:800;letter-spacing:.12em';const title=document.createElement('strong');title.textContent=deferredInstallPrompt?'Install Shiloh on this Android phone':'Install Shiloh on this Android phone';title.style.cssText='display:block;margin-bottom:8px;font-size:1.05rem';card.append(eyebrow,title);if(!deferredInstallPrompt){const copy=document.createElement('div');copy.textContent='In Chrome, tap the ⋮ menu, then choose Install app or Add to Home screen. The wording may vary by Chrome version.';card.append(copy);}else{const button=document.createElement('button');button.type='button';button.textContent='Install Shiloh';button.style.cssText='min-height:44px;border:1px solid #496b5a;border-radius:999px;padding:9px 15px;background:#496b5a;color:#fff;font:700 .9rem/1.2 system-ui,sans-serif;cursor:pointer';button.addEventListener('click',async()=>{const prompt=deferredInstallPrompt;if(!prompt)return;deferredInstallPrompt=null;removeInstallCard('[data-shiloh-browser-install]');await prompt.prompt();const choice=await prompt.userChoice.catch(()=>null);if(choice&&choice.outcome!=='accepted')deferredInstallPrompt=prompt;installAction();});card.append(button);}const target=document.body.firstElementChild;document.body.insertBefore(card,target||null);}
+function installAction(){if(!androidDevice()||standalone()||!deferredInstallPrompt){removeInstallCard('[data-shiloh-browser-install]');return;}let card=document.querySelector('[data-shiloh-browser-install]');if(card)return;card=document.createElement('section');card.setAttribute('data-shiloh-browser-install','');card.setAttribute('role','note');card.style.cssText='box-sizing:border-box;margin:14px auto 0;width:min(calc(100% - 28px),680px);padding:16px 18px 16px 44px;border:1px solid #cfdad3;border-radius:16px;background:#f4f8f5;color:#20322b;box-shadow:0 6px 20px rgba(20,45,35,.08);font:400 .94rem/1.45 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';const eyebrow=document.createElement('div');eyebrow.textContent='INSTALL SHILOH';eyebrow.style.cssText='margin-bottom:5px;color:#496b5a;font-size:.72rem;font-weight:800;letter-spacing:.12em';const title=document.createElement('strong');title.textContent='Install Shiloh on this Android phone';title.style.cssText='display:block;margin-bottom:8px;font-size:1.05rem';const button=document.createElement('button');button.type='button';button.textContent='Install Shiloh';button.style.cssText='min-height:44px;border:1px solid #496b5a;border-radius:999px;padding:9px 15px;background:#496b5a;color:#fff;font:700 .9rem/1.2 system-ui,sans-serif;cursor:pointer';button.addEventListener('click',async()=>{const prompt=deferredInstallPrompt;if(!prompt)return;deferredInstallPrompt=null;removeInstallCard('[data-shiloh-browser-install]');await prompt.prompt();const choice=await prompt.userChoice.catch(()=>null);if(choice&&choice.outcome!=='accepted')deferredInstallPrompt=prompt;installAction();});card.append(eyebrow,title,button);const target=document.body.firstElementChild;document.body.insertBefore(card,target||null);}
 function banner(){let node=document.querySelector('[data-shiloh-pwa-status]');if(node)return node;node=document.createElement('div');node.setAttribute('data-shiloh-pwa-status','');node.setAttribute('role','status');node.setAttribute('aria-live','polite');node.hidden=true;node.style.cssText='position:fixed;left:50%;bottom:max(14px,env(safe-area-inset-bottom));z-index:120;max-width:min(92vw,520px);transform:translateX(-50%);padding:10px 12px;border:1px solid #dfe5df;border-radius:12px;background:#fffdf9;color:#20322b;box-shadow:0 8px 26px rgba(20,45,35,.18);font:700 .78rem/1.35 system-ui,sans-serif;text-align:center';document.body.appendChild(node);return node;}
 function status(message,action){const node=banner();node.textContent='';if(!message){node.hidden=true;return;}node.hidden=false;node.append(document.createTextNode(message));if(action){const button=document.createElement('button');button.type='button';button.textContent=action.label;button.style.cssText='margin-left:8px;border:1px solid #496b5a;border-radius:999px;padding:5px 9px;background:#496b5a;color:#fff;font:inherit;cursor:pointer';button.addEventListener('click',action.run);node.appendChild(button);}}
 function viewerPermitsWorkspace(viewer){return !!(viewer&&typeof viewer==='object'&&(viewer.calendarScope==='own_staff'||viewer.calendarScope==='business_all_staff'));}
@@ -120,6 +126,7 @@ module.exports = {
   STATIC_CACHE_PREFIX,
   STATIC_CACHE_NAME,
   ICON_URLS,
+  SVG_ICON_URLS,
   workspacePwaManifest,
   workspacePwaIconSvg,
   workspacePwaHeadMarkup,

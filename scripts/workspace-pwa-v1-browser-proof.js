@@ -117,7 +117,7 @@ function createFixture() {
   app.use(requestContext);
   app.use('/calendar', createWorkspacePwaHtmlMiddleware());
   app.use('/calendar/pwa', createWorkspacePwaRouter({ sessionService, env: ENV }));
-  app.get('/proof-client.js', (_req, res) => res.type('application/javascript').send("addEventListener('load',()=>{document.documentElement.dataset.rootOverflow=String(document.documentElement.scrollWidth>document.documentElement.clientWidth);document.documentElement.dataset.displayStandalone=String(!!(matchMedia&&matchMedia('(display-mode: standalone)').matches));});"));
+  app.get('/proof-client.js', (_req, res) => res.type('application/javascript').send("addEventListener('load',async()=>{document.documentElement.dataset.rootOverflow=String(document.documentElement.scrollWidth>document.documentElement.clientWidth);document.documentElement.dataset.displayStandalone=String(!!(matchMedia&&matchMedia('(display-mode: standalone)').matches));try{await navigator.serviceWorker.ready;document.documentElement.dataset.swReady='true';}catch(_error){document.documentElement.dataset.swReady='false';}});"));
   app.get('/proof-auth', (_req, res) => {
     state.valid = true;
     res.setHeader('Set-Cookie', serializeSessionCookie(SESSION_TOKEN, { env: ENV, maxAgeSeconds: 3600 }));
@@ -173,6 +173,7 @@ async function main() {
     assert.equal(manifest.name, 'Shiloh');
     assert.equal(manifest.display, 'standalone');
     assert.equal(manifest.start_url, '/calendar/pwa/launch');
+    assert.deepEqual(manifest.icons.map(icon => [icon.sizes, icon.type, icon.purpose]), [['192x192','image/png','any'],['512x512','image/png','any'],['512x512','image/png','maskable']]);
 
     const phoneProfile = path.join(temp, 'phone-profile');
     const phonePng = path.join(OUT_DIR, 'phone-390x844.png');
@@ -180,8 +181,9 @@ async function main() {
     const phoneDom = await chromeRun(chrome, [`--user-data-dir=${phoneProfile}`, androidUa, '--window-size=390,844', '--virtual-time-budget=1600', '--dump-dom', `${origin}/proof-auth`]);
     assert.match(phoneDom, /data-authenticated-workspace/);
     assert.match(phoneDom, /data-root-overflow="false"/);
-    assert.match(phoneDom, /manifest\.webmanifest\?v=791-v1/);
-    assert.match(phoneDom, /data-shiloh-browser-install/);
+    assert.match(phoneDom, /manifest\.webmanifest\?v=837-v1/);
+    assert.match(phoneDom, /data-sw-ready="true"/);
+    assert.doesNotMatch(phoneDom, /In Chrome, tap the .*Add to Home screen/);
     assert.match(phoneDom, /data-workspace-drawer-toggle/);
 
     const desktopProfile = path.join(temp, 'desktop-profile');
@@ -208,7 +210,8 @@ async function main() {
       authenticatedPhone: { viewport: '390x844', rootHorizontalOverflow: false, screenshot: path.basename(phonePng), sha256: sha256(phonePng) },
       authenticatedDesktop: { viewport: '1440x900', rootHorizontalOverflow: false, pwaExposed: false, screenshot: path.basename(desktopPng), sha256: sha256(desktopPng) },
       expiredSession: { redirectedToCanonicalEntry: true, persistentStaleWarning: false, screenshot: path.basename(expiredPng), sha256: sha256(expiredPng) },
-      standaloneLimitation: 'Headless Chromium proves manifest standalone metadata and the installed delivery shell, but cannot reproduce an OS home-screen installation window. Real-device install chrome remains a release acceptance check.',
+      installabilityPrerequisites: { raster192: true, raster512: true, maskable512: true, serviceWorkerReady: true, stableId: manifest.id, stableStartUrl: manifest.start_url, stableScope: manifest.scope },
+      standaloneLimitation: 'Headless Chromium proves raster manifest prerequisites, service-worker readiness and standalone metadata, but cannot prove Android OS/WebAPK Home-screen installation. Real-device standalone launch remains the final acceptance check.',
     };
     fs.writeFileSync(path.join(OUT_DIR, 'report.json'), JSON.stringify(report, null, 2));
     console.log(JSON.stringify(report, null, 2));
