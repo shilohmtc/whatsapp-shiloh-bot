@@ -1,0 +1,25 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+
+const { workspacePwaClientScript } = require('../src/presentation/workspacePwa');
+
+test('#810 Chromium install affordance is browser-owned, user-gesture driven, and non-authoritative', () => {
+  const client = workspacePwaClientScript();
+
+  assert.match(client, /addEventListener\('beforeinstallprompt'/);
+  assert.match(client, /event\.preventDefault\(\)/);
+  assert.match(client, /deferredInstallPrompt=event/);
+  assert.match(client, /data-shiloh-browser-install/);
+  assert.match(client, /Install Shiloh/);
+  assert.match(client, /button\.addEventListener\('click'/);
+  assert.match(client, /await prompt\.prompt\(\)/);
+  assert.match(client, /prompt\.userChoice/);
+  assert.match(client, /addEventListener\('appinstalled'/);
+  assert.match(client, /deferredInstallPrompt=null/);
+
+  assert.match(client, /if\(standalone\(\)\|\|iosDevice\(\)\)return/);
+  assert.match(client, /Add Shiloh to this iPhone/);
+  assert.match(client, /Add to Home Screen/);
+
+  assert.doesNotMatch(client, /localStorage|sessionStorage|indexedDB|document\.cookie|Authorization|Bearer\s|navigator\.credentials|permissions\s*=|calendar_scope\s*=/i);
+});
