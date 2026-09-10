@@ -20,7 +20,9 @@ test('#839 create submits selected practitioner while edit keeps canonical pract
   const client = calendarOperationalMutationsClientScript();
 
   assert.match(client, /var selectedStaffId=state\.mode===['"]create['"]\?Number\(form\.elements\.staffId\.value\):state\.staffId/);
-  assert.match(client, /if\(state\.mode===['"]create['"]&&!Number\.isSafeInteger\(selectedStaffId\)\)return status\(['"]Choose a practitioner before saving\./);
+  assert.match(client, /Number\.isSafeInteger\(selectedStaffId\)/);
+  assert.match(client, /selectedStaffId<=0/);
+  assert.match(client, /Choose a practitioner before saving\./);
   assert.match(client, /staffId:selectedStaffId/);
   assert.match(client, /if\(state\.mode===['"]edit['"]\)\{payload\.expectedRevision=state\.revision/);
   assert.match(client, /if\(state\.mode===['"]edit['"]\)\{leavePayload\.expectedRevision=state\.revision/);
