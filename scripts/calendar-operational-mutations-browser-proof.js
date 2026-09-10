@@ -577,7 +577,7 @@ async function main() {
     const touchProof = await evaluate(cdp, `(()=>{
       const operations=[...document.querySelectorAll('[data-calendar-operation]')];
       const compactEventTargets=operations.filter(element=>element.closest('.positioned-event'));
-      const candidates=[...document.querySelectorAll('[data-calendar-operation],.phone-calendar-v2-controls>details>summary,.phone-today-fab,.phone-plus-menu>summary')]
+      const candidates=[...document.querySelectorAll('[data-calendar-operation],.phone-calendar-v2-controls>details>summary,.phone-today-action,.phone-plus-menu>summary')]
         .filter(element=>!element.closest('.positioned-event'));
       const visible=candidates.filter(element=>{
         const style=getComputedStyle(element),rect=element.getBoundingClientRect();
