@@ -185,6 +185,7 @@ test('authenticated browser proof mounts canonical Calendar and Create Booking r
   const source = fs.readFileSync(require.resolve('../scripts/calendar-spatial-phone-week-browser-proof'), 'utf8');
   assert.match(source, /createCalendarReadOnlyRouter\(\{/);
   assert.match(source, /createCalendarCreateBookingRouter\(\{/);
+  assert.match(source, /retrospectiveBookingService:\s*\{\s*async resolveOperator\(\)/);
   assert.doesNotMatch(source, /phone-day-empty-time-prefill/);
   assert.match(source, /phone-week-multi-staff-empty-slot-safe/);
   assert.match(source, /phone-narrow-direct-drawer/);

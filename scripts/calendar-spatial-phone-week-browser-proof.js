@@ -252,6 +252,7 @@ function createFixture() {
     env: ENV,
     buildModel: input => calendarService.buildModel(input),
     bookingService: { async resolveOperator() { return { adminId: 77 }; } },
+    retrospectiveBookingService: { async resolveOperator() { return { adminId: 77 }; } },
     mutationService: { async resolveOperator() { return { mutationCapability }; } },
     clientAccessService: { async resolveAccess() { return { capability: 'client:lookup' }; } },
   }));
