@@ -146,11 +146,15 @@ function ownerPrincipal() {
   };
 }
 
-test('Dashboard composes canonical all-permitted Calendar day and bounded Messages projections', async () => {
+test('Dashboard composes canonical all-permitted current/carry-over Calendar days and bounded Messages projections', async () => {
   const calls = [];
   const service = createWorkspaceDashboardService({
     resolvePrincipal: async () => ownerPrincipal(),
-    calendarService: { async buildModel(input) { calls.push({ calendar: input }); return calendarFixture(); } },
+    calendarService: { async buildModel(input) {
+      calls.push({ calendar: input });
+      if (input.date === '2026-09-04') return { ...calendarFixture(), dateKey: '2026-09-04', timeline: { ...calendarFixture().timeline, appointments: [] } };
+      return calendarFixture();
+    } },
     messagesService: {
       async resolveAccess() { return { capability: 'client:lookup' }; },
       async buildModel(input) { calls.push({ messages: input }); return { attention: [], activity: [], attentionUnavailable: false, activityUnavailable: false }; },
@@ -158,11 +162,14 @@ test('Dashboard composes canonical all-permitted Calendar day and bounded Messag
   });
   const viewer = { calendarScope: 'business_all_staff' };
   const model = await service.buildModel({ adminId: 7, viewer, now: new Date('2026-09-05T08:00:00Z') });
-  assert.equal(calls[0].calendar.view, 'day');
-  assert.equal(calls[0].calendar.staff, 'all');
-  assert.deepEqual(calls[0].calendar.viewer, { calendarScope: 'all_business' });
+  const calendarCalls = calls.filter(call => call.calendar).map(call => call.calendar);
+  const messageCall = calls.find(call => call.messages)?.messages;
+  assert.deepEqual(calendarCalls.map(call => call.date).sort(), ['2026-09-04', '2026-09-05']);
+  assert.ok(calendarCalls.every(call => call.view === 'day' && call.staff === 'all'));
+  assert.ok(calendarCalls.every(call => call.viewer.calendarScope === 'all_business'));
   assert.equal(model.appointments.length, 1);
-  assert.equal(calls[1].messages.activityLimit, 4);
+  assert.equal(model.carryOver.length, 0);
+  assert.equal(messageCall.activityLimit, 4);
   await assert.rejects(service.buildModel({ adminId: 7, viewer: null }), error => error instanceof WorkspaceDashboardError && error.httpStatus === 403);
 });
 
@@ -173,7 +180,7 @@ test('Dashboard and Messages GET routes require authenticated sessions and canno
   app.use('/calendar/workspace', createWorkspaceOperationalRouter({
     env: ENABLED_ENV,
     sessionService,
-    dashboardService: { async buildModel() { state.dashboardGets += 1; return { ...calendarFixture(), requestedDateKey: '2026-09-05', operationalDateKey: '2026-09-05', calendar: calendarFixture(), appointments: calendarFixture().timeline.appointments, closures: [], communications: null }; } },
+    dashboardService: { async buildModel() { state.dashboardGets += 1; return { ...calendarFixture(), requestedDateKey: '2026-09-05', operationalDateKey: '2026-09-05', carryOverDateKey: '2026-09-04', carryOver: [], calendar: calendarFixture(), appointments: calendarFixture().timeline.appointments, closures: [], communications: null }; } },
     navigationService: { async resolve() { return {}; } },
   }));
   app.use('/calendar/messages', createWorkspaceMessagesRouter({
