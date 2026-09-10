@@ -29,8 +29,7 @@ jobs:
           start = next(i for i, line in enumerate(source) if line.strip() == "python3 <<'PY'") + 1
           end = next(i for i in range(start, len(source)) if source[i].strip() == 'PY')
           block = source[start:end]
-          indent = min(len(line) - len(line.lstrip()) for line in block if line.strip())
-          code = '\n'.join(line[indent:] for line in block)
+          code = '\n'.join(line[10:] if line.startswith('          ') else line for line in block)
           exec(compile(code, 'control-temp-837-embedded.py', 'exec'))
           PY
       - name: Focused verification
