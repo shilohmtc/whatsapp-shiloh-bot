@@ -88,7 +88,7 @@ function createWorkspaceOperationalRouter({
 } = {}) {
   if (!sessionService) throw new Error('Workspace operational routes require the existing staff browser session service');
   const router = express.Router();
-  const requireSession = requireStaffSession({ service: sessionService, env });
+  const requireSession = requireStaffSession({ service: sessionService, env, humanNavigationSigninPath: staffAccessPath });
   const sameOrigin = sameOriginGuard({ env });
   const requireCsrf = csrfGuard({ service: sessionService });
 
