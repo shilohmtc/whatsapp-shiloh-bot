@@ -40,7 +40,6 @@ function snapshot(row) {
     businessRole: row?.business_role || null,
     calendarScope: row?.calendar_scope || null,
     serviceScope: row?.service_scope || null,
-    staffScope: row?.staff_scope || null,
     appointmentCreate: permissions['appointment:create'] === true,
     recordPast: permissions[RECORD_PAST] === true,
     otherPermissionsDigest: digest(withoutRecordPast(permissions)),
@@ -59,7 +58,7 @@ function validateRow(row) {
 
 async function readChristel(db, { forUpdate = false } = {}) {
   const result = await db.query(`
-    SELECT a.id,a.staff_id,a.active AS admin_active,a.business_role,a.calendar_scope,a.service_scope,a.staff_scope,a.permissions,
+    SELECT a.id,a.staff_id,a.active AS admin_active,a.business_role,a.calendar_scope,a.service_scope,a.permissions,
            s.status AS staff_status
       FROM staff s
       JOIN staff_admin_accounts a ON a.staff_id=s.id
@@ -146,7 +145,6 @@ async function apply({ dbPool = pool, env = process.env } = {}) {
       || beforeValidation.state.businessRole !== afterValidation.state.businessRole
       || beforeValidation.state.calendarScope !== afterValidation.state.calendarScope
       || beforeValidation.state.serviceScope !== afterValidation.state.serviceScope
-      || beforeValidation.state.staffScope !== afterValidation.state.staffScope
       || beforeValidation.state.otherPermissionsDigest !== afterValidation.state.otherPermissionsDigest) {
       const error = new Error('Non-target #824 authority changed');
       error.code = 'NON_TARGET_AUTHORITY_CHANGED';
