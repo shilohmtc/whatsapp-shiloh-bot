@@ -201,10 +201,13 @@ function createWorkspaceDashboardService({
       .filter(item => item?.canonical !== false)
       .sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime())
       .map(item => projectAppointment(item, authority, now, calendar.dateKey));
-    const carryOver = [...(carryOverCalendar.timeline?.appointments || [])]
+    const carryOverSource = String(carryOverCalendar?.dateKey || '') === carryOverDateKey
+      ? (carryOverCalendar.timeline?.appointments || [])
+      : [];
+    const carryOver = [...carryOverSource]
       .filter(item => item?.canonical !== false)
       .sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime())
-      .map(item => projectAppointment(item, authority, now, carryOverCalendar.dateKey))
+      .map(item => projectAppointment(item, authority, now, carryOverDateKey))
       .filter(item => item.needsFinalization);
     await Promise.all([...appointments, ...carryOver].map(async (item) => {
       if (!item.canFinalize) return;
@@ -234,7 +237,7 @@ function createWorkspaceDashboardService({
       generatedAt: now.toISOString(),
       requestedDateKey,
       operationalDateKey: calendar.dateKey,
-      carryOverDateKey: carryOverCalendar.dateKey,
+      carryOverDateKey,
       displayName: String(principal.display_name || 'Shiloh practitioner').trim(),
       mode: authority.mode,
       linkedStaffId: authority.linkedStaffId,
