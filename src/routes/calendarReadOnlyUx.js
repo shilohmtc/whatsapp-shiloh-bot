@@ -363,6 +363,8 @@ function createCalendarReadOnlyHandler({
         basePath,
         bookingPath,
         bookingAllowed,
+        retrospectiveBookingPath,
+        retrospectiveAllowed: retrospectiveBookingAllowed,
       });
       return res.status(200).type('html').send(html);
     } catch (error) {

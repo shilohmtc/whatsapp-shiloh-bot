@@ -78,10 +78,11 @@ test('normal Calendar selectors retire Day while compatibility rendering remains
   assert.match(dayHtml, /data-view="day"/);
 });
 
-test('Phone controls expose Week and Month only, preserve all visible staff, and annotate canonical public holidays', () => {
+test('Phone controls expose Week, Agenda and Month, preserve all visible staff, and annotate canonical public holidays', () => {
   const html = renderPhoneCalendarControls(model('week'), { basePath: '/calendar/read-only' });
   assert.doesNotMatch(html, /data-phone-calendar-view="day"/);
   assert.match(html, /data-phone-calendar-view="week"/);
+  assert.match(html, /data-phone-calendar-view="agenda"/);
   assert.match(html, /data-phone-calendar-view="month"/);
   assert.match(html, /staff=51&amp;staff=52&amp;staff=53&amp;activeStaff=52/);
   assert.match(html, /Public holiday — Heritage Day/);
@@ -100,6 +101,8 @@ test('Phone Week Planner renders Mon-Sat strip and all permitted practitioner to
   assert.match(script, /eventStaffIds/);
   assert.match(script, /body\.dataset\.phoneActiveStaffId/);
   assert.match(script, /activeStaff=id;applyPlanner\(\)/);
+  assert.match(script, /node\.dataset\.bookingStaffId=activeStaff/);
+  assert.match(script, /selectedIds\(\)/);
   assert.doesNotMatch(script, /fetch\(/);
 });
 
