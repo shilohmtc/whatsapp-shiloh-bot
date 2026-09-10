@@ -98,10 +98,10 @@ test('#823 canonical appointment card remains the management target without inli
   assert.doesNotMatch(script, /Adjust end time/);
 });
 
-test('Workspace iconography covers approved sidebar destinations and sign-out without an added package dependency', () => {
+test('Workspace iconography covers approved sidebar destinations and sign-out through the shared Lucide source', () => {
   const script = workspaceIconClientScript();
   for (const key of ['dashboard', 'calendar', 'clients', 'messages', 'staff', 'services', 'reports', 'clinicHours', 'logout']) {
-    assert.match(script, new RegExp(`${key}:`));
+    assert.match(script, new RegExp(`\"${key}\":`));
   }
   assert.match(script, /workspace-nav-icon/);
   assert.match(script, /data-shiloh-logout/);

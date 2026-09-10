@@ -1,3 +1,4 @@
+const { renderLucideIcon } = require('./lucideIcons');
 const BUSINESS_TIMEZONE = 'Africa/Johannesburg';
 const DESKTOP_GRID_START_MINUTES = 7 * 60;
 const DESKTOP_GRID_END_MINUTES = 18 * 60;
@@ -32,22 +33,8 @@ function canonicalLaneStaffId(staffIds = [], visibleStaffIds = []) {
   return (visibleStaffIds || []).map(Number).find(id => assigned.includes(id)) || assigned[0] || null;
 }
 
-function lucidePath(name) {
-  const paths = {
-    plus: '<path d="M5 12h14"/><path d="M12 5v14"/>',
-    calendarPlus: '<path d="M8 2v4M16 2v4M3 10h18"/><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M12 14v4M10 16h4"/>',
-    history: '<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/>',
-    block: '<circle cx="12" cy="12" r="9"/><path d="m6.7 6.7 10.6 10.6"/>',
-    leave: '<path d="M8 2v4M16 2v4M3 10h18"/><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M9 16h6"/>',
-    chevronLeft: '<path d="m15 18-6-6 6-6"/>',
-    chevronRight: '<path d="m9 18 6-6-6-6"/>',
-    today: '<path d="M8 2v4M16 2v4M3 10h18"/><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/>',
-  };
-  return paths[name] || '';
-}
-
 function iconSvg(name) {
-  return `<svg class="calendar-action-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${lucidePath(name)}</svg>`;
+  return renderLucideIcon(name, { className: 'calendar-action-icon', size: 16 });
 }
 
 function desktopApprovedStyles() {
@@ -90,9 +77,9 @@ body[data-calendar-desktop-approved="true"] .desktop-week-day{display:grid;grid-
 body[data-calendar-desktop-approved="true"] .desktop-week-day strong{font-size:.92rem;color:#20322b}
 body[data-calendar-desktop-approved="true"] .desktop-week-day small{grid-column:1/-1;margin-top:-4px;font-size:.58rem;text-transform:uppercase;letter-spacing:.06em}
 body[data-calendar-desktop-approved="true"] .desktop-week-day.selected,body[data-calendar-desktop-approved="true"] .desktop-week-day.today{border-color:#294c3c}
-body[data-calendar-desktop-approved="true"] .desktop-week-day.selected{background:#294c3c;color:#fff}
+body[data-calendar-desktop-approved="true"] .desktop-week-day.selected{background:#234f3b;color:#fff;font-weight:850;box-shadow:0 2px 8px rgba(35,79,59,.18),inset 0 0 0 1px rgba(255,255,255,.18)}
 body[data-calendar-desktop-approved="true"] .desktop-week-day.selected strong{color:#fff}
-body[data-calendar-desktop-approved="true"] .desktop-week-day.today:not(.selected){background:#e7eee9;color:#294c3c}
+body[data-calendar-desktop-approved="true"] .desktop-week-day.today:not(.selected){background:#dfeae3;color:#234f3b;border-color:#5d7f6c;box-shadow:inset 0 0 0 1px rgba(41,76,60,.08)}
 body[data-calendar-desktop-approved="true"] .scan-summary{display:none}
 body[data-calendar-desktop-approved="true"] .week-view{padding:0;border:1px solid var(--line);border-radius:14px;background:#fffdf9;box-shadow:0 5px 18px rgba(32,50,43,.05);overflow:visible}
 body[data-calendar-desktop-approved="true"] .week-view>.view-heading,body[data-calendar-desktop-approved="true"] .week-view>.view-practitioner-context,body[data-calendar-desktop-approved="true"] .week-view>.calendar-booking-hint{display:none}
@@ -108,15 +95,15 @@ body[data-calendar-desktop-approved="true"] .desktop-practitioner-lane h3{margin
 body[data-calendar-desktop-approved="true"] .desktop-practitioner-lane .time-column{height:${gridHeight}px!important;min-height:${gridHeight}px!important;overflow:hidden;background:repeating-linear-gradient(to bottom,transparent 0,transparent 71px,var(--line) 71px,var(--line) 72px)!important}
 body[data-calendar-desktop-approved="true"] .desktop-practitioner-lane .calendar-booking-slots{display:none!important}
 body[data-calendar-desktop-approved="true"] .desktop-practitioner-lane .positioned-event{left:4px!important;right:4px!important;width:auto!important;min-height:32px!important;overflow:visible!important}
-body[data-calendar-desktop-approved="true"] .desktop-practitioner-lane .event-card{height:100%;min-width:0;padding:6px 7px;border:1px solid #cfe0d5;border-left:4px solid #4f7d64;border-radius:8px;background:#eef6f0;box-shadow:0 2px 6px rgba(32,50,43,.05);overflow:hidden}
+body[data-calendar-desktop-approved="true"] .desktop-practitioner-lane .event-card{height:100%;min-width:0;padding:7px 8px;border:1px solid #c7dccf;border-left:4px solid #4f7d64;border-radius:8px;background:#eef6f0;box-shadow:0 2px 8px rgba(32,50,43,.08);overflow:hidden}
 body[data-calendar-desktop-approved="true"] .desktop-practitioner-lane .event-card[data-kind="calendar_block"]{border-color:#d8cfe3;border-left-color:#80669a;background:#f1edf5;background-image:none}
 body[data-calendar-desktop-approved="true"] .desktop-practitioner-lane .event-card[data-kind="operational_leave"],body[data-calendar-desktop-approved="true"] .desktop-practitioner-lane .event-card[data-kind="approved_leave"]{border-color:#e5c9ca;border-left-color:#a75e62;background:#f8ecec}
 body[data-calendar-desktop-approved="true"] .desktop-practitioner-lane .event-card-top{align-items:center}
-body[data-calendar-desktop-approved="true"] .desktop-practitioner-lane .event-time{font-size:.68rem;color:#315b47;font-weight:850}
-body[data-calendar-desktop-approved="true"] .desktop-practitioner-lane .kind-pill{font-size:.57rem;color:#52655c}
-body[data-calendar-desktop-approved="true"] .desktop-practitioner-lane .event-card h4{margin:2px 0;font-size:.75rem;line-height:1.12;padding:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+body[data-calendar-desktop-approved="true"] .desktop-practitioner-lane .event-time{font-size:.71rem;color:#315b47;font-weight:850;letter-spacing:.01em}
+body[data-calendar-desktop-approved="true"] .desktop-practitioner-lane .kind-pill{font-size:.58rem;color:#52655c;font-weight:750}
+body[data-calendar-desktop-approved="true"] .desktop-practitioner-lane .event-card h4{margin:3px 0 2px;font-size:.78rem;line-height:1.15;padding:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 body[data-calendar-desktop-approved="true"] .desktop-practitioner-lane .event-client-mobile,body[data-calendar-desktop-approved="true"] .desktop-practitioner-lane .appointment-reference,body[data-calendar-desktop-approved="true"] .desktop-practitioner-lane .provenance,body[data-calendar-desktop-approved="true"] .desktop-practitioner-lane .event-practitioners{display:none!important}
-body[data-calendar-desktop-approved="true"] .desktop-practitioner-lane .event-meta{display:block;margin:2px 0 0;padding:0;font-size:.61rem;line-height:1.08;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#53665d}
+body[data-calendar-desktop-approved="true"] .desktop-practitioner-lane .event-meta{display:block;margin:3px 0 0;padding:0;font-size:.64rem;line-height:1.12;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#53665d}
 body[data-calendar-desktop-approved="true"] .desktop-practitioner-lane .event-service-context{display:inline-flex;max-width:100%;overflow:hidden;vertical-align:middle}
 body[data-calendar-desktop-approved="true"] .desktop-practitioner-lane .event-service-context>span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 body[data-calendar-desktop-approved="true"] .desktop-practitioner-lane .event-detail-separator,body[data-calendar-desktop-approved="true"] .desktop-practitioner-lane .event-state{display:none!important}
@@ -169,7 +156,6 @@ module.exports = {
   compactWeekLabel,
   desktopTimeLabels,
   canonicalLaneStaffId,
-  lucidePath,
   iconSvg,
   desktopApprovedStyles,
   calendarDesktopApprovedClientScript,
