@@ -22,9 +22,30 @@ function isStaffPasskeyAuthEnabled(env = process.env) {
   return String(env.SHILOH_STAFF_PASSKEY_AUTH_ENABLED || '').trim().toLowerCase() === 'true';
 }
 
+function isSharedReceptionViewer(viewer = {}) {
+  return String(viewer?.role || '') === 'receptionist'
+    && String(viewer?.businessRole || '') === 'booking_operator'
+    && viewer?.linkedStaffId == null
+    && String(viewer?.calendarScope || '') === 'all_business'
+    && String(viewer?.serviceScope || '') === 'all_services';
+}
+
+function accountNavigationMetadata({ viewer, passkeyEnabled = false } = {}) {
+  const sharedReception = isSharedReceptionViewer(viewer);
+  return {
+    mode: sharedReception ? 'shared_reception' : 'personal',
+    lockWorkspace: sharedReception && Boolean(passkeyEnabled),
+  };
+}
+
 function passkeyNavigationClientScript(env = process.env) {
   if (!isStaffPasskeyAuthEnabled(env)) return '';
   return `(()=>{'use strict';const account=document.querySelector('[data-workspace-account-footer]');if(!account||account.querySelector('[data-workspace-passkey-security]'))return;const link=document.createElement('a');link.className='workspace-account-signout';link.href='/calendar/staff-auth/passkeys/manage';link.dataset.workspacePasskeySecurity='true';link.textContent='Sign-in security';const signout=account.querySelector('[data-shiloh-logout]');if(signout)account.insertBefore(link,signout);else account.appendChild(link);})();`;
+}
+
+function receptionLockNavigationClientScript(env = process.env) {
+  if (!isStaffPasskeyAuthEnabled(env)) return '';
+  return `(()=>{'use strict';const button=document.querySelector('[data-shiloh-logout]');if(!button)return;fetch('/calendar/workspace/navigation',{credentials:'same-origin',headers:{Accept:'application/json'}}).then(async(response)=>{if(!response.ok)return null;return response.json();}).then((data)=>{if(!data||!data.account||data.account.lockWorkspace!==true)return;button.textContent='Lock workspace';button.setAttribute('aria-label','Lock Shiloh Workspace');button.dataset.shilohLockWorkspace='true';button.addEventListener('click',()=>{setTimeout(()=>{const status=document.querySelector('[data-shiloh-calendar-access-status]');if(status)status.textContent='Locking workspace…';},0);});}).catch(()=>{});})();`;
 }
 
 function setWorkspaceOperationalSecurityHeaders(res) {
@@ -74,7 +95,7 @@ function createWorkspaceOperationalRouter({
   router.get('/nav.js', (_req, res) => {
     res.setHeader('Cache-Control', 'private, no-store, max-age=0');
     res.setHeader('X-Content-Type-Options', 'nosniff');
-    return res.status(200).type('application/javascript').send(`${workspaceNavigationClientScript()}\n${passkeyNavigationClientScript(env)}`);
+    return res.status(200).type('application/javascript').send(`${workspaceNavigationClientScript()}\n${passkeyNavigationClientScript(env)}\n${receptionLockNavigationClientScript(env)}`);
   });
 
   router.use((req, res, next) => {
@@ -90,7 +111,14 @@ function createWorkspaceOperationalRouter({
 
   router.get('/navigation', async (req, res) => {
     try {
-      return res.status(200).json(await navigationService.resolve({ session: req.staffBrowserSession }));
+      const navigation = await navigationService.resolve({ session: req.staffBrowserSession });
+      return res.status(200).json({
+        ...navigation,
+        account: accountNavigationMetadata({
+          viewer: req.staffBrowserSession?.viewer,
+          passkeyEnabled: isStaffPasskeyAuthEnabled(env),
+        }),
+      });
     } catch (_error) {
       return res.status(403).json({ error: 'Workspace navigation is unavailable.' });
     }
@@ -159,7 +187,10 @@ function createWorkspaceOperationalRouter({
 module.exports = {
   isWorkspaceOperationalEnabled,
   isStaffPasskeyAuthEnabled,
+  isSharedReceptionViewer,
+  accountNavigationMetadata,
   passkeyNavigationClientScript,
+  receptionLockNavigationClientScript,
   setWorkspaceOperationalSecurityHeaders,
   stabilizeDashboardShell,
   dashboardSafeError,
