@@ -115,7 +115,7 @@ function createWorkspaceOperationalRouter({
       return res.status(200).json({
         ...navigation,
         account: accountNavigationMetadata({
-          viewer: req.staffBrowserSession?.viewer,
+          viewer: req.staffBrowserSession?.accountPrincipal,
           passkeyEnabled: isStaffPasskeyAuthEnabled(env),
         }),
       });
