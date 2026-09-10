@@ -9,7 +9,6 @@ const {
 } = require('../presentation/staffCalendarHandoffUx');
 const { providerIndependentAuthPolicy } = require('../services/providerIndependentStaffAuth');
 const { passkeyPolicy } = require('../services/staffPasskeyAuth');
-const { bootstrapPolicy } = require('../services/staffWhatsAppPasskeyBootstrap');
 const { signinPanel, signinScript } = require('../presentation/staffPasskeyUx');
 
 function isStaffCalendarAccessUxEnabled(env = process.env) {
@@ -50,6 +49,12 @@ function withPasskeyReentry(html) {
   return html;
 }
 
+// Compatibility seam for #804 callers. #829 deliberately removes the normal-page
+// first-device explanatory card without changing the underlying WhatsApp bootstrap flow.
+function withWhatsAppBootstrapGuidance(html) {
+  return String(html || '');
+}
+
 function withFallbackDisclosure(html) {
   let output = String(html || '');
   const start = '<section data-shiloh-provider-independent-auth>';
@@ -67,8 +72,8 @@ function retireBrowserWhatsAppGuidance(html) {
   output = output.replace(/\s*<p class="footer-note">Workspace access and actions remain governed by canonical server-derived staff\/Admin permissions and scope\.<\/p>\s*/, '\n');
   output = output.replace('>Use your authenticator here, or open Workspace from your existing Shiloh WhatsApp conversation.</div>', '></div>');
   output = output.replace('>Your staff session is missing, expired, or revoked. Sign in again to continue.</div>', '></div>');
-  if (!output.includes('[data-shiloh-status]:empty,[data-shiloh-passkey-status]:empty{display:none}')) {
-    output = output.replace('<style>', '<style>[data-shiloh-status]:empty,[data-shiloh-passkey-status]:empty{display:none}');
+  if (!output.includes('[data-shiloh-status]:empty{display:none}')) {
+    output = output.replace('<style>', '<style>[data-shiloh-status]:empty{display:none}[data-shiloh-passkey-status]:empty{display:none}');
   }
   return output;
 }
@@ -148,6 +153,7 @@ module.exports.setAccessSecurityHeaders = setAccessSecurityHeaders;
 module.exports.normalizeReason = normalizeReason;
 module.exports.withAuthenticatorSetupGuidance = withAuthenticatorSetupGuidance;
 module.exports.withPasskeyReentry = withPasskeyReentry;
+module.exports.withWhatsAppBootstrapGuidance = withWhatsAppBootstrapGuidance;
 module.exports.withFallbackDisclosure = withFallbackDisclosure;
 module.exports.bootstrapAwareSigninScript = bootstrapAwareSigninScript;
 module.exports.retireBrowserWhatsAppGuidance = retireBrowserWhatsAppGuidance;
