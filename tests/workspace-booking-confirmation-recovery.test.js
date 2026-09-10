@@ -18,7 +18,10 @@ const { renderMessagesPage } = require('../src/presentation/workspaceMessagesUx'
 const { calendarOperationalMutationsClientScript } = require('../src/presentation/calendarOperationalMutationsUx');
 
 const NOW = new Date('2026-09-04T12:00:00Z');
-const FUTURE = new Date('2026-09-10T08:00:00Z');
+// Keep this fixture deterministically in the future relative to the test suite's
+// current runtime so sendBookingConfirmation's live-now eligibility check does
+// not become a date-triggered CI failure.
+const FUTURE = new Date('2099-09-10T08:00:00Z');
 const readyEnv = {
   PHONE_NUMBER_ID: 'phone-id', WHATSAPP_TOKEN: 'token',
   WHATSAPP_BOOKING_CONFIRMATION_TEMPLATE: LIVE_BOOKING_CONFIRMATION_V2,
@@ -105,7 +108,7 @@ test('delivered provider evidence and changed canonical recipients fail closed b
 function appointmentRow(overrides = {}) {
   return {
     client_id: 91, client_name: 'Canonical client', normalized_mobile: '27821234567', client_status: 'active',
-    appointment_id: 501, starts_at: FUTURE, ends_at: new Date('2026-09-10T09:00:00Z'), appointment_status: 'confirmed',
+    appointment_id: 501, starts_at: FUTURE, ends_at: new Date('2099-09-10T09:00:00Z'), appointment_status: 'confirmed',
     source: 'shiloh_calendar', location_name: 'Shiloh', service_name: 'Treatment', staff_name: 'Practitioner',
     delivery_status: 'sent', sent_at: new Date('2026-09-04T09:00:00Z'), already_sent: true,
     provider_sent_at: new Date('2026-09-04T09:00:01Z'), provider_failed_at: new Date('2026-09-04T09:01:00Z'),
