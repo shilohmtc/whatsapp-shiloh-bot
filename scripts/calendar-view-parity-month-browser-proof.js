@@ -249,7 +249,7 @@ function assertMetrics(proof, metrics) {
   if (proof.expectShared && metrics.sharedCopies !== 1) throw new Error(`${proof.name} did not retain one shared canonical booking`);
   if (proof.view === 'week') {
     if (metrics.weekDateLaneCount !== 6) throw new Error(`${proof.name} did not retain exactly six Monday-Saturday date lanes`);
-    if (proof.phone && (metrics.visibleWeekDateLaneCount !== 1 || metrics.weekEventPosition !== 'absolute')) {
+    if (proof.phone && (metrics.weekColumnCount !== 6 || metrics.weekEventPosition !== 'absolute')) {
       throw new Error(`${proof.name} did not render the spatial Phone Week treatment`);
     }
     if (!proof.phone && metrics.weekColumnCount !== 6) throw new Error(`${proof.name} did not retain the Desktop Monday-Saturday date-first Week model`);
