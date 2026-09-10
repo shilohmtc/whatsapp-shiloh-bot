@@ -117,12 +117,26 @@ function createOptionalCalendarSessionMiddleware({ service, env = process.env } 
   };
 }
 
-function requireStaffSession({ service, env = process.env, allowRecoveryRequired = false } = {}) {
+function isHumanBrowserNavigation(req) {
+  if (String(req?.method || '').toUpperCase() !== 'GET') return false;
+  const fetchMode = String(req.get?.('sec-fetch-mode') || req.headers?.['sec-fetch-mode'] || '').trim().toLowerCase();
+  if (fetchMode) return fetchMode === 'navigate';
+  const fetchDest = String(req.get?.('sec-fetch-dest') || req.headers?.['sec-fetch-dest'] || '').trim().toLowerCase();
+  if (fetchDest) return fetchDest === 'document';
+  const accept = String(req.get?.('accept') || req.headers?.accept || '').toLowerCase();
+  return accept.includes('text/html') && !accept.includes('application/json');
+}
+
+function requireStaffSession({ service, env = process.env, allowRecoveryRequired = false, humanNavigationSigninPath = null } = {}) {
   if (!service) throw new Error('staff browser session service is required');
   return async function requireStaffBrowserSession(req, res, next) {
     const token = parseCookieValue(req.headers?.cookie, cookieName(env));
     const session = await service.validateSessionToken(token);
     if (!session.ok || (session.recoveryRequired === true && !allowRecoveryRequired)) {
+      if (humanNavigationSigninPath && isHumanBrowserNavigation(req)) {
+        const separator = String(humanNavigationSigninPath).includes('?') ? '&' : '?';
+        return res.redirect(302, `${humanNavigationSigninPath}${separator}reason=session`);
+      }
       return res.status(401).json({ error: 'Unauthorized', requestId: req.id });
     }
     req.staffBrowserSession = session;
@@ -152,6 +166,7 @@ module.exports = {
   requestFingerprintHash,
   isCalendarBridgeEnabled,
   createOptionalCalendarSessionMiddleware,
+  isHumanBrowserNavigation,
   requireStaffSession,
   csrfGuard,
 };
