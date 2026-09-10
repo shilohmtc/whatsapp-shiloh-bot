@@ -129,7 +129,7 @@ async function main() {
     const origin = `http://127.0.0.1:${server.address().port}`;
 
     const direct = await fetch(`${origin}/calendar/workspace`, { redirect: 'manual' });
-    assert.equal(direct.status, 302, 'unauthenticated human navigation must redirect to sign-in');
+    assert.equal(direct.status, 401, 'unauthenticated machine-style request must remain a 401');
     const proofResponse = await fetch(`${origin}/proof`, { redirect: 'manual' });
     assert.equal(proofResponse.status, 302);
     assert.match(String(proofResponse.headers.get('set-cookie') || ''), /shiloh_staff_session=/);
