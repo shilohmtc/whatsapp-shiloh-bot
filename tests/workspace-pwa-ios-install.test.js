@@ -21,6 +21,7 @@ test('#794 iPhone install guidance is presentation-only and stores no install or
   const client = workspacePwaClientScript();
 
   assert.doesNotMatch(client, /localStorage|sessionStorage|indexedDB|document\.cookie/i);
-  assert.doesNotMatch(client, /beforeinstallprompt|PushManager|showNotification/i);
+  assert.doesNotMatch(client, /PushManager|showNotification/i);
+  assert.match(client, /addEventListener\('beforeinstallprompt',event=>\{if\(standalone\(\)\|\|iosDevice\(\)\)return;/);
   assert.doesNotMatch(client, /INSERT INTO|UPDATE\s+staff_|DELETE FROM|Authorization|Bearer\s/i);
 });
