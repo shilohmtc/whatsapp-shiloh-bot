@@ -10,11 +10,15 @@ const { createStaffCalendarAccessRouter } = require('../src/routes/staffCalendar
 const { isHumanBrowserNavigation } = require('../src/middleware/staffBrowserSession');
 
 const execFileAsync = promisify(execFile);
+const TEST_KEY = Buffer.alloc(32, 7).toString('base64url');
 const ENV = {
   NODE_ENV: 'test',
   SHILOH_CALENDAR_READONLY_UX_ENABLED: 'true',
   SHILOH_STAFF_BROWSER_SESSION_CALENDAR_BRIDGE_ENABLED: 'true',
-  SHILOH_PROVIDER_INDEPENDENT_STAFF_AUTH_ENABLED: 'true',
+  SHILOH_STAFF_TOTP_AUTH_ENABLED: 'true',
+  SHILOH_STAFF_TOTP_PILOT_ADMIN_IDS: '7',
+  SHILOH_STAFF_TOTP_ENCRYPTION_KEYS_JSON: JSON.stringify({ v1: TEST_KEY }),
+  SHILOH_STAFF_TOTP_ACTIVE_KEY_VERSION: 'v1',
   SHILOH_STAFF_PASSKEY_AUTH_ENABLED: 'false',
 };
 
