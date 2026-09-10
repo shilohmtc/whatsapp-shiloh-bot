@@ -73,6 +73,18 @@ function deriveCalendarViewer(admin) {
   return null;
 }
 
+function deriveAccountPrincipal(admin) {
+  if (!admin || !Number.isSafeInteger(Number(admin.id)) || Number(admin.id) <= 0) return null;
+  return {
+    id: Number(admin.id),
+    role: String(admin.role || ''),
+    businessRole: String(admin.business_role || admin.businessRole || ''),
+    linkedStaffId: admin.staff_id == null ? (admin.linkedStaffId == null ? null : Number(admin.linkedStaffId)) : Number(admin.staff_id),
+    calendarScope: String(admin.calendar_scope || admin.calendarScope || ''),
+    serviceScope: String(admin.service_scope || admin.serviceScope || ''),
+  };
+}
+
 async function issueStaffBrowserSession({
   client,
   admin,
@@ -350,6 +362,7 @@ function createStaffBrowserSessionService({
           AND (last_used_at IS NULL OR last_used_at < $2 - INTERVAL '5 minutes')`,
       [row.session_id, current]
     );
+    const recoveryRequired = row.recovery_required === true;
     return {
       ok: true,
       sessionId: row.session_id,
@@ -357,8 +370,9 @@ function createStaffBrowserSessionService({
       csrfHash: row.csrf_hash,
       authenticatedAt: row.reauthenticated_at || row.issued_at,
       authMethod: row.auth_method || 'whatsapp_otp',
-      recoveryRequired: row.recovery_required === true,
-      viewer: row.recovery_required === true ? null : deriveCalendarViewer(row),
+      recoveryRequired,
+      viewer: recoveryRequired ? null : deriveCalendarViewer(row),
+      accountPrincipal: recoveryRequired ? null : deriveAccountPrincipal(row),
     };
   }
 
@@ -437,6 +451,7 @@ module.exports = {
   isValidSessionToken,
   isValidCsrfToken,
   deriveCalendarViewer,
+  deriveAccountPrincipal,
   issueStaffBrowserSession,
   createStaffBrowserSessionService,
 };
