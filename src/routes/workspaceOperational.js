@@ -149,6 +149,7 @@ function createWorkspaceOperationalRouter({
         appointmentId: req.params.appointmentId,
         expectedRevision: req.body?.expectedRevision,
         outcome: req.body?.outcome,
+        operationalDateKey: req.body?.operationalDateKey,
       });
       return res.status(200).json(result);
     } catch (error) {
