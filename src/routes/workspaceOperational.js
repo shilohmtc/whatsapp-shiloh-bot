@@ -7,6 +7,8 @@ const {
   dashboardClientScript,
 } = require('../presentation/workspaceDashboardUx');
 const { workspaceNavigationClientScript } = require('../presentation/workspaceShell');
+const { workspaceIconClientScript } = require('../presentation/workspaceIconClient');
+const { calendarDesktopApprovedClientScript } = require('../presentation/calendarDesktopApprovedUx');
 const {
   requireStaffSession,
   sameOriginGuard,
@@ -95,7 +97,7 @@ function createWorkspaceOperationalRouter({
   router.get('/nav.js', (_req, res) => {
     res.setHeader('Cache-Control', 'private, no-store, max-age=0');
     res.setHeader('X-Content-Type-Options', 'nosniff');
-    return res.status(200).type('application/javascript').send(`${workspaceNavigationClientScript()}\n${passkeyNavigationClientScript(env)}\n${receptionLockNavigationClientScript(env)}`);
+    return res.status(200).type('application/javascript').send(`${workspaceNavigationClientScript()}\n${passkeyNavigationClientScript(env)}\n${receptionLockNavigationClientScript(env)}\n${workspaceIconClientScript()}\n${calendarDesktopApprovedClientScript()}`);
   });
 
   router.use((req, res, next) => {
