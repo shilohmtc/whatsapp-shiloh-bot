@@ -42,6 +42,7 @@ test('#845 migration fails closed on identity or capability drift and changes pe
   assert.match(migration, /SET permissions=expected_permissions/);
   assert.doesNotMatch(migration, /SET[^;]*(whatsapp|normalized_whatsapp|credential|passkey|session)/i);
   assert.match(migration, /workspace\.reception_access_parity_approved/);
+  assert.match(migration, /COUNT\(\*\) FROM jsonb_object_keys\(expected_permissions\)/);
   assert.match(migration, /'credentialMaterialChanged',FALSE/);
   assert.match(migration, /'sessionMaterialChanged',FALSE/);
 });

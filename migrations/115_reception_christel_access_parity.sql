@@ -101,7 +101,7 @@ BEGIN
     jsonb_build_object(
       'controlReference','#845',
       'sourceAdminId',christel_id,
-      'enabledCapabilityCount',jsonb_object_length(expected_permissions),
+      'enabledCapabilityCount',(SELECT COUNT(*) FROM jsonb_object_keys(expected_permissions)),
       'identityChanged',FALSE,
       'credentialMaterialChanged',FALSE,
       'sessionMaterialChanged',FALSE
