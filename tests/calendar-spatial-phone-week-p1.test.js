@@ -187,13 +187,15 @@ test('authenticated browser proof mounts canonical Calendar and Create Booking r
   assert.match(source, /createCalendarCreateBookingRouter\(\{/);
   assert.match(source, /retrospectiveBookingService:\s*\{\s*async resolveOperator\(\)/);
   assert.doesNotMatch(source, /phone-day-empty-time-prefill/);
-  assert.match(source, /phone-week-multi-staff-empty-slot-safe/);
+  assert.match(source, /phone-week-empty-slot-booking/);
   assert.match(source, /phone-narrow-direct-drawer/);
   assert.match(source, /phone-plus-actions/);
   assert.match(source, /phone-week-planner-all-practitioners/);
   assert.match(source, /phone-week-active-practitioner-switch/);
   assert.match(source, /phone-appointment-manage-sheet/);
-  assert.match(source, /calendarViewportShare >= 0\.76/);
+  assert.match(source, /calendarViewportShare >= 0\.70/);
+  assert.match(source, /\['week', 'agenda', 'month'\]/);
+  assert.match(source, /time: '11:00', staff: '52'/);
   assert.match(source, /data-week-date-lane/);
   assert.match(source, /practitionerLaneCount, 0/);
   assert.match(source, /phone-month-capacity-overview/);

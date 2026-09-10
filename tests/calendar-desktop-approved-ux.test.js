@@ -71,6 +71,10 @@ test('one New appointment menu reuses authorized booking, retrospective, block a
   assert.match(script, /credentials:'same-origin'/);
   assert.match(script, /all\('\.operational-actions'\)\.forEach\(node=>node\.remove\(\)\)/);
   assert.match(script, /calendar-booking-slots/);
+  assert.match(script, /cloneBookingSlots/);
+  assert.match(script, /url\.searchParams\.set\('staff',String\(person\.id\)\)/);
+  assert.match(script, />='18:00'/);
+  assert.match(desktopApprovedStyles(), /desktop-practitioner-lane \.calendar-booking-slots\{display:block!important\}/);
 });
 
 test('appointment, block and leave presentation follows approved accessible treatments', () => {
