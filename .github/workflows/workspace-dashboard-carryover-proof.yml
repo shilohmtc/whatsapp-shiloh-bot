@@ -1,0 +1,38 @@
+name: Workspace Dashboard Carry-over Proof
+
+on:
+  pull_request:
+    paths:
+      - 'src/services/workspaceDashboard.js'
+      - 'src/routes/workspaceOperational.js'
+      - 'src/presentation/workspaceDashboardUx.js'
+      - 'tests/workspace-dashboard-carryover-849.test.js'
+      - 'scripts/workspace-dashboard-carryover-browser-proof.js'
+      - '.github/workflows/workspace-dashboard-carryover-proof.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  dashboard_carryover_proof:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24.14.1
+          cache: npm
+      - run: npm ci
+      - name: Focused #849 carry-over tests
+        run: node --test tests/workspace-dashboard-carryover-849.test.js tests/workspace-dashboard-messages-consolidation-p1.test.js
+      - name: Authenticated Desktop + Phone carry-over proof
+        run: node scripts/workspace-dashboard-carryover-browser-proof.js
+      - uses: actions/upload-artifact@v4
+        with:
+          name: workspace-dashboard-carryover-849
+          path: artifacts/workspace-dashboard-carryover-849
+          if-no-files-found: error
+          retention-days: 14
