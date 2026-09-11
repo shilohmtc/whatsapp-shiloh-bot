@@ -1,0 +1,21 @@
+const express = require('express');
+const { getPublicServiceCatalogue } = require('../services/publicServiceCatalogue');
+const { renderHome, renderTreatments, renderAbout, renderContact } = require('../services/publicWebsite');
+
+const router = express.Router();
+
+router.get('/', async (req, res) => {
+  const catalogue = await getPublicServiceCatalogue();
+  return res.status(200).type('html').send(renderHome(catalogue || []));
+});
+
+router.get('/treatments', async (req, res) => {
+  const catalogue = await getPublicServiceCatalogue();
+  const ready = Boolean(catalogue);
+  return res.status(ready ? 200 : 503).type('html').send(renderTreatments(catalogue || []));
+});
+
+router.get('/about', (req, res) => res.status(200).type('html').send(renderAbout()));
+router.get('/contact', (req, res) => res.status(200).type('html').send(renderContact()));
+
+module.exports = router;
