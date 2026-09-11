@@ -38,24 +38,31 @@ function dashboardModel() {
   ];
   const current = {
     id: 9101, kind: 'appointment', canonical: true,
-    startsAt: '2026-09-10T08:00:00.000Z', endsAt: '2026-09-10T09:00:00.000Z',
-    status: 'scheduled', revision: '2026-09-10T07:30:00.000Z',
+    startsAt: '2026-09-11T07:00:00.000Z', endsAt: '2026-09-11T08:00:00.000Z',
+    status: 'scheduled', revision: '2026-09-11T06:30:00.000Z',
     clientName: 'Today Client', serviceName: 'Today Treatment', staffIds: [31],
-    operationalDateKey: '2026-09-10', needsFinalization: true, canFinalize: true,
+    operationalDateKey: '2026-09-11', needsFinalization: true, canFinalize: true,
   };
-  const carry = {
+  const wednesday = {
     id: 9001, kind: 'appointment', canonical: true,
     startsAt: '2026-09-09T13:30:00.000Z', endsAt: '2026-09-09T14:30:00.000Z',
     status: 'scheduled', revision: '2026-09-09T13:00:00.000Z',
-    clientName: 'Yesterday Client', serviceName: 'Carry-over Treatment', staffIds: [32],
+    clientName: 'Wednesday Client', serviceName: 'Older Carry-over Treatment', staffIds: [32],
     operationalDateKey: '2026-09-09', needsFinalization: true, canFinalize: true,
   };
+  const thursday = {
+    id: 9002, kind: 'appointment', canonical: true,
+    startsAt: '2026-09-10T13:30:00.000Z', endsAt: '2026-09-10T14:30:00.000Z',
+    status: 'scheduled', revision: '2026-09-10T13:00:00.000Z',
+    clientName: 'Thursday Client', serviceName: 'Recent Carry-over Treatment', staffIds: [31],
+    operationalDateKey: '2026-09-10', needsFinalization: true, canFinalize: true,
+  };
   return {
-    generatedAt: '2026-09-10T14:00:00.000Z',
-    requestedDateKey: '2026-09-10', operationalDateKey: '2026-09-10', carryOverDateKey: '2026-09-09',
+    generatedAt: '2026-09-11T14:00:00.000Z',
+    requestedDateKey: '2026-09-11', operationalDateKey: '2026-09-11', carryOverDateKey: '2026-09-10',
     displayName: 'Clinic Owner', mode: 'owner_overview', linkedStaffId: null,
-    calendar: { dateKey: '2026-09-10', timeline: { staff, appointments: [current], closures: [] } },
-    appointments: [current], carryOver: [carry],
+    calendar: { dateKey: '2026-09-11', timeline: { staff, appointments: [current], closures: [] } },
+    appointments: [current], carryOver: [wednesday, thursday],
     teamGroups: [{ key: 'staff:31', label: 'Abigail', appointments: [current] }],
     awaitingFinalization: [current], bookingRequests: [], recentActivity: [], closures: [],
     communications: null, communicationsUnavailable: false,
@@ -114,8 +121,8 @@ async function capture(executable, origin, name, width, height, directory) {
 async function main() {
   const executable = chromeExecutable();
   if (!executable) {
-    if (process.env.CI) throw new Error('CI must provide Chrome for #849 carry-over browser proof');
-    console.log('Chrome not installed; #849 carry-over browser proof is CI-only.');
+    if (process.env.CI) throw new Error('CI must provide Chrome for #852 carry-over browser proof');
+    console.log('Chrome not installed; #852 carry-over browser proof is CI-only.');
     return;
   }
   fs.rmSync(OUT_DIR, { recursive: true, force: true });
@@ -136,9 +143,12 @@ async function main() {
 
     const html = require('../src/presentation/workspaceDashboardUx').renderDashboardPage(dashboardModel());
     assert.match(html, /data-dashboard-carryover-panel/);
-    assert.match(html, /Yesterday's to do · 2026-09-09/);
-    assert.match(html, /Yesterday Client/);
-    assert.match(html, /Carry-over Treatment/);
+    assert.match(html, /Unfinished to do/);
+    assert.match(html, /data-dashboard-carryover-day="2026-09-09"/);
+    assert.match(html, /data-dashboard-carryover-day="2026-09-10"/);
+    assert.match(html, /Wednesday Client/);
+    assert.match(html, /Thursday Client/);
+    assert.match(html, /Older Carry-over Treatment/);
     assert.match(html, /data-operational-date-key="2026-09-09"/);
     assert.match(html, /data-dashboard-finalize="completed"/);
     assert.match(html, /data-dashboard-finalize="no_show"/);
@@ -152,9 +162,9 @@ async function main() {
     fs.writeFileSync(path.join(OUT_DIR, 'manifest.json'), `${JSON.stringify({
       generatedAt: new Date().toISOString(), exactHead, authenticatedRoute: true, syntheticDataOnly: true,
       productionReads: 0, productionMutations: 0, providerNetworkCalls: 0, realClientSends: 0,
-      carryOverDateKey: '2026-09-09', carryOverRows: 1, desktopAndPhone: true, screenshots,
+      carryOverDateKeys: ['2026-09-09', '2026-09-10'], carryOverRows: 2, desktopAndPhone: true, screenshots,
     }, null, 2)}\n`);
-    console.log(`#849 authenticated Dashboard carry-over proof passed at ${exactHead}`);
+    console.log(`#852 authenticated Dashboard unresolved-backlog proof passed at ${exactHead}`);
   } finally {
     await new Promise(resolve => server.close(resolve));
     fs.rmSync(directory, { recursive: true, force: true });
