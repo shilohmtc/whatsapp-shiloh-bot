@@ -1,5 +1,3 @@
-const { escapeHtml } = require('./workspaceShell');
-
 const CREATE_FORM_MARKER = 'data-staff-create-form';
 const ONBOARDING_FORM_MARKER = 'data-staff-onboarding-form';
 
@@ -33,7 +31,7 @@ function decorateStaffListOnboardingHtml(html, model = {}) {
     .replace(CREATE_FORM_MARKER, `${ONBOARDING_FORM_MARKER} data-access-manage-allowed="${model.accessManageAllowed === true ? 'true' : 'false'}"`)
     .replace('<button class="button primary" type="submit">Add staff</button>', `${accessStep}<button class="button primary" type="submit">Create staff</button>`)
     .replace('Adds the staff profile only. It does not create Workspace access, sign-in setup or service assignments.', 'Create the canonical Staff profile first. If authorized, you can also enable the fixed practitioner Workspace preset in this same flow. Service assignments remain in Workspace → Services.')
-    .replace('</head>', '<style>.onboarding-ready{padding:13px;border:1px solid var(--line);border-radius:12px;background:var(--leaf-soft);line-height:1.45}.onboarding-ready h3{margin:0 0 6px;font-size:.95rem}.onboarding-ready p{margin:5px 0;font-size:.78rem}.onboarding-ready .button{margin-top:8px}.create-grid [data-onboarding-access-step],.create-grid [data-onboarding-identity]{grid-column:span 2}@media(max-width:700px){.create-grid [data-onboarding-access-step],.create-grid [data-onboarding-identity]{grid-column:span 1}.onboarding-ready .button{min-height:44px;width:100%}}</style><script src="/calendar/team/onboarding.js" defer></script></head>');
+    .replace('</head>', '<style>[data-onboarding-identity][hidden]{display:none!important}.onboarding-ready{padding:13px;border:1px solid var(--line);border-radius:12px;background:var(--leaf-soft);line-height:1.45}.onboarding-ready h3{margin:0 0 6px;font-size:.95rem}.onboarding-ready p{margin:5px 0;font-size:.78rem}.onboarding-ready .button{margin-top:8px}.create-grid [data-onboarding-access-step],.create-grid [data-onboarding-identity]{grid-column:span 2}@media(max-width:700px){.create-grid [data-onboarding-access-step],.create-grid [data-onboarding-identity]{grid-column:span 1}.onboarding-ready .button{min-height:44px;width:100%}}</style><script src="/calendar/team/onboarding.js" defer></script></head>');
   return result;
 }
 
