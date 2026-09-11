@@ -1,0 +1,41 @@
+name: control-temp Storybook initializer
+
+on:
+  push:
+    branches:
+      - work/865-storybook-ui-primitives
+    paths:
+      - .github/workflows/control-temp-storybook-init.yml
+
+permissions:
+  contents: write
+
+jobs:
+  initialize:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: work/865-storybook-ui-primitives
+          fetch-depth: 0
+      - name: Use Node 24.14.1
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.14.1
+          cache: npm
+      - name: Initialize Storybook 10 HTML project
+        run: npm create storybook@10 -- --type html --yes --no-dev --package-manager npm --disable-telemetry
+      - name: Verify generated Storybook build
+        run: npm run build-storybook -- --quiet
+      - name: Commit generated package and Storybook files
+        run: |
+          git config user.name "shilohmtc"
+          git config user.email "shilohmtc@gmail.com"
+          git add package.json package-lock.json .storybook src/stories 2>/dev/null || true
+          if git diff --cached --quiet; then
+            echo "No initializer changes to commit"
+            exit 0
+          fi
+          git commit -m "#865 initialize Storybook 10 HTML workshop"
+          git push origin HEAD:work/865-storybook-ui-primitives
