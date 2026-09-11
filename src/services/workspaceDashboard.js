@@ -190,6 +190,7 @@ function createWorkspaceDashboardService({
     const requestedDateKey = dateKeyInBusinessTimezone(now);
     const carryOverDateKey = previousClinicDateKey(requestedDateKey);
     const backlogCutoff = new Date(`${requestedDateKey}T00:00:00+02:00`).toISOString();
+    const legacyPreviousDayProjection = backlogService === NO_DASHBOARD_BACKLOG;
     const [calendar, backlog] = await Promise.all([
       calendarService.buildModel({
         view: 'day',
@@ -198,19 +199,35 @@ function createWorkspaceDashboardService({
         viewer: authority.timelineViewer,
         now,
       }),
-      backlogService.listUnresolvedPastAppointments({
-        before: backlogCutoff,
-        viewer: authority.timelineViewer,
-      }),
+      legacyPreviousDayProjection
+        ? calendarService.buildModel({
+          view: 'day',
+          date: carryOverDateKey,
+          staff: 'all',
+          viewer: authority.timelineViewer,
+          now,
+        })
+        : backlogService.listUnresolvedPastAppointments({
+          before: backlogCutoff,
+          viewer: authority.timelineViewer,
+        }),
     ]);
     const appointments = [...(calendar.timeline?.appointments || [])]
       .filter(item => item?.canonical !== false)
       .sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime())
       .map(item => projectAppointment(item, authority, now, calendar.dateKey));
-    const carryOver = [...(backlog?.appointments || [])]
+    const backlogAppointments = legacyPreviousDayProjection
+      ? (String(backlog?.dateKey || '') === carryOverDateKey ? (backlog.timeline?.appointments || []) : [])
+      : (backlog?.appointments || []);
+    const carryOver = [...backlogAppointments]
       .filter(item => item?.canonical !== false)
       .sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime())
-      .map(item => projectAppointment(item, authority, now, dateKeyInBusinessTimezone(new Date(item.startsAt))))
+      .map(item => projectAppointment(
+        item,
+        authority,
+        now,
+        legacyPreviousDayProjection ? carryOverDateKey : dateKeyInBusinessTimezone(new Date(item.startsAt)),
+      ))
       .filter(item => item.needsFinalization);
     await Promise.all([...appointments, ...carryOver].map(async (item) => {
       if (!item.canFinalize) return;
@@ -248,7 +265,7 @@ function createWorkspaceDashboardService({
       calendar,
       appointments,
       carryOver,
-      carryOverStaff: backlog?.staff || [],
+      carryOverStaff: legacyPreviousDayProjection ? (backlog.timeline?.staff || []) : (backlog?.staff || []),
       teamGroups: ['owner_overview', 'business_overview'].includes(authority.mode)
         ? groupOwnerAppointments(appointments, calendar.timeline?.staff || [])
         : [],
