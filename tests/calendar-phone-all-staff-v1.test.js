@@ -77,7 +77,8 @@ test('#895 Week fits 07:00 to 18:00 into the dynamic phone viewport without vert
   assert.match(script, /const baseHeight=660/);
   assert.match(script, /--phone-week-grid-height/);
   assert.match(script, /week-time-grid\{overflow:hidden!important\}/);
-  assert.match(script, /Number\(match\[1\]\)>18/);
+  assert.match(script, /phoneAfterClose=String\(hour>18\)/);
+  assert.match(script, /if\(hour===18\)node\.style\.transform='translateY\(-100%\)'/);
 });
 
 test('#895 fitted Week preserves empty-slot booking time and practitioner semantics', () => {
@@ -94,7 +95,7 @@ test('#895 full-height Month and 18:00 operating boundary remain', () => {
   assert.match(script, /--phone-calendar-surface-height/);
   assert.match(script, /calendar-view\.month-view\{display:flex!important;flex-direction:column!important/);
   assert.match(script, /month-days\{min-height:0!important;height:100%!important;grid-auto-rows:1fr!important/);
-  assert.match(script, /Number\(match\[1\]\)>18/);
+  assert.match(script, /phoneAfterClose=String\(hour>18\)/);
   assert.match(script, /data-phone-after-close/);
 });
 
