@@ -1,0 +1,35 @@
+name: Calendar Phone Operational Cleanup Proof
+
+on:
+  pull_request:
+    paths:
+      - 'src/presentation/calendarPhoneAllStaffUx.js'
+      - 'tests/calendar-phone-all-staff-v1.test.js'
+      - 'scripts/calendar-phone-operational-cleanup-browser-proof.js'
+      - '.github/workflows/calendar-phone-operational-cleanup-proof.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  phone_calendar_cleanup:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24.14.1
+          cache: npm
+      - run: npm ci
+      - name: Run focused Phone Calendar cleanup tests
+        run: node --test tests/calendar-phone-all-staff-v1.test.js
+      - name: Prove Phone Calendar hierarchy in Chrome
+        run: node scripts/calendar-phone-operational-cleanup-browser-proof.js
+      - name: Upload Phone Calendar cleanup proof
+        uses: actions/upload-artifact@v4
+        with:
+          name: calendar-phone-operational-cleanup-v1
+          path: artifacts/calendar-phone-operational-cleanup-v1
+          if-no-files-found: error
+          retention-days: 14

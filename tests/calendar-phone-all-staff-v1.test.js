@@ -34,6 +34,26 @@ test('#888 All staff mode persists explicitly and renders actual practitioner co
   assert.match(script, /addEventListener\('click'.*true\)/s);
 });
 
+test('#888 Phone Calendar removes duplicate dropdown chrome and exposes direct Week Month Today plus Appointment hierarchy', () => {
+  const script = calendarPhoneAllStaffClientScript();
+  assert.match(script, /phone-calendar-utility-bar/);
+  assert.match(script, /phone-calendar-view-nav/);
+  assert.match(script, /\['week','Week'\],\['month','Month'\]/);
+  assert.match(script, /phone-calendar-today-link/);
+  assert.match(script, /phone-calendar-primary-action/);
+  assert.match(script, /\.phone-calendar-v2-controls,\.phone-calendar-v2-actions\{display:none!important\}/);
+  assert.match(script, /phone-calendar-day-context/);
+  assert.match(script, /content:"People"/);
+  assert.doesNotMatch(script, /Choose action practitioner/);
+});
+
+test('#888 Phone Calendar visibly clamps the operational timeline at 18:00', () => {
+  const script = calendarPhoneAllStaffClientScript();
+  assert.match(script, /Number\(match\[1\]\)>18/);
+  assert.match(script, /data-phone-after-close/);
+  assert.match(script, /max-height:660px!important/);
+});
+
 test('#888 production Calendar phone-v2 asset composes the canonical V2 client with the bounded All staff enhancement', () => {
   const routeSource = fs.readFileSync(path.join(__dirname, '../src/routes/calendar.js'), 'utf8');
   assert.match(routeSource, /calendarPhoneCompactV2ClientScript/);
