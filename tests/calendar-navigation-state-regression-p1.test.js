@@ -12,21 +12,31 @@ const {
   renderCalendarCreateBookingPage,
   calendarCreateBookingClientScript,
 } = require('../src/presentation/calendarCreateBookingUx');
+const { DESTINATIONS } = require('../src/services/workspaceNavigation');
+const { dashboardCalendarHref } = require('../src/routes/workspaceOperational');
 
-test('#858 ordinary Workspace Calendar navigation uses canonical no-date Workspace entry', () => {
+test('#858 ordinary Workspace Calendar navigation uses a current-Day Calendar entry', () => {
   const html = renderWorkspaceNavigation({
     active: 'dashboard',
     dashboardHref: '/calendar/dashboard',
     clientsHref: '/calendar/clients',
+    calendarHref: DESTINATIONS.calendar,
   });
-  assert.match(html, /data-workspace-destination="calendar" href="\/calendar\/workspace"/);
+  assert.equal(DESTINATIONS.calendar, '/calendar/read-only?view=day');
+  assert.match(html, /data-workspace-destination="calendar" href="\/calendar\/read-only\?view=day"/);
   assert.doesNotMatch(html, /data-workspace-destination="calendar"[^>]*href="[^"]*date=/);
+});
 
-  const explicit = renderWorkspaceNavigation({
-    active: 'dashboard',
-    calendarHref: '/calendar/workspace?view=day&date=2026-09-09',
-  });
-  assert.match(explicit, /href="\/calendar\/workspace\?view=day&amp;date=2026-09-09"/);
+test('#858 Dashboard sidebar Calendar entry binds to the exact operational date instead of bare Week view', () => {
+  assert.equal(
+    dashboardCalendarHref({ operationalDateKey: '2026-09-11', mode: 'business_overview' }),
+    '/calendar/read-only?view=day&date=2026-09-11&staff=all',
+  );
+  assert.equal(
+    dashboardCalendarHref({ operationalDateKey: '2026-09-11', mode: 'personal' }),
+    '/calendar/read-only?view=day&date=2026-09-11',
+  );
+  assert.notEqual(dashboardCalendarHref({ operationalDateKey: '2026-09-11', mode: 'business_overview' }), '/calendar/read-only');
 });
 
 test('#858 Desktop Day lanes fill available middle workspace while preserving the 300px readability floor', () => {
