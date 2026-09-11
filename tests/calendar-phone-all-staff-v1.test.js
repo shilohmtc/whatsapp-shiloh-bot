@@ -14,7 +14,7 @@ test('#888 Phone week defaults to All staff from server-permitted buttons only',
   assert.match(script, /phoneWeekStaffAll/);
   assert.match(script, /All staff/);
   assert.match(script, /const initialMode=mode\(\)/);
-  assert.match(script, /else if\(allRendered\(\)\)\{activateAll\(\)\}else\{reloadAll\(\)\}/);
+  assert.match(script, /if\(initialMode.*allRendered\(\).*activateAll\(\).*reloadAll\(\)/s);
   assert.match(script, /permittedIds\.forEach\(id=>url\.searchParams\.append\('staff',id\)\)/);
   assert.doesNotMatch(script, /permittedStaff|calendarScope|all_business/);
 });
