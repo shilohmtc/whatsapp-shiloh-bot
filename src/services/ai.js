@@ -4,7 +4,7 @@ const { retrieveKnowledge } = require("./knowledge");
 const { getProfile } = require("./profile");
 const { getActiveCatalogueKnowledge } = require("./activeCatalogueKnowledge");
 const { getPractitionerKnowledge } = require("./practitionerKnowledge");
-const { getClinicFaqKnowledge } = require("./clinicFaq");
+const { processClinicFaqMessage, getClinicFaqKnowledge } = require("./clinicFaq");
 const { buildInstructions } = require("./orchestrator");
 const logger = require("../lib/logger");
 
@@ -41,6 +41,9 @@ function logUsage(response, workload) {
 }
 
 async function generateReply(phone, message) {
+  const directFaq = processClinicFaqMessage(message);
+  if (directFaq.handled) return directFaq.reply;
+
   const [previousResponseId, knowledge, profile, activeCatalogue, practitionerKnowledge] = await Promise.all([
     getSession(phone),
     retrieveKnowledge(message, 5),
