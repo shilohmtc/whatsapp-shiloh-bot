@@ -93,10 +93,10 @@ test('calendar viewer authority is derived only from current canonical server au
     business_role: 'manager',
     calendar_scope: 'own',
     service_scope: 'own_services',
-    permissions: { 'appointment:view': true },
+    permissions: {},
     staff_id: 44,
     staff_status: 'active',
-  }), { calendarScope: 'own_staff', staffId: 44 });
+  }), { calendarScope: 'business_all_staff' });
 
   assert.equal(sessionModule.deriveCalendarViewer({
     id: 43,
