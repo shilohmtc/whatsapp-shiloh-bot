@@ -6,6 +6,7 @@ const {
   calendarVisibilityHref,
   renderDesktopPractitionerChips,
   calendarDesktopUsabilityStyles,
+  mobileStaffOverviewStyles,
   applyCalendarResponsivePolish,
 } = require('../src/routes/calendarReadOnlyUx');
 
@@ -89,6 +90,12 @@ test('#856 Desktop visual simplification constrains wide layouts and prioritizes
   assert.match(css, /\.positioned-event \.event-card h4\{margin-top:2px!important;font-size:\.8rem!important;font-weight:850!important/);
   assert.match(css, /@media\(max-width:700px\)\{\.desktop-practitioner-chips\{display:none!important\}\}/);
   assert.doesNotMatch(css.slice(css.indexOf('@media(max-width:700px)')), /minmax\(300px,360px\)|max-width:1480px|\.positioned-event \.event-card h4/);
+});
+
+test('#888 Phone mobile staff overview preserves the People selector instead of hiding it', () => {
+  const css = mobileStaffOverviewStyles();
+  assert.match(css, /@media\(max-width:700px\)/);
+  assert.doesNotMatch(css, /data-calendar-mobile-overview[^}]*\.practitioner-control\{display:none/);
 });
 
 test('#856 responsive polish makes active Workspace Calendar a canonical no-date link and keeps explicit chip navigation plus Phone picker markup', () => {
