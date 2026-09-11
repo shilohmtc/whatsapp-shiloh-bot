@@ -24,13 +24,17 @@ function validatePartNames(name, entries) {
   const groups = new Map();
   for (const entry of candidates) {
     const suffix = entry.slice(prefix.length);
-    const match = suffix.match(/^(\d{2})([a-z]?)$/);
+    const match = suffix.match(/^(\d{2})([a-z]?)(\d*)$/);
     if (!match) throw new Error(`Malformed UX baseline part for ${name}: ${entry}`);
     const index = Number(match[1]);
-    if (index < 1) throw new Error(`UX baseline part numbering must start at 01 for ${name}: ${entry}`);
     const subpart = match[2];
+    const segmentText = match[3];
+    if (index < 1) throw new Error(`UX baseline part numbering must start at 01 for ${name}: ${entry}`);
+    if (!subpart && segmentText) throw new Error(`Malformed UX baseline part for ${name}: ${entry}`);
+    const segment = segmentText ? Number(segmentText) : null;
+    if (segmentText && segment < 1) throw new Error(`UX baseline nested segment numbering must start at 1 for ${name}: ${entry}`);
     if (!groups.has(index)) groups.set(index, []);
-    groups.get(index).push({ entry, subpart });
+    groups.get(index).push({ entry, subpart, segment });
   }
 
   const indices = [...groups.keys()].sort((a, b) => a - b);
@@ -45,7 +49,7 @@ function validatePartNames(name, entries) {
   for (const index of indices) {
     const parts = groups.get(index);
     const primary = parts.filter(({ subpart }) => subpart === '');
-    const split = parts.filter(({ subpart }) => subpart !== '').sort((a, b) => a.subpart.localeCompare(b.subpart));
+    const split = parts.filter(({ subpart }) => subpart !== '');
     if (primary.length && split.length) {
       throw new Error(`Mixed full and split UX baseline part${String(index).padStart(2, '0')} for ${name}`);
     }
@@ -56,12 +60,39 @@ function validatePartNames(name, entries) {
       ordered.push(primary[0].entry);
       continue;
     }
-    for (let position = 0; position < split.length; position += 1) {
-      const expectedSubpart = String.fromCharCode(97 + position);
-      if (split[position].subpart !== expectedSubpart) {
-        throw new Error(`Non-contiguous UX baseline subparts for ${name} part${String(index).padStart(2, '0')}: expected ${expectedSubpart}`);
+
+    const byLetter = new Map();
+    for (const item of split) {
+      if (!byLetter.has(item.subpart)) byLetter.set(item.subpart, []);
+      byLetter.get(item.subpart).push(item);
+    }
+    const letters = [...byLetter.keys()].sort();
+    for (let position = 0; position < letters.length; position += 1) {
+      const expectedLetter = String.fromCharCode(97 + position);
+      const letter = letters[position];
+      if (letter !== expectedLetter) {
+        throw new Error(`Non-contiguous UX baseline subparts for ${name} part${String(index).padStart(2, '0')}: expected ${expectedLetter}`);
       }
-      ordered.push(split[position].entry);
+      const items = byLetter.get(letter);
+      const unsplit = items.filter(({ segment }) => segment === null);
+      const nested = items.filter(({ segment }) => segment !== null).sort((a, b) => a.segment - b.segment);
+      if (unsplit.length && nested.length) {
+        throw new Error(`Mixed full and nested UX baseline subpart ${letter} for ${name} part${String(index).padStart(2, '0')}`);
+      }
+      if (unsplit.length !== 0 && unsplit.length !== 1) {
+        throw new Error(`Duplicate UX baseline subpart ${letter} for ${name} part${String(index).padStart(2, '0')}`);
+      }
+      if (unsplit.length === 1) {
+        ordered.push(unsplit[0].entry);
+        continue;
+      }
+      for (let nestedPosition = 0; nestedPosition < nested.length; nestedPosition += 1) {
+        const expectedSegment = nestedPosition + 1;
+        if (nested[nestedPosition].segment !== expectedSegment) {
+          throw new Error(`Non-contiguous UX baseline nested segments for ${name} part${String(index).padStart(2, '0')}${letter}: expected ${expectedSegment}`);
+        }
+        ordered.push(nested[nestedPosition].entry);
+      }
     }
   }
   return ordered;
