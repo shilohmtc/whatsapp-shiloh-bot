@@ -17,12 +17,19 @@ test('#888 Phone week planner adds an explicit All staff mode from server-permit
   assert.doesNotMatch(script, /permittedStaff|calendarScope|all_business/);
 });
 
-test('#888 All staff mode persists explicitly and shows every rendered permitted appointment while individual focus remains reversible', () => {
+test('#888 All staff mode persists explicitly and renders actual practitioner columns while individual focus remains reversible', () => {
   const script = calendarPhoneAllStaffClientScript();
   assert.match(script, /phoneStaff.*all/);
   assert.match(script, /node\.dataset\.phoneStaffVisible='true'/);
   assert.match(script, /node\.dataset\.phoneAllStaffVisible='true'/);
   assert.match(script, /ids\.find\(id=>permittedIds\.includes\(id\)\)/);
+  assert.match(script, /phone-all-staff-column-header/);
+  assert.match(script, /phone-all-staff-column-name/);
+  assert.match(script, /gridTemplateColumns='repeat\('\+count\+',minmax\(0,1fr\)\)'/);
+  assert.match(script, /--phone-all-staff-columns/);
+  assert.match(script, /linear-gradient\(to right/);
+  assert.match(script, /node\.style\.setProperty\('left','calc\('/);
+  assert.match(script, /node\.style\.setProperty\('width','calc\('/);
   assert.match(script, /url\.searchParams\.delete\('phoneStaff'\)/);
   assert.match(script, /addEventListener\('click'.*true\)/s);
 });
