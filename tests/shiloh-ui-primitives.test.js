@@ -88,13 +88,14 @@ test('#870 shared controls preserve semantic navigation when href is supplied', 
   assert.doesNotMatch(week, /aria-pressed/);
 });
 
-test('#870 disabled navigation primitives remain non-operable without changing href semantics', () => {
+test('#870 disabled navigation primitives remain non-operable', () => {
   const html = renderButton({
     label: 'Today',
     href: '/workspace/calendar?date=2026-09-11',
     disabled: true,
   });
+  assert.match(html, /^<a/);
   assert.match(html, /aria-disabled="true"/);
   assert.match(html, /tabindex="-1"/);
-  assert.match(html, /href="\/workspace\/calendar\?date=2026-09-11"/);
+  assert.doesNotMatch(html, / href=/);
 });
