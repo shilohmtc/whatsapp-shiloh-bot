@@ -1,4 +1,4 @@
-name: Calendar Phone All Staff Columns Proof
+name: Calendar Phone All Staff Adaptive Proof
 
 on:
   pull_request:
@@ -6,7 +6,7 @@ on:
       - 'src/presentation/calendarPhoneAllStaffUx.js'
       - 'src/routes/calendar.js'
       - 'tests/calendar-phone-all-staff-v1.test.js'
-      - 'scripts/calendar-phone-all-staff-columns-browser-proof.js'
+      - 'scripts/calendar-phone-operational-cleanup-browser-proof.js'
       - '.github/workflows/calendar-phone-all-staff-columns-proof.yml'
   workflow_dispatch:
 
@@ -14,7 +14,7 @@ permissions:
   contents: read
 
 jobs:
-  phone_all_staff_columns:
+  phone_all_staff_adaptive:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -23,14 +23,14 @@ jobs:
           node-version: 24.14.1
           cache: npm
       - run: npm ci
-      - name: Run focused Phone All staff tests
+      - name: Run focused Phone All staff adaptive tests
         run: node --test tests/calendar-phone-all-staff-v1.test.js
-      - name: Prove Phone All staff practitioner columns in Chrome
-        run: node scripts/calendar-phone-all-staff-columns-browser-proof.js
-      - name: Upload Phone All staff column proof
+      - name: Prove Phone All staff adaptive schedule in Chrome
+        run: node scripts/calendar-phone-operational-cleanup-browser-proof.js
+      - name: Upload Phone All staff adaptive proof
         uses: actions/upload-artifact@v4
         with:
-          name: calendar-phone-all-staff-columns-v1
-          path: artifacts/calendar-phone-all-staff-columns-v1
+          name: calendar-phone-all-staff-adaptive-v1
+          path: artifacts/calendar-phone-operational-cleanup-v1
           if-no-files-found: error
           retention-days: 14
