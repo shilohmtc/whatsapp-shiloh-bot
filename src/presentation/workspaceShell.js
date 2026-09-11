@@ -21,7 +21,7 @@ function workspaceItem({ key, label, active, href }) {
   return `<span class="workspace-link future" aria-disabled="true" ${destination}>${escapeHtml(label)}</span>`;
 }
 
-function renderWorkspaceNavigation({ active, displayName = '', dashboardHref = null, calendarHref = null, clientsHref = null, messagesHref = null, staffHref = null, servicesHref = null, reportsHref = null, clinicHoursHref = null } = {}) {
+function renderWorkspaceNavigation({ active, displayName = '', dashboardHref = null, calendarHref = '/calendar/workspace', clientsHref = null, messagesHref = null, staffHref = null, servicesHref = null, reportsHref = null, clinicHoursHref = null } = {}) {
   const primary = [
     workspaceItem({
       key: 'dashboard',
