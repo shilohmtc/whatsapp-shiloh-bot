@@ -1,3 +1,5 @@
+const { calendarReferenceUxCss } = require('./calendarUxReference');
+
 const SERVICE_FAMILIES = Object.freeze({
   facial_skin: Object.freeze({
     key: 'facial_skin',
@@ -143,7 +145,7 @@ function serviceFamilyAccentCss() {
   const accents = Object.entries(SERVICE_FAMILY_ACCENTS)
     .map(([familyKey, color]) => `.service-family-icon[data-service-family="${familyKey}"]{color:${color}}`)
     .join('');
-  return `${accents}${desktopAppointmentCardDensityCss()}`;
+  return `${calendarReferenceUxCss()}${accents}${desktopAppointmentCardDensityCss()}`;
 }
 
 function withServiceFamily(service = {}) {
