@@ -8,6 +8,7 @@ on:
       - 'src/routes/workspaceOperational.js'
       - 'src/presentation/workspaceDashboardUx.js'
       - 'tests/workspace-dashboard-carryover-849.test.js'
+      - 'tests/workspace-dashboard-visual-polish-854.test.js'
       - 'scripts/workspace-dashboard-carryover-browser-proof.js'
       - '.github/workflows/workspace-dashboard-carryover-proof.yml'
   workflow_dispatch:
@@ -27,13 +28,13 @@ jobs:
           node-version: 24.14.1
           cache: npm
       - run: npm ci
-      - name: Focused #849/#852 carry-over tests
-        run: node --test tests/workspace-dashboard-carryover-849.test.js tests/workspace-dashboard-messages-consolidation-p1.test.js
+      - name: Focused #849/#852/#854 carry-over tests
+        run: node --test tests/workspace-dashboard-carryover-849.test.js tests/workspace-dashboard-visual-polish-854.test.js tests/workspace-dashboard-messages-consolidation-p1.test.js
       - name: Authenticated Desktop + Phone unresolved-backlog proof
         run: node scripts/workspace-dashboard-carryover-browser-proof.js
       - uses: actions/upload-artifact@v4
         with:
-          name: workspace-dashboard-carryover-852
+          name: workspace-dashboard-carryover-854
           path: artifacts/workspace-dashboard-carryover-849
           if-no-files-found: error
           retention-days: 14

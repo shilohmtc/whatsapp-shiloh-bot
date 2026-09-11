@@ -227,7 +227,7 @@ test('#852 carry-over row without canonical certification remains visible but ha
     carryOver: [{ ...item(601, '2026-09-09T06:00:00.000Z', '2026-09-09T07:00:00.000Z'), operationalDateKey: '2026-09-09', canFinalize: false, needsFinalization: true }],
   };
   const html = renderDashboardPage(model);
-  const match = html.match(/<section class="panel" data-dashboard-carryover-panel>[\s\S]*?<section class="panel" data-dashboard-attention-panel>/);
+  const match = html.match(/<section class="panel(?: carryover-panel)?" data-dashboard-carryover-panel>[\s\S]*?<section class="panel" data-dashboard-activity-panel>/);
   assert.ok(match, 'carry-over panel must render');
   const carryPanel = match[0];
   assert.match(carryPanel, /Client 601/);
