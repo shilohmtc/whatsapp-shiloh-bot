@@ -37,6 +37,8 @@ jobs:
         run: node --test tests/calendar-readonly-ux.test.js
       - name: Run focused Desktop spatial lane tests
         run: node --test tests/calendar-desktop-spatial-lanes-v1.test.js
+      - name: Run focused Calendar Web usability polish tests
+        run: node --test tests/calendar-web-usability-polish.test.js
       - name: Run focused Calendar view parity and Month tests
         run: node --test tests/calendar-view-parity-month-v1.test.js tests/permanent-sunday-closure-authority-p1.test.js
       - name: Run focused Shiloh-only cockpit polish tests
@@ -147,6 +149,15 @@ jobs:
         with:
           name: calendar-desktop-spatial-lanes-v1
           path: artifacts/calendar-desktop-spatial-lanes-v1
+          if-no-files-found: error
+          retention-days: 14
+      - name: Run authenticated Desktop Calendar visual simplification proof
+        run: node scripts/calendar-web-desktop-visual-browser-proof.js
+      - name: Upload authenticated Desktop Calendar visual simplification proof
+        uses: actions/upload-artifact@v4
+        with:
+          name: calendar-web-desktop-visual-v1
+          path: artifacts/calendar-web-desktop-visual-v1
           if-no-files-found: error
           retention-days: 14
       - name: Run Calendar view parity and Month browser proof
