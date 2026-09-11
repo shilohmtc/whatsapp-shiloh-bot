@@ -87,6 +87,24 @@ function createWorkspaceClinicHoursRouter({
     }
   });
 
+  router.post('/exceptions', sameOrigin, requireCsrf, async (req, res, next) => {
+    try {
+      const result = await service.upsertException({
+        adminId: req.staffBrowserSession?.adminId,
+        exceptionDate: req.body?.exceptionDate,
+        exceptionType: req.body?.exceptionType,
+        startsLocal: req.body?.startsLocal,
+        endsLocal: req.body?.endsLocal,
+        reason: req.body?.reason,
+      });
+      return res.status(200).json(result);
+    } catch (error) {
+      const safe = clinicHoursError(error);
+      if (safe.status === 503) return next(error);
+      return res.status(safe.status).json({ error: safe.message, code: safe.code, details: error?.details || undefined, requestId: req.id });
+    }
+  });
+
   return router;
 }
 
