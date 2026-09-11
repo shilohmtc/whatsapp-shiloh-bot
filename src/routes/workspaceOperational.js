@@ -1,3 +1,5 @@
+'use strict';
+
 const express = require('express');
 const workspaceDashboard = require('../services/workspaceDashboard');
 const workspaceNavigation = require('../services/workspaceNavigation');
@@ -68,8 +70,7 @@ function stabilizeDashboardShell(html) {
 
 function dashboardCalendarHref(model = {}) {
   const dateKey = String(model.operationalDateKey || '').trim();
-  const businessOverview = ['owner_overview', 'business_overview'].includes(String(model.mode || ''));
-  return `/calendar/read-only?view=day${dateKey ? `&date=${encodeURIComponent(dateKey)}` : ''}${businessOverview ? '&staff=all' : ''}`;
+  return `/calendar/read-only?view=week${dateKey ? `&date=${encodeURIComponent(dateKey)}` : ''}&staff=all`;
 }
 
 function dashboardSafeError(error) {
