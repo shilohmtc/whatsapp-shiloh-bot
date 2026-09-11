@@ -48,6 +48,13 @@ function onboardingHtml() {
   });
 }
 
+function onboardingAccessHtml() {
+  return onboardingHtml()
+    .replace('<option value="none">No Workspace access</option>', '<option value="none">No Workspace access</option>')
+    .replace('<option value="practitioner">Practitioner access</option>', '<option value="practitioner" selected>Practitioner access</option>')
+    .replace(/ data-onboarding-identity hidden/g, ' data-onboarding-identity');
+}
+
 function detailHtml() {
   return renderStaffDetailPage({
     staff: staff[0],
@@ -126,11 +133,13 @@ fs.mkdirSync(outDir, { recursive: true });
 const proofs = [
   { view: 'staff-list', viewport: 'desktop', width: 1440, height: 960, html: listHtml() },
   { view: 'staff-onboarding', viewport: 'desktop', width: 1440, height: 1100, html: onboardingHtml() },
+  { view: 'staff-onboarding-access', viewport: 'desktop', width: 1440, height: 1100, html: onboardingAccessHtml() },
   { view: 'staff-detail', viewport: 'desktop', width: 1440, height: 960, html: detailHtml() },
   { view: 'staff-access-enable', viewport: 'desktop', width: 1440, height: 960, html: accessEnableHtml() },
   { view: 'staff-access-complete', viewport: 'desktop', width: 1440, height: 960, html: accessCompleteHtml() },
   { view: 'staff-list', viewport: 'narrow', width: 390, height: 844, html: listHtml() },
-  { view: 'staff-onboarding', viewport: 'narrow', width: 390, height: 1500, html: onboardingHtml() },
+  { view: 'staff-onboarding', viewport: 'narrow', width: 390, height: 1200, html: onboardingHtml() },
+  { view: 'staff-onboarding-access', viewport: 'narrow', width: 390, height: 1500, html: onboardingAccessHtml() },
   { view: 'staff-detail', viewport: 'narrow', width: 390, height: 844, html: detailHtml() },
   { view: 'staff-access-enable', viewport: 'narrow', width: 390, height: 1600, html: accessEnableHtml() },
   { view: 'staff-access-complete', viewport: 'narrow', width: 390, height: 1600, html: accessCompleteHtml() },
@@ -141,8 +150,11 @@ for (const proof of proofs) {
   if (!/aria-current="page">Staff/.test(proof.html) || !/>Calendar<|>Calendar<\//.test(proof.html) || !/>Clients<|>Clients<\//.test(proof.html)) {
     throw new Error(`${proof.view}/${proof.viewport} lacks shared Workspace navigation`);
   }
-  if (proof.view === 'staff-onboarding' && (!/data-staff-onboarding-form/.test(proof.html) || !/Practitioner access/.test(proof.html) || !/Staff WhatsApp mobile/.test(proof.html))) {
-    throw new Error(`${proof.view}/${proof.viewport} lacks the guided add-and-enable controls`);
+  if (proof.view === 'staff-onboarding' && (!/data-staff-onboarding-form/.test(proof.html) || !/Practitioner access/.test(proof.html) || !/data-onboarding-identity hidden/.test(proof.html))) {
+    throw new Error(`${proof.view}/${proof.viewport} lacks the guided default no-access state`);
+  }
+  if (proof.view === 'staff-onboarding-access' && (!/data-staff-onboarding-form/.test(proof.html) || !/value="practitioner" selected/.test(proof.html) || !/Staff WhatsApp mobile/.test(proof.html) || /data-onboarding-identity hidden/.test(proof.html))) {
+    throw new Error(`${proof.view}/${proof.viewport} lacks the guided practitioner-access state`);
   }
   if (proof.view === 'staff-access-enable' && (!/Enable Workspace access/.test(proof.html) || !/name="identityConfirmed"/.test(proof.html))) {
     throw new Error(`${proof.view}/${proof.viewport} lacks the bounded Access enablement controls`);
