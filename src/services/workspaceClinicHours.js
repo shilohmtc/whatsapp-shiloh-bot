@@ -14,6 +14,7 @@ const DAY_NAMES = Object.freeze({
   6: 'Saturday',
 });
 const TIME_PATTERN = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
+const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const REVISION_PATTERN = /^[a-f0-9]{64}$/i;
 
 class WorkspaceClinicHoursError extends Error {
@@ -37,6 +38,11 @@ function permissionSet(value) {
 
 function timeValue(value) {
   return String(value || '').slice(0, 5);
+}
+
+function dateValue(value) {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return value.toISOString().slice(0, 10);
+  return String(value || '').slice(0, 10);
 }
 
 function evaluateAuthority(rows = []) {
@@ -101,6 +107,53 @@ function normalizeDayPayload(days) {
   return normalized;
 }
 
+function normalizeExceptionPayload(raw = {}) {
+  const exceptionDate = String(raw.exceptionDate || '').trim();
+  if (!DATE_PATTERN.test(exceptionDate)) {
+    throw new WorkspaceClinicHoursError(
+      'WORKSPACE_CLINIC_HOURS_INVALID_EXCEPTION_DATE',
+      'Clinic closure or holiday hours require a valid YYYY-MM-DD date.',
+      400
+    );
+  }
+  const parsed = new Date(`${exceptionDate}T00:00:00Z`);
+  if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== exceptionDate) {
+    throw new WorkspaceClinicHoursError(
+      'WORKSPACE_CLINIC_HOURS_INVALID_EXCEPTION_DATE',
+      'Clinic closure or holiday hours require a valid calendar date.',
+      400
+    );
+  }
+  const exceptionType = String(raw.exceptionType || '').trim().toLowerCase();
+  if (!['closed', 'open'].includes(exceptionType)) {
+    throw new WorkspaceClinicHoursError(
+      'WORKSPACE_CLINIC_HOURS_INVALID_EXCEPTION_TYPE',
+      'Choose Closed or Open with special hours.',
+      400
+    );
+  }
+  if (exceptionType === 'closed') {
+    return { exceptionDate, exceptionType, startsLocal: null, endsLocal: null };
+  }
+  const startsLocal = String(raw.startsLocal || '').trim();
+  const endsLocal = String(raw.endsLocal || '').trim();
+  if (!TIME_PATTERN.test(startsLocal) || !TIME_PATTERN.test(endsLocal)) {
+    throw new WorkspaceClinicHoursError(
+      'WORKSPACE_CLINIC_HOURS_INVALID_EXCEPTION_TIME',
+      'Special opening and closing times must use HH:MM.',
+      400
+    );
+  }
+  if (endsLocal <= startsLocal) {
+    throw new WorkspaceClinicHoursError(
+      'WORKSPACE_CLINIC_HOURS_INVALID_EXCEPTION_WINDOW',
+      'Special closing time must be later than opening time.',
+      400
+    );
+  }
+  return { exceptionDate, exceptionType, startsLocal, endsLocal };
+}
+
 function canonicalDays(rows = []) {
   const grouped = new Map();
   for (const row of rows) {
@@ -133,6 +186,19 @@ function canonicalDays(rows = []) {
     endsLocal: null,
     permanent: true,
   });
+}
+
+function canonicalExceptions(rows = []) {
+  return rows.map(row => ({
+    id: positiveId(row.id),
+    exceptionDate: dateValue(row.exception_date),
+    exceptionType: row.mode === 'open' ? 'open' : 'closed',
+    startsLocal: row.mode === 'open' ? timeValue(row.open_time) : null,
+    endsLocal: row.mode === 'open' ? timeValue(row.close_time) : null,
+    holidayName: row.holiday_name == null ? null : String(row.holiday_name),
+    actorAdminId: positiveId(row.actor_admin_id),
+    updatedAt: row.updated_at ? new Date(row.updated_at).toISOString() : null,
+  }));
 }
 
 function revisionFor(locationId, days) {
@@ -232,15 +298,36 @@ function createWorkspaceClinicHoursService({ db = pool, locationResolver = getDe
     return result.rows;
   }
 
+  async function exceptionRows(locationId, queryable = db) {
+    const result = await queryable.query(
+      `/* workspaceClinicHours:exceptionRows */
+       SELECT e.id, e.exception_date, e.mode, e.open_time, e.close_time,
+              e.actor_admin_id, e.updated_at, h.name AS holiday_name
+         FROM location_hours_exceptions e
+         LEFT JOIN public_holidays h
+           ON h.holiday_date=e.exception_date
+          AND h.country_code='ZA'
+        WHERE e.location_id=$1
+        ORDER BY e.exception_date DESC, e.id DESC`,
+      [locationId]
+    );
+    return result.rows;
+  }
+
   async function buildModel({ adminId } = {}) {
     const authority = await requireAccess(adminId);
     const location = await requireLocation();
-    const days = canonicalDays(await activeRows(location.id));
+    const [daysRows, exceptionsRows] = await Promise.all([
+      activeRows(location.id),
+      exceptionRows(location.id),
+    ]);
+    const days = canonicalDays(daysRows);
     return {
       authority,
       location: { id: positiveId(location.id), name: String(location.name || 'Shiloh'), timezone: String(location.timezone || 'Africa/Johannesburg') },
       days,
       revision: revisionFor(location.id, days),
+      exceptions: canonicalExceptions(exceptionsRows),
     };
   }
 
@@ -310,7 +397,57 @@ function createWorkspaceClinicHoursService({ db = pool, locationResolver = getDe
     }
   }
 
-  return { resolveAccess, buildModel, updateHours };
+  async function upsertException({ adminId, exceptionDate, exceptionType, startsLocal, endsLocal } = {}) {
+    const desired = normalizeExceptionPayload({ exceptionDate, exceptionType, startsLocal, endsLocal });
+    const authority = await requireAccess(adminId);
+    const location = await requireLocation();
+    const write = await db.query(
+      `/* workspaceClinicHours:upsertException */
+       INSERT INTO location_hours_exceptions
+         (location_id, exception_date, mode, open_time, close_time, actor_admin_id)
+       VALUES ($1, $2::date, $3, $4::time, $5::time, $6)
+       ON CONFLICT (location_id, exception_date)
+       DO UPDATE SET mode=EXCLUDED.mode,
+                     open_time=EXCLUDED.open_time,
+                     close_time=EXCLUDED.close_time,
+                     actor_admin_id=EXCLUDED.actor_admin_id,
+                     updated_at=NOW()
+       RETURNING id, exception_date, mode, open_time, close_time, actor_admin_id, updated_at`,
+      [
+        location.id,
+        desired.exceptionDate,
+        desired.exceptionType,
+        desired.startsLocal,
+        desired.endsLocal,
+        authority.operatorAdminId,
+      ]
+    );
+    const exception = canonicalExceptions(write.rows)[0];
+    await db.query(
+      `/* workspaceClinicHours:exceptionAudit */
+       INSERT INTO crm_audit_events
+         (actor_admin_id, action, entity_type, entity_id, metadata)
+       VALUES ($1, 'admin.holiday_hours_updated', 'location_hours_exception', $2, $3::jsonb)`,
+      [
+        authority.operatorAdminId,
+        exception?.id,
+        JSON.stringify({
+          locationId: positiveId(location.id),
+          exceptionDate: desired.exceptionDate,
+          mode: desired.exceptionType,
+          openTime: desired.startsLocal,
+          closeTime: desired.endsLocal,
+        }),
+      ]
+    );
+    return {
+      status: 'updated',
+      location: { id: positiveId(location.id), name: String(location.name || 'Shiloh') },
+      exception,
+    };
+  }
+
+  return { resolveAccess, buildModel, updateHours, upsertException };
 }
 
 const service = createWorkspaceClinicHoursService();
@@ -318,12 +455,16 @@ const service = createWorkspaceClinicHoursService();
 module.exports = {
   SCHEDULE_MANAGE_CAPABILITY,
   WRITABLE_DAYS,
-  DAY_NAMES,
   WorkspaceClinicHoursError,
   evaluateAuthority,
   normalizeDayPayload,
+  normalizeExceptionPayload,
   canonicalDays,
+  canonicalExceptions,
   revisionFor,
   createWorkspaceClinicHoursService,
-  ...service,
+  resolveAccess: service.resolveAccess,
+  buildModel: service.buildModel,
+  updateHours: service.updateHours,
+  upsertException: service.upsertException,
 };
