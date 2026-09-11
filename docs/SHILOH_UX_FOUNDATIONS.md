@@ -1,10 +1,10 @@
 # Shiloh UX Foundations
 
-Status: **V1 foundation / presentation-only**
+Status: **V2 foundation / presentation-only**
 
-Governing issue: #862
+Governing issues: #862, #865
 
-This document defines the smallest shared UX foundation for Shiloh Workspace. It does not own booking, scheduling, roster, staff identity, permissions, authentication, retained data or provider behavior.
+This document defines the shared UX foundation for Shiloh Workspace. It does not own booking, scheduling, roster, staff identity, permissions, authentication, retained data or provider behavior.
 
 ## 1. Product contract
 
@@ -41,6 +41,18 @@ The wrapper provides a bounded semantic vocabulary instead of allowing each feat
 
 The initial vocabulary intentionally stays small: Calendar, person/people, search, previous/next, time, confirm, alert, message, add and more-actions.
 
+### Shared UI primitives
+
+`src/presentation/shilohUiPrimitives.js` owns the first reusable production controls:
+
+- Button;
+- IconButton;
+- Chip;
+- Badge/status;
+- shared primitive CSS built from the canonical UX tokens.
+
+These primitives deliberately support a 44px touch density and a denser Desktop mode. Icon buttons require an accessible label, selected chips expose semantic state with `aria-pressed`, and status badges keep visible text instead of relying on colour alone.
+
 ## 3. Authoritative inventory — initial findings
 
 Current presentation code is server-rendered JavaScript/CommonJS with substantial feature-level HTML/CSS composition under `src/presentation` and related routes.
@@ -59,29 +71,40 @@ Consolidation opportunities:
 - `calendarServiceFamilyVisuals.js` contains hand-authored SVG paths and feature-local accent colours;
 - icon selection/accessibility/size should converge on the shared Lucide primitive where Lucide has an appropriate icon;
 - service-family visuals may retain custom artwork where it communicates a domain-specific concept better than a generic icon, but its colour roles should eventually consume shared tokens;
-- common controls (button, icon button, chip, badge/status, staff marker, appointment-card treatment) should become reusable presentation primitives before broad screen redesign.
+- common controls should migrate to shared primitives before broad screen redesign.
 
-## 4. Storybook decision
+## 4. Storybook workshop
 
-**Decision: FIT, with a bounded implementation gate.**
+**Decision: ADOPTED for development/test UX work.**
 
-Storybook 10 supports an explicit HTML project type and requires Node 20+. Shiloh is Node 24 and does not need React/Vue/Next to use Storybook.
+Shiloh uses Storybook 10 with the HTML + Vite adapter. The application itself remains Node 24 / CommonJS; isolated Storybook configuration uses `.mjs`. No React, Vue, Next or second frontend runtime is required.
 
-Storybook should be adopted only under these conditions:
+The retained Storybook dependency surface is intentionally small:
 
-1. stories render the same production primitives exported from `src/presentation`;
-2. no parallel "Storybook-only" implementation of Shiloh components is created;
-3. Storybook remains development/test tooling and does not become runtime authority;
-4. installation/build dependencies remain isolated from production behavior;
-5. CI cost and maintenance remain proportionate to recurring UX value.
+- `storybook`;
+- `@storybook/html-vite`;
+- `@storybook/addon-a11y`.
 
-The V1 foundations unit does not introduce a framework migration. A follow-up Storybook setup unit should run the official initializer for an HTML project in an environment able to update and verify the npm lockfile, then add only a minimal first catalogue for tokens, icons and the first shared primitives.
+The official initializer was used as a feasibility spike, then reduced under Clean Change. Chromatic, Vitest and Playwright were not added as Storybook dependencies in V2 because Shiloh already has separate authenticated browser-proof infrastructure and there is no current need for a second testing platform.
+
+### Commands
+
+- `npm run storybook` — local visual workshop on port 6006.
+- `npm run build-storybook` — deterministic static catalogue build used by CI.
+
+### Story rule
+
+Stories must import and render the same production exports from `src/presentation` that live Shiloh surfaces use. Do not create a parallel Storybook-only implementation of a component. A thin adapter is acceptable only when needed to connect Storybook controls to a production renderer without duplicating component markup or authority.
+
+The initial catalogue under `stories/` covers design tokens, the canonical Lucide vocabulary, responsive contracts, buttons, icon buttons, chips and status badges. `.github/workflows/storybook.yml` keeps focused foundation tests and the catalogue build green on pull requests and `main`.
+
+Storybook is development/test tooling only. It is not served as production runtime authority, and `storybook-static/` is generated output excluded from Git history.
 
 ## 5. Migration order
 
-1. UX tokens and Lucide wrapper — foundation.
-2. Shared Button / IconButton / Chip / Badge / StaffMarker primitives.
-3. Storybook catalogue consuming those exact production primitives.
+1. UX tokens and Lucide wrapper — complete.
+2. Shared Button / IconButton / Chip / Badge primitives — complete foundation; live migration intentionally separate.
+3. Storybook catalogue consuming those exact production primitives — complete foundation.
 4. Calendar as the first reference migration, preserving existing date/roster/Phone/Desktop semantics.
 5. Workspace surfaces: Clients, Staff, Services, Messages and Dashboard.
 6. Visual regression expansion around stable stories plus existing authenticated full-route browser proofs.
@@ -90,9 +113,9 @@ The V1 foundations unit does not introduce a framework migration. A follow-up St
 ## 6. Clean Change disposition
 
 - **Reuse:** existing `lucide`, server-rendered presentation architecture, Phone/Desktop contracts and browser proof infrastructure.
-- **Smallest change:** shared primitives before screen-by-screen redesign.
-- **Permanent:** tokens, icon wrapper, focused tests and this concise contract.
-- **Temporary:** exploratory Storybook setup remains non-release until lockfile/build/CI proof passes.
-- **Duplicate authority:** none; this layer owns presentation only.
-- **One-year judgment:** shared tokens/icons are expected to reduce repeated UX work and are intentionally maintainable.
-- **Retirement:** later migrations should remove redundant feature-local icon/colour definitions where the shared layer fully replaces them.
+- **Smallest change:** shared primitives and visual workshop before screen-by-screen redesign.
+- **Permanent:** tokens, icon wrapper, shared primitives, focused tests, minimal Storybook config/catalogue/build gate and this concise contract.
+- **Temporary:** initializer workflow and bootstrap smoke story were removed after proving installation/build behavior.
+- **Duplicate authority:** none; this layer owns presentation only and stories consume production exports.
+- **One-year judgment:** the retained foundation is expected to reduce repeated UX work while remaining small enough to maintain deliberately.
+- **Retirement:** later migrations should remove redundant feature-local icon/colour/control definitions where the shared layer fully replaces them.
