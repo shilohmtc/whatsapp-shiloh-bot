@@ -2,7 +2,6 @@ const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const http = require('node:http');
-const net = require('node:net');
 const os = require('node:os');
 const path = require('node:path');
 const { spawn, spawnSync } = require('node:child_process');
@@ -21,14 +20,6 @@ function chromeExecutable() {
     .find(candidate => candidate && fs.existsSync(candidate)) || null;
 }
 function sha256(file) { return crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex'); }
-async function reservePort() {
-  const server = net.createServer();
-  server.listen(0, '127.0.0.1');
-  await once(server, 'listening');
-  const port = server.address().port;
-  await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
-  return port;
-}
 async function poll(load, accept, timeoutMs = 15000) {
   const deadline = Date.now() + timeoutMs;
   let lastError;
@@ -123,14 +114,25 @@ async function main() {
     server.listen(0, '127.0.0.1');
     await once(server, 'listening');
     const origin = `http://127.0.0.1:${server.address().port}`;
-    const debuggingPort = await reservePort();
+    const profileDirectory = path.join(directory, 'profile');
+    fs.mkdirSync(profileDirectory, { recursive: true });
     chrome = spawn(executable, [
       '--headless=new', '--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage', '--hide-scrollbars',
-      '--remote-allow-origins=*', `--remote-debugging-port=${debuggingPort}`, `--user-data-dir=${path.join(directory, 'profile')}`, 'about:blank',
-    ], { stdio: 'ignore' });
+      '--remote-allow-origins=*', '--remote-debugging-port=0', `--user-data-dir=${profileDirectory}`, 'about:blank',
+    ], { stdio: ['ignore', 'ignore', 'pipe'] });
+    let browserErrors = '';
+    chrome.stderr.on('data', chunk => { browserErrors = `${browserErrors}${String(chunk)}`.slice(-8000); });
+    const devToolsActivePort = path.join(profileDirectory, 'DevToolsActivePort');
+    const debuggingPort = await poll(() => {
+      if (chrome.exitCode != null) throw new Error(`Chrome exited before DevTools became ready (code ${chrome.exitCode}).\n${browserErrors}`);
+      if (!fs.existsSync(devToolsActivePort)) return null;
+      const [portLine] = fs.readFileSync(devToolsActivePort, 'utf8').trim().split(/\r?\n/);
+      const port = Number(portLine);
+      return Number.isSafeInteger(port) && port > 0 ? port : null;
+    }, Boolean);
     const targets = await poll(
       async () => (await fetch(`http://127.0.0.1:${debuggingPort}/json/list`)).json(),
-      value => value.some(target => target.type === 'page')
+      value => Array.isArray(value) && value.some(target => target.type === 'page' && target.webSocketDebuggerUrl)
     );
     cdp = await connectCdp(targets.find(target => target.type === 'page').webSocketDebuggerUrl);
     await cdp.send('Page.enable');
