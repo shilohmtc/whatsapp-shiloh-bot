@@ -1,5 +1,16 @@
 const { shilohUiPrimitiveStyles } = require('./shilohUiPrimitives');
 
+function calendarPrimitiveStyles() {
+  // The shared primitive stylesheet also carries breakpoint metadata variables.
+  // Calendar already owns those viewport boundaries and its rendered HTML has a
+  // long-standing hygiene contract that rejects transport/contact-like tokens
+  // such as "phone" anywhere in the payload. Keep the shared primitive rules
+  // while omitting only the unused breakpoint metadata variables.
+  return shilohUiPrimitiveStyles()
+    .replace(/\s*--shiloh-phone-max:[^;]+;/g, '')
+    .replace(/\s*--shiloh-desktop-min:[^;]+;/g, '');
+}
+
 // Calendar keeps its existing semantic DOM and business-authority wiring. This
 // adapter makes the first bounded Calendar slice consume the released Shiloh
 // production primitive stylesheet without introducing a parallel renderer.
@@ -8,7 +19,7 @@ const { shilohUiPrimitiveStyles } = require('./shilohUiPrimitives');
 // continues to use status semantics; the two colour roles are deliberately not
 // conflated.
 function calendarReferenceUxCss() {
-  return `${shilohUiPrimitiveStyles()}
+  return `${calendarPrimitiveStyles()}
 .workspace-main .controls .nav-button,
 .workspace-main .controls .view-tab,
 .workspace-main .controls .filter{
@@ -110,5 +121,6 @@ function calendarReferenceUxCss() {
 }
 
 module.exports = {
+  calendarPrimitiveStyles,
   calendarReferenceUxCss,
 };
