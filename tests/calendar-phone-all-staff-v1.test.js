@@ -36,7 +36,7 @@ test('#895 visible events are laid out inside their selected practitioner column
   assert.match(script, /laneWidth=\(100\/columnCount\)\/laneCount/);
   assert.match(script, /node\.dataset\.phoneColumnVisible=String\(visible\)/);
   assert.match(script, /phone-staff-column-dividers/);
-  assert.match(script, /overflow-y:auto!important;overflow-x:hidden!important/);
+  assert.match(script, /week-time-grid\{overflow:hidden!important\}/);
   assert.doesNotMatch(script, /scrollLeft/);
 });
 
@@ -49,26 +49,48 @@ test('#895 week strip carries compact month context and no large duplicate day h
   assert.doesNotMatch(script, /formatActiveDate/);
 });
 
-test('#895 Phone Calendar keeps direct Week Month Today and Appointment hierarchy', () => {
+test('#895 Phone Calendar keeps direct Week Month and Appointment hierarchy with contextual Today', () => {
   const script = calendarPhoneAllStaffClientScript();
   assert.match(script, /phone-calendar-utility-bar/);
   assert.match(script, /\['week','Week'\],\['month','Month'\]/);
   assert.match(script, /phone-calendar-today-link/);
+  assert.match(script, /if\(!alreadyToday\)nav\.appendChild\(today\)/);
   assert.match(script, /phone-calendar-primary-action/);
   assert.match(script, /\.phone-calendar-v2-controls,\.phone-calendar-v2-actions\{display:none!important\}/);
 });
 
-test('#895 Today returns to todays Week and communicates when already there', () => {
+test('#895 Today is absent on todays Week and returns away states to todays Week', () => {
   const script = calendarPhoneAllStaffClientScript();
   assert.match(script, /function todayWeekHref\(\)/);
   assert.match(script, /url\.searchParams\.set\('view','week'\)/);
+  assert.match(script, /currentDate=String\(body\.dataset\.phoneActiveDate/);
   assert.match(script, /alreadyToday=currentView\(\)==='week'/);
-  assert.match(script, /today\.setAttribute\('aria-disabled','true'\)/);
+  assert.match(script, /if\(!alreadyToday\)nav\.appendChild\(today\)/);
+  assert.doesNotMatch(script, /aria-disabled/);
+});
+
+test('#895 Week fits 07:00 to 18:00 into the dynamic phone viewport without vertical panning', () => {
+  const script = calendarPhoneAllStaffClientScript();
+  assert.match(script, /function fitCalendarViewport\(\)/);
+  assert.match(script, /window\.visualViewport\?\.height\|\|innerHeight/);
+  assert.match(script, /function fitWeekGrid\(\)/);
+  assert.match(script, /const baseHeight=660/);
+  assert.match(script, /--phone-week-grid-height/);
+  assert.match(script, /week-time-grid\{overflow:hidden!important\}/);
+  assert.match(script, /Number\(match\[1\]\)>18/);
+});
+
+test('#895 fitted Week preserves empty-slot booking time and practitioner semantics', () => {
+  const script = calendarPhoneAllStaffClientScript();
+  assert.match(script, /function installFittedBookingTap\(\)/);
+  assert.match(script, /rawMinutes=7\*60\+\(y\/rect\.height\)\*\(11\*60\)/);
+  assert.match(script, /Math\.min\(18\*60-30/);
+  assert.match(script, /Math\.floor\(\(x\/rect\.width\)\*selectedIds\.length\)/);
+  assert.match(script, /location\.assign\(bookingPath\+'\?'\+params\.toString\(\)\)/);
 });
 
 test('#895 full-height Month and 18:00 operating boundary remain', () => {
   const script = calendarPhoneAllStaffClientScript();
-  assert.match(script, /function fitCalendarViewport\(\)/);
   assert.match(script, /--phone-calendar-surface-height/);
   assert.match(script, /calendar-view\.month-view\{display:flex!important;flex-direction:column!important/);
   assert.match(script, /month-days\{min-height:0!important;height:100%!important;grid-auto-rows:1fr!important/);
