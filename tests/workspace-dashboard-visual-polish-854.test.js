@@ -62,8 +62,8 @@ function model() {
 }
 
 test('#854 formats backlog date groups for human scanning', () => {
-  assert.equal(dateGroupLabel('2026-09-09'), 'Wed, 09 Sep');
-  assert.equal(dateGroupLabel('2026-09-10'), 'Thu, 10 Sep');
+  assert.equal(dateGroupLabel('2026-09-09'), 'Wed, 09 Sept');
+  assert.equal(dateGroupLabel('2026-09-10'), 'Thu, 10 Sept');
 });
 
 test('#854 renders bounded Desktop backlog and balanced secondary layout without changing finalization controls', () => {
@@ -72,8 +72,8 @@ test('#854 renders bounded Desktop backlog and balanced secondary layout without
   assert.match(html, /class="panel carryover-panel" data-dashboard-carryover-panel/);
   assert.match(html, /data-dashboard-carryover-scroll/);
   assert.match(html, /class="secondary-grid" data-dashboard-secondary-grid/);
-  assert.match(html, /<h3>Wed, 09 Sep<\/h3>/);
-  assert.match(html, /<h3>Thu, 10 Sep<\/h3>/);
+  assert.match(html, /<h3>Wed, 09 Sept<\/h3>/);
+  assert.match(html, /<h3>Thu, 10 Sept<\/h3>/);
   assert.match(html, /class="appointment carryover-card"/);
   assert.match(html, /data-dashboard-finalize="completed"/);
   assert.match(html, /data-dashboard-finalize="no_show"/);
