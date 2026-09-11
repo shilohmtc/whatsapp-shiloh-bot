@@ -413,22 +413,33 @@ function createWorkspaceClinicHoursService({ db = pool, locationResolver = getDe
                      actor_admin_id=EXCLUDED.actor_admin_id,
                      updated_at=NOW()
        RETURNING id, exception_date, mode, open_time, close_time, actor_admin_id, updated_at`,
-      [location.id, desired.exceptionDate, desired.exceptionType, desired.startsLocal, desired.endsLocal, authority.operatorAdminId]
+      [
+        location.id,
+        desired.exceptionDate,
+        desired.exceptionType,
+        desired.startsLocal,
+        desired.endsLocal,
+        authority.operatorAdminId,
+      ]
     );
-    const row = write.rows?.[0];
+    const exception = canonicalExceptions(write.rows)[0];
     await db.query(
       `/* workspaceClinicHours:exceptionAudit */
        INSERT INTO crm_audit_events
          (actor_admin_id, action, entity_type, entity_id, metadata)
-       VALUES ($1, 'admin.holiday_hours_updated', 'location', $2, $3::jsonb)`,
-      [authority.operatorAdminId, location.id, JSON.stringify({
-        exceptionDate: desired.exceptionDate,
-        exceptionType: desired.exceptionType,
-        startsLocal: desired.startsLocal,
-        endsLocal: desired.endsLocal,
-      })]
+       VALUES ($1, 'admin.holiday_hours_updated', 'location_hours_exception', $2, $3::jsonb)`,
+      [
+        authority.operatorAdminId,
+        exception?.id,
+        JSON.stringify({
+          locationId: positiveId(location.id),
+          exceptionDate: desired.exceptionDate,
+          mode: desired.exceptionType,
+          openTime: desired.startsLocal,
+          closeTime: desired.endsLocal,
+        }),
+      ]
     );
-    const exception = canonicalExceptions([row])[0];
     return {
       status: 'updated',
       location: { id: positiveId(location.id), name: String(location.name || 'Shiloh') },
