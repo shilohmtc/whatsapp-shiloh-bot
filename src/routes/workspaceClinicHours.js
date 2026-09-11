@@ -95,7 +95,6 @@ function createWorkspaceClinicHoursRouter({
         exceptionType: req.body?.exceptionType,
         startsLocal: req.body?.startsLocal,
         endsLocal: req.body?.endsLocal,
-        reason: req.body?.reason,
       });
       return res.status(200).json(result);
     } catch (error) {
