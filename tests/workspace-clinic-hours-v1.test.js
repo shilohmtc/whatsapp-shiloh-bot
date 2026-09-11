@@ -31,13 +31,13 @@ function principalRow(permissions = { 'schedule:manage': true }) {
   };
 }
 
-function canonicalWriteRow(mode, openTime = null, closeTime = null) {
+function canonicalWriteRow(exceptionType, startsLocal = null, endsLocal = null) {
   return {
     id: 91,
     exception_date: '2026-12-16',
-    mode,
-    open_time: openTime,
-    close_time: closeTime,
+    exception_type: exceptionType,
+    starts_local: startsLocal,
+    ends_local: endsLocal,
     actor_admin_id: 41,
     updated_at: new Date('2026-09-11T12:00:00Z'),
   };
