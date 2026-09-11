@@ -14,6 +14,10 @@ const {
   decorateStaffDetailAccessHtml,
   workspaceStaffAccessClientScript,
 } = require('../presentation/workspaceStaffAccessUx');
+const {
+  decorateStaffListOnboardingHtml,
+  workspaceStaffOnboardingClientScript,
+} = require('../presentation/workspaceStaffOnboardingUx');
 const { renderAccessListPage, renderAccessDetailPage, workspaceAccessV2ClientScript } = require('../presentation/workspaceAccessV2Ux');
 const { requireStaffSession } = require('../middleware/staffBrowserSession');
 
@@ -78,7 +82,8 @@ function createWorkspaceStaffListHandler({
       });
       try { model.accessManageAllowed = Boolean(await workspaceStaffAccess.resolveManageAccess(req.staffBrowserSession?.adminId)); }
       catch (_error) { model.accessManageAllowed = false; }
-      return res.status(200).type('html').send(renderPage(model, await pageOptions(req, clientAccessService, staffAccessPath)));
+      const html = renderPage(model, await pageOptions(req, clientAccessService, staffAccessPath));
+      return res.status(200).type('html').send(decorateStaffListOnboardingHtml(html, model));
     } catch (error) {
       const safe = safeError(error);
       return res.status(safe.status).type('html').send(renderUnavailable({ code: error?.code, message: safe.message }));
@@ -161,6 +166,17 @@ function createWorkspaceStaffRouter({ sessionService, ...options } = {}) {
       const authority = await service.resolveManageAccess(req.staffBrowserSession?.adminId);
       if (!authority) return res.sendStatus(403);
       return res.status(200).type('application/javascript').send(workspaceStaffManageClientScript());
+    } catch (_error) {
+      return res.sendStatus(403);
+    }
+  });
+  router.get('/onboarding.js', async (req, res) => {
+    setWorkspaceStaffSecurityHeaders(res);
+    if (!isWorkspaceStaffEnabled(options.env || process.env)) return res.sendStatus(404);
+    try {
+      const authority = await service.resolveManageAccess(req.staffBrowserSession?.adminId);
+      if (!authority) return res.sendStatus(403);
+      return res.status(200).type('application/javascript').send(workspaceStaffOnboardingClientScript());
     } catch (_error) {
       return res.sendStatus(403);
     }
