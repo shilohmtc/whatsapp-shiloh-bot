@@ -13,6 +13,13 @@ test('#870 Calendar reference adapter consumes released Shiloh primitive styles'
   assert.match(css, /var\(--shiloh-focus\)/);
 });
 
+test('#870 Calendar production adapter omits unused breakpoint metadata that violates cockpit payload hygiene', () => {
+  const css = calendarReferenceUxCss();
+  assert.doesNotMatch(css, /--shiloh-phone-max/);
+  assert.doesNotMatch(css, /--shiloh-desktop-min/);
+  assert.match(css, /--shiloh-touch-min:44px/);
+});
+
 test('#870 Phone Calendar controls preserve the shared 44px touch contract', () => {
   const css = calendarReferenceUxCss();
   assert.match(css, /@media\(max-width:700px\)/);
