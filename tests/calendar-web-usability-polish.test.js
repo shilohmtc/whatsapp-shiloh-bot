@@ -81,14 +81,14 @@ test('#856 Desktop visual simplification constrains wide layouts and prioritizes
   const css = calendarDesktopUsabilityStyles();
   assert.match(css, /@media\(min-width:701px\)/);
   assert.match(css, /\.shell\{max-width:1480px!important\}/);
-  assert.match(css, /\.day-time-grid \.lanes\{grid-template-columns:repeat\(var\(--lane-count\),minmax\(250px,320px\)\)!important\}/);
+  assert.match(css, /\.day-time-grid \.lanes\{grid-template-columns:repeat\(var\(--lane-count\),minmax\(300px,360px\)\)!important\}/);
   assert.match(css, /\.day-time-grid \.lane:has\(\.positioned-event\)/);
   assert.match(css, /\.week-day:has\(\.positioned-event\)/);
   assert.match(css, /\.time-rail span\{color:#78877f!important/);
   assert.match(css, /\.positioned-event \.event-time\{font-size:\.68rem!important;font-weight:850!important/);
   assert.match(css, /\.positioned-event \.event-card h4\{margin-top:2px!important;font-size:\.8rem!important;font-weight:850!important/);
   assert.match(css, /@media\(max-width:700px\)\{\.desktop-practitioner-chips\{display:none!important\}\}/);
-  assert.doesNotMatch(css.slice(css.indexOf('@media(max-width:700px)')), /minmax\(250px,320px\)|max-width:1480px|\.positioned-event \.event-card h4/);
+  assert.doesNotMatch(css.slice(css.indexOf('@media(max-width:700px)')), /minmax\(300px,360px\)|max-width:1480px|\.positioned-event \.event-card h4/);
 });
 
 test('#856 responsive polish makes active Workspace Calendar a canonical no-date link and keeps Phone picker markup', () => {
