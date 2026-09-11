@@ -34,11 +34,12 @@ function normalizeDensity(value) {
   return DENSITIES.has(value) ? value : 'touch';
 }
 
-function navigationAttributes({ href, ariaCurrent } = {}) {
+function navigationAttributes({ href, ariaCurrent, disabled = false } = {}) {
   const cleanHref = String(href ?? '').trim();
   if (!cleanHref) return null;
+  const hrefAttribute = disabled ? '' : ` href="${escapeHtml(cleanHref)}"`;
   const current = ariaCurrent === 'page' || ariaCurrent === 'true' ? ` aria-current="${ariaCurrent}"` : '';
-  return `href="${escapeHtml(cleanHref)}"${current}`;
+  return `${hrefAttribute}${current}`;
 }
 
 function renderButton({
@@ -62,9 +63,9 @@ function renderButton({
     safeClassName(className),
   ].filter(Boolean).join(' ');
   const iconHtml = icon ? renderShilohIcon(icon, { size: 18, className: 'shiloh-button__icon' }) : '';
-  const nav = navigationAttributes({ href, ariaCurrent });
-  if (nav) {
-    return `<a ${nav} class="${classes}"${disabled ? ' aria-disabled="true" tabindex="-1"' : ''}>${iconHtml}<span>${escapeHtml(text)}</span></a>`;
+  const nav = navigationAttributes({ href, ariaCurrent, disabled });
+  if (nav !== null) {
+    return `<a${nav} class="${classes}"${disabled ? ' aria-disabled="true" tabindex="-1"' : ''}>${iconHtml}<span>${escapeHtml(text)}</span></a>`;
   }
   return `<button type="${safeType}" class="${classes}"${disabled ? ' disabled aria-disabled="true"' : ''}>${iconHtml}<span>${escapeHtml(text)}</span></button>`;
 }
@@ -88,9 +89,9 @@ function renderIconButton({
     `shiloh-control--${normalizeDensity(density)}`,
     safeClassName(className),
   ].filter(Boolean).join(' ');
-  const nav = navigationAttributes({ href, ariaCurrent });
-  if (nav) {
-    return `<a ${nav} class="${classes}" aria-label="${escapeHtml(accessibleLabel)}"${disabled ? ' aria-disabled="true" tabindex="-1"' : ''}>${renderShilohIcon(icon, { size: 18 })}</a>`;
+  const nav = navigationAttributes({ href, ariaCurrent, disabled });
+  if (nav !== null) {
+    return `<a${nav} class="${classes}" aria-label="${escapeHtml(accessibleLabel)}"${disabled ? ' aria-disabled="true" tabindex="-1"' : ''}>${renderShilohIcon(icon, { size: 18 })}</a>`;
   }
   return `<button type="button" class="${classes}" aria-label="${escapeHtml(accessibleLabel)}"${disabled ? ' disabled aria-disabled="true"' : ''}>${renderShilohIcon(icon, { size: 18 })}</button>`;
 }
@@ -114,9 +115,9 @@ function renderChip({
     safeClassName(className),
   ].filter(Boolean).join(' ');
   const iconHtml = icon ? renderShilohIcon(icon, { size: 16, className: 'shiloh-chip__icon' }) : '';
-  const nav = navigationAttributes({ href, ariaCurrent });
-  if (nav) {
-    return `<a ${nav} class="${classes}"${disabled ? ' aria-disabled="true" tabindex="-1"' : ''}>${iconHtml}<span>${escapeHtml(text)}</span></a>`;
+  const nav = navigationAttributes({ href, ariaCurrent, disabled });
+  if (nav !== null) {
+    return `<a${nav} class="${classes}"${disabled ? ' aria-disabled="true" tabindex="-1"' : ''}>${iconHtml}<span>${escapeHtml(text)}</span></a>`;
   }
   return `<button type="button" class="${classes}" aria-pressed="${selected ? 'true' : 'false'}"${disabled ? ' disabled aria-disabled="true"' : ''}>${iconHtml}<span>${escapeHtml(text)}</span></button>`;
 }
