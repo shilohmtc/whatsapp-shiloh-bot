@@ -24,18 +24,51 @@ jobs:
         with:
           node-version: 24.14.1
           cache: npm
-      - name: Initialize Storybook 10 HTML project with Vite
-        run: npm create storybook@10 -- --type html --builder vite --yes --no-dev --package-manager npm --disable-telemetry
-      - name: Verify generated Storybook build
+      - name: Install minimal Storybook HTML workshop
+        run: |
+          npm install --save-dev storybook@^10.6.0 @storybook/html-vite@^10.6.0 @storybook/addon-a11y@^10.6.0
+          npm pkg set 'scripts.storybook=storybook dev -p 6006' 'scripts.build-storybook=storybook build'
+      - name: Configure isolated ESM Storybook surface
+        run: |
+          mkdir -p .storybook stories
+          cat > .storybook/main.mjs <<'EOF'
+          const config = {
+            stories: ['../stories/**/*.stories.js'],
+            addons: ['@storybook/addon-a11y'],
+            framework: {
+              name: '@storybook/html-vite',
+              options: {},
+            },
+          };
+          export default config;
+          EOF
+          cat > .storybook/preview.mjs <<'EOF'
+          const preview = {
+            parameters: {
+              a11y: {
+                test: 'todo',
+              },
+            },
+          };
+          export default preview;
+          EOF
+          cat > stories/FoundationSmoke.stories.js <<'EOF'
+          export default {
+            title: 'Foundations/Storybook Smoke',
+          };
+
+          export const Ready = {
+            render: () => '<div style="font:16px system-ui;padding:24px">Shiloh Storybook HTML/Vite workshop ready</div>',
+          };
+          EOF
+      - name: Verify minimal Storybook build
         run: npm run build-storybook -- --quiet
-      - name: Commit generated package and Storybook files
+      - name: Confirm production dependency audit is unchanged-safe
+        run: npm audit --omit=dev --audit-level=high
+      - name: Commit verified package, lockfile and Storybook config
         run: |
           git config user.name "shilohmtc"
           git config user.email "shilohmtc@gmail.com"
-          git add package.json package-lock.json .storybook src/stories 2>/dev/null || true
-          if git diff --cached --quiet; then
-            echo "No initializer changes to commit"
-            exit 0
-          fi
-          git commit -m "#865 initialize Storybook 10 HTML workshop"
+          git add package.json package-lock.json .storybook stories/FoundationSmoke.stories.js
+          git commit -m "#865 initialize minimal Storybook 10 HTML workshop"
           git push origin HEAD:work/865-storybook-ui-primitives
