@@ -56,21 +56,18 @@ function isValidCsrfToken(value) {
 
 function deriveCalendarViewer(admin) {
   const authority = evaluateCalendarAuthority(admin || {});
-  if (!authority || !hasCapability(authority, CALENDAR_CAPABILITIES.VIEW)) return null;
-  const calendarScope = authority.calendarScope;
-  if (calendarScope === 'all_business') {
-    return { calendarScope: 'business_all_staff' };
-  }
-  if (calendarScope === 'own_services' && authority.linkedStaffId) {
-    return { calendarScope: 'business_all_staff' };
-  }
-  if (
-    (calendarScope === 'own_appointments' || calendarScope === 'own') &&
-    authority.linkedStaffId
-  ) {
-    return { calendarScope: 'own_staff', staffId: authority.linkedStaffId };
-  }
-  return null;
+  if (!authority) return null;
+
+  // #900: Calendar read is a baseline Workspace capability for every active linked
+  // staff member. Existing non-staff admin/reception identities still require the
+  // explicit appointment:view capability. This broadens read visibility only;
+  // booking and operational mutation services continue to evaluate the persisted
+  // capabilities and calendar/service scopes independently.
+  const activeLinkedStaff = Number.isSafeInteger(Number(authority.linkedStaffId))
+    && Number(authority.linkedStaffId) > 0;
+  if (!activeLinkedStaff && !hasCapability(authority, CALENDAR_CAPABILITIES.VIEW)) return null;
+
+  return { calendarScope: 'business_all_staff' };
 }
 
 function deriveAccountPrincipal(admin) {
