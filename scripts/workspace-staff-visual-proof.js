@@ -6,6 +6,7 @@ const { spawnSync } = require('node:child_process');
 const { pathToFileURL } = require('node:url');
 const { renderStaffListPage, renderStaffDetailPage } = require('../src/presentation/workspaceStaffUx');
 const { decorateStaffDetailAccessHtml } = require('../src/presentation/workspaceStaffAccessUx');
+const { decorateStaffListOnboardingHtml } = require('../src/presentation/workspaceStaffOnboardingUx');
 
 function chromeExecutable() {
   const candidates = [process.env.CHROME_BIN, '/usr/bin/google-chrome', '/usr/bin/google-chrome-stable', '/usr/bin/chromium', '/usr/bin/chromium-browser'];
@@ -27,6 +28,24 @@ const renderOptions = {
 
 function listHtml() {
   return renderStaffListPage({ staff, hasMore: false, offset: 0, pageSize: 30, query: '', status: 'active' }, renderOptions);
+}
+
+function onboardingHtml() {
+  const base = renderStaffListPage({
+    staff,
+    hasMore: false,
+    offset: 0,
+    pageSize: 30,
+    query: '',
+    status: 'active',
+    manageAllowed: true,
+    accessManageAllowed: true,
+    authority: { displayName: 'Synthetic Owner' },
+  }, renderOptions);
+  return decorateStaffListOnboardingHtml(base, {
+    manageAllowed: true,
+    accessManageAllowed: true,
+  });
 }
 
 function detailHtml() {
@@ -106,10 +125,12 @@ fs.rmSync(outDir, { recursive: true, force: true });
 fs.mkdirSync(outDir, { recursive: true });
 const proofs = [
   { view: 'staff-list', viewport: 'desktop', width: 1440, height: 960, html: listHtml() },
+  { view: 'staff-onboarding', viewport: 'desktop', width: 1440, height: 1100, html: onboardingHtml() },
   { view: 'staff-detail', viewport: 'desktop', width: 1440, height: 960, html: detailHtml() },
   { view: 'staff-access-enable', viewport: 'desktop', width: 1440, height: 960, html: accessEnableHtml() },
   { view: 'staff-access-complete', viewport: 'desktop', width: 1440, height: 960, html: accessCompleteHtml() },
   { view: 'staff-list', viewport: 'narrow', width: 390, height: 844, html: listHtml() },
+  { view: 'staff-onboarding', viewport: 'narrow', width: 390, height: 1500, html: onboardingHtml() },
   { view: 'staff-detail', viewport: 'narrow', width: 390, height: 844, html: detailHtml() },
   { view: 'staff-access-enable', viewport: 'narrow', width: 390, height: 1600, html: accessEnableHtml() },
   { view: 'staff-access-complete', viewport: 'narrow', width: 390, height: 1600, html: accessCompleteHtml() },
@@ -119,6 +140,9 @@ const manifest = [];
 for (const proof of proofs) {
   if (!/aria-current="page">Staff/.test(proof.html) || !/>Calendar<|>Calendar<\//.test(proof.html) || !/>Clients<|>Clients<\//.test(proof.html)) {
     throw new Error(`${proof.view}/${proof.viewport} lacks shared Workspace navigation`);
+  }
+  if (proof.view === 'staff-onboarding' && (!/data-staff-onboarding-form/.test(proof.html) || !/Practitioner access/.test(proof.html) || !/Staff WhatsApp mobile/.test(proof.html))) {
+    throw new Error(`${proof.view}/${proof.viewport} lacks the guided add-and-enable controls`);
   }
   if (proof.view === 'staff-access-enable' && (!/Enable Workspace access/.test(proof.html) || !/name="identityConfirmed"/.test(proof.html))) {
     throw new Error(`${proof.view}/${proof.viewport} lacks the bounded Access enablement controls`);
