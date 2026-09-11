@@ -4,6 +4,7 @@ const { retrieveKnowledge } = require("./knowledge");
 const { getProfile } = require("./profile");
 const { getActiveCatalogueKnowledge } = require("./activeCatalogueKnowledge");
 const { getPractitionerKnowledge } = require("./practitionerKnowledge");
+const { getClinicFaqKnowledge } = require("./clinicFaq");
 const { buildInstructions } = require("./orchestrator");
 const logger = require("../lib/logger");
 
@@ -48,7 +49,8 @@ async function generateReply(phone, message) {
     getPractitionerKnowledge(),
   ]);
 
-  const authoritativeKnowledge = [activeCatalogue, practitionerKnowledge, ...knowledge].filter(Boolean);
+  const clinicFaqKnowledge = getClinicFaqKnowledge(message);
+  const authoritativeKnowledge = [activeCatalogue, practitionerKnowledge, clinicFaqKnowledge, ...knowledge].filter(Boolean);
   const workload = "conversation";
   const request = {
     model: getModelForWorkload(workload),
