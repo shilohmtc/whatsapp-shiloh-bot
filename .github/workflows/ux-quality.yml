@@ -1,0 +1,70 @@
+name: UX Visual + Accessibility
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  ux_quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact PR head
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Use Node 24.14.1
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24.14.1
+          cache: npm
+      - name: Install repository dependencies
+        run: npm ci
+      - name: Install pinned UX proof tooling
+        run: npm install --no-save --package-lock=false @playwright/test@1.55.0 @axe-core/playwright@4.10.2
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Build production-backed Storybook catalogue
+        env:
+          STORYBOOK_DISABLE_TELEMETRY: '1'
+        run: npm run build-storybook -- --quiet
+      - name: Start static Storybook
+        run: |
+          python3 -m http.server 6006 --directory storybook-static > /tmp/shiloh-storybook.log 2>&1 &
+          echo $! > /tmp/shiloh-storybook.pid
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:6006/index.html > /dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/shiloh-storybook.log
+          exit 1
+      - name: Compare reviewed baselines and run accessibility checks
+        id: ux_check
+        shell: bash
+        run: |
+          if compgen -G 'tests/ux-baselines/*.png.b64' > /dev/null; then
+            node scripts/ux-baseline-codec.js decode
+            npx playwright test --config=playwright.ux.config.js
+          else
+            echo 'No committed reviewed UX baselines found; generating candidate baselines only.'
+            npx playwright test --config=playwright.ux.config.js --update-snapshots
+            node scripts/ux-baseline-codec.js encode
+            mkdir -p artifacts/ux-baseline-candidate
+            cp tests/ux-baselines/*.png.b64 artifacts/ux-baseline-candidate/
+            echo 'Candidate baselines generated. Review them and commit the approved .png.b64 fixtures deliberately.'
+            exit 1
+          fi
+      - name: Upload UX evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ux-visual-accessibility-evidence
+          path: |
+            artifacts/ux-playwright-results
+            artifacts/ux-playwright-report
+            artifacts/ux-baseline-candidate
+          if-no-files-found: ignore
+          retention-days: 14
