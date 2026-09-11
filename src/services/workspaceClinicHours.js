@@ -132,9 +132,8 @@ function normalizeExceptionPayload(raw = {}) {
       400
     );
   }
-  const reason = String(raw.reason || '').trim().slice(0, 240) || null;
   if (exceptionType === 'closed') {
-    return { exceptionDate, exceptionType, startsLocal: null, endsLocal: null, reason };
+    return { exceptionDate, exceptionType, startsLocal: null, endsLocal: null };
   }
   const startsLocal = String(raw.startsLocal || '').trim();
   const endsLocal = String(raw.endsLocal || '').trim();
@@ -152,7 +151,7 @@ function normalizeExceptionPayload(raw = {}) {
       400
     );
   }
-  return { exceptionDate, exceptionType, startsLocal, endsLocal, reason };
+  return { exceptionDate, exceptionType, startsLocal, endsLocal };
 }
 
 function canonicalDays(rows = []) {
@@ -193,10 +192,9 @@ function canonicalExceptions(rows = []) {
   return rows.map(row => ({
     id: positiveId(row.id),
     exceptionDate: dateValue(row.exception_date),
-    exceptionType: row.exception_type === 'open' ? 'open' : 'closed',
-    startsLocal: row.exception_type === 'open' ? timeValue(row.starts_local) : null,
-    endsLocal: row.exception_type === 'open' ? timeValue(row.ends_local) : null,
-    reason: row.reason == null ? null : String(row.reason),
+    exceptionType: row.mode === 'open' ? 'open' : 'closed',
+    startsLocal: row.mode === 'open' ? timeValue(row.open_time) : null,
+    endsLocal: row.mode === 'open' ? timeValue(row.close_time) : null,
     holidayName: row.holiday_name == null ? null : String(row.holiday_name),
     actorAdminId: positiveId(row.actor_admin_id),
     updatedAt: row.updated_at ? new Date(row.updated_at).toISOString() : null,
@@ -303,8 +301,8 @@ function createWorkspaceClinicHoursService({ db = pool, locationResolver = getDe
   async function exceptionRows(locationId, queryable = db) {
     const result = await queryable.query(
       `/* workspaceClinicHours:exceptionRows */
-       SELECT e.id, e.exception_date, e.exception_type, e.starts_local, e.ends_local,
-              e.reason, e.actor_admin_id, e.updated_at, h.name AS holiday_name
+       SELECT e.id, e.exception_date, e.mode, e.open_time, e.close_time,
+              e.actor_admin_id, e.updated_at, h.name AS holiday_name
          FROM location_hours_exceptions e
          LEFT JOIN public_holidays h
            ON h.holiday_date=e.exception_date
@@ -399,30 +397,28 @@ function createWorkspaceClinicHoursService({ db = pool, locationResolver = getDe
     }
   }
 
-  async function upsertException({ adminId, exceptionDate, exceptionType, startsLocal, endsLocal, reason } = {}) {
-    const desired = normalizeExceptionPayload({ exceptionDate, exceptionType, startsLocal, endsLocal, reason });
+  async function upsertException({ adminId, exceptionDate, exceptionType, startsLocal, endsLocal } = {}) {
+    const desired = normalizeExceptionPayload({ exceptionDate, exceptionType, startsLocal, endsLocal });
     const authority = await requireAccess(adminId);
     const location = await requireLocation();
     const write = await db.query(
       `/* workspaceClinicHours:upsertException */
        INSERT INTO location_hours_exceptions
-         (location_id, exception_date, exception_type, starts_local, ends_local, reason, actor_admin_id)
-       VALUES ($1, $2::date, $3, $4::time, $5::time, $6, $7)
+         (location_id, exception_date, mode, open_time, close_time, actor_admin_id)
+       VALUES ($1, $2::date, $3, $4::time, $5::time, $6)
        ON CONFLICT (location_id, exception_date)
-       DO UPDATE SET exception_type=EXCLUDED.exception_type,
-                     starts_local=EXCLUDED.starts_local,
-                     ends_local=EXCLUDED.ends_local,
-                     reason=EXCLUDED.reason,
+       DO UPDATE SET mode=EXCLUDED.mode,
+                     open_time=EXCLUDED.open_time,
+                     close_time=EXCLUDED.close_time,
                      actor_admin_id=EXCLUDED.actor_admin_id,
                      updated_at=NOW()
-       RETURNING id, exception_date, exception_type, starts_local, ends_local, reason, actor_admin_id, updated_at`,
+       RETURNING id, exception_date, mode, open_time, close_time, actor_admin_id, updated_at`,
       [
         location.id,
         desired.exceptionDate,
         desired.exceptionType,
         desired.startsLocal,
         desired.endsLocal,
-        desired.reason,
         authority.operatorAdminId,
       ]
     );
@@ -438,10 +434,9 @@ function createWorkspaceClinicHoursService({ db = pool, locationResolver = getDe
         JSON.stringify({
           locationId: positiveId(location.id),
           exceptionDate: desired.exceptionDate,
-          exceptionType: desired.exceptionType,
-          startsLocal: desired.startsLocal,
-          endsLocal: desired.endsLocal,
-          reason: desired.reason,
+          mode: desired.exceptionType,
+          openTime: desired.startsLocal,
+          closeTime: desired.endsLocal,
         }),
       ]
     );
