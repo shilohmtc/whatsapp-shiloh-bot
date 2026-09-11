@@ -24,8 +24,8 @@ jobs:
         with:
           node-version: 24.14.1
           cache: npm
-      - name: Initialize Storybook 10 HTML project
-        run: npm create storybook@10 -- --type html --yes --no-dev --package-manager npm --disable-telemetry
+      - name: Initialize Storybook 10 HTML project with Vite
+        run: npm create storybook@10 -- --type html --builder vite --yes --no-dev --package-manager npm --disable-telemetry
       - name: Verify generated Storybook build
         run: npm run build-storybook -- --quiet
       - name: Commit generated package and Storybook files
