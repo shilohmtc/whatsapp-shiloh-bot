@@ -4,10 +4,13 @@ on:
   pull_request:
     paths:
       - 'src/presentation/calendarPhoneAllStaffUx.js'
+      - 'src/services/workspaceNavigation.js'
+      - 'src/presentation/workspaceShell.js'
       - 'src/routes/calendar.js'
       - 'tests/calendar-phone-all-staff-v1.test.js'
       - 'scripts/calendar-phone-column-toggle-browser-proof.js'
       - 'scripts/calendar-phone-viewport-fit-browser-proof.js'
+      - 'scripts/workspace-calendar-entry-browser-proof.js'
       - '.github/workflows/calendar-phone-all-staff-columns-proof.yml'
   workflow_dispatch:
 
@@ -26,6 +29,8 @@ jobs:
       - run: npm ci
       - name: Run focused Phone multi-staff column tests
         run: node --test tests/calendar-phone-all-staff-v1.test.js
+      - name: Prove Workspace to Calendar entry journey in Chrome
+        run: node scripts/workspace-calendar-entry-browser-proof.js
       - name: Prove Phone multi-staff columns and toggles in Chrome
         run: node scripts/calendar-phone-column-toggle-browser-proof.js
       - name: Prove Phone viewport-fit Week and contextual Today in Chrome
