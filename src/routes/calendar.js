@@ -25,6 +25,8 @@ const { createWorkspaceClinicHoursRouter } = require('./workspaceClinicHours');
 const { createWorkspaceOperationalRouter } = require('./workspaceOperational');
 const { createWorkspaceMessagesRouter } = require('./workspaceMessages');
 const { createWorkspacePwaRouter, createWorkspacePwaHtmlMiddleware } = require('./workspacePwa');
+const { calendarPhoneCompactV2ClientScript } = require('../presentation/calendarPhoneCompactV2');
+const { calendarPhoneAllStaffClientScript } = require('../presentation/calendarPhoneAllStaffUx');
 const router = express.Router();
 
 const staffBrowserSessionService = createStaffBrowserSessionService({ db: pool });
@@ -73,6 +75,11 @@ router.use('/reports', createWorkspaceReportsRouter({ sessionService: staffBrows
 router.use('/clinic-hours', createWorkspaceClinicHoursRouter({ sessionService: staffBrowserSessionService }));
 router.use('/workspace', createWorkspaceOperationalRouter({ sessionService: staffBrowserSessionService }));
 router.use('/messages', createWorkspaceMessagesRouter({ sessionService: staffBrowserSessionService }));
+router.get('/read-only/phone-v2.js', (_req, res) => {
+  res.setHeader('Cache-Control', 'private, no-store, max-age=0');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  return res.status(200).type('application/javascript').send(`${calendarPhoneCompactV2ClientScript()}\n${calendarPhoneAllStaffClientScript()}`);
+});
 router.use('/read-only', createOptionalCalendarSessionMiddleware({ service: staffBrowserSessionService }), calendarReadOnlyUxRoutes);
 router.get('/', (_req, res) => res.redirect(302, '/calendar/workspace'));
 
