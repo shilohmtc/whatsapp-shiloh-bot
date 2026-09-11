@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'src/services/workspaceDashboard.js'
+      - 'src/services/workspaceDashboardBacklog.js'
       - 'src/routes/workspaceOperational.js'
       - 'src/presentation/workspaceDashboardUx.js'
       - 'tests/workspace-dashboard-carryover-849.test.js'
@@ -26,13 +27,13 @@ jobs:
           node-version: 24.14.1
           cache: npm
       - run: npm ci
-      - name: Focused #849 carry-over tests
+      - name: Focused #849/#852 carry-over tests
         run: node --test tests/workspace-dashboard-carryover-849.test.js tests/workspace-dashboard-messages-consolidation-p1.test.js
-      - name: Authenticated Desktop + Phone carry-over proof
+      - name: Authenticated Desktop + Phone unresolved-backlog proof
         run: node scripts/workspace-dashboard-carryover-browser-proof.js
       - uses: actions/upload-artifact@v4
         with:
-          name: workspace-dashboard-carryover-849
+          name: workspace-dashboard-carryover-852
           path: artifacts/workspace-dashboard-carryover-849
           if-no-files-found: error
           retention-days: 14

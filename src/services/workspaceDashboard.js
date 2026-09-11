@@ -1,6 +1,7 @@
 const { pool } = require('../db/pool');
 const calendarReadOnlyUx = require('./calendarReadOnlyUx');
 const workspaceMessages = require('./workspaceMessages');
+const workspaceDashboardBacklog = require('./workspaceDashboardBacklog');
 const {
   CALENDAR_CAPABILITIES,
   hasCapability,
@@ -8,7 +9,7 @@ const {
 } = require('./calendarAuthorization');
 const { finalizeAppointment } = require('./adminAppointmentFinalization');
 const { canCertifyAppointment } = require('./attendanceFinalizationAuthority');
-const { dateKeyInBusinessTimezone } = require('./operationalCalendar');
+const { dateKeyInBusinessTimezone, isOperationalDateKey } = require('./operationalCalendar');
 const bookingRequestResolution = require('./workspaceBookingRequestRouting');
 
 const FINAL_STATUSES = new Set(['completed', 'cancelled', 'no_show']);
@@ -16,6 +17,9 @@ const OWNER_ROLES = new Set(['owner', 'business_admin']);
 const BUSINESS_OVERVIEW_ROLES = new Set(['owner', 'business_admin', 'booking_operator']);
 const NO_BOOKING_REQUESTS = {
   async listUnresolvedBookingRequests() { return []; },
+};
+const NO_DASHBOARD_BACKLOG = {
+  async listUnresolvedPastAppointments() { return { staff: [], appointments: [] }; },
 };
 
 class WorkspaceDashboardError extends Error {
@@ -154,6 +158,7 @@ function createWorkspaceDashboardService({
   finalizeAppointmentFn = finalizeAppointment,
   canCertifyAppointmentFn = canCertifyAppointment,
   bookingRequestService = NO_BOOKING_REQUESTS,
+  backlogService = NO_DASHBOARD_BACKLOG,
 } = {}) {
   if (!calendarService || typeof calendarService.buildModel !== 'function') {
     throw new Error('Workspace Dashboard requires canonical CalendarReadOnlyUx authority');
@@ -165,6 +170,7 @@ function createWorkspaceDashboardService({
   if (typeof finalizeAppointmentFn !== 'function') throw new Error('Workspace Dashboard requires the canonical appointment finalizer');
   if (typeof canCertifyAppointmentFn !== 'function') throw new Error('Workspace Dashboard requires canonical attendance-certification authority');
   if (!bookingRequestService || typeof bookingRequestService.listUnresolvedBookingRequests !== 'function') throw new Error('Workspace Dashboard requires canonical booking-request resolution');
+  if (!backlogService || typeof backlogService.listUnresolvedPastAppointments !== 'function') throw new Error('Workspace Dashboard requires canonical unresolved-past appointment authority');
 
   async function resolveAuthority(adminId, viewer) {
     const principal = await resolvePrincipal(adminId);
@@ -183,7 +189,9 @@ function createWorkspaceDashboardService({
     const { principal, authority } = await resolveAuthority(adminId, viewer);
     const requestedDateKey = dateKeyInBusinessTimezone(now);
     const carryOverDateKey = previousClinicDateKey(requestedDateKey);
-    const [calendar, carryOverCalendar] = await Promise.all([
+    const backlogCutoff = new Date(`${requestedDateKey}T00:00:00+02:00`).toISOString();
+    const legacyPreviousDayProjection = backlogService === NO_DASHBOARD_BACKLOG;
+    const [calendar, backlog] = await Promise.all([
       calendarService.buildModel({
         view: 'day',
         date: requestedDateKey,
@@ -191,25 +199,35 @@ function createWorkspaceDashboardService({
         viewer: authority.timelineViewer,
         now,
       }),
-      calendarService.buildModel({
-        view: 'day',
-        date: carryOverDateKey,
-        staff: 'all',
-        viewer: authority.timelineViewer,
-        now,
-      }),
+      legacyPreviousDayProjection
+        ? calendarService.buildModel({
+          view: 'day',
+          date: carryOverDateKey,
+          staff: 'all',
+          viewer: authority.timelineViewer,
+          now,
+        })
+        : backlogService.listUnresolvedPastAppointments({
+          before: backlogCutoff,
+          viewer: authority.timelineViewer,
+        }),
     ]);
     const appointments = [...(calendar.timeline?.appointments || [])]
       .filter(item => item?.canonical !== false)
       .sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime())
       .map(item => projectAppointment(item, authority, now, calendar.dateKey));
-    const carryOverSource = String(carryOverCalendar?.dateKey || '') === carryOverDateKey
-      ? (carryOverCalendar.timeline?.appointments || [])
-      : [];
-    const carryOver = [...carryOverSource]
+    const backlogAppointments = legacyPreviousDayProjection
+      ? (String(backlog?.dateKey || '') === carryOverDateKey ? (backlog.timeline?.appointments || []) : [])
+      : (backlog?.appointments || []);
+    const carryOver = [...backlogAppointments]
       .filter(item => item?.canonical !== false)
       .sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime())
-      .map(item => projectAppointment(item, authority, now, carryOverDateKey))
+      .map(item => projectAppointment(
+        item,
+        authority,
+        now,
+        legacyPreviousDayProjection ? carryOverDateKey : dateKeyInBusinessTimezone(new Date(item.startsAt)),
+      ))
       .filter(item => item.needsFinalization);
     await Promise.all([...appointments, ...carryOver].map(async (item) => {
       if (!item.canFinalize) return;
@@ -247,6 +265,7 @@ function createWorkspaceDashboardService({
       calendar,
       appointments,
       carryOver,
+      carryOverStaff: legacyPreviousDayProjection ? (backlog.timeline?.staff || []) : (backlog?.staff || []),
       teamGroups: ['owner_overview', 'business_overview'].includes(authority.mode)
         ? groupOwnerAppointments(appointments, calendar.timeline?.staff || [])
         : [],
@@ -265,13 +284,15 @@ function createWorkspaceDashboardService({
     const targetStatus = String(outcome || '').trim().toLowerCase();
     const revisionTime = new Date(expectedRevision).getTime();
     const currentDateKey = dateKeyInBusinessTimezone(now);
-    const carryOverDateKey = previousClinicDateKey(currentDateKey);
     const requestedWindowDateKey = String(operationalDateKey || currentDateKey).trim();
+    const validOperationalDate = /^\d{4}-\d{2}-\d{2}$/.test(requestedWindowDateKey)
+      && isOperationalDateKey(requestedWindowDateKey)
+      && requestedWindowDateKey <= currentDateKey;
     if (!id
       || !['completed', 'no_show'].includes(targetStatus)
       || !Number.isFinite(revisionTime)
       || !authority.canFinalize
-      || ![currentDateKey, carryOverDateKey].includes(requestedWindowDateKey)) {
+      || !validOperationalDate) {
       throw new WorkspaceDashboardError('WORKSPACE_DASHBOARD_FINALIZE_INVALID', 'This finalization request is invalid.', 400);
     }
     const result = await finalizeAppointmentFn(principal, id, targetStatus, {
@@ -302,7 +323,10 @@ function createWorkspaceDashboardService({
   return { buildModel, finalizeVisit, resolveBookingRequest };
 }
 
-const service = createWorkspaceDashboardService({ bookingRequestService: bookingRequestResolution });
+const service = createWorkspaceDashboardService({
+  bookingRequestService: bookingRequestResolution,
+  backlogService: workspaceDashboardBacklog,
+});
 
 module.exports = {
   WorkspaceDashboardError,
