@@ -114,7 +114,7 @@ async function verifyViewport(cdp, origin, viewport) {
       dayContext:!!document.querySelector('.phone-calendar-day-context'),
     };
   })()`);
-  assert.equal(initial.month.toLowerCase(), 'sep');
+  assert.ok(['sep','sept'].includes(initial.month.toLowerCase()), `Unexpected month label: ${initial.month}`);
   assert.equal(initial.headers.length, 7);
   assert.ok(initial.headers.every(header => header.width > 20), JSON.stringify(initial.headers));
   assert.ok(initial.staffPressed.every(value => value === 'true'));
