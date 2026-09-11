@@ -47,6 +47,14 @@ test('multipart baseline validation fails closed on missing, non-contiguous, mal
     /expected b/,
   );
   assert.throws(
+    () => validatePartNames('calendar-phone.png', ['calendar-phone.png.b64.part01a1', 'calendar-phone.png.b64.part01a3']),
+    /expected 2/,
+  );
+  assert.throws(
+    () => validatePartNames('calendar-phone.png', ['calendar-phone.png.b64.part01a', 'calendar-phone.png.b64.part01a1']),
+    /Mixed full and nested/,
+  );
+  assert.throws(
     () => validatePartNames('calendar-phone.png', ['calendar-phone.png.b64.part01', 'calendar-phone.png.b64.part01a']),
     /Mixed full and split/,
   );
@@ -79,6 +87,7 @@ test('baseline acceptance is fail-closed, deliberate, and validates PNG stream i
   assert.match(workflow, /exit 1/);
   assert.match(codec, /PART_SIZE = 12000/);
   assert.match(codec, /Non-contiguous UX baseline parts/);
+  assert.match(codec, /Non-contiguous UX baseline nested segments/);
   assert.match(codec, /PNG IEND marker/);
   assert.doesNotMatch(workflow, /chromatic|percy/i);
 });
