@@ -149,6 +149,15 @@ jobs:
           path: artifacts/calendar-desktop-spatial-lanes-v1
           if-no-files-found: error
           retention-days: 14
+      - name: Run authenticated Desktop Calendar visual simplification proof
+        run: node scripts/calendar-web-desktop-visual-browser-proof.js
+      - name: Upload authenticated Desktop Calendar visual simplification proof
+        uses: actions/upload-artifact@v4
+        with:
+          name: calendar-web-desktop-visual-v1
+          path: artifacts/calendar-web-desktop-visual-v1
+          if-no-files-found: error
+          retention-days: 14
       - name: Run Calendar view parity and Month browser proof
         run: node scripts/calendar-view-parity-month-browser-proof.js
       - name: Upload Calendar view parity and Month browser proof
