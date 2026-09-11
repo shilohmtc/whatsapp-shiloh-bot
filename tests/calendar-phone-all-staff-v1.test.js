@@ -81,6 +81,16 @@ test('#895 Week fits 07:00 to 18:00 into the dynamic phone viewport without vert
   assert.match(script, /if\(hour===18\)node\.style\.transform='translateY\(-100%\)'/);
 });
 
+test('#895 Phone Week polish keeps opening time visible and strengthens scan hierarchy', () => {
+  const script = calendarPhoneAllStaffClientScript();
+  assert.match(script, /phoneOpenLabel=String\(hour===7\)/);
+  assert.match(script, /data-phone-open-label="true"\]\{transform:translateY\(3px\)!important\}/);
+  assert.match(script, /time-rail span\{color:var\(--ink\)!important;font-size:clamp\(\.5rem,2vw,\.62rem\)!important;font-weight:850!important/);
+  assert.match(script, /phone-staff-column-name\{[^}]*color:var\(--leaf-deep\)[^}]*font-weight:900/);
+  assert.match(script, /time-column:before\{[^}]*repeating-linear-gradient\(to bottom/);
+  assert.match(script, /phone-staff-column-header\{[^}]*border-top:1px solid var\(--line-strong\)[^}]*border-bottom:1px solid var\(--line-strong\)/);
+});
+
 test('#895 fitted Week preserves empty-slot booking time and practitioner semantics', () => {
   const script = calendarPhoneAllStaffClientScript();
   assert.match(script, /function installFittedBookingTap\(\)/);
