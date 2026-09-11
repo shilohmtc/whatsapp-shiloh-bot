@@ -44,7 +44,7 @@ test('public Treatments renders canonical catalogue fields without creating book
 
 test('public pages share coherent Home Treatments About Contact Book navigation', () => {
   for (const html of [renderHome(catalogue), renderTreatments(catalogue), renderAbout(), renderContact()]) {
-    assert.match(html, /href="\/">Home<\/a>/);
+    assert.match(html, /href="\/"[^>]*>Home<\/a>/);
     assert.match(html, /href="\/treatments"/);
     assert.match(html, /href="\/about"/);
     assert.match(html, /href="\/contact"/);
