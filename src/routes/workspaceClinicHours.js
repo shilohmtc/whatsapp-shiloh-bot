@@ -1,5 +1,6 @@
 const express = require('express');
 const workspaceClinicHours = require('../services/workspaceClinicHours');
+const workspaceClinicHoursHolidayGuard = require('../services/workspaceClinicHoursHolidayGuard');
 const {
   renderClinicHoursPage,
   clinicHoursClientScript,
@@ -43,6 +44,7 @@ function createWorkspaceClinicHoursRouter({
   env = process.env,
   sessionService,
   service = workspaceClinicHours,
+  holidayGuard = workspaceClinicHoursHolidayGuard,
   renderPage = renderClinicHoursPage,
 } = {}) {
   if (!sessionService) throw new Error('Workspace Clinic hours routes require the existing staff browser session service');
@@ -89,6 +91,7 @@ function createWorkspaceClinicHoursRouter({
 
   router.post('/exceptions', sameOrigin, requireCsrf, async (req, res, next) => {
     try {
+      await holidayGuard.requireLoadedZaPublicHoliday(req.body?.exceptionDate);
       const result = await service.upsertException({
         adminId: req.staffBrowserSession?.adminId,
         exceptionDate: req.body?.exceptionDate,
