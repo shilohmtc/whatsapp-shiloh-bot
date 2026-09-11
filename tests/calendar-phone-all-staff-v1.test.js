@@ -17,7 +17,7 @@ test('#888 Phone week planner adds an explicit All staff mode from server-permit
   assert.doesNotMatch(script, /permittedStaff|calendarScope|all_business/);
 });
 
-test('#888 All staff mode persists explicitly and renders actual practitioner columns while individual focus remains reversible', () => {
+test('#888 All staff mode persists explicitly and renders readable horizontally scrollable practitioner columns', () => {
   const script = calendarPhoneAllStaffClientScript();
   assert.match(script, /phoneStaff.*all/);
   assert.match(script, /node\.dataset\.phoneStaffVisible='true'/);
@@ -25,11 +25,13 @@ test('#888 All staff mode persists explicitly and renders actual practitioner co
   assert.match(script, /ids\.find\(id=>permittedIds\.includes\(id\)\)/);
   assert.match(script, /phone-all-staff-column-header/);
   assert.match(script, /phone-all-staff-column-name/);
-  assert.match(script, /gridTemplateColumns='repeat\('\+count\+',minmax\(0,1fr\)\)'/);
-  assert.match(script, /--phone-all-staff-columns/);
-  assert.match(script, /linear-gradient\(to right/);
-  assert.match(script, /node\.style\.setProperty\('left','calc\('/);
-  assert.match(script, /node\.style\.setProperty\('width','calc\('/);
+  assert.match(script, /count\*116/);
+  assert.match(script, /contentWidth=Math\.max\(viewport,count\*116\)/);
+  assert.match(script, /content\.style\.setProperty\('min-width',contentWidth\+'px','important'\)/);
+  assert.match(script, /node\.style\.setProperty\('left',\(index\*columnWidth\+1\)\+'px','important'\)/);
+  assert.match(script, /node\.style\.setProperty\('width',Math\.max\(72,columnWidth-2\)\+'px','important'\)/);
+  assert.match(script, /position:sticky!important;left:0/);
+  assert.match(script, /syncColumnHeaderScroll/);
   assert.match(script, /url\.searchParams\.delete\('phoneStaff'\)/);
   assert.match(script, /addEventListener\('click'.*true\)/s);
 });
@@ -45,6 +47,27 @@ test('#888 Phone Calendar removes duplicate dropdown chrome and exposes direct W
   assert.match(script, /phone-calendar-day-context/);
   assert.match(script, /content:"People"/);
   assert.doesNotMatch(script, /Choose action practitioner/);
+});
+
+test('#888 Today is an explicit return to todays Week and communicates when already there', () => {
+  const script = calendarPhoneAllStaffClientScript();
+  assert.match(script, /function todayWeekHref\(\)/);
+  assert.match(script, /url\.searchParams\.set\('view','week'\)/);
+  assert.match(script, /alreadyToday=currentView\(\)==='week'/);
+  assert.match(script, /today\.setAttribute\('aria-disabled','true'\)/);
+  assert.match(script, /preventDefault/);
+});
+
+test('#888 Phone Calendar fills the dynamic viewport and Month distributes rows through remaining height', () => {
+  const script = calendarPhoneAllStaffClientScript();
+  assert.match(script, /function fitCalendarViewport\(\)/);
+  assert.match(script, /innerHeight-top-4/);
+  assert.match(script, /--phone-calendar-surface-height/);
+  assert.match(script, /calendar-view\.week-view\{display:flex!important;flex-direction:column!important/);
+  assert.match(script, /week-time-grid\{flex:1 1 auto!important;min-height:0!important/);
+  assert.match(script, /calendar-view\.month-view\{display:flex!important;flex-direction:column!important/);
+  assert.match(script, /month-grid\{display:grid!important;grid-template-rows:auto minmax\(0,1fr\)!important/);
+  assert.match(script, /month-days\{min-height:0!important;height:100%!important;grid-auto-rows:1fr!important/);
 });
 
 test('#888 Phone Calendar visibly clamps the operational timeline at 18:00', () => {
