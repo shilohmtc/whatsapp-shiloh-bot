@@ -1,0 +1,70 @@
+[
+  {
+    "id": "known-direct-professional",
+    "group": "known",
+    "message": "Is it professional?",
+    "expect": "answer",
+    "entryId": "professional-conduct"
+  },
+  {
+    "id": "known-colloquial-boundary",
+    "group": "known",
+    "message": "Do you do happy endings?",
+    "expect": "answer",
+    "entryId": "professional-conduct"
+  },
+  {
+    "id": "typo-cooldrinks",
+    "group": "typo",
+    "message": "do u have cooldrnks?",
+    "expect": "unknown",
+    "entryId": "refreshments-cooldrinks"
+  },
+  {
+    "id": "slang-champagne",
+    "group": "slang",
+    "message": "got champers?",
+    "expect": "unknown",
+    "entryId": "champagne-alcohol"
+  },
+  {
+    "id": "slang-companion",
+    "group": "slang",
+    "message": "can my mate come along?",
+    "expect": "unknown",
+    "entryId": "companions"
+  },
+  {
+    "id": "ambiguous-companion-drink",
+    "group": "ambiguity",
+    "message": "can my mate come for champers?",
+    "expect": "ambiguous"
+  },
+  {
+    "id": "unsupported-pet-policy",
+    "group": "unsupported-policy",
+    "message": "can i bring my pet with me?",
+    "expect": "unknown-policy"
+  },
+  {
+    "id": "unsupported-dress-policy",
+    "group": "unsupported-policy",
+    "message": "may i wear my own robe?",
+    "expect": "unknown-policy"
+  },
+  {
+    "id": "canonical-price-plus-faq",
+    "group": "canonical-precedence",
+    "message": "how much is a massage and do you have snacks?",
+    "expect": "defer-canonical",
+    "faqKind": "unknown",
+    "entryId": "snacks"
+  },
+  {
+    "id": "canonical-booking-only",
+    "group": "canonical-precedence",
+    "message": "can i book a massage tomorrow?",
+    "expect": "defer-canonical",
+    "faqKind": "none"
+  }
+]

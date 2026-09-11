@@ -82,11 +82,12 @@ test('approved profile fields are exposed exactly without deriving extra credent
   assert.doesNotMatch(`${christel}\n${marietjie}`, /qualified|certified|years|expert/i);
 });
 
-test('practitioner CRM knowledge is injected ahead of legacy retrieval alongside active catalogue', () => {
+test('practitioner CRM knowledge stays ahead of clinic FAQ and legacy retrieval alongside active catalogue', () => {
   assert.match(ai, /getPractitionerKnowledge/);
   assert.match(ai, /getActiveCatalogueKnowledge\(\)/);
   assert.match(ai, /getPractitionerKnowledge\(\)/);
-  assert.match(ai, /\[activeCatalogue, practitionerKnowledge, \.\.\.knowledge\]\.filter\(Boolean\)/);
+  assert.match(ai, /clinicFaqKnowledge/);
+  assert.match(ai, /\[activeCatalogue, practitionerKnowledge, clinicFaqKnowledge, \.\.\.knowledge\]\.filter\(Boolean\)/);
 });
 
 test('orchestrator makes mappings authoritative but forbids qualification inference', () => {
