@@ -24,6 +24,8 @@ test('#802 guided onboarding decorates only authorized Staff creation and preser
   assert.match(html, /Practitioner access/);
   assert.match(html, /Staff WhatsApp mobile/);
   assert.match(html, /I verified this is the new staff member’s current WhatsApp number/);
+  assert.match(html, /data-onboarding-identity hidden/);
+  assert.match(html, /\[data-onboarding-identity\]\[hidden\]\{display:none!important\}/);
   assert.match(html, /Workspace → Services/);
   assert.match(html, /\/calendar\/team\/onboarding\.js/);
   assert.match(html, /min-height:44px/);
