@@ -34,6 +34,13 @@ function normalizeDensity(value) {
   return DENSITIES.has(value) ? value : 'touch';
 }
 
+function navigationAttributes({ href, ariaCurrent } = {}) {
+  const cleanHref = String(href ?? '').trim();
+  if (!cleanHref) return null;
+  const current = ariaCurrent === 'page' || ariaCurrent === 'true' ? ` aria-current="${ariaCurrent}"` : '';
+  return `href="${escapeHtml(cleanHref)}"${current}`;
+}
+
 function renderButton({
   label,
   icon,
@@ -42,6 +49,8 @@ function renderButton({
   disabled = false,
   className = '',
   type = 'button',
+  href,
+  ariaCurrent,
 } = {}) {
   const text = String(label ?? '').trim();
   if (!text) throw new Error('Shiloh button requires a label');
@@ -53,6 +62,10 @@ function renderButton({
     safeClassName(className),
   ].filter(Boolean).join(' ');
   const iconHtml = icon ? renderShilohIcon(icon, { size: 18, className: 'shiloh-button__icon' }) : '';
+  const nav = navigationAttributes({ href, ariaCurrent });
+  if (nav) {
+    return `<a ${nav} class="${classes}"${disabled ? ' aria-disabled="true" tabindex="-1"' : ''}>${iconHtml}<span>${escapeHtml(text)}</span></a>`;
+  }
   return `<button type="${safeType}" class="${classes}"${disabled ? ' disabled aria-disabled="true"' : ''}>${iconHtml}<span>${escapeHtml(text)}</span></button>`;
 }
 
@@ -63,6 +76,8 @@ function renderIconButton({
   density = 'touch',
   disabled = false,
   className = '',
+  href,
+  ariaCurrent,
 } = {}) {
   const accessibleLabel = String(label ?? '').trim();
   if (!accessibleLabel) throw new Error('Shiloh icon button requires an accessible label');
@@ -73,6 +88,10 @@ function renderIconButton({
     `shiloh-control--${normalizeDensity(density)}`,
     safeClassName(className),
   ].filter(Boolean).join(' ');
+  const nav = navigationAttributes({ href, ariaCurrent });
+  if (nav) {
+    return `<a ${nav} class="${classes}" aria-label="${escapeHtml(accessibleLabel)}"${disabled ? ' aria-disabled="true" tabindex="-1"' : ''}>${renderShilohIcon(icon, { size: 18 })}</a>`;
+  }
   return `<button type="button" class="${classes}" aria-label="${escapeHtml(accessibleLabel)}"${disabled ? ' disabled aria-disabled="true"' : ''}>${renderShilohIcon(icon, { size: 18 })}</button>`;
 }
 
@@ -83,6 +102,8 @@ function renderChip({
   density = 'touch',
   icon,
   className = '',
+  href,
+  ariaCurrent,
 } = {}) {
   const text = String(label ?? '').trim();
   if (!text) throw new Error('Shiloh chip requires a label');
@@ -93,6 +114,10 @@ function renderChip({
     safeClassName(className),
   ].filter(Boolean).join(' ');
   const iconHtml = icon ? renderShilohIcon(icon, { size: 16, className: 'shiloh-chip__icon' }) : '';
+  const nav = navigationAttributes({ href, ariaCurrent });
+  if (nav) {
+    return `<a ${nav} class="${classes}"${disabled ? ' aria-disabled="true" tabindex="-1"' : ''}>${iconHtml}<span>${escapeHtml(text)}</span></a>`;
+  }
   return `<button type="button" class="${classes}" aria-pressed="${selected ? 'true' : 'false'}"${disabled ? ' disabled aria-disabled="true"' : ''}>${iconHtml}<span>${escapeHtml(text)}</span></button>`;
 }
 
@@ -110,7 +135,7 @@ function renderBadge({ label, tone = 'neutral', icon, className = '' } = {}) {
 
 function shilohUiPrimitiveStyles() {
   return `${shilohUxTokenCss()}\n` +
-    `.shiloh-button,.shiloh-icon-button,.shiloh-chip{font:600 14px/1 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;border:1px solid transparent;box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;gap:var(--shiloh-space-2);cursor:pointer;transition:background-color .14s ease,border-color .14s ease,box-shadow .14s ease,color .14s ease;}` +
+    `.shiloh-button,.shiloh-icon-button,.shiloh-chip{font:600 14px/1 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;border:1px solid transparent;box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;gap:var(--shiloh-space-2);cursor:pointer;text-decoration:none;transition:background-color .14s ease,border-color .14s ease,box-shadow .14s ease,color .14s ease;}` +
     `.shiloh-control--touch{min-height:var(--shiloh-touch-min);padding:0 var(--shiloh-space-4);}` +
     `.shiloh-control--compact{min-height:34px;padding:0 var(--shiloh-space-3);}` +
     `.shiloh-button{border-radius:var(--shiloh-radius-md);}` +
@@ -120,9 +145,9 @@ function shilohUiPrimitiveStyles() {
     `.shiloh-button--secondary{background:var(--shiloh-surface);color:var(--shiloh-ink);border-color:var(--shiloh-border);}` +
     `.shiloh-button--ghost{background:transparent;color:var(--shiloh-ink);border-color:transparent;}` +
     `.shiloh-button--danger{background:var(--shiloh-danger);color:#fff;border-color:var(--shiloh-danger);}` +
-    `.shiloh-button:hover:not(:disabled),.shiloh-icon-button:hover:not(:disabled),.shiloh-chip:hover:not(:disabled){box-shadow:var(--shiloh-shadow-soft);}` +
+    `.shiloh-button:hover:not(:disabled):not([aria-disabled="true"]),.shiloh-icon-button:hover:not(:disabled):not([aria-disabled="true"]),.shiloh-chip:hover:not(:disabled):not([aria-disabled="true"]){box-shadow:var(--shiloh-shadow-soft);}` +
     `.shiloh-button:focus-visible,.shiloh-icon-button:focus-visible,.shiloh-chip:focus-visible{outline:3px solid color-mix(in srgb,var(--shiloh-focus) 28%,transparent);outline-offset:2px;}` +
-    `.shiloh-button:disabled,.shiloh-icon-button:disabled,.shiloh-chip:disabled{opacity:.5;cursor:not-allowed;box-shadow:none;}` +
+    `.shiloh-button:disabled,.shiloh-icon-button:disabled,.shiloh-chip:disabled,.shiloh-button[aria-disabled="true"],.shiloh-icon-button[aria-disabled="true"],.shiloh-chip[aria-disabled="true"]{opacity:.5;cursor:not-allowed;box-shadow:none;}` +
     `.shiloh-chip{border-radius:var(--shiloh-radius-pill);background:var(--shiloh-surface);color:var(--shiloh-ink);border-color:var(--shiloh-border);}` +
     `.shiloh-chip.is-selected{background:var(--shiloh-focus);color:#fff;border-color:var(--shiloh-focus);box-shadow:var(--shiloh-shadow-soft);}` +
     `.shiloh-badge{font:700 12px/1 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;display:inline-flex;align-items:center;gap:6px;border-radius:var(--shiloh-radius-pill);padding:6px 9px;border:1px solid var(--shiloh-border);background:var(--shiloh-surface-subtle);color:var(--shiloh-ink-muted);}` +
