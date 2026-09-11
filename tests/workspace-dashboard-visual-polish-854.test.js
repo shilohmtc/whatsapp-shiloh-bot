@@ -66,12 +66,12 @@ test('#854 formats backlog date groups for human scanning', () => {
   assert.equal(dateGroupLabel('2026-09-10'), 'Thu, 10 Sept');
 });
 
-test('#854 renders bounded Desktop backlog and balanced secondary layout without changing finalization controls', () => {
+test('#854 renders bounded Desktop backlog and stable Phone order without changing finalization controls', () => {
   const html = renderDashboardPage(model());
 
+  assert.match(html, /class="dashboard-grid" data-dashboard-grid/);
   assert.match(html, /class="panel carryover-panel" data-dashboard-carryover-panel/);
   assert.match(html, /data-dashboard-carryover-scroll/);
-  assert.match(html, /class="secondary-grid" data-dashboard-secondary-grid/);
   assert.match(html, /<h3>Wed, 09 Sept<\/h3>/);
   assert.match(html, /<h3>Thu, 10 Sept<\/h3>/);
   assert.match(html, /class="appointment carryover-card"/);
@@ -80,7 +80,10 @@ test('#854 renders bounded Desktop backlog and balanced secondary layout without
   assert.match(html, /data-operational-date-key="2026-09-09"/);
   assert.match(html, /date=2026-09-09/);
 
+  assert.match(html, /\.dashboard-grid>\[data-dashboard-today\]\{grid-column:1\/5\}/);
+  assert.match(html, /\.dashboard-grid>\[data-dashboard-carryover-panel\]\{grid-column:5\/7\}/);
   assert.match(html, /\.carryover-panel\{position:sticky;top:16px;max-height:calc\(100vh - 32px\)/);
-  assert.match(html, /@media\(max-width:850px\)[\s\S]*\.carryover-panel\{[^}]*position:static;[^}]*max-height:none;[^}]*overflow:visible[^}]*\}/);
+  assert.match(html, /@media\(max-width:850px\)[\s\S]*\[data-dashboard-attention-panel\]\{grid-column:1;grid-row:1\}[\s\S]*\[data-dashboard-today\]\{grid-column:1;grid-row:2\}/);
+  assert.match(html, /@media\(max-width:850px\)[\s\S]*\.carryover-panel\{position:static;max-height:none;overflow:visible\}/);
   assert.match(html, /\.carryover-group \.appointment-actions \.action-button,\.carryover-group \.appointment-actions \.button\{min-height:44px\}/);
 });
