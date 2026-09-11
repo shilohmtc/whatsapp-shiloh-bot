@@ -7,7 +7,7 @@ module.exports = defineConfig({
   workers: 1,
   timeout: 30_000,
   expect: { timeout: 5_000 },
-  snapshotPathTemplate: '{testDir}/ux-baselines/{arg}',
+  snapshotPathTemplate: '{testDir}/ux-baselines/{arg}{ext}',
   outputDir: 'artifacts/ux-playwright-results',
   reporter: [
     ['line'],
