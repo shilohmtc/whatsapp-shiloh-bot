@@ -55,9 +55,9 @@ test('Needs attention identifies the exact unresolved visit and exposes canonica
   assert.match(panel, /Attention Client/);
   assert.match(panel, /Treatment · Canonical Practitioner/);
   assert.match(panel, /10:30/);
-  assert.match(panel, /data-dashboard-appointment="901"/);
-  assert.match(panel, /data-dashboard-finalize="completed"/);
-  assert.match(panel, /data-dashboard-finalize="no_show"/);
+  assert.match(panel, /data-dashboard-attention-appointment="901"/);
+  assert.match(panel, /data-dashboard-attention-finalize="completed"/);
+  assert.match(panel, /data-dashboard-attention-finalize="no_show"/);
   assert.match(panel, />Review visit</);
   assert.match(panel, /id="dashboard-attention-appointment-901"/);
 });
@@ -66,6 +66,6 @@ test('Needs attention remains fail-closed when the visit cannot be finalized by 
   const panel = attentionPanel(renderDashboardPage(model({ canFinalize: false })));
   assert.match(panel, /Attention Client/);
   assert.match(panel, /Canonical Practitioner/);
-  assert.doesNotMatch(panel, /data-dashboard-finalize=/);
+  assert.doesNotMatch(panel, /data-dashboard-attention-finalize=/);
   assert.match(panel, />Review visit</);
 });
