@@ -23,5 +23,7 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci
-      - name: Run Assistant Knowledge and FAQ evaluation pack
+      - name: Run curated Assistant FAQ evaluation cases
+        run: node scripts/assistant-faq-eval.js
+      - name: Run Assistant Knowledge and FAQ authority tests
         run: node --test tests/assistant-faq-v1.test.js
