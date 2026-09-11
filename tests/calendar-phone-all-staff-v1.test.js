@@ -6,52 +6,59 @@ const vm = require('node:vm');
 
 const { calendarPhoneAllStaffClientScript } = require('../src/presentation/calendarPhoneAllStaffUx');
 
-test('#888 Phone week defaults to All staff from server-permitted buttons only', () => {
+test('#895 Phone Week defaults to all permitted staff columns', () => {
   const script = calendarPhoneAllStaffClientScript();
   assert.doesNotThrow(() => new vm.Script(script));
   assert.match(script, /data-phone-week-staff-id/);
   assert.match(script, /phoneWeekStaffRendered/);
-  assert.match(script, /phoneWeekStaffAll/);
-  assert.match(script, /All staff/);
-  assert.match(script, /const initialMode=mode\(\)/);
-  assert.match(script, /if\(initialMode.*allRendered\(\).*activateAll\(\).*reloadAll\(\)/s);
+  assert.match(script, /selectedIds=parseMode\(\)/);
+  assert.match(script, /if\(!raw\|\|raw==='all'\)return \[\.\.\.permittedIds\]/);
   assert.match(script, /permittedIds\.forEach\(id=>url\.searchParams\.append\('staff',id\)\)/);
   assert.doesNotMatch(script, /permittedStaff|calendarScope|all_business/);
 });
 
-test('#888 All staff is one non-horizontal timetable with dynamic overlap lanes', () => {
+test('#895 staff chips toggle persistent named columns instead of mutually-exclusive focus', () => {
   const script = calendarPhoneAllStaffClientScript();
+  assert.match(script, /phone-staff-column-header/);
+  assert.match(script, /phone-staff-column-name/);
+  assert.match(script, /selectedIds=selectedIds\.includes\(id\)\?selectedIds\.filter/);
+  assert.match(script, /staffButtons\.forEach\(button=>button\.addEventListener\('click'/);
+  assert.match(script, /event\.stopImmediatePropagation\(\)/);
+  assert.match(script, /selectedIds=\[\.\.\.permittedIds\]/);
+  assert.match(script, /allButton\.addEventListener/);
+});
+
+test('#895 visible events are laid out inside their selected practitioner column with overlap sublanes', () => {
+  const script = calendarPhoneAllStaffClientScript();
+  assert.match(script, /function eventOwner\(node\)/);
+  assert.match(script, /function layoutStaffGroup\(nodes,columnIndex,columnCount\)/);
+  assert.match(script, /base=columnIndex\*100\/columnCount/);
+  assert.match(script, /laneWidth=\(100\/columnCount\)\/laneCount/);
+  assert.match(script, /node\.dataset\.phoneColumnVisible=String\(visible\)/);
+  assert.match(script, /phone-staff-column-dividers/);
   assert.match(script, /overflow-y:auto!important;overflow-x:hidden!important/);
-  assert.match(script, /function layoutOverlaps\(\)/);
-  assert.match(script, /item\.node\.dataset\.phoneOverlapLanes=String\(count\)/);
-  assert.match(script, /node\.dataset\.phoneAllStaffVisible='true'/);
-  assert.match(script, /event-practitioners\{display:inline-flex!important\}/);
-  assert.doesNotMatch(script, /phone-all-staff-column-header/);
-  assert.doesNotMatch(script, /count\*116/);
   assert.doesNotMatch(script, /scrollLeft/);
 });
 
-test('#888 Phone Calendar exposes one People selector and no duplicated large day context', () => {
+test('#895 week strip carries compact month context and no large duplicate day heading', () => {
   const script = calendarPhoneAllStaffClientScript();
-  assert.match(script, /content:"People"/);
+  assert.match(script, /function addMonthContext\(\)/);
+  assert.match(script, /phone-week-month-context/);
+  assert.match(script, /Intl\.DateTimeFormat\('en-ZA',\{month:'short'\}\)/);
+  assert.doesNotMatch(script, /phone-calendar-day-context/);
+  assert.doesNotMatch(script, /formatActiveDate/);
+});
+
+test('#895 Phone Calendar keeps direct Week Month Today and Appointment hierarchy', () => {
+  const script = calendarPhoneAllStaffClientScript();
   assert.match(script, /phone-calendar-utility-bar/);
   assert.match(script, /\['week','Week'\],\['month','Month'\]/);
   assert.match(script, /phone-calendar-today-link/);
   assert.match(script, /phone-calendar-primary-action/);
   assert.match(script, /\.phone-calendar-v2-controls,\.phone-calendar-v2-actions\{display:none!important\}/);
-  assert.doesNotMatch(script, /phone-calendar-day-context/);
-  assert.doesNotMatch(script, /formatActiveDate/);
 });
 
-test('#888 individual staff mode remains explicit and persists across calendar links', () => {
-  const script = calendarPhoneAllStaffClientScript();
-  assert.match(script, /function activateIndividual\(id\)/);
-  assert.match(script, /url\.searchParams\.set\('phoneStaff',id\)/);
-  assert.match(script, /syncModeLinks\(id\)/);
-  assert.match(script, /staffButtons\.forEach\(button=>button\.addEventListener\('click'/);
-});
-
-test('#888 Today returns to todays Week and communicates when already there', () => {
+test('#895 Today returns to todays Week and communicates when already there', () => {
   const script = calendarPhoneAllStaffClientScript();
   assert.match(script, /function todayWeekHref\(\)/);
   assert.match(script, /url\.searchParams\.set\('view','week'\)/);
@@ -59,22 +66,17 @@ test('#888 Today returns to todays Week and communicates when already there', ()
   assert.match(script, /today\.setAttribute\('aria-disabled','true'\)/);
 });
 
-test('#888 Phone Calendar fills dynamic viewport and Month distributes rows through remaining height', () => {
+test('#895 full-height Month and 18:00 operating boundary remain', () => {
   const script = calendarPhoneAllStaffClientScript();
   assert.match(script, /function fitCalendarViewport\(\)/);
-  assert.match(script, /innerHeight-top-4/);
   assert.match(script, /--phone-calendar-surface-height/);
   assert.match(script, /calendar-view\.month-view\{display:flex!important;flex-direction:column!important/);
   assert.match(script, /month-days\{min-height:0!important;height:100%!important;grid-auto-rows:1fr!important/);
-});
-
-test('#888 Phone Calendar visibly clamps operational timeline at 18:00', () => {
-  const script = calendarPhoneAllStaffClientScript();
   assert.match(script, /Number\(match\[1\]\)>18/);
   assert.match(script, /data-phone-after-close/);
 });
 
-test('#888 production Calendar phone-v2 asset composes canonical V2 client with bounded adaptive schedule enhancement', () => {
+test('#895 production Calendar phone-v2 asset still composes canonical V2 with bounded column-toggle enhancement', () => {
   const routeSource = fs.readFileSync(path.join(__dirname, '../src/routes/calendar.js'), 'utf8');
   assert.match(routeSource, /calendarPhoneCompactV2ClientScript/);
   assert.match(routeSource, /calendarPhoneAllStaffClientScript/);

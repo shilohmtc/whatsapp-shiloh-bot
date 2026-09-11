@@ -1,11 +1,11 @@
-name: Calendar Phone Operational Cleanup Proof
+name: Calendar Phone Column Toggle Proof
 
 on:
   pull_request:
     paths:
       - 'src/presentation/calendarPhoneAllStaffUx.js'
       - 'tests/calendar-phone-all-staff-v1.test.js'
-      - 'scripts/calendar-phone-operational-cleanup-browser-proof.js'
+      - 'scripts/calendar-phone-column-toggle-browser-proof.js'
       - '.github/workflows/calendar-phone-operational-cleanup-proof.yml'
   workflow_dispatch:
 
@@ -13,7 +13,7 @@ permissions:
   contents: read
 
 jobs:
-  phone_calendar_cleanup:
+  phone_calendar_columns:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout exact PR head
@@ -25,14 +25,14 @@ jobs:
           node-version: 24.14.1
           cache: npm
       - run: npm ci
-      - name: Run focused Phone Calendar cleanup tests
+      - name: Run focused Phone Calendar column tests
         run: node --test tests/calendar-phone-all-staff-v1.test.js
-      - name: Prove Phone Calendar hierarchy in Chrome
-        run: node scripts/calendar-phone-operational-cleanup-browser-proof.js
-      - name: Upload Phone Calendar cleanup proof
+      - name: Prove Phone Calendar columns and toggles in Chrome
+        run: node scripts/calendar-phone-column-toggle-browser-proof.js
+      - name: Upload Phone Calendar column proof
         uses: actions/upload-artifact@v4
         with:
-          name: calendar-phone-operational-cleanup-v1
-          path: artifacts/calendar-phone-operational-cleanup-v1
+          name: calendar-phone-column-toggle-v1
+          path: artifacts/calendar-phone-column-toggle-v1
           if-no-files-found: error
           retention-days: 14
