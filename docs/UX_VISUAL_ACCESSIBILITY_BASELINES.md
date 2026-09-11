@@ -21,7 +21,9 @@ Accessibility automation is a regression aid, not a substitute for human accessi
 
 ## Baseline ownership and updates
 
-Committed baseline authority is the reviewed `tests/ux-baselines/*.png.b64.partNN` text fixture set. The parts are a transport/storage representation of one exact PNG per reference state; `scripts/ux-baseline-codec.js` concatenates them in filename order and decodes the exact pixels only at test runtime. The bounded part size keeps the fixtures reviewable through the normal GitHub text-file path without changing the baseline image.
+Committed baseline authority is the reviewed `tests/ux-baselines/*.png.b64.part*` text fixture set. The parts are only a transport/storage representation of one exact PNG per reference state. `scripts/ux-baseline-codec.js` validates the numeric part sequence, optional alphabetic subparts, optional nested numeric segments, base64 syntax, PNG signature, and terminal IEND marker before reconstructing the pixels in validated semantic order. Missing, non-contiguous, malformed, mixed, truncated, or non-PNG fixtures fail closed.
+
+The normal encoder emits deterministic bounded numeric parts. Smaller subparts/nested segments are permitted only as an equivalent transport representation when required by repository tooling; they do not change the reviewed PNG bytes.
 
 Never auto-accept visual drift. If a visual change is intentional:
 
@@ -29,7 +31,7 @@ Never auto-accept visual drift. If a visual change is intentional:
 2. run the Storybook build and Playwright suite with `--update-snapshots` in the same Ubuntu/Chromium environment used by CI;
 3. inspect the generated PNGs visually on both Desktop and Phone;
 4. run `node scripts/ux-baseline-codec.js encode`, which replaces the prior parts with deterministic bounded parts;
-5. commit only the approved `.png.b64.partNN` fixtures together with the authorized presentation change;
+5. commit only the approved `.png.b64.part*` fixtures together with the authorized presentation change;
 6. rerun the exact-head UX gate and normal repository gates.
 
 When a new baseline has not yet been committed, the PR workflow generates candidate PNGs plus their encoded part fixtures as an artifact and fails closed. A human/Control review must deliberately accept the pixels and commit the corresponding parts before the gate can pass.
