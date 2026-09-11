@@ -91,11 +91,12 @@ test('#856 Desktop visual simplification constrains wide layouts and prioritizes
   assert.doesNotMatch(css.slice(css.indexOf('@media(max-width:700px)')), /minmax\(300px,360px\)|max-width:1480px|\.positioned-event \.event-card h4/);
 });
 
-test('#856 responsive polish makes active Workspace Calendar a canonical no-date link and keeps Phone picker markup', () => {
+test('#856 responsive polish makes active Workspace Calendar a canonical no-date link and keeps explicit chip navigation plus Phone picker markup', () => {
   const source = '<html><head><style>.controls{position:sticky;top:0;z-index:5;grid-template-columns:1fr 1fr;</style></head><body><span class="workspace-link active" data-workspace-destination="calendar" aria-current="page">Calendar</span><section class="controls"><div class="control-group practitioner-control"><details class="people-picker"><summary>People</summary></details></div></section></body></html>';
   const html = applyCalendarResponsivePolish(source, model(), '/calendar/workspace');
   assert.match(html, /data-workspace-destination="calendar" aria-current="page" href="\/calendar\/workspace">Calendar<\/a>/);
-  assert.doesNotMatch(html, /href="\/calendar\/workspace\?[^\"]*date=/);
+  assert.doesNotMatch(html, /data-workspace-destination="calendar"[^>]*href="\/calendar\/workspace\?[^\"]*date=/);
+  assert.match(html, /data-calendar-staff-chip="all"[^>]*href="\/calendar\/workspace\?view=week&amp;date=2026-09-11&amp;staff=all/);
   assert.match(html, /data-desktop-practitioner-chips/);
   assert.match(html, /class="control-group practitioner-control"/);
   assert.match(html, /class="people-picker"/);
