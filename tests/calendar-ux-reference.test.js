@@ -45,9 +45,9 @@ test('#870 practitioner identity and appointment status remain distinct semantic
   assert.doesNotMatch(css, /staff.*danger/i);
 });
 
-test('#870 production Calendar stylesheet includes the reference adapter without replacing service-family visuals', () => {
+test('#870 service-family accents remain isolated from the Calendar reference layer', () => {
   const css = serviceFamilyAccentCss();
-  assert.match(css, /--shiloh-touch-min:44px/);
+  assert.doesNotMatch(css, /--shiloh-touch-min/);
   assert.match(css, /service-family-icon\[data-service-family="facial_skin"\]/);
-  assert.match(css, /desktopAppointmentCardDensityCss|@container/);
+  assert.match(css, /@container/);
 });
