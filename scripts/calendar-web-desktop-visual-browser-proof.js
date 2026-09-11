@@ -321,7 +321,7 @@ async function main() {
     manifest.push({ ...(await capture('desktop-direct-chip-selected')), viewport: { width: 1440, height: 1000 }, metrics: selected });
 
     await viewport(390, 844, true);
-    await navigate(`${origin}/proof?staff=all`);
+    await navigate(`${origin}/proof?staff=41`);
     const phone = await metrics();
     assert.equal(phone.desktopChipsVisible, false, 'Phone must hide Desktop practitioner chips');
     assert.equal(phone.peoplePickerVisible, true, 'Phone must retain the compact practitioner picker');
