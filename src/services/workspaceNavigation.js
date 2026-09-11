@@ -6,7 +6,7 @@ const workspaceClinicHours = require('./workspaceClinicHours');
 
 const DESTINATIONS = Object.freeze({
   dashboard: '/calendar/workspace',
-  calendar: '/calendar/read-only?view=day',
+  calendar: '/calendar/read-only?view=week&staff=all',
   clients: '/calendar/clients',
   messages: '/calendar/messages',
   staff: '/calendar/team',
