@@ -215,8 +215,69 @@ function mobileStaffOverviewStyles() {
   return `.mobile-staff-overview{display:none}@media(max-width:700px){body[data-calendar-mobile-overview="true"] .practitioner-control{display:none}.mobile-staff-overview{display:grid;gap:9px;margin-top:2px}.mobile-staff-overview-head{display:flex;align-items:end;justify-content:space-between;gap:10px}.mobile-staff-overview-head h3{margin:2px 0 0;font-size:1rem}.mobile-staff-overview-head>span{max-width:130px;text-align:right;color:var(--muted);font-size:.68rem;line-height:1.25}.mobile-staff-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.mobile-staff-card{display:grid;align-content:start;gap:7px;min-width:0;min-height:118px;padding:11px;border:1px solid var(--line);border-radius:13px;background:#fff;box-shadow:0 3px 12px rgba(32,50,43,.04)}.mobile-staff-card:active{background:var(--leaf-soft)}.mobile-staff-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:6px;min-width:0}.mobile-staff-card-head strong{min-width:0;font-size:.88rem;line-height:1.2;overflow-wrap:anywhere}.mobile-staff-count{display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;min-width:27px;height:27px;border-radius:999px;background:var(--leaf-soft);color:var(--leaf);font-size:.72rem;font-weight:850}.mobile-staff-schedule{display:flex;align-items:flex-start;gap:6px;min-width:0;color:var(--muted);font-size:.68rem;line-height:1.3}.mobile-staff-schedule .status-dot{flex:0 0 8px;margin-top:2px}.mobile-staff-next{display:grid;gap:2px;min-width:0;padding-top:7px;border-top:1px solid var(--line)}.mobile-staff-next-label{color:var(--muted);font-size:.62rem;text-transform:uppercase;letter-spacing:.06em;font-weight:800}.mobile-staff-next strong{min-width:0;font-size:.74rem;line-height:1.28;overflow-wrap:anywhere}.mobile-staff-next small{min-width:0;color:var(--muted);font-size:.66rem;line-height:1.25;overflow-wrap:anywhere}.day-view.mobile-all-staff-overview .day-time-grid{position:absolute!important;width:1px!important;height:1px!important;overflow:hidden!important;clip-path:inset(50%)!important;visibility:hidden!important;pointer-events:none!important}.day-view:not(.mobile-all-staff-overview) .day-time-grid{overflow:hidden}.day-view:not(.mobile-all-staff-overview) .day-time-grid .lanes{grid-template-columns:minmax(0,1fr)!important;min-width:0!important;width:100%}.day-view:not(.mobile-all-staff-overview) .day-time-grid .lane{min-width:0!important;width:100%;border-right:0}}`;
 }
 
-function applyCalendarResponsivePolish(html) {
-  return String(html)
+function visibleStaffIdsForCalendarModel(model) {
+  if (Array.isArray(model?.visibleStaffIds)) {
+    return model.visibleStaffIds.map(Number).filter(id => Number.isSafeInteger(id) && id > 0);
+  }
+  if (model?.selectedStaffId != null) {
+    const id = Number(model.selectedStaffId);
+    return Number.isSafeInteger(id) && id > 0 ? [id] : [];
+  }
+  return (model?.timeline?.staff || [])
+    .map(person => Number(person.id))
+    .filter(id => Number.isSafeInteger(id) && id > 0);
+}
+
+function calendarVisibilityHref(basePath, model, selection) {
+  const params = new URLSearchParams({
+    view: String(model?.view || 'week'),
+    date: String(model?.dateKey || ''),
+  });
+  if (selection === 'all') {
+    params.set('staff', 'all');
+  } else {
+    for (const id of selection || []) params.append('staff', String(id));
+  }
+  const activeStaffId = Number(model?.activeStaffId);
+  if (Number.isSafeInteger(activeStaffId) && activeStaffId > 0) params.set('activeStaff', String(activeStaffId));
+  return `${basePath}?${params.toString()}`;
+}
+
+function renderDesktopPractitionerChips(model, basePath) {
+  const permittedStaff = Array.isArray(model?.permittedStaff) ? model.permittedStaff : [];
+  if (permittedStaff.length <= 1) return '';
+  const permittedIds = permittedStaff
+    .map(person => Number(person.id))
+    .filter(id => Number.isSafeInteger(id) && id > 0);
+  const visibleIds = visibleStaffIdsForCalendarModel(model).filter(id => permittedIds.includes(id));
+  const visible = new Set(visibleIds);
+  const allSelected = permittedIds.length > 0 && permittedIds.every(id => visible.has(id));
+  const allHref = calendarVisibilityHref(basePath, model, 'all');
+  const chips = permittedStaff.map(person => {
+    const id = Number(person.id);
+    const selected = visible.has(id);
+    let nextSelection;
+    if (allSelected) {
+      nextSelection = [id];
+    } else if (selected) {
+      nextSelection = visibleIds.length > 1 ? visibleIds.filter(value => value !== id) : 'all';
+    } else {
+      const selectedSet = new Set([...visibleIds, id]);
+      nextSelection = permittedIds.filter(value => selectedSet.has(value));
+    }
+    const href = nextSelection === 'all' ? allHref : calendarVisibilityHref(basePath, model, nextSelection);
+    const active = !allSelected && selected;
+    return `<a class="staff-chip${active ? ' active' : ''}" data-calendar-staff-chip="${escapeHtml(id)}"${active ? ' aria-current="true"' : ''} href="${escapeHtml(href)}">${escapeHtml(person.displayName || `Staff ${id}`)}</a>`;
+  }).join('');
+  return `<div class="desktop-practitioner-chips" data-desktop-practitioner-chips><span class="control-label">People</span><nav class="people-chip-row" aria-label="Practitioners in view"><a class="staff-chip all-staff${allSelected ? ' active' : ''}" data-calendar-staff-chip="all"${allSelected ? ' aria-current="true"' : ''} href="${escapeHtml(allHref)}">All staff</a>${chips}</nav></div>`;
+}
+
+function calendarDesktopUsabilityStyles() {
+  return `.desktop-practitioner-chips{display:none}@media(min-width:701px){.desktop-practitioner-chips{display:grid;grid-column:1/-1;gap:5px;min-width:0;padding-top:2px}.people-chip-row{display:flex;align-items:center;gap:7px;min-width:0;overflow-x:auto;padding:1px 1px 3px;scrollbar-width:thin}.staff-chip{display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;min-height:36px;padding:6px 11px;border:1px solid var(--line-strong);border-radius:999px;background:#fff;color:var(--ink);font-size:.78rem;font-weight:780;transition:border-color .12s ease,background .12s ease,box-shadow .12s ease}.staff-chip:hover,.staff-chip:focus-visible{border-color:var(--leaf);outline:none;box-shadow:0 0 0 2px var(--leaf-soft)}.staff-chip.active{background:var(--leaf-deep);border-color:var(--leaf-deep);color:#fff;box-shadow:0 3px 9px rgba(41,76,60,.16)}.staff-chip.all-staff{font-weight:850}.practitioner-control{display:none!important}.controls{gap:10px 14px!important;padding:12px 14px!important}.calendar-view{box-shadow:0 7px 24px rgba(32,50,43,.065)!important}.time-rail span{color:#52675d!important;font-weight:750!important}.week-day>header,.day-time-grid .lane>header{background:#f7f9f5!important}.positioned-event .event-card{border-color:#cfdad2!important;box-shadow:0 3px 10px rgba(32,50,43,.08)!important}.positioned-event .event-card h4{font-size:.82rem!important}.view-heading h2{letter-spacing:-.012em}}@media(min-width:1100px){.shell{max-width:1640px!important}.controls{padding:13px 15px!important}.calendar-view{padding:16px!important}}@media(max-width:700px){.desktop-practitioner-chips{display:none!important}}`;
+}
+
+function applyCalendarResponsivePolish(html, model = null, basePath = '/calendar/read-only') {
+  let polished = String(html)
     .replace(
       '.controls{position:sticky;top:0;z-index:5;grid-template-columns:1fr 1fr;',
       '.controls{position:sticky;top:0;z-index:5;grid-template-columns:1fr;',
@@ -226,6 +287,20 @@ function applyCalendarResponsivePolish(html) {
       'Shared appointments appear once as one canonical booking and retain all assigned practitioners.',
       'Shared appointments appear once and retain all assigned practitioners.',
     );
+
+  const chips = renderDesktopPractitionerChips(model, basePath);
+  if (chips) {
+    polished = polished.replace(
+      '<div class="control-group practitioner-control">',
+      `${chips}<div class="control-group practitioner-control">`,
+    );
+  }
+  polished = polished.replace('</style>', `${calendarDesktopUsabilityStyles()}</style>`);
+  polished = polished.replace(
+    '<span class="workspace-link active" data-workspace-destination="calendar" aria-current="page">Calendar</span>',
+    `<a class="workspace-link active" data-workspace-destination="calendar" aria-current="page" href="${escapeHtml(basePath)}">Calendar</a>`,
+  );
+  return polished;
 }
 
 // Compatibility fallback for renderers that do not yet consume operationalActions.
@@ -401,6 +476,10 @@ module.exports.decorateBookingEntry = decorateBookingEntry;
 module.exports.bookingOperationalActions = bookingOperationalActions;
 module.exports.renderMobileStaffOverview = renderMobileStaffOverview;
 module.exports.mobileStaffOverviewStyles = mobileStaffOverviewStyles;
+module.exports.visibleStaffIdsForCalendarModel = visibleStaffIdsForCalendarModel;
+module.exports.calendarVisibilityHref = calendarVisibilityHref;
+module.exports.renderDesktopPractitionerChips = renderDesktopPractitionerChips;
+module.exports.calendarDesktopUsabilityStyles = calendarDesktopUsabilityStyles;
 module.exports.applyCalendarResponsivePolish = applyCalendarResponsivePolish;
 module.exports.resolveActiveWeekStaffId = resolveActiveWeekStaffId;
 module.exports.decorateUnavailableContract = decorateUnavailableContract;
