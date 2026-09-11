@@ -65,6 +65,12 @@ function stabilizeDashboardShell(html) {
   return source.includes('</head>') ? source.replace('</head>', `${style}</head>`) : source;
 }
 
+function dashboardCalendarHref(model = {}) {
+  const dateKey = String(model.operationalDateKey || '').trim();
+  const businessOverview = ['owner_overview', 'business_overview'].includes(String(model.mode || ''));
+  return `/calendar/read-only?view=day${dateKey ? `&date=${encodeURIComponent(dateKey)}` : ''}${businessOverview ? '&staff=all' : ''}`;
+}
+
 function dashboardSafeError(error) {
   if (Number(error?.httpStatus) === 403) return { status: 403, message: 'Your authenticated Shiloh access does not permit the operational Dashboard.' };
   return { status: 503, message: 'Canonical operational Dashboard data is temporarily unavailable.' };
@@ -134,6 +140,7 @@ function createWorkspaceOperationalRouter({
       });
       return res.status(200).type('html').send(stabilizeDashboardShell(renderDashboard(model, {
         staffAccessScriptPath: `${staffAccessPath}/client.js`,
+        navigation: { calendarHref: dashboardCalendarHref(model) },
       })));
     } catch (error) {
       const safe = dashboardSafeError(error);
@@ -196,6 +203,7 @@ module.exports = {
   receptionLockNavigationClientScript,
   setWorkspaceOperationalSecurityHeaders,
   stabilizeDashboardShell,
+  dashboardCalendarHref,
   dashboardSafeError,
   dashboardMutationError,
   createWorkspaceOperationalRouter,
