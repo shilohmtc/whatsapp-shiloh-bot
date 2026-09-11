@@ -62,3 +62,40 @@ test('#865 shared styles encode 44px touch and compact desktop modes', () => {
   assert.match(css, /\.shiloh-chip\.is-selected/);
   assert.match(css, /\.shiloh-badge--success/);
 });
+
+test('#870 shared controls preserve semantic navigation when href is supplied', () => {
+  const previous = renderIconButton({
+    label: 'Previous period',
+    icon: 'previous',
+    href: '/workspace/calendar?view=week&date=2026-09-07',
+    density: 'compact',
+  });
+  assert.match(previous, /^<a /);
+  assert.match(previous, /href="\/workspace\/calendar\?view=week&amp;date=2026-09-07"/);
+  assert.match(previous, /aria-label="Previous period"/);
+  assert.doesNotMatch(previous, /<button/);
+
+  const week = renderChip({
+    label: 'Week',
+    selected: true,
+    href: '/workspace/calendar?view=week',
+    ariaCurrent: 'page',
+    density: 'compact',
+  });
+  assert.match(week, /^<a /);
+  assert.match(week, /aria-current="page"/);
+  assert.match(week, /is-selected/);
+  assert.doesNotMatch(week, /aria-pressed/);
+});
+
+test('#870 disabled navigation primitives remain non-operable', () => {
+  const html = renderButton({
+    label: 'Today',
+    href: '/workspace/calendar?date=2026-09-11',
+    disabled: true,
+  });
+  assert.match(html, /^<a/);
+  assert.match(html, /aria-disabled="true"/);
+  assert.match(html, /tabindex="-1"/);
+  assert.doesNotMatch(html, / href=/);
+});
