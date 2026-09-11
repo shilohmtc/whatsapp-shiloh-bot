@@ -81,6 +81,6 @@ test('#854 renders bounded Desktop backlog and balanced secondary layout without
   assert.match(html, /date=2026-09-09/);
 
   assert.match(html, /\.carryover-panel\{position:sticky;top:16px;max-height:calc\(100vh - 32px\)/);
-  assert.match(html, /@media\(max-width:850px\)[\s\S]*\.carryover-panel\{position:static;max-height:none;overflow:visible\}/);
+  assert.match(html, /@media\(max-width:850px\)[\s\S]*\.carryover-panel\{[^}]*position:static;[^}]*max-height:none;[^}]*overflow:visible[^}]*\}/);
   assert.match(html, /\.carryover-group \.appointment-actions \.action-button,\.carryover-group \.appointment-actions \.button\{min-height:44px\}/);
 });
