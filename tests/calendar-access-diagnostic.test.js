@@ -108,7 +108,7 @@ test('Calendar access diagnostic is read-only, sanitized, and reports production
   assert.equal(byName['Jean-Pierre'].viewerScope, 'business_all_staff');
   assert.equal(byName.Abigail.calendarScope, 'own_appointments');
   assert.equal(byName.Abigail.serviceScope, 'own_services');
-  assert.equal(byName.Abigail.viewerScope, 'own_staff');
+  assert.equal(byName.Abigail.viewerScope, 'business_all_staff');
   assert.equal(byName.Marietjie.calendarScope, 'own_services');
   assert.equal(byName.Marietjie.serviceScope, 'own_services');
   assert.equal(byName.Marietjie.viewerScope, 'business_all_staff');
