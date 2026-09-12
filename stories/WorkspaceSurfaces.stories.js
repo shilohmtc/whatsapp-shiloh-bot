@@ -109,7 +109,11 @@ function messagesModel() {
       actionLabel: 'Re-send confirmation',
       appointment: { id: 668, serviceName: 'Full Body Swedish', startsAt: '2026-09-12T08:00:00.000Z' },
       client: { id: 912, name: 'Michelle Sardinha', mobileLast4: '4567' },
-      confirmation: { statusLabel: 'Delivery failed' },
+      confirmation: {
+        statusLabel: 'Delivery failed',
+        deliveryExplanation: 'WhatsApp could not deliver this message to the recipient.',
+      },
+      recoveryExplanation: 'Retry is available through Shiloh’s existing booking-confirmation channel.',
     }],
     activity: [
       { clientName: 'Rozel Janse van Rensburg', mobileLast4: '2241', label: 'Booking confirmation', appointmentId: 667, occurredAt: '2026-09-10T11:56:00.000Z', status: 'read', statusLabel: 'Read on WhatsApp' },
