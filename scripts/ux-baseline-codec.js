@@ -3,7 +3,18 @@ const path = require('node:path');
 
 const mode = process.argv[2];
 const baselineDir = path.join(process.cwd(), 'tests', 'ux-baselines');
-const expected = ['calendar-desktop.png', 'calendar-phone.png'];
+const expected = [
+  'calendar-desktop.png',
+  'calendar-phone.png',
+  'dashboard-desktop.png',
+  'dashboard-phone.png',
+  'client-history-desktop.png',
+  'client-history-phone.png',
+  'messages-desktop.png',
+  'messages-phone.png',
+  'appointment-editor-desktop.png',
+  'appointment-editor-phone.png',
+];
 const PART_SIZE = 12000;
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 const PNG_IEND = Buffer.from([0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82]);
