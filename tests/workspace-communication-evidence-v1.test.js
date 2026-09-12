@@ -153,6 +153,27 @@ test('Client Communications UX shows Shiloh template and provider outcome but hi
   assert.doesNotMatch(html, /Send message|Reply|Compose/);
 });
 
+test('Client appointment history exposes an obvious accessible drill-in to Calendar details', () => {
+  const html = renderClientDetailPageWithCommunications(clientDetailModel({
+    appointments: [{
+      id: 71,
+      starts_at: '2026-09-12T08:00:00.000Z',
+      ends_at: '2026-09-12T08:45:00.000Z',
+      status: 'completed',
+      services: [{ name: 'Quick Relief' }],
+      staff: [{ name: 'Christel' }],
+    }],
+  }));
+
+  assert.match(html, /class="history-row history-row-link"/);
+  assert.match(html, /data-appointment-detail-link="71"/);
+  assert.match(html, /appointment=71&amp;staff=all/);
+  assert.match(html, /aria-label="Open appointment details"/);
+  assert.match(html, /<span>Open<\/span>›/);
+  assert.match(html, /history-row-link:hover/);
+  assert.match(html, /history-row-link:focus-visible/);
+});
+
 test('communication evidence failure renders a neutral unavailable state rather than a false empty or delivery claim', () => {
   const html = renderClientDetailPageWithCommunications(clientDetailModel({
     communications: [],

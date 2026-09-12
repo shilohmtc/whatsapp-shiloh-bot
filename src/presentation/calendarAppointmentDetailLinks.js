@@ -50,7 +50,7 @@ function decorateClientAppointmentHistory(html, appointments = []) {
         allStaff: true,
       });
       if (!href) return match;
-      return `<a class="history-row${tone}" data-appointment-detail-link="${positiveId(appointment.id)}" href="${escapeAttribute(href)}" style="text-decoration:none;min-height:44px">${body}</a>`;
+      return `<a class="history-row history-row-link${tone}" data-appointment-detail-link="${positiveId(appointment.id)}" href="${escapeAttribute(href)}" aria-label="Open appointment details" title="Open appointment details" style="text-decoration:none;min-height:44px">${body}<span class="history-open" aria-hidden="true"><span>Open</span>›</span></a>`;
     },
   );
 }
