@@ -1,4 +1,4 @@
-const express = require('express');
+const express = require("express");
 const { pool } = require('../db/pool');
 const calendarReadOnlyUxRoutes = require('./calendarReadOnlyUx');
 const staffCalendarAccessUxRoutes = require('./staffCalendarAccessUx');
@@ -27,6 +27,7 @@ const { createWorkspaceMessagesRouter } = require('./workspaceMessages');
 const { createWorkspacePwaRouter, createWorkspacePwaHtmlMiddleware } = require('./workspacePwa');
 const { calendarPhoneCompactV2ClientScript } = require('../presentation/calendarPhoneCompactV2');
 const { calendarPhoneAllStaffClientScript } = require('../presentation/calendarPhoneAllStaffUx');
+const { calendarAppointmentDetailsClientScript } = require('../presentation/calendarAppointmentDetailsUx');
 const router = express.Router();
 
 const staffBrowserSessionService = createStaffBrowserSessionService({ db: pool });
@@ -78,7 +79,7 @@ router.use('/messages', createWorkspaceMessagesRouter({ sessionService: staffBro
 router.get('/read-only/phone-v2.js', (_req, res) => {
   res.setHeader('Cache-Control', 'private, no-store, max-age=0');
   res.setHeader('X-Content-Type-Options', 'nosniff');
-  return res.status(200).type('application/javascript').send(`${calendarPhoneCompactV2ClientScript()}\n${calendarPhoneAllStaffClientScript()}`);
+  return res.status(200).type('application/javascript').send(`${calendarPhoneCompactV2ClientScript()}\n${calendarPhoneAllStaffClientScript()}\n${calendarAppointmentDetailsClientScript()}`);
 });
 router.use('/read-only', createOptionalCalendarSessionMiddleware({ service: staffBrowserSessionService }), calendarReadOnlyUxRoutes);
 router.get('/', (_req, res) => res.redirect(302, '/calendar/workspace'));

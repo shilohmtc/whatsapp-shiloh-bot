@@ -8,6 +8,7 @@ const {
   renderDashboardUnavailablePage,
   dashboardClientScript,
 } = require('../presentation/workspaceDashboardUx');
+const { decorateWorkspaceAppointmentLinks } = require('../presentation/calendarAppointmentDetailLinks');
 const { workspaceNavigationClientScript } = require('../presentation/workspaceShell');
 const { workspaceIconClientScript } = require('../presentation/workspaceIconClient');
 const { calendarDesktopApprovedClientScript } = require('../presentation/calendarDesktopApprovedUx');
@@ -140,10 +141,13 @@ function createWorkspaceOperationalRouter({
         adminId: req.staffBrowserSession?.adminId,
         viewer: req.staffBrowserSession?.viewer,
       });
-      return res.status(200).type('html').send(stabilizeDashboardShell(renderDashboard(model, {
+      const dashboardHtml = renderDashboard(model, {
         staffAccessScriptPath: `${staffAccessPath}/client.js`,
         navigation: { calendarHref: dashboardCalendarHref(model) },
-      })));
+      });
+      return res.status(200).type('html').send(
+        stabilizeDashboardShell(decorateWorkspaceAppointmentLinks(dashboardHtml)),
+      );
     } catch (error) {
       const safe = dashboardSafeError(error);
       return res.status(safe.status).type('html').send(renderUnavailable({ message: safe.message }));
