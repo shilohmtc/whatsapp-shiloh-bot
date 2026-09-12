@@ -1,4 +1,5 @@
 const express = require('express');
+const QRCode = require('qrcode');
 const { pool } = require('../db/pool');
 const { createStaffBrowserSessionService } = require('../services/staffBrowserSession');
 const { createProviderIndependentStaffAuthService } = require('../services/providerIndependentStaffAuth');
@@ -20,7 +21,7 @@ function setSecurityHeaders(res) {
   res.setHeader('Referrer-Policy', 'no-referrer');
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
-  res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; script-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'");
+  res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; script-src 'self'; connect-src 'self'; img-src data:; base-uri 'none'; form-action 'self'; frame-ancestors 'none'");
 }
 
 function resultError(res, result, requestId) {
@@ -32,6 +33,10 @@ function resultError(res, result, requestId) {
   return res.status(404).json({ error: 'That active staff-auth account is not available for enrollment.', requestId });
 }
 
+function createEnrollmentQrDataUrl(value) {
+  return QRCode.toDataURL(value, { errorCorrectionLevel: 'M', margin: 2, width: 320 });
+}
+
 function createStaffAuthBrowserEnrollmentRouter({
   env = process.env,
   sessionService = createStaffBrowserSessionService({ db: pool }),
@@ -39,6 +44,7 @@ function createStaffAuthBrowserEnrollmentRouter({
   enrollmentService = createStaffAuthBrowserEnrollmentService({ db: pool, env }),
   renderPage = renderStaffAuthBrowserEnrollmentPage,
   renderClient = staffAuthBrowserEnrollmentClientScript,
+  renderQrCode = createEnrollmentQrDataUrl,
 } = {}) {
   const router = express.Router();
   const requireSession = requireStaffSession({ service: sessionService, env });
@@ -77,10 +83,12 @@ function createStaffAuthBrowserEnrollmentRouter({
         requestFingerprintHash: requestFingerprintHash(req),
       });
       if (!result.ok) return resultError(res, result, req.id);
+      const qrDataUrl = await renderQrCode(result.url);
       setSecurityHeaders(res);
       return res.status(201).json({
         ok: true,
         url: result.url,
+        qrDataUrl,
         expiresAt: result.expiresAt,
         subject: result.subject,
       });
@@ -94,6 +102,7 @@ function createStaffAuthBrowserEnrollmentRouter({
 
 module.exports = {
   createStaffAuthBrowserEnrollmentRouter,
+  createEnrollmentQrDataUrl,
   setSecurityHeaders,
   resultError,
 };
