@@ -3,6 +3,7 @@ const path = require("path");
 const express = require("express");
 const { validateEnv } = require("./src/config/env");
 const logger = require("./src/lib/logger");
+const observability = require("./src/lib/observability");
 const requestContext = require("./src/middleware/requestContext");
 const { presentClientFamilyResult } = require("./src/presentation/clientFamilyPresentation");
 const { presentClientAppointmentChangeResult } = require("./src/presentation/clientAppointmentChangePresentation");
@@ -16,6 +17,7 @@ const clientDiscoveryService = require("./src/services/clientDiscoveryMenu");
 const { installClientNavigationPriority } = require("./src/services/clientNavigationPriority");
 const { submitWorkspaceBookingRequestAlertTemplate } = require("./src/services/workspaceBookingRequestAlertTemplateProvisioning");
 
+observability.initialize();
 validateEnv();
 const processClientServiceFamilyMessage = clientFamilyService.processClientServiceFamilyMessage;
 clientFamilyService.processClientServiceFamilyMessage = async (...args) => presentClientFamilyResult(await processClientServiceFamilyMessage(...args));
@@ -65,7 +67,19 @@ app.use("/assets/service-images", express.static(path.join(__dirname, "public", 
 app.get("/", (req, res) => res.status(200).json({ service: "shiloh-whatsapp-bot", status: "running" }));
 app.get("/health", async (req, res) => { const ok = await checkDatabase(); return res.status(ok ? 200 : 503).json({ status: ok ? "ok" : "degraded", database: ok ? "ok" : "unavailable", timestamp: new Date().toISOString() }); });
 app.use("/audit-read", auditReadRoutes); app.use("/admin/privacy", privacyRoutes); app.use("/admin", adminRoutes); app.use("/calendar", calendarRoutes); app.use("/", serviceRoutes); app.use("/", walkinRoutes); app.use("/", bookRoutes); app.use("/", webhookRoutes);
-app.use((err, req, res, next) => { const log = req.log || logger; log.error({ err }, "Unhandled Express error"); if (res.headersSent) return next(err); return res.status(500).json({ error: "Internal server error", requestId: req.id }); });
+app.use((err, req, res, next) => {
+  const log = req.log || logger;
+  const route = `${req.baseUrl || ""}${req.route?.path || ""}` || "unmatched";
+  observability.captureException(err, {
+    "error.kind": "express",
+    "error.code": err?.code,
+    "http.method": req.method,
+    "http.route": route,
+  });
+  log.error({ err }, "Unhandled Express error");
+  if (res.headersSent) return next(err);
+  return res.status(500).json({ error: "Internal server error", requestId: req.id });
+});
 
 async function auditMetaTemplateInventoryIfExplicitlyEnabled() {
   if (String(process.env.META_TEMPLATE_INVENTORY_AUDIT_ON_START || '').toLowerCase() !== 'true') return;
@@ -111,6 +125,11 @@ async function start() {
   await auditMetaTemplateInventoryIfExplicitlyEnabled();
   server = app.listen(PORT, () => { logger.info({ port: PORT }, "Shiloh started"); startConversationSessionCleanupScheduler(); startTemporarySessionCleanupScheduler(); startGoogleBusinessProfileSyncScheduler(); startAppointmentLifecycleScheduler(); startCustomerCareScheduler(); startBookingIntegrityScheduler(); startCustomerBookingConfirmationScheduler(); startMandatoryDemoCleanupScheduler(); startAttendanceFinalizationReminderScheduler(); startHistoricalFinalizationPromptScheduler(); });
 }
-start().catch((error) => { logger.fatal({ err: error }, "Shiloh failed during startup"); process.exit(1); });
+start().catch(async (error) => {
+  observability.captureException(error, { "error.kind": "startup", "error.code": error?.code, "runtime.phase": "startup" });
+  await observability.flush();
+  logger.fatal({ err: error }, "Shiloh failed during startup");
+  process.exit(1);
+});
 function shutdown(signal) { logger.info({ signal }, "Shutting down Shiloh"); if (!server) return process.exit(0); server.close(() => { logger.info("HTTP server closed"); process.exit(0); }); setTimeout(() => { logger.error("Forced shutdown after timeout"); process.exit(1); }, 10000).unref(); }
 process.on("SIGTERM", () => shutdown("SIGTERM")); process.on("SIGINT", () => shutdown("SIGINT"));
