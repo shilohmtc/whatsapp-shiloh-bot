@@ -107,15 +107,19 @@ function createCalendarRetrospectiveBookingV1Service({
     const client = await db.connect();
     try {
       await client.query('BEGIN');
-      const context = await customContext(payload.adminId, payload, client);
-      await client.query(`SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, [`calendar-past:${context.admin.id}:${safeRequestId}`]);
-      const replay = await client.query(`SELECT entity_id,metadata FROM crm_audit_events WHERE actor_admin_id=$1 AND action='calendar.past_appointment_recorded' AND metadata->>'requestId'=$2 ORDER BY id LIMIT 1`, [context.admin.id, safeRequestId]);
+      const initialContext = await customContext(payload.adminId, payload, client);
+      await client.query(`SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, [`calendar-past:${initialContext.admin.id}:${safeRequestId}`]);
+      const replay = await client.query(`SELECT entity_id,metadata FROM crm_audit_events WHERE actor_admin_id=$1 AND action='calendar.past_appointment_recorded' AND metadata->>'requestId'=$2 ORDER BY id LIMIT 1`, [initialContext.admin.id, safeRequestId]);
       if (replay.rows[0]) {
         if (String(replay.rows[0].metadata?.requestFingerprint || '') !== requestFingerprint) throw customError('CALENDAR_PAST_IDEMPOTENCY_MISMATCH', 'That request identifier was already used for a different appointment.', 409);
         await client.query('COMMIT');
         return { status: 'idempotent_replay', appointmentId: Number(replay.rows[0].entity_id), warnings: replay.rows[0].metadata?.warnings || [] };
       }
-      await client.query(`SELECT pg_advisory_xact_lock($1::bigint)`, [context.staff.id]);
+      await client.query(`SELECT pg_advisory_xact_lock($1::bigint)`, [initialContext.staff.id]);
+      const context = await customContext(payload.adminId, payload, client);
+      if (Number(context.staff.id) !== Number(initialContext.staff.id)) {
+        throw customError('CALENDAR_PAST_STAFF_CHANGED', 'The selected practitioner changed while the historical appointment was being prepared.', 409);
+      }
       const inserted = await client.query(`INSERT INTO appointments(client_id,crm_v2_client_id,source_client_name,location_id,starts_at,ends_at,status,title,notes,total_price,currency,source) VALUES(NULL,$1,$2,$3,$4,$5,'unknown',$6,$7,NULL,'ZAR','shiloh_calendar') RETURNING id`, [context.client.id, context.client.name, context.location.id, context.startsAt, context.endsAt, context.service.name, context.notes]);
       const appointmentId = Number(inserted.rows[0].id);
       await client.query(`INSERT INTO appointment_services(appointment_id,service_id,position,service_name_snapshot,price_snapshot,duration_minutes_snapshot) VALUES($1,NULL,1,$2,NULL,$3)`, [appointmentId, context.service.name, context.service.durationMinutes]);
