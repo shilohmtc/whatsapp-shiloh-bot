@@ -155,6 +155,7 @@ async function main() {
 
     const screenshots = [
       await capture(executable, origin, 'desktop-dashboard-carryover', 1440, 960, directory),
+      await capture(executable, origin, 'desktop-dashboard-tall', 1440, 1200, directory),
       await capture(executable, origin, 'phone-dashboard-carryover', 390, 844, directory),
     ];
     const exactHead = spawnSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).stdout.trim();

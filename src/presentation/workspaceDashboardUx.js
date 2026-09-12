@@ -5,7 +5,7 @@ function baseStyles() {
 }
 
 function styles() {
-  return `${baseStyles()}@media(max-width:850px){.dashboard-grid{grid-template-columns:minmax(0,1fr)}.dashboard-grid,.panel,.panel-head>*{min-width:0;max-width:100%}.panel-head{flex-wrap:wrap}.appointment-actions,.carryover-group .appointment-actions{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.attention-summary{max-width:100%;overflow-wrap:anywhere}}`;
+  return `${baseStyles()}@media(min-width:1051px){.workspace-main .shell{display:flex;min-height:100vh;flex-direction:column}.dashboard-grid{flex:1;grid-template-rows:auto auto minmax(0,1fr);align-items:stretch}.dashboard-grid>.panel{align-self:stretch}.dashboard-grid>[data-dashboard-today]{grid-row:1}.dashboard-grid>[data-dashboard-activity-panel]{grid-row:2/4}.dashboard-grid:not(:has([data-dashboard-attention-panel])){grid-template-rows:auto minmax(0,1fr)}.dashboard-grid:not(:has([data-dashboard-attention-panel]))>[data-dashboard-communications-panel],.dashboard-grid:not(:has([data-dashboard-attention-panel]))>[data-dashboard-activity-panel]{grid-row:2}}@media(max-width:850px){.dashboard-grid{grid-template-columns:minmax(0,1fr)}.dashboard-grid,.panel,.panel-head>*{min-width:0;max-width:100%}.panel-head{flex-wrap:wrap}.appointment-actions,.carryover-group .appointment-actions{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.attention-summary{max-width:100%;overflow-wrap:anywhere}}`;
 }
 
 function timeOnly(value) {

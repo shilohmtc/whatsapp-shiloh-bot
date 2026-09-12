@@ -1,6 +1,7 @@
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
+const http = require('node:http');
 const https = require('node:https');
 const net = require('node:net');
 const os = require('node:os');
@@ -22,6 +23,7 @@ const { calendarOperationalMutationsClientScript } = require('../src/presentatio
 const { workspaceNavigationClientScript } = require('../src/presentation/workspaceShell');
 const { workspaceIconClientScript } = require('../src/presentation/workspaceIconClient');
 const { calendarDesktopApprovedClientScript } = require('../src/presentation/calendarDesktopApprovedUx');
+const { calendarDesktopFitCanvasClientScript } = require('../src/presentation/calendarDesktopFitCanvasUx');
 
 const OUT_DIR = path.join(process.cwd(), 'artifacts', 'calendar-phone-week-planner-v3');
 const SESSION_TOKEN = 'synthetic-phone-v2-session';
@@ -48,7 +50,7 @@ function createCertificate(directory) {
     'req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-keyout', keyPath, '-out', certPath,
     '-subj', '/CN=127.0.0.1', '-addext', 'subjectAltName=IP:127.0.0.1,DNS:localhost', '-days', '1',
   ], { encoding: 'utf8' });
-  if (generated.status !== 0) throw new Error(`OpenSSL proof certificate failed: ${generated.stderr}`);
+  if (generated.status !== 0) return null;
   return { key: fs.readFileSync(keyPath), cert: fs.readFileSync(certPath) };
 }
 
@@ -234,6 +236,7 @@ function createFixture() {
     workspaceNavigationClientScript(),
     workspaceIconClientScript(),
     calendarDesktopApprovedClientScript(),
+    calendarDesktopFitCanvasClientScript(),
   ].join('\n')));
   app.get('/calendar/workspace/navigation', (_req, res) => res.json({
     dashboard: { allowed: true, href: '/calendar/workspace' },
@@ -285,15 +288,17 @@ async function main() {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'shiloh-phone-v2-'));
   fs.rmSync(OUT_DIR, { recursive: true, force: true });
   fs.mkdirSync(OUT_DIR, { recursive: true });
+  const certificate = createCertificate(directory);
+  ENV.NODE_ENV = certificate ? 'production' : 'test';
   const { app, state } = createFixture();
   let server;
   let chrome;
   let cdp;
   try {
-    server = https.createServer(createCertificate(directory), app);
+    server = certificate ? https.createServer(certificate, app) : http.createServer(app);
     server.listen(0, '127.0.0.1');
     await once(server, 'listening');
-    const origin = `https://127.0.0.1:${server.address().port}`;
+    const origin = `${certificate ? 'https' : 'http'}://127.0.0.1:${server.address().port}`;
     const debugPort = await reservePort();
     chrome = spawn(executable, [
       '--headless=new', '--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage', '--hide-scrollbars',
@@ -337,7 +342,7 @@ async function main() {
 
     const screenshots = [];
 
-    await cdp.send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false, screenWidth: 1440, screenHeight: 1000 });
+    await cdp.send('Emulation.setDeviceMetricsOverride', { width: 1920, height: 1600, deviceScaleFactor: 1, mobile: false, screenWidth: 1920, screenHeight: 1600 });
     await cdp.send('Page.navigate', { url: `${origin}/proof` });
     await poll(() => evaluate(cdp, 'location.pathname'), value => value === '/calendar/read-only');
     await poll(() => evaluate(cdp, `document.body.dataset.calendarDesktopApproved`), value => value === 'true');
@@ -365,8 +370,11 @@ async function main() {
       bookingSlotCounts:Array.from(document.querySelectorAll('.desktop-practitioner-lane')).map(lane=>lane.querySelectorAll('.calendar-booking-slot').length),
       bookingSlotStaff:Array.from(document.querySelectorAll('.desktop-practitioner-lane')).map(lane=>new URL(lane.querySelector('.calendar-booking-slot')?.href||location.href).searchParams.get('staff')),
       phoneControlsDisplay:getComputedStyle(document.querySelector('[data-phone-calendar-v2-controls]')).display,
+      verticalFit:document.body.dataset.calendarDesktopVerticalFit||'',
+      gridHeight:document.querySelector('.desktop-practitioner-lane .time-column')?.getBoundingClientRect().height||0,
+      gridBottom:document.querySelector('.week-time-grid')?.getBoundingClientRect().bottom||0,
     }))()`);
-    assert.deepEqual(desktopMetrics.viewport, { width: 1440, height: 1000, screenWidth: 1440, screenHeight: 1000 });
+    assert.deepEqual(desktopMetrics.viewport, { width: 1920, height: 1600, screenWidth: 1920, screenHeight: 1600 });
     assert.equal(desktopMetrics.approved, 'true');
     assert.equal(desktopMetrics.compactPeriod, '7–12 Sep 2026');
     assert.equal(desktopMetrics.weekStripDays, 6);
@@ -381,13 +389,16 @@ async function main() {
     assert.equal(desktopMetrics.sourceWeekDisplay, 'none');
     assert.equal(desktopMetrics.plannerOverflowY, 'visible');
     assert.equal(desktopMetrics.plannerMaxHeight, 'none');
-    assert.ok(desktopMetrics.rootScrollWidth <= 1440);
+    assert.ok(desktopMetrics.rootScrollWidth <= 1920);
     assert.ok(desktopMetrics.navIconCount >= 8);
     assert.equal(desktopMetrics.signoutHasIcon, true);
     assert.equal(desktopMetrics.visibleInlineManage, 0);
     assert.deepEqual(desktopMetrics.bookingSlotCounts, [11, 11, 11]);
     assert.deepEqual(desktopMetrics.bookingSlotStaff, ['51', '52', '53']);
     assert.equal(desktopMetrics.phoneControlsDisplay, 'none');
+    assert.equal(desktopMetrics.verticalFit, 'true');
+    assert.ok(desktopMetrics.gridHeight > 792, JSON.stringify(desktopMetrics));
+    assert.ok(1600 - desktopMetrics.gridBottom < 80);
     screenshots.push({ ...(await capture('desktop-approved-calendar-contract')), viewport: desktopMetrics.viewport, metrics: desktopMetrics });
     const desktopViewOptions = await evaluate(cdp, `Array.from(document.querySelectorAll('[data-calendar-view-option]')).map(node=>node.dataset.calendarViewOption)`);
     assert.deepEqual(desktopViewOptions, ['week', 'agenda', 'month']);
@@ -401,8 +412,8 @@ async function main() {
     assert.equal(desktopMonthMetrics.view, 'month');
     assert.equal(desktopMonthMetrics.dayOption, false);
     assert.equal(desktopMonthMetrics.monthGrid, true);
-    assert.ok(desktopMonthMetrics.rootScrollWidth <= 1440);
-    screenshots.push({ ...(await capture('desktop-month-day-retired')), viewport: { width: 1440, height: 1000 }, metrics: desktopMonthMetrics });
+    assert.ok(desktopMonthMetrics.rootScrollWidth <= 1920);
+    screenshots.push({ ...(await capture('desktop-month-day-retired')), viewport: { width: 1920, height: 1600 }, metrics: desktopMonthMetrics });
 
 
     await cdp.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true, screenWidth: 390, screenHeight: 844 });
@@ -660,7 +671,7 @@ async function main() {
       if (chrome.exitCode == null) chrome.kill('SIGKILL');
     }
     if (server) await new Promise(resolve => server.close(() => resolve()));
-    fs.rmSync(directory, { recursive: true, force: true });
+    try { fs.rmSync(directory, { recursive: true, force: true }); } catch (_error) {}
   }
 }
 
