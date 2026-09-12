@@ -1,4 +1,5 @@
 const base = require('./publicBookingPage');
+const { PUBLIC_CHROME_CSS, renderSiteHeader, renderSiteFooter } = require('./publicSiteChrome');
 
 const VISUAL_BREAK = `<section class="inside-shiloh-break" aria-label="Inside Shiloh"><img src="/assets/booking/inside-shiloh-signature.png" alt="Inside Shiloh — Clinical care. Personal touch. Beautifully you. Shiloh Massage Therapy &amp; Aesthetic Clinic"></section>`;
 
@@ -17,12 +18,17 @@ function insertInsideShilohSignatures(html, catalogue = []) {
     html = html.replace(middleSection, `${VISUAL_BREAK}${middleSection}`);
   }
 
-  html = html.replace('</div><section class="clinic">', `${VISUAL_BREAK}</div><section class="clinic">`);
+  html = html.replace(
+    '</div><section class="clinic">',
+    `${VISUAL_BREAK}</div><section class="clinic">`,
+  );
   return html;
 }
 
 function extractCategorySection(html, index) {
-  const match = html.match(new RegExp(`<section class="category" id="category-${index}">[\\s\\S]*?<\\/section>`));
+  const match = html.match(
+    new RegExp(`<section class="category" id="category-${index}">[\\s\\S]*?<\\/section>`),
+  );
   return match ? match[0] : null;
 }
 
@@ -54,13 +60,20 @@ function groupSpecialtyCategories(html, catalogue = []) {
     }
 
     const columns = row.length === 3 ? ' specialty-category-row--three' : '';
-    html = html.replace(marker, `<div class="specialty-category-row${columns}">${sections.join('')}</div>`);
+    html = html.replace(
+      marker,
+      `<div class="specialty-category-row${columns}">${sections.join('')}</div>`,
+    );
   }
   return html;
 }
 
 function renderBookingPage(number, catalogue = []) {
   let html = base.renderBookingPage(number, catalogue);
+
+  html = html.replace('<body>', `<body>${renderSiteHeader('/book')}`);
+  html = html.replace('<main>', '<main id="main-content">');
+  html = html.replace(/<footer class="footer">[\s\S]*?<\/footer>/, renderSiteFooter());
 
   const oldGallery = /<section class="clinic-gallery"[\s\S]*?<\/section>/;
   html = html.replace(oldGallery, '');
@@ -71,7 +84,7 @@ function renderBookingPage(number, catalogue = []) {
   const visualBreakCss = `
 .inside-shiloh-break{width:calc(100% + 280px);margin:26px -140px 32px;border-radius:20px;overflow:hidden;box-shadow:0 10px 30px rgba(36,53,47,.12);border:1px solid rgba(36,53,47,.08);background:#5f584f}.inside-shiloh-break img{display:block;width:100%;height:auto}.catalogue>.inside-shiloh-break:first-child{margin-top:4px;margin-bottom:30px}.catalogue>.inside-shiloh-break:last-child{margin-top:34px;margin-bottom:8px}.specialty-category-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;align-items:stretch}.specialty-category-row--three{grid-template-columns:repeat(3,minmax(0,1fr))}.specialty-category-row>.category{min-width:0}.specialty-category-row .service-grid{grid-template-columns:1fr}.specialty-category-row .service-card{height:100%}@media(max-width:1280px){.inside-shiloh-break{width:100%;margin:24px 0 30px}.specialty-category-row--three{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:700px){.inside-shiloh-break{border-radius:16px;margin:20px 0 24px}.specialty-category-row,.specialty-category-row--three{grid-template-columns:1fr;gap:0}}
 `;
-  html = html.replace('</style>', `${visualBreakCss}</style>`);
+  html = html.replace('</style>', `${PUBLIC_CHROME_CSS}${visualBreakCss}</style>`);
   return html;
 }
 
