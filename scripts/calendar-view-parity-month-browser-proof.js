@@ -202,6 +202,7 @@ const METRICS_EXPRESSION = `(() => {
     contextVisible: visible(context),
     peopleSummary: peopleSummary ? peopleSummary.textContent.trim() : null,
     practitionerCount: visibleAll('.view-practitioner').length,
+    desktopPractitionerCount: visibleAll('.desktop-practitioner-chips [data-calendar-staff-chip]:not([data-calendar-staff-chip="all"])').length,
     activePractitionerVisible: visible(document.querySelector('[data-compact-week-active-staff]')),
     activePractitionerName: document.querySelector('[data-compact-week-active-staff]')?.textContent.trim() || '',
     ownerLabelCount: visibleAll('.event-practitioners').length,
@@ -240,7 +241,10 @@ function assertMetrics(proof, metrics) {
     if (metrics.contextVisible || metrics.practitionerCount !== 0 || !metrics.peopleSummary || !metrics.activePractitionerVisible || !metrics.activePractitionerName) {
       throw new Error(`${proof.name} lost compact active-practitioner context: ${JSON.stringify(metrics)}`);
     }
-  } else if (!metrics.contextVisible || metrics.practitionerCount !== proof.staffCount) {
+  } else if (
+    (!metrics.contextVisible || metrics.practitionerCount !== proof.staffCount)
+    && metrics.desktopPractitionerCount !== proof.staffCount
+  ) {
     throw new Error(`${proof.name} lost selected practitioner context: ${JSON.stringify(metrics)}`);
   }
   if (metrics.ownerLabelCount < 1 && !(proof.view === 'month' && proof.phone && metrics.visibleMonthOwners > 0)) {
