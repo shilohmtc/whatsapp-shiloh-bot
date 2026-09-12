@@ -8,6 +8,11 @@ const {
 } = require('../src/services/calendarAuthorization');
 const { calendarAppointmentDetailsClientScript } = require('../src/presentation/calendarAppointmentDetailsUx');
 const {
+  appointmentDetailHref,
+  decorateClientAppointmentHistory,
+  decorateWorkspaceAppointmentLinks,
+} = require('../src/presentation/calendarAppointmentDetailLinks');
+const {
   renderCalendarRetrospectiveBookingPage,
   calendarRetrospectiveBookingClientScript,
 } = require('../src/presentation/calendarRetrospectiveBookingV1Ux');
@@ -73,6 +78,36 @@ test('every visible canonical appointment is enhanced for read-only details inde
   assert.match(script, /setAttribute\('tabindex','0'\)/);
   assert.match(script, /min-height:44px/);
   assert.match(script, /appointmentManagementTarget==='true'/);
+  assert.match(script, /URLSearchParams\(window\.location\.search\)/);
+  assert.match(script, /openRequested\(\)/);
+});
+
+test('Client History and Workspace converge on the canonical Calendar appointment detail deep link', () => {
+  const href = appointmentDetailHref({ appointmentId: 42, startsAt: '2026-09-11T07:30:00.000Z' });
+  assert.equal(href, '/calendar/read-only?view=day&date=2026-09-11&appointment=42&staff=all');
+
+  const clientBase = '<section><article class="history-row"><div>History appointment</div></article></section>';
+  const clientHtml = decorateClientAppointmentHistory(clientBase, [{ id: 42, starts_at: '2026-09-11T07:30:00.000Z' }]);
+  assert.match(clientHtml, /data-appointment-detail-link="42"/);
+  assert.match(clientHtml, /appointment=42&amp;staff=all/);
+  assert.match(clientHtml, /min-height:44px/);
+  assert.doesNotMatch(clientHtml, /<article class="history-row"/);
+
+  const dashboardBase = '<article class="appointment" data-dashboard-appointment="42" data-operational-date-key="2026-09-11"><div class="appointment-actions"><a class="button" href="/calendar/read-only?view=day&amp;date=2026-09-11&amp;staff=all">Open / manage</a></div></article>';
+  const dashboardHtml = decorateWorkspaceAppointmentLinks(dashboardBase);
+  assert.match(dashboardHtml, /data-appointment-detail-link="42"/);
+  assert.match(dashboardHtml, /staff=all&amp;appointment=42/);
+  assert.match(dashboardHtml, />Open \/ manage</);
+});
+
+test('authorized edit handoff remains the existing canonical operational Manage surface', () => {
+  const routeSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'routes', 'calendarAppointmentEndTime.js'), 'utf8');
+  assert.match(routeSource, /renderOperationalClient\(\)/);
+  assert.match(routeSource, /renderNotesClient\(\)/);
+  assert.match(routeSource, /renderEndTimeClient\(\)/);
+  const detailSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'presentation', 'calendarAppointmentDetailsUx.js'), 'utf8');
+  assert.match(detailSource, /detailsEditBypass/);
+  assert.match(detailSource, /card\.click\(\)/);
 });
 
 test('past appointment UX exposes Custom service and Add New Appointment from production renderer', () => {
@@ -102,4 +137,16 @@ test('custom service remains bounded by canonical record-past and all-business s
   assert.match(source, /authority\.serviceScope !== 'all_services'/);
   assert.match(source, /calendarScopeAllowsBookingTarget/);
   assert.match(source, /retrospectiveClientAllows/);
+});
+
+test('custom historical write revalidates canonical context after practitioner lock before insert', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'services', 'calendarRetrospectiveBookingV1.js'), 'utf8');
+  const recordIndex = source.indexOf('async function record');
+  const staffLockIndex = source.indexOf('SELECT pg_advisory_xact_lock($1::bigint)', recordIndex);
+  const revalidationIndex = source.indexOf('const context = await customContext(payload.adminId, payload, client);', staffLockIndex);
+  const insertIndex = source.indexOf('INSERT INTO appointments', revalidationIndex);
+  assert.ok(recordIndex >= 0);
+  assert.ok(staffLockIndex > recordIndex);
+  assert.ok(revalidationIndex > staffLockIndex);
+  assert.ok(insertIndex > revalidationIndex);
 });
