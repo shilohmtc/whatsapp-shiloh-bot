@@ -67,7 +67,7 @@ test('JP test elevation is removable by canonical permission data only', () => {
 
 test('every visible canonical appointment is enhanced for read-only details independently of edit attributes', () => {
   const script = calendarAppointmentDetailsClientScript();
-  assert.match(script, /event-card\[data-kind=\\"appointment\\"\]\[data-canonical=\\"true\\"\]/);
+  assert.match(script, /event-card\[data-kind="appointment"\]\[data-canonical="true"\]/);
   assert.match(script, /appointmentDetailsReady/);
   assert.match(script, /setAttribute\('role','button'\)/);
   assert.match(script, /setAttribute\('tabindex','0'\)/);
