@@ -21,7 +21,11 @@ async function run() {
     const phone = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 });
     await phone.setContent(renderHome(catalogue), { waitUntil: 'load' });
     await assertCondition(await phone.locator('.mobile-book').isVisible(), 'Phone sticky Book CTA must be visible');
-    await assertCondition(!(await phone.locator('nav a[href="/treatments"]').isVisible()), 'Phone condenses secondary header navigation');
+    await assertCondition(await phone.locator('.mobile-menu').isVisible(), 'Phone primary navigation menu must be visible');
+    await phone.locator('.mobile-menu summary').click();
+    for (const href of ['/', '/treatments', '/about', '/contact', '/book']) {
+      await assertCondition(await phone.locator(`.mobile-menu-panel a[href="${href}"]`).isVisible(), `Phone navigation must expose ${href}`);
+    }
     const phoneBookHeight = await phone.locator('.mobile-book').evaluate((node) => node.getBoundingClientRect().height);
     await assertCondition(phoneBookHeight >= 44, `Phone Book target must be at least 44px; got ${phoneBookHeight}`);
     await assertCondition((await phone.locator('.hero-grid').evaluate((node) => getComputedStyle(node).gridTemplateColumns)).split(' ').length === 1, 'Phone hero must collapse to one column');
@@ -29,7 +33,8 @@ async function run() {
 
     const desktop = await browser.newPage({ viewport: { width: 1440, height: 1000 }, deviceScaleFactor: 1 });
     await desktop.setContent(renderHome(catalogue), { waitUntil: 'load' });
-    await assertCondition(await desktop.locator('nav a[href="/treatments"]').isVisible(), 'Desktop full navigation must be visible');
+    await assertCondition(await desktop.locator('.nav a[href="/treatments"]').isVisible(), 'Desktop full navigation must be visible');
+    await assertCondition(!(await desktop.locator('.mobile-menu').isVisible()), 'Desktop must not show the Phone menu');
     await assertCondition(!(await desktop.locator('.mobile-book').isVisible()), 'Desktop must not show Phone sticky CTA');
     const columns = await desktop.locator('.hero-grid').evaluate((node) => getComputedStyle(node).gridTemplateColumns);
     await assertCondition(columns.split(' ').filter(Boolean).length === 2, `Desktop hero must retain two columns; got ${columns}`);

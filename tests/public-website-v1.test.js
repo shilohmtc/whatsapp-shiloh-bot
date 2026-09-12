@@ -58,6 +58,11 @@ test('public site keeps Phone-first touch and Desktop layout contracts explicit'
   assert.match(html, /@media\(max-width:700px\)/);
   assert.match(html, /min-height:44px/);
   assert.match(html, /mobile-book/);
+  assert.match(html, /mobile-menu-panel/);
+  assert.match(html, /Phone primary navigation/);
+  for (const href of ['/', '/treatments', '/about', '/contact', '/book']) {
+    assert.equal((html.match(new RegExp(`href="${href === '/' ? '\\/' : href}"`, 'g')) || []).length >= 2, true);
+  }
   assert.match(html, /grid-template-columns:1\.12fr \.88fr/);
 });
 
