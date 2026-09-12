@@ -62,6 +62,27 @@ function validCrmV2Mobile(value) {
   return /^27[678][0-9]{8}$/.test(String(value || '').trim());
 }
 
+function safeProviderFailureExplanation(providerError) {
+  const code = providerError && typeof providerError === 'object' && !Array.isArray(providerError)
+    ? String(providerError.code ?? '').trim()
+    : '';
+  if (code === '131042') {
+    return 'WhatsApp rejected this delivery because the business account has a payment or eligibility issue.';
+  }
+  if (code === '131026') {
+    return 'WhatsApp could not deliver this message to the recipient.';
+  }
+  return 'WhatsApp reported a delivery failure. No additional safe detail is available.';
+}
+
+function deliveryExplanation(row, outcome) {
+  if (outcome === 'failed') return safeProviderFailureExplanation(row?.provider_error);
+  if (outcome === 'uncertain') return 'Shiloh cannot confirm whether WhatsApp accepted or delivered this message.';
+  if (outcome === 'pending' || outcome === 'sending') return 'The booking confirmation has not yet reached a final delivery state.';
+  if (outcome === 'not_sent') return 'No booking confirmation delivery has been recorded.';
+  return 'The latest recorded WhatsApp delivery evidence is shown above.';
+}
+
 function confirmationProjection(row, now = new Date()) {
   if (!row?.appointment_id) return { status: 'not_sent', statusLabel: 'Not sent', lastEvidenceAt: null, recoverable: false };
   const outcome = row.already_sent === true && !row.delivery_status ? 'sent' : providerOutcome({
@@ -98,6 +119,7 @@ function confirmationProjection(row, now = new Date()) {
     status: outcome,
     statusLabel: labels[outcome] || 'Unknown / uncertain',
     lastEvidenceAt: evidenceTimes.find(Boolean) || null,
+    deliveryExplanation: deliveryExplanation(row, outcome),
     recoverable: recovery.recoverable,
     recoveryReason: recovery.reason,
   };
@@ -137,6 +159,11 @@ function publicReason(reason) {
     case 'appointment_not_found': return 'The appointment is no longer available.';
     default: return 'The booking confirmation was not sent.';
   }
+}
+
+function recoveryExplanation(state = {}) {
+  if (state.canSend === true) return 'Retry is available through Shiloh’s existing booking-confirmation channel.';
+  return publicReason(state.reason);
 }
 
 function createWorkspaceClientNotificationService({
@@ -194,6 +221,7 @@ function createWorkspaceClientNotificationService({
               delivery.recipient_mobile AS delivery_recipient_mobile,
               delivery.provider_sent_at, delivery.provider_delivered_at,
               delivery.provider_read_at, delivery.provider_failed_at,
+              delivery.provider_error,
               CASE WHEN a.id IS NULL THEN FALSE ELSE EXISTS(
                 SELECT 1 FROM crm_audit_events e
                  WHERE e.action='customer.booking_confirmation_sent'
@@ -275,6 +303,7 @@ function createWorkspaceClientNotificationService({
       canSend: state.canSend,
       reason: state.reason,
       reasonMessage: state.reason ? publicReason(state.reason) : null,
+      recoveryExplanation: recoveryExplanation(state),
     };
   }
 
@@ -294,6 +323,7 @@ function createWorkspaceClientNotificationService({
               delivery.recipient_mobile AS delivery_recipient_mobile,
               delivery.provider_sent_at,delivery.provider_delivered_at,
               delivery.provider_read_at,delivery.provider_failed_at,
+              delivery.provider_error,
               EXISTS(SELECT 1 FROM crm_audit_events audit
                       WHERE audit.action='customer.booking_confirmation_sent'
                         AND audit.entity_type='appointment' AND audit.entity_id=a.id) AS already_sent
@@ -332,6 +362,7 @@ function createWorkspaceClientNotificationService({
       actionLabel: confirmation.status === 'not_sent' ? 'Send booking confirmation' : 'Re-send booking confirmation',
       reason: state.reason,
       reasonMessage: state.reason ? publicReason(state.reason) : null,
+      recoveryExplanation: recoveryExplanation(state),
     };
   }
 
@@ -350,6 +381,7 @@ function createWorkspaceClientNotificationService({
         preview.canRecover = false;
         preview.reason = 'provider_unavailable';
         preview.reasonMessage = publicReason('provider_unavailable');
+        preview.recoveryExplanation = recoveryExplanation({ canSend: false, reason: 'provider_unavailable' });
       }
     }
     return { authority, ...preview };
@@ -370,6 +402,7 @@ function createWorkspaceClientNotificationService({
               delivery.recipient_mobile AS delivery_recipient_mobile,
               delivery.provider_sent_at,delivery.provider_delivered_at,
               delivery.provider_read_at,delivery.provider_failed_at,
+              delivery.provider_error,
               EXISTS(SELECT 1 FROM crm_audit_events audit
                       WHERE audit.action='customer.booking_confirmation_sent'
                         AND audit.entity_type='appointment' AND audit.entity_id=a.id) AS already_sent
@@ -393,6 +426,7 @@ function createWorkspaceClientNotificationService({
         item.canRecover = false;
         item.reason = 'provider_unavailable';
         item.reasonMessage = publicReason('provider_unavailable');
+        item.recoveryExplanation = recoveryExplanation({ canSend: false, reason: 'provider_unavailable' });
       }
       return item;
     })
@@ -460,6 +494,9 @@ module.exports = {
   channelReady,
   defaultProviderGuard,
   validCrmV2Mobile,
+  safeProviderFailureExplanation,
+  deliveryExplanation,
+  recoveryExplanation,
   confirmationProjection,
   previewState,
   publicReason,

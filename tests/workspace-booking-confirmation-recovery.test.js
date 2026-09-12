@@ -13,6 +13,7 @@ const {
 const {
   createWorkspaceClientNotificationService,
   confirmationProjection,
+  safeProviderFailureExplanation,
 } = require('../src/services/workspaceClientNotifications');
 const { renderMessagesPage } = require('../src/presentation/workspaceMessagesUx');
 const { calendarOperationalMutationsClientScript } = require('../src/presentation/calendarOperationalMutationsUx');
@@ -63,6 +64,21 @@ test('legacy sent audit without a delivery row remains terminal rather than beco
   assert.equal(projection.recoveryReason, 'already_sent');
 });
 
+test('provider failure diagnostics map known codes and fail closed for unknown or malformed evidence', () => {
+  assert.equal(
+    safeProviderFailureExplanation({ code: 131042, message: 'secret provider payload' }),
+    'WhatsApp rejected this delivery because the business account has a payment or eligibility issue.'
+  );
+  assert.equal(
+    safeProviderFailureExplanation({ code: '131026', message: 'recipient and token details' }),
+    'WhatsApp could not deliver this message to the recipient.'
+  );
+  const generic = 'WhatsApp reported a delivery failure. No additional safe detail is available.';
+  assert.equal(safeProviderFailureExplanation({ code: 999999, message: 'private detail' }), generic);
+  assert.equal(safeProviderFailureExplanation('malformed provider evidence'), generic);
+  assert.equal(safeProviderFailureExplanation(null), generic);
+});
+
 test('recovery revalidates current CRM V2 recipient and conditionally reopens provider-failed local-sent evidence', async () => {
   const calls = [];
   const db = { async query(sql, params = []) {
@@ -109,6 +125,7 @@ function appointmentRow(overrides = {}) {
     source: 'shiloh_calendar', location_name: 'Shiloh', service_name: 'Treatment', staff_name: 'Practitioner',
     delivery_status: 'sent', sent_at: new Date('2026-09-04T09:00:00Z'), already_sent: true,
     provider_sent_at: new Date('2026-09-04T09:00:01Z'), provider_failed_at: new Date('2026-09-04T09:01:00Z'),
+    provider_error: { code: 131042, message: 'private provider text 27829999999' },
     ...overrides,
   };
 }
@@ -163,8 +180,28 @@ test('Messages attention shows truthful recovery state without provider internal
   assert.match(html, /Failed/);
   assert.match(html, /Re-send booking confirmation/);
   assert.match(html, /WhatsApp ending 4567/);
-  assert.doesNotMatch(html, /27821234567|wamid|provider_error/i);
+  assert.match(html, /Delivery/);
+  assert.match(html, /business account has a payment or eligibility issue/);
+  assert.match(html, /Recovery/);
+  assert.match(html, /Retry is available through Shiloh/);
+  assert.doesNotMatch(html, /27821234567|27829999999|private provider text|wamid|provider_error|131042/i);
   assert.match(calendarOperationalMutationsClientScript(), /booking-confirmation\/recover/);
+});
+
+test('Workspace exception SQL reads only the provider error field needed for sanitized diagnostics', async () => {
+  let exceptionSql = '';
+  const db = workspaceDb();
+  const originalQuery = db.query;
+  db.query = async (sql, params) => {
+    if (String(sql).includes('workspaceClientNotifications:exceptions')) exceptionSql = String(sql);
+    return originalQuery(sql, params);
+  };
+  const service = createWorkspaceClientNotificationService({
+    db, env: readyEnv, providerGuard: async () => ({ ready: true }), sender: async () => ({ sent: true }),
+  });
+  await service.listBookingConfirmationExceptions({ adminId: 7, now: NOW });
+  assert.match(exceptionSql, /delivery\.provider_error/);
+  assert.doesNotMatch(exceptionSql, /provider_message_id/);
 });
 
 test('Calendar exception routes retain session, same-origin, CSRF and client:notify boundaries', () => {
