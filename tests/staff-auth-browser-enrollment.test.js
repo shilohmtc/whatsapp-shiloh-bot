@@ -15,6 +15,10 @@ const {
 const {
   renderStaffCalendarAccessPage,
 } = require('../src/presentation/staffCalendarAccessUx');
+const {
+  createEnrollmentQrDataUrl,
+  setSecurityHeaders,
+} = require('../src/routes/staffAuthBrowserEnrollment');
 
 const NOW = new Date('2026-09-01T08:00:00.000Z');
 
@@ -123,10 +127,21 @@ test('staff sign-in UX retains authenticator enrollment only as recovery adminis
 test('browser enrollment management UX keeps the enrollment token in the one-time response surface', () => {
   const html = renderStaffAuthBrowserEnrollmentPage();
   const script = staffAuthBrowserEnrollmentClientScript();
-  assert.match(html, /Create one-time enrollment link/);
-  assert.match(html, /five-minute, single-use enrollment link/);
+  assert.match(html, /Create private enrollment QR/);
+  assert.match(html, /expires after five minutes/);
+  assert.match(html, /data-enrollment-link-qr/);
   assert.match(script, /HERE=BASE\+'\/admin-enrollment'/);
   assert.match(script, /fetch\(HERE\+'\/issue'/);
   assert.match(script, /x-shiloh-csrf-token/);
+  assert.match(script, /data\.qrDataUrl/);
   assert.doesNotMatch(script, /localStorage|sessionStorage/);
+});
+
+test('private enrollment links render as in-memory QR images permitted only on the protected page', async () => {
+  const dataUrl = await createEnrollmentQrDataUrl('https://example.test/calendar/staff#staff-recovery=private-once');
+  assert.match(dataUrl, /^data:image\/png;base64,/);
+  const headers = new Map();
+  setSecurityHeaders({ setHeader: (name, value) => headers.set(name, value) });
+  assert.match(headers.get('Content-Security-Policy'), /img-src data:/);
+  assert.equal(headers.get('Cache-Control'), 'private, no-store, max-age=0');
 });
