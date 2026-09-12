@@ -1,11 +1,11 @@
 const express = require('express');
 const { pool } = require('../db/pool');
-const { createCalendarRetrospectiveBookingService } = require('../services/calendarRetrospectiveBooking');
+const { createCalendarRetrospectiveBookingV1Service } = require('../services/calendarRetrospectiveBookingV1');
 const { requireStaffSession, sameOriginGuard, csrfGuard } = require('../middleware/staffBrowserSession');
 const {
   renderCalendarRetrospectiveBookingPage,
   calendarRetrospectiveBookingClientScript,
-} = require('../presentation/calendarRetrospectiveBookingUx');
+} = require('../presentation/calendarRetrospectiveBookingV1Ux');
 
 function statusForPastError(error) {
   if (Number.isInteger(error?.httpStatus)) return error.httpStatus;
@@ -19,7 +19,7 @@ function statusForPastError(error) {
 function createCalendarRetrospectiveBookingRouter({
   env = process.env,
   sessionService,
-  service = createCalendarRetrospectiveBookingService({ db: pool }),
+  service = createCalendarRetrospectiveBookingV1Service({ db: pool }),
   renderPage = renderCalendarRetrospectiveBookingPage,
   renderClient = calendarRetrospectiveBookingClientScript,
 } = {}) {
