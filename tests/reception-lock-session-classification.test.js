@@ -67,7 +67,7 @@ test('#812 validated shared Reception session keeps Calendar viewer reduced and 
   });
 });
 
-test('#812 account projection fails closed for a personal linked principal', async () => {
+test('#900 personal linked principal keeps personal account classification while Calendar read is business-wide', async () => {
   const row = sessionRow({
     id: 7,
     admin_id: 7,
@@ -82,7 +82,7 @@ test('#812 account projection fails closed for a personal linked principal', asy
   const session = await service.validateSessionToken(TOKEN);
 
   assert.equal(session.ok, true);
-  assert.deepEqual(session.viewer, { calendarScope: 'own_staff', staffId: 12 });
+  assert.deepEqual(session.viewer, { calendarScope: 'business_all_staff' });
   assert.deepEqual(accountNavigationMetadata({ viewer: session.accountPrincipal, passkeyEnabled: true }), {
     mode: 'personal',
     lockWorkspace: false,

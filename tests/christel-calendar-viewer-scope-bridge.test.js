@@ -90,7 +90,7 @@ function authenticatedRequest(viewer, adminId = 2) {
   return req;
 }
 
-test('1 Christel all-business browser-session scope translates explicitly to SchedulingTimeline all_business', () => {
+test('1 business-wide browser-session scope translates explicitly to SchedulingTimeline all_business', () => {
   assert.deepEqual(
     normalizeViewerForTimeline({ calendarScope: 'business_all_staff' }),
     { calendarScope: 'all_business' },
@@ -132,7 +132,7 @@ test('2 canonical authenticated viewer crosses the adapter and Calendar read-onl
   assert.match(res.body, /Create booking/);
 });
 
-test('2a own-appointments canonical authority derives linked-staff-only browser scope', () => {
+test('2a active employee practitioner receives business-wide Calendar read even without explicit appointment:view', () => {
   const viewer = deriveCalendarViewer(authorityRow({
     id: 7,
     staff_id: 7,
@@ -141,16 +141,15 @@ test('2a own-appointments canonical authority derives linked-staff-only browser 
     business_role: 'employee_practitioner',
     calendar_scope: 'own_appointments',
     service_scope: 'own_services',
-    permissions: { 'appointment:view': true },
+    permissions: {},
   }));
-  assert.deepEqual(viewer, { calendarScope: 'own_staff', staffId: 7 });
+  assert.deepEqual(viewer, { calendarScope: 'business_all_staff' });
   const normalized = normalizeViewerForTimeline(viewer);
-  assert.deepEqual(normalized, { calendarScope: 'own_appointments', staffId: 7 });
-  assert.deepEqual(resolveViewerFilter(normalized, null), { scope: 'own_appointments', staffIds: [7] });
-  assert.deepEqual(resolveViewerFilter(normalized, [8]), { scope: 'own_appointments', staffIds: [] });
+  assert.deepEqual(normalized, { calendarScope: 'all_business' });
+  assert.deepEqual(resolveViewerFilter(normalized, null), { scope: 'all_business', staffIds: null });
 });
 
-test('2b own-services browser behavior remains business-wide at the adapter boundary', () => {
+test('2b own-services active practitioner also receives the same business-wide Calendar read', () => {
   const viewer = deriveCalendarViewer(authorityRow({
     id: 11,
     staff_id: 11,
@@ -163,6 +162,27 @@ test('2b own-services browser behavior remains business-wide at the adapter boun
   }));
   assert.deepEqual(viewer, { calendarScope: 'business_all_staff' });
   assert.deepEqual(normalizeViewerForTimeline(viewer), { calendarScope: 'all_business' });
+});
+
+test('2c inactive linked staff and non-staff identities without appointment:view still fail closed', () => {
+  assert.equal(deriveCalendarViewer(authorityRow({
+    id: 12,
+    staff_id: 12,
+    staff_status: 'inactive',
+    business_role: 'employee_practitioner',
+    calendar_scope: 'own_appointments',
+    service_scope: 'own_services',
+    permissions: {},
+  })), null);
+  assert.equal(deriveCalendarViewer(authorityRow({
+    id: 13,
+    staff_id: null,
+    staff_status: null,
+    business_role: 'booking_operator',
+    calendar_scope: 'all_business',
+    service_scope: 'all_services',
+    permissions: {},
+  })), null);
 });
 
 test('3 unknown browser viewer scopes remain forbidden before SchedulingTimeline is called', async () => {
@@ -181,7 +201,7 @@ test('3 unknown browser viewer scopes remain forbidden before SchedulingTimeline
   assert.equal(timelineCalls, 0);
 });
 
-test('4 own_staff browser scope normalizes only to canonical own-scope and remains staff constrained', () => {
+test('4 legacy own_staff browser scope normalization remains constrained for compatibility', () => {
   const normalized = normalizeViewerForTimeline({ calendarScope: 'own_staff', staffId: 7 });
   assert.deepEqual(normalized, { calendarScope: 'own_appointments', staffId: 7 });
   assert.deepEqual(resolveViewerFilter(normalized, null), { scope: 'own_appointments', staffIds: [7] });
@@ -240,12 +260,15 @@ test('6 Create Booking presentation follows canonical booking authority, not who
   assert.deepEqual(authorityCalls, [2, 3, 99]);
 });
 
-test('7 repair does not broaden SchedulingTimeline or create a second appointment-write path', () => {
+test('7 #900 broadens only the browser read projection and does not change canonical mutation authority', () => {
   const schedulingSource = fs.readFileSync(path.join(__dirname, '../src/services/schedulingEngine.js'), 'utf8');
   const calendarBookingSource = fs.readFileSync(path.join(__dirname, '../src/services/calendarCreateBooking.js'), 'utf8');
+  const authorizationSource = fs.readFileSync(path.join(__dirname, '../src/services/calendarAuthorization.js'), 'utf8');
   const calendarRouteSource = fs.readFileSync(path.join(__dirname, '../src/routes/calendarReadOnlyUx.js'), 'utf8');
   assert.match(schedulingSource, /const KNOWN_SCOPES = new Set\(\[ALL_BUSINESS_SCOPE, \.\.\.OWN_SCOPES, 'none'\]\)/);
   assert.doesNotMatch(schedulingSource, /business_all_staff|own_staff/);
+  assert.match(authorizationSource, /calendarScopeAllowsBookingTarget/);
+  assert.match(authorizationSource, /targetStaffId === authority\.linkedStaffId/);
   assert.doesNotMatch(calendarBookingSource, /INSERT INTO appointments|INSERT INTO appointment_services|INSERT INTO appointment_staff/);
   assert.match(calendarBookingSource, /prepareBooking/);
   assert.match(calendarBookingSource, /confirmBooking/);

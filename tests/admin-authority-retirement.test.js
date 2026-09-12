@@ -109,12 +109,18 @@ test('ambiguous staff identity fails closed for Workspace entry', async () => {
   assert.match(blocked.reply, /No action was taken/);
 });
 
-test('staff without Workspace authority does not receive a launcher or handoff', async () => {
-  const noView = { ...owner, permissions: {} };
-  const result = await processRetiredAdminAuthorityMessage('27720000000', 'hi', oneAdminDb(noView));
-  assert.equal(result.handled, true);
-  assert.equal(result.interactive, undefined);
-  assert.match(result.reply, /Workspace access is not available/);
+test('#900 active linked staff receives the Workspace launcher without explicit appointment:view while inactive staff remains denied', async () => {
+  const activeLinkedNoView = { ...owner, permissions: {} };
+  const activeResult = await processRetiredAdminAuthorityMessage('27720000000', 'hi', oneAdminDb(activeLinkedNoView));
+  assert.equal(activeResult.handled, true);
+  assert.equal(activeResult.interactive?.type, 'button');
+  assert.deepEqual(activeResult.interactive?.buttons, [{ id: 'staff_open_workspace', title: 'Open Workspace' }]);
+
+  const inactive = { ...activeLinkedNoView, staff_status: 'inactive' };
+  const inactiveResult = await processRetiredAdminAuthorityMessage('27720000000', 'hi', oneAdminDb(inactive));
+  assert.equal(inactiveResult.handled, true);
+  assert.equal(inactiveResult.interactive, undefined);
+  assert.match(inactiveResult.reply, /Workspace access is not available/);
 });
 
 test('ordinary webhook exposes client proposal handling and only the bounded staff authority adapter', () => {
