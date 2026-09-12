@@ -28,7 +28,7 @@ Use `multipart/form-data` with:
 
 ## Postman test
 
-1. Create a POST request to `https://shiloh-whatsapp-bot.onrender.com/admin/documents/upload`.
+1. Create a POST request to `https://app.shilohmtc.co.za/admin/documents/upload`.
 2. Add the `x-admin-key` header with the configured Render `ADMIN_API_KEY` value.
 3. Open Body → form-data.
 4. Add a key named `file`, change its type from Text to File, and select a PDF/DOCX/TXT/MD file.
