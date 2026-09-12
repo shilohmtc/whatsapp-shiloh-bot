@@ -56,6 +56,9 @@ function fileUrl(filePath, query = '') {
       if ((await page.locator('[data-details-title]').textContent()) !== 'Appointment #42') throw new Error(`${state.name}: canonical deep link did not open appointment 42`);
       await page.screenshot({ path: path.join(output, `${state.name}-appointment-deep-link.png`), fullPage: true });
 
+      // page.setContent preserves the current URL. Reset after the selected-appointment
+      // navigation so subsequent fixtures are not auto-opened by ?appointment=42.
+      await page.goto('about:blank');
       await page.setContent(calendarFixture(true));
       await page.locator('.event-card').click();
       await page.locator('[data-appointment-details-dialog][open]').waitFor();
