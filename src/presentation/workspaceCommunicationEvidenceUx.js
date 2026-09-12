@@ -1,5 +1,6 @@
 const { escapeHtml } = require('./workspaceShell');
 const { renderClientDetailPage } = require('./workspaceClientsUx');
+const { decorateClientAppointmentHistory } = require('./calendarAppointmentDetailLinks');
 
 const BUSINESS_TIMEZONE = 'Africa/Johannesburg';
 
@@ -49,7 +50,10 @@ function renderCommunicationSection(communications = [], unavailable = false) {
 }
 
 function renderClientDetailPageWithCommunications(model, options = {}) {
-  const base = renderClientDetailPage(model, options);
+  const base = decorateClientAppointmentHistory(
+    renderClientDetailPage(model, options),
+    model?.appointments || [],
+  );
   const actionSection = renderClientNotificationActionSection(model?.client, options.notificationActionAllowed === true);
   const communicationSection = renderCommunicationSection(model?.communications || [], model?.communicationsUnavailable === true);
   const marker = '<section class="history-panel">';
