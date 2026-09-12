@@ -91,6 +91,16 @@ function operationsForAuthority(authority) {
   return CALENDAR_OPERATIONS.filter((operation) => hasCapability(authority, OPERATION_CAPABILITIES[operation]));
 }
 
+function hasFullAppointmentEditAuthority(authority) {
+  if (!authority || authority.calendarScope !== 'all_business' || authority.serviceScope !== 'all_services') return false;
+  const operations = new Set(operationsForAuthority(authority));
+  return hasCapability(authority, CALENDAR_CAPABILITIES.VIEW)
+    && hasCapability(authority, CALENDAR_CAPABILITIES.ADJUST_END)
+    && operations.has('appointment:reschedule')
+    && operations.has('appointment:cancel')
+    && operations.has('appointment:reassign');
+}
+
 function serviceScopeAllows(authority, serviceIds = []) {
   if (!authority) return false;
   if (authority.serviceScope === 'all_services') return true;
@@ -222,6 +232,7 @@ module.exports = {
   resolveCalendarAuthority,
   hasCapability,
   operationsForAuthority,
+  hasFullAppointmentEditAuthority,
   serviceScopeAllows,
   serviceVisibilityAllows,
   calendarScopeAllowsBookingTarget,

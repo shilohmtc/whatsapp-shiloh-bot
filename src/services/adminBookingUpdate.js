@@ -5,6 +5,11 @@ const { checkAuthoritativeSchedule } = require('./adminAvailability');
 const { listAvailableSlots } = require('./availabilityService');
 const { getNextOpenClinicDates, shortDateTitle } = require('./clinicDateChoices');
 const { compactListTitle, fullLabelDescription } = require('../presentation/whatsappListRowPresentation');
+const {
+  listEligibleReplacementServices,
+  updateSingleAppointmentTreatment,
+  updateAppointmentChargedPrice,
+} = require('./appointmentTreatmentPriceMutation');
 
 const sessions = new Map();
 const SLOT_PAGE_SIZE = 8;
@@ -129,28 +134,7 @@ function manageInteractive(a) {
 
 async function eligibleReplacementServices(a) {
   if (!a || a.services.length !== 1 || !a.services[0].service_id) return [];
-  const r = await pool.query(`
-    SELECT DISTINCT s.id,s.name,s.duration_minutes,s.processing_time_minutes,s.extra_time_minutes,
-           s.price,s.variable_price,s.display_price
-      FROM services s
-     WHERE s.status='active'
-       AND s.id<>$2
-       AND COALESCE(s.external_source,'')<>'shiloh_package'
-       AND NOT EXISTS (
-         SELECT 1 FROM service_packages sp
-          WHERE sp.session_service_id=s.id AND sp.status='active'
-       )
-       AND NOT EXISTS (
-         SELECT 1 FROM appointment_staff ast
-          WHERE ast.appointment_id=$1
-            AND ast.staff_id IS NOT NULL
-            AND NOT EXISTS (
-              SELECT 1 FROM staff_services ss
-               WHERE ss.staff_id=ast.staff_id AND ss.service_id=s.id
-            )
-       )
-     ORDER BY s.name,s.id`, [a.id, a.services[0].service_id]);
-  return r.rows;
+  return listEligibleReplacementServices(pool, { appointmentId: a.id, currentServiceId: a.services[0].service_id });
 }
 
 function replacementServiceInteractive(a, services, page = 1) {
@@ -331,7 +315,7 @@ async function processAdminBookingUpdateMessage(sender, text) {
     const minutes = Number(service.duration_minutes || 0) + Number(service.processing_time_minutes || 0) + Number(service.extra_time_minutes || 0);
     const starts = new Date(a.starts_at); const ends = new Date(starts.getTime() + minutes * 60000);
     if (a.staff.length === 1) { const problem = await validateWindow(a, a.staff[0].staff_id, a.staff[0].display_name || a.staff[0].staff_name_snapshot, starts, ends); if (problem) return { handled: true, admin, reply: `${problem}\n\nNo service change was saved. Choose another eligible service.` }; }
-    await transaction(async (db) => { await db.query(`UPDATE appointment_services SET service_id=$1,service_name_snapshot=$2,duration_minutes_snapshot=$3,price_snapshot=$4 WHERE id=$5`, [service.id, service.name, service.duration_minutes, service.price, a.services[0].id]); await db.query(`UPDATE appointments SET ends_at=$1,title=$2,updated_at=NOW() WHERE id=$3`, [ends, service.name, a.id]); });
+    await transaction((db) => updateSingleAppointmentTreatment(db, { appointmentId: a.id, appointmentServiceId: a.services[0].id, serviceId: service.id, serviceName: service.name, durationMinutes: service.duration_minutes, priceSnapshot: service.price, endsAt: ends }));
     const after = await loadAppointment(admin, a.id); await audit(admin, a.id, 'appointment.service_updated', { from: a.services[0].name || a.services[0].service_name_snapshot, to: service.name, selectedFromInteractiveList: Boolean(servicePickMatch) }); sessions.set(k, { step: 'menu', appointmentId: a.id });
     return { handled: true, admin, interactive: { ...manageInteractive(after), body: `✅ Service changed to *${service.name}* in Shiloh Calendar.\n\n${manageInteractive(after).body}` } };
   }
@@ -353,7 +337,7 @@ async function processAdminBookingUpdateMessage(sender, text) {
   if (s.step === 'price') {
     const m = n.match(/^r?\s*(\d+(?:\.\d{1,2})?)$/); if (!m) return { handled: true, admin, reply: 'Send a valid booked price, for example *650* or *R650*.' };
     const price = Number(m[1]); if (price < 0 || price > 100000) return { handled: true, admin, reply: 'That price is outside the allowed range.' };
-    await transaction(async (db) => { await db.query(`UPDATE appointments SET total_price=$1,updated_at=NOW() WHERE id=$2`, [price, a.id]); if (a.services.length === 1) await db.query(`UPDATE appointment_services SET price_snapshot=$1 WHERE id=$2`, [price, a.services[0].id]); });
+    await transaction((db) => updateAppointmentChargedPrice(db, { appointmentId: a.id, appointmentServiceId: a.services.length === 1 ? a.services[0].id : null, chargedPrice: price }));
     await audit(admin, a.id, 'appointment.price_updated', { from: a.total_price == null ? null : Number(a.total_price), to: price }); const after = await loadAppointment(admin, a.id); sessions.set(k, { step: 'menu', appointmentId: a.id });
     return { handled: true, admin, interactive: { ...manageInteractive(after), body: `✅ Booked price updated to *R${price.toFixed(2)}*. The calendar title remains price-free.\n\n${manageInteractive(after).body}` } };
   }

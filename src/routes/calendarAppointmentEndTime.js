@@ -6,9 +6,11 @@ const {
   csrfGuard,
 } = require('../middleware/staffBrowserSession');
 const { createCalendarAppointmentEndTimeService } = require('../services/calendarAppointmentEndTime');
+const { createCalendarAppointmentTreatmentPriceService } = require('../services/calendarAppointmentTreatmentPrice');
 const { calendarOperationalMutationsClientScript } = require('../presentation/calendarOperationalMutationsUx');
 const { calendarManageAppointmentNotesClientScript } = require('../presentation/calendarAppointmentNotesUx');
 const { calendarAppointmentEndTimeClientScript } = require('../presentation/calendarAppointmentEndTimeUx');
+const { calendarAppointmentTreatmentPriceClientScript } = require('../presentation/calendarAppointmentTreatmentPriceUx');
 
 function statusForEndTimeError(error) {
   if (Number.isInteger(error?.httpStatus)) return error.httpStatus;
@@ -44,9 +46,11 @@ function createCalendarAppointmentEndTimeRouter({
   env = process.env,
   sessionService,
   service = createCalendarAppointmentEndTimeService({ db: pool }),
+  treatmentPriceService = createCalendarAppointmentTreatmentPriceService({ db: pool }),
   renderOperationalClient = calendarOperationalMutationsClientScript,
   renderNotesClient = calendarManageAppointmentNotesClientScript,
   renderEndTimeClient = calendarAppointmentEndTimeClientScript,
+  renderTreatmentPriceClient = calendarAppointmentTreatmentPriceClientScript,
 } = {}) {
   if (!sessionService) throw new Error('Appointment end-time routes require the staff session service.');
   const router = express.Router();
@@ -67,7 +71,7 @@ function createCalendarAppointmentEndTimeRouter({
     try {
       await service.resolveOperator(req.staffBrowserSession.adminId);
       return res.status(200).type('application/javascript').send(
-        `${renderOperationalClient()}\n${renderNotesClient()}\n${renderEndTimeClient()}`
+        `${renderOperationalClient()}\n${renderNotesClient()}\n${renderEndTimeClient()}\n${renderTreatmentPriceClient()}`
       );
     } catch (error) {
       if (String(error?.code || '') === 'CALENDAR_END_TIME_FORBIDDEN') return next();
@@ -93,6 +97,32 @@ function createCalendarAppointmentEndTimeRouter({
         appointmentId: req.params.appointmentId,
         expectedRevision: req.body?.expectedRevision,
         endsAt: req.body?.endsAt,
+        requestId: req.body?.requestId,
+      }));
+    } catch (error) {
+      return sendError(error, req, res, next);
+    }
+  });
+
+  router.get('/appointments/:appointmentId/treatment-price', requireSession, async (req, res, next) => {
+    try {
+      return res.status(200).json(await treatmentPriceService.get({
+        adminId: req.staffBrowserSession.adminId,
+        appointmentId: req.params.appointmentId,
+      }));
+    } catch (error) {
+      return sendError(error, req, res, next);
+    }
+  });
+
+  router.patch('/appointments/:appointmentId/treatment-price', sameOrigin, requireSession, requireCsrf, async (req, res, next) => {
+    try {
+      return res.status(200).json(await treatmentPriceService.update({
+        adminId: req.staffBrowserSession.adminId,
+        appointmentId: req.params.appointmentId,
+        expectedRevision: req.body?.expectedRevision,
+        serviceId: req.body?.serviceId,
+        chargedPrice: req.body?.chargedPrice,
         requestId: req.body?.requestId,
       }));
     } catch (error) {

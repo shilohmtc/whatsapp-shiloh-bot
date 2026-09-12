@@ -24,7 +24,7 @@ jobs:
       - name: Install repository dependencies
         run: npm ci
       - name: Run focused authority regressions
-        run: node --test tests/calendar-appointment-authority-v1.test.js
+        run: node --test tests/calendar-appointment-authority-v1.test.js tests/calendar-appointment-treatment-price-v1.test.js
       - name: Install pinned Chromium proof tooling
         run: npm install --no-save --package-lock=false @playwright/test@1.55.0
       - name: Install Chromium
