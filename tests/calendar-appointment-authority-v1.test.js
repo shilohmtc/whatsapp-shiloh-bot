@@ -17,6 +17,7 @@ const EDIT_PERMISSIONS = {
   'calendar:booking:reschedule': true,
   'calendar:booking:cancel': true,
   'calendar:booking:reassign': true,
+  'appointment:adjust_end': true,
 };
 
 function authority(name, permissions = EDIT_PERMISSIONS) {
@@ -38,6 +39,7 @@ test('Calendar view and edit remain separate canonical authorities', () => {
   assert.ok(reader);
   assert.deepEqual(operationsForAuthority(reader), []);
   const editor = authority('Any appointment editor');
+  assert.equal(editor.capabilities.includes('appointment:adjust_end'), true);
   assert.deepEqual(operationsForAuthority(editor), [
     'appointment:reschedule',
     'appointment:cancel',
@@ -55,8 +57,12 @@ test('Christel and Reception can share the same capability/scope tuple without n
 });
 
 test('JP test elevation is removable by canonical permission data only', () => {
-  assert.equal(operationsForAuthority(authority('JP', EDIT_PERMISSIONS)).length, 3);
-  assert.deepEqual(operationsForAuthority(authority('JP', { 'appointment:view': true })), []);
+  const elevated = authority('JP', EDIT_PERMISSIONS);
+  assert.equal(operationsForAuthority(elevated).length, 3);
+  assert.equal(elevated.capabilities.includes('appointment:adjust_end'), true);
+  const reverted = authority('JP', { 'appointment:view': true });
+  assert.deepEqual(operationsForAuthority(reverted), []);
+  assert.equal(reverted.capabilities.includes('appointment:adjust_end'), false);
 });
 
 test('every visible canonical appointment is enhanced for read-only details independently of edit attributes', () => {
