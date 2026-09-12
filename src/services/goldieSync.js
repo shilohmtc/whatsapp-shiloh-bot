@@ -134,7 +134,7 @@ async function fetchGoldiePage(url) {
     timeout: 20000,
     maxContentLength: 5 * 1024 * 1024,
     headers: {
-      "User-Agent": "ShilohKnowledgeSync/1.0 (+https://shiloh-whatsapp-bot.onrender.com)",
+      "User-Agent": "ShilohKnowledgeSync/1.0",
       Accept: "text/html,application/xhtml+xml",
     },
     validateStatus: (status) => status >= 200 && status < 400,

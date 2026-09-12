@@ -34,7 +34,20 @@ function profileComplete(client = {}) {
 // Historical long-form welcome retained as an exported compatibility surface.
 // First-contact identity presentation below deliberately uses the canonical
 // clientIdentityOnboarding PREMIUM_GREETING instead.
-function buildUniversalWelcome() {
+function publicBookingUrl(env = process.env) {
+  const rawOrigin = String(env.SHILOH_PUBLIC_BASE_URL || env.RENDER_EXTERNAL_URL || '').trim();
+  if (!rawOrigin) return null;
+  try {
+    const origin = new URL(rawOrigin);
+    if (origin.protocol !== 'https:' || origin.username || origin.password) return null;
+    return new URL('/book', origin).toString();
+  } catch (_) {
+    return null;
+  }
+}
+
+function buildUniversalWelcome(env = process.env) {
+  const bookingUrl = publicBookingUrl(env);
   return [
     '🌿 *Welcome to Shiloh*',
     '',
@@ -48,7 +61,7 @@ function buildUniversalWelcome() {
     '',
     '✨ *Choosing the right treatment*',
     'Not sure what to book? Tell me what you’d like help with and I can guide you, or browse our treatments, descriptions and prices here:',
-    'https://shiloh-whatsapp-bot.onrender.com/book',
+    bookingUrl || 'Reply *services* to browse treatments here in WhatsApp.',
     '',
     'Found the right treatment? You can start your booking directly from the treatment page, or come back here and chat with me — I’ll be happy to help. 🌿',
     '',
@@ -263,6 +276,7 @@ module.exports = {
   normalizePhone,
   isGreetingOnly,
   profileComplete,
+  publicBookingUrl,
   buildUniversalWelcome,
   buildPremiumGreeting,
   prependPremiumGreeting,
