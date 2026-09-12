@@ -23,8 +23,6 @@ jobs:
           cache: npm
       - name: Install repository dependencies
         run: npm ci
-      - name: Install pinned UX proof tooling
-        run: npm install --no-save --package-lock=false @playwright/test@1.55.0 @axe-core/playwright@4.10.2
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
       - name: Build production-backed Storybook catalogue
@@ -47,10 +45,10 @@ jobs:
         run: |
           if compgen -G 'tests/ux-baselines/*.png.b64.part*' > /dev/null; then
             node scripts/ux-baseline-codec.js decode
-            npx playwright test --config=playwright.ux.config.js
+            npm run test:ux
           else
             echo 'No committed reviewed UX baselines found; generating candidate baselines only.'
-            npx playwright test --config=playwright.ux.config.js --update-snapshots
+            npm run test:ux -- --update-snapshots
             node scripts/ux-baseline-codec.js encode
             mkdir -p artifacts/ux-baseline-candidate
             cp tests/ux-baselines/*.png artifacts/ux-baseline-candidate/

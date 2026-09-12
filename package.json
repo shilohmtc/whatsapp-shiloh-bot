@@ -16,6 +16,9 @@
     "test:controlled-release-migration": "node --test tests/controlled-release-migration-gate.test.js",
     "test:e2e:booking-confirmation": "node scripts/run-controlled-booking-confirmation-e2e.js",
     "test": "node --test tests/*.test.js",
+    "test:browser:appointment-authority": "node scripts/calendar-appointment-authority-browser-proof.js",
+    "test:ux": "playwright test --config=playwright.ux.config.js",
+    "playwright:install": "playwright install chromium",
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build"
   },
@@ -42,6 +45,8 @@
     "qrcode": "1.5.4"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.10.2",
+    "@playwright/test": "1.55.0",
     "@storybook/addon-a11y": "^10.6.0",
     "@storybook/html-vite": "^10.6.0",
     "nodemon": "^3.1.10",

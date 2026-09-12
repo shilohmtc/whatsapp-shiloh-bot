@@ -25,12 +25,10 @@ jobs:
         run: npm ci
       - name: Run focused authority regressions
         run: node --test tests/calendar-appointment-authority-v1.test.js tests/calendar-appointment-treatment-price-v1.test.js
-      - name: Install pinned Chromium proof tooling
-        run: npm install --no-save --package-lock=false @playwright/test@1.55.0
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
       - name: Prove Phone and Desktop appointment authority UX
-        run: node scripts/calendar-appointment-authority-browser-proof.js
+        run: npm run test:browser:appointment-authority
       - name: Upload Phone and Desktop evidence
         if: always()
         uses: actions/upload-artifact@v4

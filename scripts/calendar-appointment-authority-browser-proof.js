@@ -17,6 +17,17 @@ const states = [
   { name: 'desktop', viewport: { width: 1440, height: 1000 } },
 ];
 
+function installedChrome() {
+  return [
+    process.env.CHROME_BIN,
+    'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+    'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+    '/usr/bin/google-chrome',
+    '/usr/bin/google-chrome-stable',
+    '/usr/bin/chromium',
+  ].find(candidate => candidate && fs.existsSync(candidate)) || null;
+}
+
 function calendarFixture(editable) {
   return `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>:root{--panel:#fff;--line:#dfe5df;--leaf-soft:#e7eee9;--leaf-deep:#294b3e}body{font-family:system-ui;background:#f7f5ef;padding:20px}.event-card{min-height:64px;border:1px solid #dfe5df;border-radius:14px;background:#fff;padding:14px;max-width:420px}.event-card h4{margin:4px 0}.event-meta{display:flex;gap:8px}.eyebrow{font-size:11px;text-transform:uppercase}</style></head><body><article class="event-card" data-event-id="appointment-42" data-kind="appointment" data-canonical="true" ${editable ? 'data-appointment-management-target="true" data-appointment-id="42"' : ''} data-client-name="Client Example" data-client-mobile="+27 82 000 0000" data-service-name="Treatment Example" data-practitioner-names="Practitioner A" data-appointment-status="confirmed"><div class="event-time"><span class="event-time-range">09:00–10:00</span></div><span class="kind-pill">Appointment</span><h4>Client Example</h4><p class="event-client-mobile">+27 82 000 0000</p><p class="event-meta"><span class="event-practitioners">Practitioner A</span><span class="event-service-context"><span>Treatment Example</span></span><span class="event-state">confirmed</span></p></article><script>${calendarAppointmentDetailsClientScript()}</script></body></html>`;
 }
@@ -56,7 +67,8 @@ function fileUrl(filePath, query = '') {
 }
 
 (async () => {
-  const browser = await chromium.launch({ headless: true });
+  const executablePath = installedChrome();
+  const browser = await chromium.launch({ headless: true, ...(executablePath ? { executablePath } : {}) });
   try {
     const deepLinkFixturePath = path.join(output, 'calendar-deep-link-fixture.html');
     fs.writeFileSync(deepLinkFixturePath, calendarFixture(false));
