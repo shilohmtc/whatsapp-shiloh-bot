@@ -26,19 +26,27 @@ const resolverSource = fs.readFileSync(
   'utf8'
 );
 
-test('legacy universal welcome compatibility surface remains unchanged', () => {
-  const reply = transition.buildUniversalWelcome();
+test('legacy universal welcome derives its booking link from the deployed origin', () => {
+  const reply = transition.buildUniversalWelcome({ RENDER_EXTERNAL_URL: 'https://shiloh.example.test' });
   assert.match(reply, /you’re in the right place/i);
   assert.match(reply, /Shiloh, our AI Assistant/i);
   assert.match(reply, /Choosing the right treatment/i);
   assert.match(reply, /browse our treatments, descriptions and prices here/i);
-  assert.match(reply, /https:\/\/shiloh-whatsapp-bot\.onrender\.com\/book/i);
+  assert.match(reply, /https:\/\/shiloh\.example\.test\/book/i);
   assert.match(reply, /start your booking directly from the treatment page/i);
   assert.match(reply, /come back here and chat with me/i);
   assert.match(reply, /Checking availability/i);
   assert.match(reply, /Making or managing your appointment/i);
   assert.match(reply, /Calls & SMS: 066 239 9138/i);
   assert.match(reply, /right here on WhatsApp/i);
+});
+
+test('public booking URL follows a safe explicit or Render origin without a hostname dependency', () => {
+  assert.equal(transition.publicBookingUrl({ RENDER_EXTERNAL_URL: 'https://old.example.test' }), 'https://old.example.test/book');
+  assert.equal(transition.publicBookingUrl({ SHILOH_PUBLIC_BASE_URL: 'https://new.example.test/' }), 'https://new.example.test/book');
+  assert.equal(transition.publicBookingUrl({ SHILOH_PUBLIC_BASE_URL: 'http://unsafe.example.test' }), null);
+  assert.equal(transition.publicBookingUrl({}), null);
+  assert.doesNotMatch(transition.buildUniversalWelcome({}), /onrender\.com/i);
 });
 
 test('first-contact presentation uses the exact canonical PREMIUM_GREETING', () => {
