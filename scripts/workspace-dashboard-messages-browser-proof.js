@@ -174,8 +174,12 @@ function attentionExceptions() {
   return [{
     client: { id: 201, name: 'Aloe Client', mobileLast4: '1001' },
     appointment: { id: 8101, serviceName: 'Synthetic treatment', startsAt: '2026-09-05T07:00:00.000Z' },
-    confirmation: { status: 'uncertain', statusLabel: 'Delivery uncertain' },
+    confirmation: {
+      status: 'failed', statusLabel: 'Failed',
+      deliveryExplanation: 'WhatsApp could not deliver this message to the recipient.',
+    },
     canRecover: true, actionLabel: 'Retry confirmation safely', reasonMessage: null,
+    recoveryExplanation: 'Retry is available through Shiloh’s existing booking-confirmation channel.',
   }];
 }
 
@@ -366,6 +370,7 @@ const METRICS_EXPRESSION = `(() => {
     signoutText:document.querySelector('[data-shiloh-logout]')?.textContent.trim()||'',
     signoutToTabsGap:(()=>{const button=document.querySelector('[data-shiloh-logout]'),tabs=document.querySelector('.tabs');return button&&tabs?tabs.getBoundingClientRect().top-button.getBoundingClientRect().bottom:null;})(),
     attentionVisible:visible(document.querySelector('[data-messages-attention]')),
+    attentionText:document.querySelector('[data-message-attention]')?.textContent.trim()||'',
     unknownVisible:Array.from(document.querySelectorAll('[data-message-status="unknown"]')).some(visible),
     dashboardMode:document.body.dataset.dashboardMode||'',
     dashboardGreeting:document.querySelector('.brand h1')?.textContent.trim()||'',
@@ -492,6 +497,8 @@ async function main() {
       if (urlPath.startsWith('/calendar/messages')) {
         assert.equal(metrics.attentionVisible, true);
         assert.equal(metrics.unknownVisible, true);
+        assert.match(metrics.attentionText, /Delivery\s*WhatsApp could not deliver this message to the recipient\./);
+        assert.match(metrics.attentionText, /Recovery\s*Retry is available through Shiloh/);
       }
       if (metrics.dashboardMode) {
         assert.ok(metrics.dashboardAppointments > 0, `${name} has no operational appointments`);
