@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 
 const {
   dateGroupLabel,
+  dashboardDateLabel,
   renderDashboardPage,
 } = require('../src/presentation/workspaceDashboardUx');
 
@@ -64,6 +65,21 @@ function model() {
 test('#854 formats backlog date groups for human scanning', () => {
   assert.equal(dateGroupLabel('2026-09-09'), 'Wed, 09 Sept');
   assert.equal(dateGroupLabel('2026-09-10'), 'Thu, 10 Sept');
+  assert.equal(dashboardDateLabel('2026-09-11'), 'Friday, 11 September');
+});
+
+test('Dashboard removes empty urgency chrome and leads with the operational day', () => {
+  const html = renderDashboardPage({
+    ...model(),
+    carryOver: [],
+    awaitingFinalization: [],
+    bookingRequests: [],
+  });
+  const body = html.slice(html.indexOf('</style>'));
+  assert.doesNotMatch(body, /data-dashboard-attention-panel/);
+  assert.doesNotMatch(body, /No booking request or past visit currently needs staff action/);
+  assert.ok(body.indexOf('data-dashboard-today') < body.indexOf('data-dashboard-carryover-panel'));
+  assert.match(body, /<h2>Today across the team<\/h2><p class="truth-note">Friday, 11 September<\/p>/);
 });
 
 test('#854 renders bounded Desktop backlog and stable Phone order without changing finalization controls', () => {
@@ -80,10 +96,11 @@ test('#854 renders bounded Desktop backlog and stable Phone order without changi
   assert.match(html, /data-operational-date-key="2026-09-09"/);
   assert.match(html, /date=2026-09-09/);
 
-  assert.match(html, /\.dashboard-grid>\[data-dashboard-today\]\{grid-column:1\/5\}/);
-  assert.match(html, /\.dashboard-grid>\[data-dashboard-carryover-panel\]\{grid-column:5\/7\}/);
-  assert.match(html, /\.carryover-panel\{position:sticky;top:16px;max-height:calc\(100vh - 32px\)/);
+  assert.match(html, /\.dashboard-grid>\[data-dashboard-today\]\{grid-column:1\/5;grid-row:1\/4\}/);
+  assert.match(html, /\.dashboard-grid>\[data-dashboard-carryover-panel\]\{grid-column:5\/7;grid-row:1\}/);
+  assert.doesNotMatch(html, /\.carryover-panel\{position:sticky/);
+  assert.match(html, /@media\(min-width:1180px\)\{\.team-groups\{grid-template-columns:repeat\(3,minmax\(0,1fr\)\)\}\}/);
   assert.match(html, /@media\(max-width:850px\)[\s\S]*\[data-dashboard-attention-panel\]\{grid-column:1;grid-row:1\}[\s\S]*\[data-dashboard-today\]\{grid-column:1;grid-row:2\}/);
-  assert.match(html, /@media\(max-width:850px\)[\s\S]*\.carryover-panel\{position:static;max-height:none;overflow:visible\}/);
+  assert.match(html, /@media\(max-width:850px\)[\s\S]*\.dashboard-grid:not\(:has\(\[data-dashboard-attention-panel\]\)\)>\[data-dashboard-today\]\{grid-row:1\}/);
   assert.match(html, /\.carryover-group \.appointment-actions \.action-button,\.carryover-group \.appointment-actions \.button\{min-height:44px\}/);
 });

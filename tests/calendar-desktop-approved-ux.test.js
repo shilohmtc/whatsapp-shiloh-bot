@@ -42,6 +42,8 @@ test('Desktop enhancer preserves Phone by gating all planner changes above 700px
 
 test('Desktop Week becomes selected-day practitioner columns with a Mon-Sat context strip', () => {
   const script = calendarDesktopApprovedClientScript();
+  assert.match(script, /teamDay\.textContent='Team day'/);
+  assert.match(script, /<span>New<\/span>/);
   assert.match(script, /desktop-week-strip/);
   assert.match(script, /grid-template-columns:repeat\(6,minmax\(0,1fr\)\)/);
   assert.match(script, /desktop-practitioner-grid/);
@@ -85,6 +87,7 @@ test('appointment, block and leave presentation follows approved accessible trea
   assert.match(css, /background:#f8ecec/);
   assert.match(script, /node\.textContent='Block time'/);
   assert.match(script, /node\.textContent='Leave'/);
+  assert.match(css, /-webkit-line-clamp:2/);
 });
 
 test('Desktop planner delegates vertical scrolling to page and avoids structural horizontal scrolling', () => {

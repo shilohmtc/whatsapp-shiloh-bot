@@ -45,9 +45,9 @@ test('#858 Desktop Day lanes fill available middle workspace while preserving th
   assert.match(css, /\.day-time-grid \.lane\{min-width:300px!important;width:auto!important\}/);
 });
 
-test('#858 Desktop create launcher is an Appointment menu rather than a duplicate New appointment button', () => {
+test('#858 Desktop create launcher is a concise New menu rather than a duplicate New appointment button', () => {
   const script = calendarDesktopApprovedClientScript();
-  assert.match(script, /<summary>.*<span>Appointment<\/span><\/summary>/);
+  assert.match(script, /<summary>.*<span>New<\/span><\/summary>/);
   assert.match(script, /Record past appointment/);
   assert.match(script, /New appointment/);
   assert.doesNotMatch(script, /<summary>.*<span>New appointment<\/span><\/summary>/);

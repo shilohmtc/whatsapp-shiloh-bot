@@ -206,7 +206,7 @@ test('#852 presentation groups unfinished carry-over by original clinic day', ()
   };
   const html = renderDashboardPage(model);
   assert.match(html, /data-dashboard-carryover-panel/);
-  assert.match(html, /Unfinished to do/);
+  assert.match(html, /Unfinished visits/);
   assert.match(html, /Past visits stay here until they are recorded as Completed or No-show/);
   assert.match(html, /data-dashboard-carryover-day="2026-09-09"/);
   assert.match(html, /data-dashboard-carryover-day="2026-09-10"/);

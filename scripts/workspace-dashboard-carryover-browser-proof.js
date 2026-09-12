@@ -143,7 +143,7 @@ async function main() {
 
     const html = require('../src/presentation/workspaceDashboardUx').renderDashboardPage(dashboardModel());
     assert.match(html, /data-dashboard-carryover-panel/);
-    assert.match(html, /Unfinished to do/);
+    assert.match(html, /Unfinished visits/);
     assert.match(html, /data-dashboard-carryover-day="2026-09-09"/);
     assert.match(html, /data-dashboard-carryover-day="2026-09-10"/);
     assert.match(html, /Wednesday Client/);

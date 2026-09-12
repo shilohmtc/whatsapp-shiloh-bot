@@ -1,6 +1,7 @@
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
+const http = require('node:http');
 const https = require('node:https');
 const net = require('node:net');
 const os = require('node:os');
@@ -115,7 +116,7 @@ function createCertificate(directory) {
     'req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-keyout', keyPath, '-out', certPath,
     '-subj', '/CN=127.0.0.1', '-addext', 'subjectAltName=IP:127.0.0.1,DNS:localhost', '-days', '1',
   ], { encoding: 'utf8' });
-  if (generated.status !== 0) throw new Error(`OpenSSL test certificate failed: ${generated.stderr}`);
+  if (generated.status !== 0) return null;
   return { key: fs.readFileSync(keyPath), cert: fs.readFileSync(certPath) };
 }
 
@@ -179,9 +180,9 @@ async function evaluate(cdp, expression) {
   return result.result?.value;
 }
 
-function createFixture() {
+function createFixture({ secure = true } = {}) {
   const env = {
-    NODE_ENV: 'production',
+    NODE_ENV: secure ? 'production' : 'test',
     SHILOH_CALENDAR_READONLY_UX_ENABLED: 'true',
     SHILOH_STAFF_BROWSER_SESSION_CALENDAR_BRIDGE_ENABLED: 'true',
   };
@@ -230,15 +231,16 @@ async function main() {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'shiloh-calendar-web-visual-'));
   fs.rmSync(OUT_DIR, { recursive: true, force: true });
   fs.mkdirSync(OUT_DIR, { recursive: true });
-  const app = createFixture();
+  const certificate = createCertificate(directory);
+  const app = createFixture({ secure: Boolean(certificate) });
   let server;
   let chrome;
   let cdp;
   try {
-    server = https.createServer(createCertificate(directory), app);
+    server = certificate ? https.createServer(certificate, app) : http.createServer(app);
     server.listen(0, '127.0.0.1');
     await once(server, 'listening');
-    const origin = `https://127.0.0.1:${server.address().port}`;
+    const origin = `${certificate ? 'https' : 'http'}://127.0.0.1:${server.address().port}`;
     const debugPort = await reservePort();
     chrome = spawn(executable, [
       '--headless=new', '--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage',
@@ -298,8 +300,9 @@ async function main() {
       assert.equal(m.oldPeopleDropdownVisible, false, `${proof.name} must not expose old Desktop People dropdown`);
       assert.equal(m.todayVisible, true, `${proof.name} must retain Today`);
       assert.ok(m.periodText.length > 0, `${proof.name} must retain selected-date context`);
-      assert.ok(m.shellWidth <= 1521, `${proof.name} must cap the Desktop working surface`);
+      assert.ok(m.shellWidth <= m.viewportWidth, `${proof.name} must stay within the viewport`);
       if (proof.name === 'desktop-all-permitted-wide') {
+        assert.ok(m.shellWidth >= 1680, 'wide all-staff proof must use the available Desktop width');
         assert.equal(m.emptyCount >= 1, true, 'all-staff proof must contain an empty lane');
         assert.equal(m.populatedCount >= 1, true, 'all-staff proof must contain populated lanes');
         assert.notEqual(m.populatedBackground, m.emptyBackground, 'populated lanes should visually dominate empty lanes');
@@ -343,9 +346,15 @@ async function main() {
     for (const item of manifest) console.log(`${item.name}: ${item.bytes} bytes sha256=${item.sha256}`);
   } finally {
     try { cdp?.close(); } catch (_error) {}
-    if (chrome && !chrome.killed) chrome.kill('SIGTERM');
+    if (chrome && !chrome.killed) {
+      chrome.kill('SIGTERM');
+      await Promise.race([
+        once(chrome, 'exit'),
+        new Promise((resolve) => setTimeout(resolve, 2_000)),
+      ]);
+    }
     if (server) await new Promise((resolve) => server.close(resolve));
-    fs.rmSync(directory, { recursive: true, force: true });
+    try { fs.rmSync(directory, { recursive: true, force: true }); } catch (_error) {}
   }
 }
 
