@@ -40,6 +40,7 @@ const auditReadRoutes = require("./src/routes/auditRead");
 const calendarRoutes = require("./src/routes/calendar");
 const walkinRoutes = require("./src/routes/walkin");
 const bookRoutes = require("./src/routes/book");
+const publicWebsiteRoutes = require("./src/routes/publicWebsite");
 const serviceRoutes = require("./src/routes/services");
 const { checkDatabase, startConversationSessionCleanupScheduler } = require("./src/services/memory");
 const { startTemporarySessionCleanupScheduler } = require("./src/services/temporarySessionRetention");
@@ -66,9 +67,8 @@ app.use(canonicalHostRedirect);
 app.use(express.json({ limit: "2mb" }));
 app.use(requestContext);
 app.use("/assets/service-images", express.static(path.join(__dirname, "public", "service-images"), { maxAge: "30d", immutable: true }));
-app.get("/", (req, res) => res.status(200).json({ service: "shiloh-whatsapp-bot", status: "running" }));
 app.get("/health", async (req, res) => { const ok = await checkDatabase(); return res.status(ok ? 200 : 503).json({ status: ok ? "ok" : "degraded", database: ok ? "ok" : "unavailable", timestamp: new Date().toISOString() }); });
-app.use("/audit-read", auditReadRoutes); app.use("/admin/privacy", privacyRoutes); app.use("/admin", adminRoutes); app.use("/calendar", calendarRoutes); app.use("/", serviceRoutes); app.use("/", walkinRoutes); app.use("/", bookRoutes); app.use("/", webhookRoutes);
+app.use("/audit-read", auditReadRoutes); app.use("/admin/privacy", privacyRoutes); app.use("/admin", adminRoutes); app.use("/calendar", calendarRoutes); app.use("/", publicWebsiteRoutes); app.use("/", serviceRoutes); app.use("/", walkinRoutes); app.use("/", bookRoutes); app.use("/", webhookRoutes);
 app.use((err, req, res, next) => {
   const log = req.log || logger;
   const route = `${req.baseUrl || ""}${req.route?.path || ""}` || "unmatched";

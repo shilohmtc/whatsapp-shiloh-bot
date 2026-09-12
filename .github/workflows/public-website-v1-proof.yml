@@ -1,0 +1,50 @@
+name: Public Website V1 Proof
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - app.js
+      - src/routes/book.js
+      - src/routes/publicWebsite.js
+      - src/services/publicBookingPage.js
+      - src/services/publicBookingPageEditorial.js
+      - src/services/publicSiteChrome.js
+      - src/services/publicWebsite.js
+      - scripts/public-website-browser-proof.js
+      - tests/public-website-v1.test.js
+      - .github/workflows/public-website-v1-proof.yml
+
+permissions:
+  contents: read
+
+jobs:
+  public_website_v1:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact PR head
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Use Node 24.14.1
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24.14.1
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Run focused public website regressions
+        run: npm run test:public-website
+      - name: Install pinned Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Prove phone and desktop website contracts
+        run: node scripts/public-website-browser-proof.js
+      - name: Upload visual evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: public-website-v1-evidence
+          path: artifacts/public-website-v1
+          if-no-files-found: error
+          retention-days: 14
