@@ -69,7 +69,7 @@ test('visual regression uses Playwright screenshots with bounded tolerance and i
   assert.match(spec, /maxDiffPixelRatio:\s*0\.001/);
   assert.match(config, /artifacts\/ux-playwright-results/);
   assert.match(config, /artifacts\/ux-playwright-report/);
-  assert.match(workflow, /upload-artifact@v4/);
+  assert.match(workflow, /upload-artifact@v7/);
   assert.match(workflow, /ux-visual-accessibility-evidence/);
 });
 
