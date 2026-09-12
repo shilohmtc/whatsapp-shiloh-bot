@@ -14,6 +14,7 @@ const {
 const workspaceClientNotifications = require('../services/workspaceClientNotifications');
 const { createWorkspaceAppointmentNotesService } = require('../services/workspaceAppointmentNotes');
 const { calendarManageAppointmentNotesClientScript } = require('../presentation/calendarAppointmentNotesUx');
+const { calendarAppointmentCompactEditorClientScript } = require('../presentation/calendarAppointmentCompactEditorUx');
 
 function setOperationalSecurityHeaders(res) {
   res.setHeader('Cache-Control', 'private, no-store, max-age=0');
@@ -66,6 +67,7 @@ function createCalendarOperationalMutationRouter({
   notesService = createWorkspaceAppointmentNotesService({ db: pool }),
   renderClient = calendarOperationalMutationsClientScript,
   renderNotesClient = calendarManageAppointmentNotesClientScript,
+  renderCompactEditorClient = calendarAppointmentCompactEditorClientScript,
 } = {}) {
   if (!sessionService) throw new Error('Calendar operational mutations require the staff session service.');
   const router = express.Router();
@@ -108,7 +110,7 @@ function createCalendarOperationalMutationRouter({
   }));
 
   router.get('/client.js', requireSession, requireAnyActionCapability, (_req, res) => {
-    return res.status(200).type('application/javascript').send(`${renderClient()}\n${renderNotesClient()}`);
+    return res.status(200).type('application/javascript').send(`${renderClient()}\n${renderNotesClient()}\n${renderCompactEditorClient()}`);
   });
 
   router.get('/booking-confirmation-exceptions', requireSession, requireNotificationCapability, (_req, res) => {

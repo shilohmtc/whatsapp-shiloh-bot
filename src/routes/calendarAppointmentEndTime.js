@@ -11,6 +11,7 @@ const { calendarOperationalMutationsClientScript } = require('../presentation/ca
 const { calendarManageAppointmentNotesClientScript } = require('../presentation/calendarAppointmentNotesUx');
 const { calendarAppointmentEndTimeClientScript } = require('../presentation/calendarAppointmentEndTimeUx');
 const { calendarAppointmentTreatmentPriceClientScript } = require('../presentation/calendarAppointmentTreatmentPriceUx');
+const { calendarAppointmentCompactEditorClientScript } = require('../presentation/calendarAppointmentCompactEditorUx');
 
 function statusForEndTimeError(error) {
   if (Number.isInteger(error?.httpStatus)) return error.httpStatus;
@@ -51,6 +52,7 @@ function createCalendarAppointmentEndTimeRouter({
   renderNotesClient = calendarManageAppointmentNotesClientScript,
   renderEndTimeClient = calendarAppointmentEndTimeClientScript,
   renderTreatmentPriceClient = calendarAppointmentTreatmentPriceClientScript,
+  renderCompactEditorClient = calendarAppointmentCompactEditorClientScript,
 } = {}) {
   if (!sessionService) throw new Error('Appointment end-time routes require the staff session service.');
   const router = express.Router();
@@ -71,7 +73,7 @@ function createCalendarAppointmentEndTimeRouter({
     try {
       await service.resolveOperator(req.staffBrowserSession.adminId);
       return res.status(200).type('application/javascript').send(
-        `${renderOperationalClient()}\n${renderNotesClient()}\n${renderEndTimeClient()}\n${renderTreatmentPriceClient()}`
+        `${renderOperationalClient()}\n${renderNotesClient()}\n${renderEndTimeClient()}\n${renderTreatmentPriceClient()}\n${renderCompactEditorClient()}`
       );
     } catch (error) {
       if (String(error?.code || '') === 'CALENDAR_END_TIME_FORBIDDEN') return next();
