@@ -2,6 +2,7 @@ const express = require('express');
 const { pool } = require('../db/pool');
 const calendarReadOnlyUx = require('../services/calendarReadOnlyUx');
 const { renderCalendarPage, renderUnavailablePage } = require('../presentation/calendarReadOnlyUx');
+const { calendarEventToneCss } = require('../presentation/calendarEventVisuals');
 const {
   calendarPhoneCompactV2ClientScript,
   decoratePhoneCalendarV2,
@@ -293,7 +294,7 @@ function applyCalendarResponsivePolish(html, model = null, basePath = '/calendar
       `${chips}<div class="control-group practitioner-control">`,
     );
   }
-  polished = polished.replace('</style>', `${calendarDesktopUsabilityStyles()}</style>`);
+  polished = polished.replace('</style>', `${calendarDesktopUsabilityStyles()}${calendarEventToneCss()}</style>`);
   polished = polished.replace(
     '<span class="workspace-link active" data-workspace-destination="calendar" aria-current="page">Calendar</span>',
     `<a class="workspace-link active" data-workspace-destination="calendar" aria-current="page" href="${escapeHtml(basePath)}">Calendar</a>`,

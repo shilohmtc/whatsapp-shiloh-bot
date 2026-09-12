@@ -10,6 +10,7 @@ const {
   calendarDesktopApprovedClientScript,
 } = require('../src/presentation/calendarDesktopApprovedUx');
 const { workspaceIconClientScript } = require('../src/presentation/workspaceIconClient');
+const { calendarEventToneCss } = require('../src/presentation/calendarEventVisuals');
 
 const WEEK = ['2026-09-07', '2026-09-08', '2026-09-09', '2026-09-10', '2026-09-11', '2026-09-12'];
 
@@ -81,10 +82,13 @@ test('one New appointment menu reuses authorized booking, retrospective, block a
 
 test('appointment, block and leave presentation follows approved accessible treatments', () => {
   const css = desktopApprovedStyles();
+  const semanticCss = calendarEventToneCss();
   const script = calendarDesktopApprovedClientScript();
-  assert.match(css, /background:#eef6f0/);
-  assert.match(css, /background:#f1edf5/);
-  assert.match(css, /background:#f8ecec/);
+  assert.match(css, /background-color:var\(--calendar-event-surface,#eef6f0\)/);
+  assert.match(semanticCss, /data-event-tone="blocked"/);
+  assert.match(semanticCss, /repeating-linear-gradient/);
+  assert.match(semanticCss, /data-event-tone="leave"/);
+  assert.match(semanticCss, /data-event-tone="no_show"/);
   assert.match(script, /node\.textContent='Block time'/);
   assert.match(script, /node\.textContent='Leave'/);
   assert.match(css, /-webkit-line-clamp:2/);
