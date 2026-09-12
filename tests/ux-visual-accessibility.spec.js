@@ -12,6 +12,16 @@ const states = [
     storyId: 'calendar-reference-implementation--phone-touch-toolbar',
     viewport: { width: 390, height: 844 },
   },
+  {
+    name: 'calendar-colour-treatment-desktop',
+    storyId: 'calendar-reference-implementation--colour-and-treatment-language',
+    viewport: { width: 1280, height: 1000 },
+  },
+  {
+    name: 'calendar-colour-treatment-phone',
+    storyId: 'calendar-reference-implementation--colour-and-treatment-language-phone',
+    viewport: { width: 390, height: 1100 },
+  },
   ...[
     ['dashboard', 'dashboard-operational', '.workspace-surface-story'],
     ['client-history', 'client-appointment-history', '.workspace-surface-story'],

@@ -6,6 +6,8 @@ const baselineDir = path.join(process.cwd(), 'tests', 'ux-baselines');
 const expected = [
   'calendar-desktop.png',
   'calendar-phone.png',
+  'calendar-colour-treatment-desktop.png',
+  'calendar-colour-treatment-phone.png',
   'dashboard-desktop.png',
   'dashboard-phone.png',
   'client-history-desktop.png',
@@ -15,6 +17,11 @@ const expected = [
   'appointment-editor-desktop.png',
   'appointment-editor-phone.png',
 ];
+const requested = process.argv.slice(3);
+const selected = requested.length ? requested : expected;
+for (const name of selected) {
+  if (!expected.includes(name)) throw new Error(`Unknown UX baseline: ${name}`);
+}
 const PART_SIZE = 12000;
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 const PNG_IEND = Buffer.from([0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82]);
@@ -129,7 +136,7 @@ function decodeBase64Png(name, value) {
 }
 
 function encodeBaselines() {
-  for (const name of expected) {
+  for (const name of selected) {
     const pngPath = path.join(baselineDir, name);
     if (!fs.existsSync(pngPath)) throw new Error(`Missing generated UX baseline: ${name}`);
     const prefix = partPrefix(name);
@@ -143,22 +150,22 @@ function encodeBaselines() {
       fs.writeFileSync(path.join(baselineDir, `${prefix}${suffix}`), `${encoded.slice(index * PART_SIZE, (index + 1) * PART_SIZE)}\n`);
     }
   }
-  console.log(`Encoded ${expected.length} reviewed UX baseline candidates into bounded text parts.`);
+  console.log(`Encoded ${selected.length} reviewed UX baseline candidates into bounded text parts.`);
 }
 
 function decodeBaselines() {
-  for (const name of expected) {
+  for (const name of selected) {
     const parts = partFiles(name);
     const value = parts.map((entry) => fs.readFileSync(path.join(baselineDir, entry), 'utf8').trim()).join('');
     fs.writeFileSync(path.join(baselineDir, name), decodeBase64Png(name, value));
   }
-  console.log(`Decoded ${expected.length} committed UX baselines for Playwright comparison.`);
+  console.log(`Decoded ${selected.length} committed UX baselines for Playwright comparison.`);
 }
 
 function main() {
   if (mode === 'encode') encodeBaselines();
   else if (mode === 'decode') decodeBaselines();
-  else throw new Error('Usage: node scripts/ux-baseline-codec.js <encode|decode>');
+  else throw new Error('Usage: node scripts/ux-baseline-codec.js <encode|decode> [baseline.png ...]');
 }
 
 if (require.main === module) main();
