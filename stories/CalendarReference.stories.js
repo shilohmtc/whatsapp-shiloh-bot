@@ -174,8 +174,8 @@ const colourAndTreatmentLanguage = (width) => frame(`
   <section class="calendar-language" aria-labelledby="calendar-language-title">
     <div class="calendar-language__intro">
       <span class="calendar-reference__label">Shiloh calendar language</span>
-      <h2 id="calendar-language-title">Status colour, treatment shape</h2>
-      <p>Colour communicates operational state. The existing outline icon communicates the treatment family. Labels keep every state understandable without colour.</p>
+      <h2 id="calendar-language-title">Treatment colour, status clarity</h2>
+      <p>The card tint and existing outline icon communicate the treatment family. The labelled badge and right border communicate status, so neither meaning depends on colour alone.</p>
     </div>
     <div class="calendar-language__grid">
       ${languageItems.map((item) => `<div class="calendar-language__sample"><span>${item.label}</span>${languageCard(item)}</div>`).join('')}
