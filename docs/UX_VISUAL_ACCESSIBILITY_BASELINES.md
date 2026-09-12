@@ -2,16 +2,20 @@
 
 This gate protects a deliberately small set of deterministic, production-backed Storybook states. It is engineering-only verification; it does not create product or business authority.
 
-## V1 reference states
+## Protected reference states
 
 - Desktop Calendar reference toolbar + practitioner/status presentation from `stories/CalendarReference.stories.js`.
 - Phone 390x844 Calendar reference touch toolbar + appointment presentation from the same production-backed story module.
+- Desktop and Phone Workspace Dashboard operational overview.
+- Desktop and Phone client profile with clickable appointment history.
+- Desktop and Phone Messages attention and recent-delivery evidence.
+- Desktop and Phone compact appointment editor.
 
-The stories import the released Shiloh UI primitives and Calendar reference adapter from `src/presentation`; the gate must not introduce story-only copies of production presentation logic.
+The stories import the released Shiloh UI primitives, Calendar reference adapter and Workspace presentation authorities from `src/presentation`; the gate must not introduce a parallel product implementation. The appointment-editor story executes the released compact-editor transformation against bounded sample form content.
 
 ## What CI checks
 
-`UX Visual + Accessibility` builds Storybook, serves the static catalogue, and uses pinned Playwright Chromium to open the two exact story iframe states. For each state it:
+`UX Visual + Accessibility` builds Storybook, serves the static catalogue, and uses pinned Playwright Chromium to open the ten exact Desktop and Phone story iframe states. For each state it:
 
 1. runs axe through `@axe-core/playwright` and fails on configured serious or critical WCAG 2.0/2.1 A/AA violations;
 2. uses Playwright `toHaveScreenshot` comparison against the reviewed baseline;

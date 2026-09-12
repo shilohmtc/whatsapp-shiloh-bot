@@ -12,6 +12,15 @@ const states = [
     storyId: 'calendar-reference-implementation--phone-touch-toolbar',
     viewport: { width: 390, height: 844 },
   },
+  ...[
+    ['dashboard', 'dashboard-operational', '.workspace-surface-story'],
+    ['client-history', 'client-appointment-history', '.workspace-surface-story'],
+    ['messages', 'messages-attention', '.workspace-surface-story'],
+    ['appointment-editor', 'compact-appointment-editor', '.appointment-editor-story'],
+  ].flatMap(([name, story, selector]) => [
+    { name: `${name}-desktop`, storyId: `workspace-production-surfaces--${story}`, selector, viewport: { width: 1440, height: 1000 } },
+    { name: `${name}-phone`, storyId: `workspace-production-surfaces--${story}`, selector, viewport: { width: 390, height: 844 } },
+  ]),
 ];
 
 for (const state of states) {
@@ -22,11 +31,11 @@ for (const state of states) {
       if (document.fonts && document.fonts.ready) await document.fonts.ready;
     });
 
-    const reference = page.locator('.calendar-reference');
+    const reference = page.locator(state.selector || '.calendar-reference');
     await expect(reference).toBeVisible();
 
     const accessibility = await new AxeBuilder({ page })
-      .include('.calendar-reference')
+      .include(state.selector || '.calendar-reference')
       .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
       .analyze();
     const serious = accessibility.violations.filter((violation) => ['serious', 'critical'].includes(violation.impact));
