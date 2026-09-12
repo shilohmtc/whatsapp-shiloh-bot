@@ -41,21 +41,33 @@ function calendarEventStatusLabel(item = {}) {
   }
 }
 
+function calendarEventServiceFamily(item = {}) {
+  if (item.kind !== 'appointment' || !Array.isArray(item.serviceContexts)) return null;
+  const families = [...new Set(item.serviceContexts
+    .map((service) => resolveServiceFamily(service)?.key)
+    .filter(Boolean))];
+  return families.length === 1 ? families[0] : null;
+}
+
 function calendarEventVisualAttributes(item = {}) {
   const tone = calendarEventTone(item);
   const statusLabel = calendarEventStatusLabel(item);
-  return ` data-event-tone="${tone}"${statusLabel ? ` data-event-status-label="${statusLabel}"` : ''}`;
+  const serviceFamily = calendarEventServiceFamily(item);
+  return ` data-event-tone="${tone}"${statusLabel ? ` data-event-status-label="${statusLabel}"` : ''}${serviceFamily ? ` data-service-family-card="${serviceFamily}"` : ''}`;
 }
 
 function calendarEventToneCss() {
   const toneRules = Object.entries(CALENDAR_EVENT_TONES)
-    .map(([tone, values]) => `.event-card[data-event-tone="${tone}"]{--calendar-event-accent:${values.accent};--calendar-event-border:${values.border};--calendar-event-surface:${values.surface}}`)
+    .map(([tone, values]) => `.event-card[data-event-tone="${tone}"]{--calendar-status-accent:${values.accent};--calendar-status-border:${values.border};--calendar-status-surface:${values.surface};--calendar-event-accent:${values.accent};--calendar-event-border:${values.border};--calendar-event-surface:${values.surface}}`)
     .join('');
   return `${toneRules}
+.event-card[data-kind="appointment"][data-service-family-card]{--calendar-event-accent:var(--calendar-family-accent);--calendar-event-border:var(--calendar-family-border);--calendar-event-surface:var(--calendar-family-surface)}
 .event-card[data-event-tone]{position:relative;border-color:var(--calendar-event-border)!important;border-left-color:var(--calendar-event-accent)!important;background-color:var(--calendar-event-surface)!important;background-image:var(--calendar-event-pattern,none)!important}
 .event-card[data-event-tone="blocked"]{--calendar-event-pattern:repeating-linear-gradient(135deg,rgba(94,105,101,.08) 0,rgba(94,105,101,.08) 7px,transparent 7px,transparent 14px);border-left-style:dashed}
 .event-card[data-event-tone] .event-time,.event-card[data-event-tone] .kind-pill,.event-card[data-event-tone] .event-meta,.event-card[data-event-tone] .event-practitioners{color:#4B5D55!important}
-.event-card[data-event-tone="attention"] .kind-pill,.event-card[data-event-tone="completed"] .kind-pill,.event-card[data-event-tone="no_show"] .kind-pill{color:var(--calendar-event-accent)!important}
+.event-card[data-kind="appointment"][data-event-tone]{border-right:3px solid var(--calendar-status-accent,var(--calendar-event-accent))!important}
+.event-card[data-kind="appointment"][data-event-tone] .kind-pill{padding:2px 5px;border:1px solid var(--calendar-status-border,var(--calendar-event-border));border-radius:999px;background:var(--calendar-status-surface,var(--calendar-event-surface));color:var(--calendar-status-accent,var(--calendar-event-accent))!important}
+.event-card[data-event-tone="attention"] .kind-pill,.event-card[data-event-tone="completed"] .kind-pill,.event-card[data-event-tone="no_show"] .kind-pill{color:var(--calendar-status-accent,var(--calendar-event-accent))!important}
 .positioned-event .event-card[data-event-tone="attention"] .kind-pill,.positioned-event .event-card[data-event-tone="completed"] .kind-pill,.positioned-event .event-card[data-event-tone="no_show"] .kind-pill,.month-event .event-card[data-event-tone="attention"] .kind-pill,.month-event .event-card[data-event-tone="completed"] .kind-pill,.month-event .event-card[data-event-tone="no_show"] .kind-pill{position:absolute;top:4px;right:5px;display:inline-flex!important;max-width:calc(100% - 12px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.54rem;line-height:1.1}
 .positioned-event .event-card[data-event-tone="attention"] .event-card-top,.positioned-event .event-card[data-event-tone="completed"] .event-card-top,.positioned-event .event-card[data-event-tone="no_show"] .event-card-top{padding-right:76px!important}
 @media(prefers-contrast:more){.event-card[data-event-tone]{border-width:2px;border-left-width:5px}.event-card[data-event-tone="blocked"]{border-left-style:dashed}}`;
@@ -65,6 +77,8 @@ module.exports = {
   CALENDAR_EVENT_TONES,
   calendarEventTone,
   calendarEventStatusLabel,
+  calendarEventServiceFamily,
   calendarEventVisualAttributes,
   calendarEventToneCss,
 };
+const { resolveServiceFamily } = require('./calendarServiceFamilyVisuals');

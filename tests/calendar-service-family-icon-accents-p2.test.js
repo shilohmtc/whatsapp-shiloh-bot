@@ -5,6 +5,7 @@ const crypto = require('node:crypto');
 const {
   SERVICE_FAMILIES,
   SERVICE_FAMILY_ACCENTS,
+  SERVICE_FAMILY_CARD_PALETTE,
   renderServiceFamilyIcon,
   serviceFamilyAccentCss,
 } = require('../src/presentation/calendarServiceFamilyVisuals');
@@ -88,19 +89,21 @@ function model(view) {
   };
 }
 
-test('the exact five restrained accents are centralized and scoped to SVG icon color only', () => {
+test('the exact five restrained accents are centralized for icons and appointment family cards', () => {
   assert.deepEqual(Object.keys(SERVICE_FAMILIES), Object.keys(EXPECTED_ACCENTS));
   assert.deepEqual(SERVICE_FAMILY_ACCENTS, EXPECTED_ACCENTS);
   const css = serviceFamilyAccentCss();
   assert.equal((css.match(/\.service-family-icon\[data-service-family=/g) || []).length, 5);
   for (const [familyKey, color] of Object.entries(EXPECTED_ACCENTS)) {
     assert.match(css, new RegExp(`\\.service-family-icon\\[data-service-family="${familyKey}"\\]\\{color:${color}\\}`));
+    assert.match(css, new RegExp(`data-service-family-card="${familyKey}"[^}]+--calendar-family-accent:${color}`));
   }
-  assert.doesNotMatch(css, /background|border|fill|stroke|font|text-shadow/i);
+  assert.equal((css.match(/data-service-family-card=/g) || []).length, 5);
+  assert.doesNotMatch(css, /\bfill:|\bstroke:|text-shadow/i);
 });
 
 test('all five icon accents exceed non-text contrast requirements on every current Calendar surface', () => {
-  const surfaces = ['#FFFFFF', '#FFFDF9', '#F4F3ED', '#E7EEE9', '#FAFBF8'];
+  const surfaces = ['#FFFFFF', '#FFFDF9', '#F4F3ED', '#E7EEE9', '#FAFBF8', ...Object.values(SERVICE_FAMILY_CARD_PALETTE).map(({ surface }) => surface)];
   for (const [familyKey, color] of Object.entries(EXPECTED_ACCENTS)) {
     for (const surface of surfaces) {
       assert.ok(contrast(color, surface) >= 3, `${familyKey} ${color} against ${surface}`);
@@ -137,7 +140,7 @@ test('Create Booking keeps native treatment and #546 time controls while selecte
   assert.match(html, /Choose the client, treatment, practitioner and time\./);
 });
 
-test('Day, Week and Agenda retain visible service text while all five families use icon-only accents', () => {
+test('Day, Week and Agenda retain visible service text while all five families use matching card and icon accents', () => {
   for (const view of ['day', 'week', 'agenda']) {
     const html = renderCalendarPage(model(view));
     for (const fixture of FAMILY_FIXTURES) {

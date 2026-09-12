@@ -26,14 +26,22 @@ const SERVICE_FAMILIES = Object.freeze({
   }),
 });
 
-// Restrained icon-stroke accents only. Text, cards, practitioner identity and
-// appointment status retain the Calendar palette and remain independent.
+// Shared treatment-family accents. Icons and appointment cards use the same
+// audited family key; status remains an independent Calendar signal.
 const SERVICE_FAMILY_ACCENTS = Object.freeze({
   facial_skin: '#8A6518',
   foot_pedicure: '#9A503C',
   targeted_therapeutic: '#3F6653',
   massage_body: '#3F6785',
   permanent_makeup_beauty: '#80506E',
+});
+
+const SERVICE_FAMILY_CARD_PALETTE = Object.freeze({
+  facial_skin: Object.freeze({ border: '#DFC985', surface: '#FFF6DA' }),
+  foot_pedicure: Object.freeze({ border: '#DDB9AC', surface: '#FAECE7' }),
+  targeted_therapeutic: Object.freeze({ border: '#B9D1C5', surface: '#EDF6F1' }),
+  massage_body: Object.freeze({ border: '#B9CEDB', surface: '#ECF4F8' }),
+  permanent_makeup_beauty: Object.freeze({ border: '#D7BED0', surface: '#F6EDF4' }),
 });
 
 // Canonical catalogue category authority. Historical spelling variants are
@@ -143,7 +151,10 @@ function serviceFamilyAccentCss() {
   const accents = Object.entries(SERVICE_FAMILY_ACCENTS)
     .map(([familyKey, color]) => `.service-family-icon[data-service-family="${familyKey}"]{color:${color}}`)
     .join('');
-  return `${accents}${desktopAppointmentCardDensityCss()}`;
+  const cardPalettes = Object.entries(SERVICE_FAMILY_CARD_PALETTE)
+    .map(([familyKey, values]) => `.event-card[data-kind="appointment"][data-service-family-card="${familyKey}"]{--calendar-family-accent:${SERVICE_FAMILY_ACCENTS[familyKey]};--calendar-family-border:${values.border};--calendar-family-surface:${values.surface}}`)
+    .join('');
+  return `${accents}${cardPalettes}${desktopAppointmentCardDensityCss()}`;
 }
 
 function withServiceFamily(service = {}) {
@@ -157,6 +168,7 @@ function withServiceFamily(service = {}) {
 module.exports = {
   SERVICE_FAMILIES,
   SERVICE_FAMILY_ACCENTS,
+  SERVICE_FAMILY_CARD_PALETTE,
   CATEGORY_FAMILY,
   SERVICE_FAMILY_OVERRIDE,
   resolveServiceFamily,
