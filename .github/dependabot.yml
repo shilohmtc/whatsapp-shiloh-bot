@@ -1,0 +1,49 @@
+version: 2
+
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Africa/Johannesburg
+    open-pull-requests-limit: 5
+    versioning-strategy: increase
+    commit-message:
+      prefix: deps
+    groups:
+      playwright-tooling:
+        applies-to: version-updates
+        patterns:
+          - "@playwright/*"
+          - playwright
+          - playwright-core
+          - "@axe-core/playwright"
+      production-patches:
+        applies-to: version-updates
+        dependency-type: production
+        update-types:
+          - patch
+          - minor
+      development-patches:
+        applies-to: version-updates
+        dependency-type: development
+        update-types:
+          - patch
+          - minor
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: tuesday
+      time: "09:00"
+      timezone: Africa/Johannesburg
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: ci
+    groups:
+      github-actions:
+        patterns:
+          - "*"
