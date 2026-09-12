@@ -1,0 +1,13 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "entry": ["app.js!", "scripts/**/*.js!", "playwright.ux.config.js", "stories/**/*.stories.js"],
+  "project": [
+    ".storybook/**/*.js",
+    "*.js!",
+    "scripts/**/*.js!",
+    "src/**/*.js!",
+    "stories/**/*.js",
+    "tests/**/*.js"
+  ],
+  "ignore": ["artifacts/**", "storybook-static/**", "tests/ux-baselines/**"]
+}

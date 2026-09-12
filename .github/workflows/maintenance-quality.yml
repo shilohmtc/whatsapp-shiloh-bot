@@ -1,0 +1,34 @@
+name: Maintenance quality
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Use Node 24.14.1
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24.14.1
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Run low-noise correctness lint
+        run: npm run lint
+      - name: Check maintenance configuration formatting
+        run: npm run format:check
+      - name: Report unused production code (advisory)
+        continue-on-error: true
+        run: npm run analyze:unused
